@@ -15,8 +15,10 @@ services:
     name: pulse-api
     runtime: node
     plan: free
+    # Render preinstalls pnpm (packageManager field) — corepack is unnecessary
+    # and fails on the read-only image filesystem.
     buildCommand: >-
-      corepack enable && pnpm install --frozen-lockfile &&
+      pnpm install --frozen-lockfile &&
       pnpm --filter @pulse/contracts build &&
       pnpm --filter @pulse/api exec prisma generate &&
       pnpm --filter @pulse/api build
@@ -43,7 +45,7 @@ services:
     name: pulse-web
     runtime: static
     buildCommand: >-
-      corepack enable && pnpm install --frozen-lockfile &&
+      pnpm install --frozen-lockfile &&
       pnpm --filter @pulse/contracts build &&
       pnpm --filter @pulse/web build
     staticPublishPath: apps/web/out

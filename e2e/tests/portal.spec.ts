@@ -37,16 +37,20 @@ test.describe('login gateway', () => {
 });
 
 test.describe('form builder → submission → list (happy path)', () => {
-  test('admin builds a form, submits an entry, sees it in the table', async ({ page }) => {
+  test('admin builds a form, submits an entry, sees it in the table', async ({ page }, testInfo) => {
+    // unique per browser-project run — parallel projects share one database
+    const formTitle = `e2e sprint check ${testInfo.project.name} ${Date.now()}`;
+
     // login
     await page.goto('/login');
     await page.getByLabel('email').fill(ADMIN.email);
     await page.getByLabel('password').fill(ADMIN.password);
     await page.getByRole('button', { name: 'sign in' }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
 
     // build
     await page.goto('/forms/new');
-    await page.getByLabel('form title').fill('e2e sprint check');
+    await page.getByLabel('form title').fill(formTitle);
     await page.getByRole('button', { name: 'add field' }).click();
     await page.getByLabel('field label').fill('Team');
     await page.getByLabel('field type').selectOption('short_text');
@@ -62,7 +66,7 @@ test.describe('form builder → submission → list (happy path)', () => {
 
     // verify in submissions table
     await page.goto('/forms');
-    await page.getByRole('link', { name: 'e2e sprint check' }).click();
+    await page.getByRole('link', { name: formTitle }).click();
     await page.getByRole('tab', { name: 'submissions' }).click();
     await expect(page.getByRole('cell', { name: 'digital-channels' })).toBeVisible();
   });
