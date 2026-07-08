@@ -7,7 +7,19 @@ import type { AuthenticatedUser } from '@pulse/contracts';
 import { logout } from '../lib/api-client';
 import { asset } from '../lib/asset';
 
-/** Authenticated chrome: brand header + nav, shared by every portal page. */
+const NAV_ITEMS: Array<{ href: string; label: string; permission?: string }> = [
+  { href: '/dashboard', label: 'dashboard' },
+  { href: '/forms', label: 'forms' },
+  { href: '/admin/kpis', label: 'KPIs', permission: 'kpis:write' },
+  { href: '/admin/users', label: 'users', permission: 'users:read' },
+  { href: '/admin/roles', label: 'roles', permission: 'roles:read' },
+  { href: '/admin/branding', label: 'branding', permission: 'branding:write' },
+];
+
+export const can = (user: AuthenticatedUser | null, permission: string): boolean =>
+  Boolean(user?.permissions?.includes(permission));
+
+/** Authenticated chrome: brand header + permission-gated nav, shared by every portal page. */
 export function PortalShell({
   user,
   children,
@@ -30,8 +42,13 @@ export function PortalShell({
             <Image src={asset('/brand/pulse-neg.svg')} alt="pulse by solutions" width={110} height={48} />
           </Link>
           <nav>
-            <Link href="/dashboard">dashboard</Link>
-            <Link href="/forms">forms</Link>
+            {NAV_ITEMS.filter((item) => !item.permission || can(user, item.permission)).map(
+              (item) => (
+                <Link key={item.href} href={item.href}>
+                  {item.label}
+                </Link>
+              ),
+            )}
           </nav>
         </div>
         <div className="portal-header-actions">

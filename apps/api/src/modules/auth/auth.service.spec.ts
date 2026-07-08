@@ -37,6 +37,9 @@ const hasherStub = {
   hash: vi.fn(async (plain: string) => `hashed:${plain}`),
   verify: vi.fn(async (hash: string, plain: string) => hash === `hashed:${plain}`),
 };
+const rbacStub = {
+  getEffectivePermissions: vi.fn(async () => new Set(['kpis:read', 'forms:read'])),
+};
 
 describe('AuthService', () => {
   let prisma: ReturnType<typeof makePrismaStub>;
@@ -46,7 +49,12 @@ describe('AuthService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = makePrismaStub();
-    service = new AuthService(prisma as never, jwtStub as never, hasherStub as never);
+    service = new AuthService(
+      prisma as never,
+      jwtStub as never,
+      hasherStub as never,
+      rbacStub as never,
+    );
   });
 
   describe('login', () => {
@@ -62,7 +70,12 @@ describe('AuthService', () => {
       expect(grant).toMatchObject({
         accessToken: 'signed.access.token',
         expiresIn: 900,
-        user: { id: 'user-1', email: activeUser.email, roles: ['admin'] },
+        user: {
+          id: 'user-1',
+          email: activeUser.email,
+          roles: ['admin'],
+          permissions: ['kpis:read', 'forms:read'],
+        },
       });
       expect(refreshToken).toHaveLength(64); // 48 random bytes, base64url
 

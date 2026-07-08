@@ -375,3 +375,105 @@ h1, h2, h3 {
   flex-direction: column;
   gap: var(--space-1);
 }
+
+/* ── admin pages ───────────────────────────────────────────────── */
+.admin-card {
+  padding: var(--space-6);
+  margin: var(--space-4) 0 var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  max-width: none;
+}
+
+.admin-card h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--space-2);
+}
+
+.field-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  margin-top: var(--space-2);
+}
+
+.form-notice {
+  color: var(--pulse-chart-oasis);
+  font-size: var(--font-size-sm);
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.inline-form input,
+.inline-form select {
+  font: inherit;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.perm-resource {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.perm-resource legend {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  padding: 0 var(--space-1);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.perm-chip {
+  font-size: var(--font-size-xs);
+  background: color-mix(in srgb, var(--pulse-purple) 8%, white);
+  color: var(--pulse-purple-dark);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--space-2);
+}
+
+/* ── KPI detail chart ──────────────────────────────────────────── */
+.kpi-tile {
+  cursor: pointer;
+}
+
+.kpi-tile-open {
+  border-color: var(--color-primary);
+}
+
+.kpi-detail {
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.kpi-detail h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--space-4);
+}

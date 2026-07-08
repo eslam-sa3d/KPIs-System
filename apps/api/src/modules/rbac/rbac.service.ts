@@ -44,6 +44,32 @@ export class RbacService {
     return permissions;
   }
 
+  /** All roles with their permission grants, for the admin UI. */
+  listRoles() {
+    return this.prisma.role
+      .findMany({
+        orderBy: { name: 'asc' },
+        include: {
+          permissions: { include: { permission: true } },
+          _count: { select: { users: true } },
+        },
+      })
+      .then((roles) =>
+        roles.map((role) => ({
+          id: role.id,
+          name: role.name,
+          description: role.description,
+          isSystem: role.isSystem,
+          memberCount: role._count.users,
+          permissions: role.permissions.map(({ permission, scope }) => ({
+            resource: permission.resource,
+            action: permission.action,
+            scope,
+          })),
+        })),
+      );
+  }
+
   /** Admin: create a custom role with an arbitrary permission composition. */
   async createRole(input: CreateRoleInput, actorId: string) {
     const existing = await this.prisma.role.findUnique({ where: { name: input.name } });

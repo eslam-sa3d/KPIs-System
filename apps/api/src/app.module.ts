@@ -8,6 +8,9 @@ import { AuthController } from './modules/auth/auth.controller';
 import { AuthService } from './modules/auth/auth.service';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { PasswordHasher } from './modules/auth/password-hasher';
+import { BrandingController } from './modules/branding/branding.controller';
+import { DepartmentsController, UsersController } from './modules/users/users.controller';
+import { UsersService } from './modules/users/users.service';
 import { FormsController } from './modules/forms/forms.controller';
 import { FormsService } from './modules/forms/forms.service';
 import { SubmissionsService } from './modules/forms/submissions.service';
@@ -32,15 +35,19 @@ import { RolesController } from './modules/rbac/roles.controller';
   controllers: [
     HealthController,
     AuthController,
+    UsersController,
+    DepartmentsController,
     RolesController,
     KpisController,
     FormsController,
+    BrandingController,
   ],
   providers: [
     PrismaService,
     RedisService,
     PasswordHasher,
     AuthService,
+    UsersService,
     RbacService,
     KpisService,
     FormsService,

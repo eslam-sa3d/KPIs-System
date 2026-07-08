@@ -1,5 +1,5 @@
-import { Body, Controller, Param, Post, Put, Req } from '@nestjs/common';
-import { CreateRoleInput, createRoleSchema } from '@pulse/contracts';
+import { Body, Controller, Get, Param, Post, Put, Req } from '@nestjs/common';
+import { ACTIONS, CreateRoleInput, RESOURCES, createRoleSchema } from '@pulse/contracts';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from './require-permissions.decorator';
 import { RbacService } from './rbac.service';
@@ -7,6 +7,19 @@ import { RbacService } from './rbac.service';
 @Controller('v1/roles')
 export class RolesController {
   constructor(private readonly rbac: RbacService) {}
+
+  @Get()
+  @RequirePermissions('roles:read')
+  list() {
+    return this.rbac.listRoles();
+  }
+
+  /** The composable permission catalog the role editor renders. */
+  @Get('permission-catalog')
+  @RequirePermissions('roles:read')
+  catalog() {
+    return { resources: RESOURCES, actions: ACTIONS };
+  }
 
   @Post()
   @RequirePermissions('roles:manage')

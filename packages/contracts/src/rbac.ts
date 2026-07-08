@@ -8,6 +8,7 @@ import { z } from 'zod';
 export const RESOURCES = [
   'users',
   'roles',
+  'departments',
   'kpis',
   'kpi_entries',
   'forms',

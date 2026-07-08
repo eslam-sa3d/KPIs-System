@@ -4,6 +4,7 @@ import { AccessTokenClaims, AuthenticatedUser, TokenGrant } from '@pulse/contrac
 import { createHash, randomBytes } from 'node:crypto';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
+import { RbacService } from '../rbac/rbac.service';
 import { PasswordHasher } from './password-hasher';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
@@ -40,6 +41,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly hasher: PasswordHasher,
+    private readonly rbac: RbacService,
   ) {}
 
   async login(email: string, password: string, context: SessionContext): Promise<GrantWithRefresh> {
@@ -52,7 +54,7 @@ export class AuthService {
     if (!user || !user.isActive) throw invalid;
     if (!(await this.hasher.verify(user.passwordHash, password))) throw invalid;
 
-    return this.issueGrant(this.toAuthenticatedUser(user), context);
+    return this.issueGrant(await this.toAuthenticatedUser(user), context);
   }
 
   async refresh(rawRefreshToken: string, context: SessionContext): Promise<GrantWithRefresh> {
@@ -83,7 +85,7 @@ export class AuthService {
       where: { id: session.id },
       data: { revokedAt: new Date() },
     });
-    return this.issueGrant(this.toAuthenticatedUser(session.user), context);
+    return this.issueGrant(await this.toAuthenticatedUser(session.user), context);
   }
 
   /** Idempotent: logging out an unknown/already-revoked token is a no-op. */
@@ -102,6 +104,29 @@ export class AuthService {
     });
     if (!user) throw AppError.notFound('User', userId);
     return this.toAuthenticatedUser(user);
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw AppError.notFound('User', userId);
+    if (!(await this.hasher.verify(user.passwordHash, currentPassword))) {
+      throw new AppError('UNAUTHENTICATED', 'Current password is incorrect');
+    }
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash: await this.hasher.hash(newPassword) },
+      }),
+      // rotating the password revokes every other session
+      this.prisma.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+      this.prisma.auditLog.create({
+        data: { actorId: userId, action: 'user.password_changed', entity: 'User', entityId: userId },
+      }),
+    ]);
+    return null;
   }
 
   private async issueGrant(
@@ -130,17 +155,18 @@ export class AuthService {
     };
   }
 
-  private toAuthenticatedUser(user: {
+  private async toAuthenticatedUser(user: {
     id: string;
     email: string;
     displayName: string;
     roles: Array<{ role: { name: string } }>;
-  }): AuthenticatedUser {
+  }): Promise<AuthenticatedUser> {
     return {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
       roles: user.roles.map(({ role }) => role.name),
+      permissions: [...(await this.rbac.getEffectivePermissions(user.id))],
     };
   }
 }

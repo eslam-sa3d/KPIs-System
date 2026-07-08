@@ -10,7 +10,7 @@ import type { ApiEnvelope, AuthenticatedUser, TokenGrant } from '@pulse/contract
  */
 
 // || (not ??): an unset repo Variable reaches the build as '' — fall through.
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 let accessToken: string | null = null;
 let currentUser: AuthenticatedUser | null = null;
