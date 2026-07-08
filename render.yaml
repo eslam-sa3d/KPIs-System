@@ -22,8 +22,11 @@ services:
       pnpm --filter @pulse/contracts build &&
       pnpm --filter @pulse/api exec prisma generate &&
       pnpm --filter @pulse/api build
+    # db:seed is idempotent (upserts) — running on boot replaces shell access,
+    # which the free tier doesn't include.
     startCommand: >-
       pnpm --filter @pulse/api exec prisma migrate deploy &&
+      pnpm db:seed &&
       node apps/api/dist/main.js
     healthCheckPath: /api/health
     envVars:
