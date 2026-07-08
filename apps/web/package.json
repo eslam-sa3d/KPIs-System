@@ -6,7 +6,7 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "serve -l 3000 out",
-    "lint": "next lint",
+    "lint": "eslint app components lib",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
@@ -21,6 +21,6 @@
   "devDependencies": {
     "@types/react": "^19.0.2",
     "serve": "^14.2.4",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.6"
   }
 }
