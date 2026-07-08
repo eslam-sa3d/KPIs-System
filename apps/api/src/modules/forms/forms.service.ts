@@ -21,10 +21,33 @@ export class FormsService {
     return this.prisma.form.create({
       data: {
         slug,
+        status: 'published',
         createdById,
         versions: { create: { version: 1, definition: parsed } },
       },
       include: { versions: true },
+    });
+  }
+
+  /** All non-archived forms with their latest version's title, for the list view. */
+  async listForms() {
+    const forms = await this.prisma.form.findMany({
+      where: { status: { not: 'archived' } },
+      orderBy: { createdAt: 'desc' },
+      include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+    });
+    return forms.map((form) => {
+      const latest = form.versions[0];
+      const definition = latest?.definition as unknown as FormDefinition | undefined;
+      return {
+        id: form.id,
+        slug: form.slug,
+        status: form.status,
+        title: definition?.title ?? form.slug,
+        fieldCount: definition?.fields.length ?? 0,
+        version: latest?.version ?? 0,
+        createdAt: form.createdAt,
+      };
     });
   }
 

@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import { login } from '../../lib/api-client';
+import { asset } from '../../lib/asset';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,7 +28,7 @@ export default function LoginPage() {
   return (
     <main className="login-screen" data-surface="purple">
       <form className="login-card" onSubmit={onSubmit} aria-busy={pending}>
-        <Image src="/brand/pulse-pos.svg" alt="pulse by solutions" width={120} height={52} priority />
+        <Image src={asset('/brand/pulse-pos.svg')} alt="pulse by solutions" width={120} height={52} priority />
         <h1>welcome back</h1>
 
         <label htmlFor="email">email</label>

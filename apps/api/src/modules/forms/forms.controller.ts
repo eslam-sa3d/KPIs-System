@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Header, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { PageQuery, SubmissionAnswers, submissionAnswersSchema } from '@pulse/contracts';
+import type { Response } from 'express';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
 import { FormsService } from './forms.service';
@@ -13,6 +14,12 @@ export class FormsController {
     private readonly forms: FormsService,
     private readonly submissions: SubmissionsService,
   ) {}
+
+  @Get()
+  @RequirePermissions('forms:read')
+  listForms() {
+    return this.forms.listForms();
+  }
 
   @Post()
   @RequirePermissions('forms:write')
@@ -59,10 +66,14 @@ export class FormsController {
     return this.submissions.list(slug, query, filters);
   }
 
+  /** File download — sends raw CSV via @Res, deliberately outside the JSON envelope. */
   @Get(':slug/submissions/export')
   @RequirePermissions('form_submissions:read', 'form_submissions:execute')
-  @Header('Content-Type', 'text/csv')
-  export(@Param('slug') slug: string, @Req() req: AuthedRequest) {
-    return this.submissions.exportCsv(slug, req.user.id);
+  async export(@Param('slug') slug: string, @Req() req: AuthedRequest, @Res() res: Response) {
+    const csv = await this.submissions.exportCsv(slug, req.user.id);
+    res
+      .type('text/csv')
+      .setHeader('Content-Disposition', `attachment; filename="${slug}-submissions.csv"`)
+      .send(csv);
   }
 }

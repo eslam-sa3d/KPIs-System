@@ -27,6 +27,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pulse/api exec prisma generate
       - run: pnpm lint
       - run: pnpm typecheck
 
@@ -42,6 +43,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pulse/api exec prisma generate
       - run: pnpm test
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -80,13 +82,17 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Generate client & build packages
+        run: |
+          pnpm --filter @pulse/api exec prisma generate
+          pnpm --filter @pulse/contracts build
+          pnpm --filter @pulse/api build
       - name: Migrate & seed database
         run: |
           pnpm --filter @pulse/api exec prisma migrate deploy
           pnpm db:seed
       - name: Start API
         run: |
-          pnpm --filter @pulse/api build
           node apps/api/dist/main.js &
           npx wait-on http://localhost:4000/api/health --timeout 60000
         env:
@@ -126,6 +132,7 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
       - name: Migrate, seed, build & start the stack
         run: |
+          pnpm --filter @pulse/api exec prisma generate
           pnpm --filter @pulse/api exec prisma migrate deploy
           pnpm db:seed
           pnpm build
@@ -157,28 +164,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level high
 
-  # ── Stage 6: deploy (main only, after all gates pass) ─────────────────────
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [e2e, security]
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - name: Run production migrations
-        run: pnpm --filter @pulse/api exec prisma migrate deploy
-        env:
-          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
-      # Swap this step for your target platform (Vercel, ECS, Azure App Service…)
-      - name: Deploy
-        run: echo "Deploy artifacts to hosting platform"
-        env:
-          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+  # Frontend deployment: .github/workflows/deploy-pages.yml publishes the web
+  # app's static export to GitHub Pages on every push to main.
+  # The API needs a Node host (Render/Fly/Railway/ECS…) — add its deploy job
+  # here once a platform is chosen, gated on [e2e, security].

@@ -78,6 +78,21 @@ export async function logout(): Promise<void> {
   currentUser = null;
 }
 
+/** Authenticated file download (e.g. CSV export) — outside the JSON envelope. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const response = await fetch(`${API_URL}/api${path}`, {
+    credentials: 'include',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  if (!response.ok) throw new ApiRequestError('INTERNAL_ERROR', 'Export failed', response.status);
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 /** Restores the session from the refresh cookie (e.g. after a hard reload). */
 export async function restoreSession(): Promise<AuthenticatedUser | null> {
   if (currentUser) return currentUser;

@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { asset } from '../lib/asset';
 
 /**
  * Public landing page (SSR, CDN-cacheable).
@@ -17,7 +18,7 @@ export default function LandingPage() {
           padding: 'var(--space-6) var(--space-12)',
         }}
       >
-        <Image src="/brand/pulse-neg.svg" alt="pulse by solutions" width={140} height={61} priority />
+        <Image src={asset('/brand/pulse-neg.svg')} alt="pulse by solutions" width={140} height={61} priority />
         <Link href="/login" className="btn-primary">
           sign in
         </Link>
