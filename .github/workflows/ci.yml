@@ -133,6 +133,7 @@ jobs:
       - name: Migrate, seed, build & start the stack
         run: |
           pnpm --filter @pulse/api exec prisma generate
+          pnpm --filter @pulse/contracts build
           pnpm --filter @pulse/api exec prisma migrate deploy
           pnpm db:seed
           pnpm build
