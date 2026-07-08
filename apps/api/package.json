@@ -22,6 +22,7 @@
     "@prisma/client": "^6.1.0",
     "@pulse/contracts": "workspace:*",
     "argon2": "^0.41.1",
+    "cookie-parser": "^1.4.7",
     "helmet": "^8.0.0",
     "ioredis": "^5.4.2",
     "reflect-metadata": "^0.2.2",
@@ -31,6 +32,8 @@
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",
     "@nestjs/testing": "^10.4.15",
+    "@types/cookie-parser": "^1.4.8",
+    "@types/express": "^5.0.0",
     "prisma": "^6.1.0",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
