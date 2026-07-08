@@ -8,7 +8,8 @@ const ADMIN = {
 test.describe('branded landing page', () => {
   test('shows brand identity and routes to login', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByAltText('pulse by solutions')).toBeVisible();
+    // header + footer both carry the logo — assert the first
+    await expect(page.getByAltText('pulse by solutions').first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'elevating what matters' })).toBeVisible();
 
     await page.getByRole('link', { name: 'enter the portal' }).click();

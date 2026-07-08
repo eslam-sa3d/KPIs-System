@@ -38,18 +38,37 @@ async function rawRequest<T>(path: string, init: RequestInit = {}): Promise<ApiE
   return (await response.json()) as ApiEnvelope<T>;
 }
 
-async function tryRefresh(): Promise<boolean> {
-  const envelope = await rawRequest<TokenGrant>('/v1/auth/refresh', { method: 'POST' });
-  if (envelope.success) {
-    accessToken = envelope.data.accessToken;
-    currentUser = envelope.data.user;
-    return true;
-  }
-  return false;
+/**
+ * Single-flight refresh: refresh tokens are single-use (rotation + reuse
+ * detection), so two concurrent refreshes would consume the same cookie and
+ * the second would be treated as theft, revoking the session family. Every
+ * caller joins the one in-flight attempt instead.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+function tryRefresh(): Promise<boolean> {
+  refreshInFlight ??= (async () => {
+    try {
+      const envelope = await rawRequest<TokenGrant>('/v1/auth/refresh', { method: 'POST' });
+      if (envelope.success) {
+        accessToken = envelope.data.accessToken;
+        currentUser = envelope.data.user;
+        return true;
+      }
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
 }
 
 /** Core request: unwraps the envelope, silently refreshing once on 401. */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // A hard navigation may still be restoring the session — join it rather
+  // than sending an unauthenticated request that triggers a second refresh.
+  if (!accessToken && refreshInFlight) await refreshInFlight;
+
   let envelope = await rawRequest<T>(path, init);
 
   if (!envelope.success && envelope.error.code === 'UNAUTHENTICATED' && (await tryRefresh())) {
