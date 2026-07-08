@@ -25,6 +25,9 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true # creates the Pages site on first run
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @pulse/contracts build
       - name: Build web (static export)
