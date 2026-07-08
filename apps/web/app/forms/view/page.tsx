@@ -198,9 +198,6 @@ function FormView() {
 
   return (
     <PortalShell user={user}>
-      <h1>{definition.title}</h1>
-      {definition.description && <p className="portal-subtitle">{definition.description}</p>}
-
       <div role="tablist" className="tabs" aria-label="form views">
         <button role="tab" aria-selected={tab === 'form'} onClick={() => setTab('form')}>
           form
@@ -215,46 +212,61 @@ function FormView() {
       </div>
 
       {tab === 'form' ? (
-        submitted ? (
-          <div className="empty-state">
-            <h2>thank you!</h2>
-            <p className="muted">your response was recorded.</p>
-            <button
-              className="btn-ghost"
-              onClick={() => {
-                setAnswers({});
-                setSubmitted(false);
-              }}
-            >
-              submit another response
-            </button>
-          </div>
-        ) : (
-          <form className="fill-form" onSubmit={onSubmit}>
-            {definition.fields.filter((field) => isVisible(field, answers)).map((field) => (
-              <div key={field.key} className="fill-field">
-                <label htmlFor={`f-${field.key}`}>
-                  {field.label}
-                  {field.required && <span aria-hidden="true"> *</span>}
-                </label>
-                {field.helpText && <p className="muted">{field.helpText}</p>}
-                <FieldInput
-                  field={field}
-                  value={answers[field.key]}
-                  onChange={(value) => setAnswers((a) => ({ ...a, [field.key]: value }))}
-                />
+        <div className="msform">
+          {/* MS-Forms-style banner card */}
+          <header className="msform-banner">
+            <h1>{definition.title}</h1>
+            {definition.description && <p>{definition.description}</p>}
+            {!submitted && <p className="msform-required-hint">* required</p>}
+          </header>
+
+          {submitted ? (
+            <div className="question-card msform-thanks">
+              <h2>thank you!</h2>
+              <p className="muted">your response was recorded.</p>
+              <button
+                className="btn-ghost"
+                onClick={() => {
+                  setAnswers({});
+                  setSubmitted(false);
+                }}
+              >
+                submit another response
+              </button>
+            </div>
+          ) : (
+            <form className="fill-form msform-body" onSubmit={onSubmit}>
+              {definition.fields.filter((field) => isVisible(field, answers)).map((field, index) => (
+                <div key={field.key} className="question-card">
+                  <label htmlFor={`f-${field.key}`} className="question-title">
+                    <span className="question-number">{index + 1}.</span> {field.label}
+                    {field.required && (
+                      <span aria-hidden="true" className="question-required">
+                        {' '}*
+                      </span>
+                    )}
+                  </label>
+                  {field.helpText && <p className="muted">{field.helpText}</p>}
+                  <FieldInput
+                    field={field}
+                    value={answers[field.key]}
+                    onChange={(value) => setAnswers((a) => ({ ...a, [field.key]: value }))}
+                  />
+                </div>
+              ))}
+              {error && (
+                <p role="alert" className="form-error">
+                  {error}
+                </p>
+              )}
+              <div>
+                <button className="btn-primary" type="submit">
+                  submit
+                </button>
               </div>
-            ))}
-            {error && (
-              <p role="alert" className="form-error">
-                {error}
-              </p>
-            )}
-            <button className="btn-primary" type="submit">
-              submit
-            </button>
-          </form>
-        )
+            </form>
+          )}
+        </div>
       ) : (
         <section role="tabpanel" aria-label="submissions">
           <div className="page-title-row">

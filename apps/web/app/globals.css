@@ -376,6 +376,122 @@ h1, h2, h3 {
   gap: var(--space-1);
 }
 
+/* ── Microsoft-Forms-style form experience ─────────────────────── */
+.msform {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.msform-banner {
+  background: linear-gradient(135deg, var(--pulse-purple) 0%, var(--pulse-purple-light) 100%);
+  color: var(--pulse-air);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  box-shadow: var(--shadow-card);
+}
+
+.msform-banner h1 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
+}
+
+.msform-banner p {
+  margin-top: var(--space-2);
+  color: var(--pulse-silver-light);
+}
+
+.msform-required-hint {
+  font-size: var(--font-size-sm);
+  color: var(--pulse-coral) !important;
+}
+
+.msform-banner-edit label {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--pulse-silver-light);
+  margin-bottom: var(--space-2);
+}
+
+.msform-title-input {
+  width: 100%;
+  font: inherit;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
+  color: var(--pulse-air);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid color-mix(in srgb, var(--pulse-air) 40%, transparent);
+  padding: var(--space-1) 0;
+  outline: none;
+}
+
+.msform-title-input:focus {
+  border-bottom-color: var(--pulse-coral);
+}
+
+.msform-title-input::placeholder {
+  color: color-mix(in srgb, var(--pulse-air) 55%, transparent);
+}
+
+.msform-body {
+  max-width: none;
+}
+
+.question-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: box-shadow var(--transition-fast);
+}
+
+.question-card:focus-within {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pulse-purple) 35%, transparent), var(--shadow-card);
+}
+
+.question-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+}
+
+.question-number {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
+}
+
+.question-required {
+  color: var(--pulse-coral);
+}
+
+.msform-add-field {
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+  background: transparent;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.msform-add-field:hover {
+  border-color: var(--color-primary);
+}
+
+.msform-thanks {
+  align-items: center;
+  text-align: center;
+  padding: var(--space-12);
+}
+
 /* ── admin pages ───────────────────────────────────────────────── */
 .admin-card {
   padding: var(--space-6);
@@ -476,4 +592,226 @@ h1, h2, h3 {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-medium);
   margin-bottom: var(--space-4);
+}
+
+/* ── landing page ──────────────────────────────────────────────── */
+.landing {
+  min-height: 100vh;
+  background:
+    radial-gradient(1000px 600px at 85% -5%, color-mix(in srgb, var(--pulse-moon-light) 22%, transparent), transparent 60%),
+    var(--pulse-purple);
+  color: var(--color-text);
+  overflow-x: hidden;
+}
+
+.landing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-6) clamp(var(--space-4), 6vw, var(--space-16));
+}
+
+.landing-hero {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.1fr) minmax(280px, 0.9fr);
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) clamp(var(--space-4), 6vw, var(--space-16)) var(--space-16);
+}
+
+.landing-hero-copy h1 {
+  font-size: clamp(2.2rem, 5vw, 3.6rem);
+}
+
+.landing-tagline {
+  margin-top: var(--space-4);
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+  max-width: 34rem;
+}
+
+.landing-cta-row {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.landing-ghost {
+  color: var(--pulse-air);
+  border-color: var(--pulse-purple-light);
+  padding: var(--space-3) var(--space-8);
+  text-decoration: none;
+}
+
+.landing-hero-art {
+  display: flex;
+  justify-content: center;
+}
+
+.landing-hero-art img {
+  width: min(100%, 560px);
+  height: auto;
+  animation: hero-float 7s ease-in-out infinite;
+  filter: drop-shadow(0 24px 48px rgb(0 0 0 / 0.35));
+}
+
+@keyframes hero-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-hero-art img { animation: none; }
+}
+
+.landing-stats {
+  display: flex;
+  justify-content: center;
+  gap: clamp(var(--space-6), 8vw, var(--space-16));
+  flex-wrap: wrap;
+  padding: var(--space-8) var(--space-4);
+  background: var(--pulse-purple-dark);
+}
+
+.landing-stats div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* numbers may be bold/extrabold per brand rules */
+.landing-stats strong {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-extrabold);
+  color: var(--pulse-coral);
+  line-height: var(--line-height-tight);
+}
+
+.landing-stats span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.landing-features {
+  padding: var(--space-16) clamp(var(--space-4), 6vw, var(--space-16));
+}
+
+.landing-features h2,
+.landing-industries h2 {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  margin-bottom: var(--space-8);
+  text-align: center;
+}
+
+.landing-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.landing-feature-grid article {
+  background: color-mix(in srgb, var(--pulse-air) 6%, transparent);
+  border: 1px solid var(--pulse-purple-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.landing-feature-grid h3 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--space-2);
+}
+
+.landing-feature-grid p {
+  color: var(--color-text-muted);
+}
+
+.landing-industries {
+  padding: var(--space-8) clamp(var(--space-4), 6vw, var(--space-16)) var(--space-16);
+}
+
+.landing-diamond-row {
+  display: flex;
+  justify-content: center;
+  gap: clamp(var(--space-4), 4vw, var(--space-12));
+  flex-wrap: wrap;
+}
+
+.landing-diamond-row figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+/* rotated-square frame echoing the pulse diamond mark.
+   The rotated square's diagonal (~170px) overflows its 120px box — the
+   margin absorbs it so captions and neighbours don't collide. */
+.diamond-frame {
+  display: block;
+  width: 120px;
+  height: 120px;
+  margin: 28px;
+  transform: rotate(45deg);
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  outline: 2px solid var(--pulse-coral);
+  outline-offset: 5px;
+}
+
+.diamond-frame img {
+  width: 142%;
+  height: 142%;
+  object-fit: cover;
+  transform: rotate(-45deg) translate(-15%, -15%);
+  transform-origin: center;
+}
+
+.landing-diamond-row figcaption {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.landing-band {
+  position: relative;
+  background-size: cover;
+  background-position: center 30%;
+}
+
+.landing-band-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-16) clamp(var(--space-4), 6vw, var(--space-16));
+  background: linear-gradient(90deg, rgb(58 16 102 / 0.92) 0%, rgb(58 16 102 / 0.55) 60%, rgb(58 16 102 / 0.25) 100%);
+}
+
+.landing-band h2 {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+}
+
+.landing-band p {
+  color: var(--pulse-silver-light);
+  max-width: 30rem;
+}
+
+.landing-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-6) clamp(var(--space-4), 6vw, var(--space-16));
+  background: var(--pulse-onyx);
+}
+
+@media (max-width: 760px) {
+  .landing-hero {
+    grid-template-columns: 1fr;
+    text-align: left;
+  }
 }

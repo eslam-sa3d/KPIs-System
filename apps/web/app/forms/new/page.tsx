@@ -100,21 +100,27 @@ export default function NewFormPage() {
 
   return (
     <PortalShell user={user}>
-      <h1>new form</h1>
-      <p className="portal-subtitle">define the fields; validation runs on both client and server</p>
+      <div className="msform">
+        <header className="msform-banner msform-banner-edit">
+          <label htmlFor="form-title">form title</label>
+          <input
+            id="form-title"
+            className="msform-title-input"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="untitled form"
+          />
+          <p className="msform-required-hint">
+            questions render exactly as respondents will see them
+          </p>
+        </header>
 
-      <div className="builder">
-        <label htmlFor="form-title">form title</label>
-        <input
-          id="form-title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. sprint health check"
-        />
-
+        <div className="builder msform-body">
         {fields.map((field, index) => (
-          <fieldset key={index} className="builder-field">
-            <legend>field {index + 1}</legend>
+          <fieldset key={index} className="builder-field question-card">
+            <legend>
+              <span className="question-number">{index + 1}.</span> question
+            </legend>
 
             <label htmlFor={`field-label-${index}`}>field label</label>
             <input
@@ -168,14 +174,15 @@ export default function NewFormPage() {
           </fieldset>
         ))}
 
+        <button
+          type="button"
+          className="msform-add-field"
+          onClick={() => setFields((current) => [...current, emptyField()])}
+        >
+          + add field
+        </button>
+
         <div className="page-title-row">
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() => setFields((current) => [...current, emptyField()])}
-          >
-            add field
-          </button>
           <button
             type="button"
             className="btn-primary"
@@ -191,6 +198,7 @@ export default function NewFormPage() {
             {error}
           </p>
         )}
+        </div>
       </div>
     </PortalShell>
   );

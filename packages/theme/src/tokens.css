@@ -101,27 +101,17 @@
   --color-primary-hover: color-mix(in srgb, var(--pulse-coral) 85%, var(--pulse-onyx));
 }
 
+/* Brand font files from pulsebysolutions.com (regular + bold are published).
+   Weights 100–500 resolve to regular, 600–900 to bold. */
 @font-face {
   font-family: 'stc forward';
-  src: url('/fonts/stc-forward-regular.woff2') format('woff2');
-  font-weight: 400;
+  src: url('/fonts/stc-forward-regular.ttf') format('truetype');
+  font-weight: 100 500;
   font-display: swap;
 }
 @font-face {
   font-family: 'stc forward';
-  src: url('/fonts/stc-forward-light.woff2') format('woff2');
-  font-weight: 300;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'stc forward';
-  src: url('/fonts/stc-forward-medium.woff2') format('woff2');
-  font-weight: 500;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'stc forward';
-  src: url('/fonts/stc-forward-bold.woff2') format('woff2');
-  font-weight: 700;
+  src: url('/fonts/stc-forward-bold.ttf') format('truetype');
+  font-weight: 600 900;
   font-display: swap;
 }

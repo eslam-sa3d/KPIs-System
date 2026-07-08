@@ -15,6 +15,7 @@ export const RESOURCES = [
   'form_submissions',
   'dashboards',
   'branding',
+  'settings',
 ] as const;
 
 export const ACTIONS = ['read', 'write', 'execute', 'manage'] as const;
