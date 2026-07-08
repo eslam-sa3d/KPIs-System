@@ -8,12 +8,22 @@ import { Public } from './public.decorator';
 
 export const REFRESH_COOKIE = 'pulse_rt';
 
-/** The refresh token only ever travels on the auth endpoints, over an
- *  httpOnly SameSite=Strict cookie — invisible to JS, never in JSON. */
+/**
+ * The refresh token only ever travels on the auth endpoints, over an httpOnly
+ * cookie — invisible to JS, never in JSON.
+ *
+ * SameSite is deployment-dependent: 'strict' when web and API share a site;
+ * 'none' when they are cross-site (e.g. *.onrender.com subdomains are separate
+ * sites — the Public Suffix List splits them — as is Pages → Render). 'none'
+ * stays CSRF-safe here because CORS is allowlisted and every mutating endpoint
+ * authenticates via the Authorization header, not this cookie.
+ */
+const sameSite = (process.env.REFRESH_COOKIE_SAMESITE ?? 'strict') as 'strict' | 'lax' | 'none';
 const refreshCookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict' as const,
+  // browsers reject SameSite=None without Secure
+  secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
+  sameSite,
   path: '/api/v1/auth',
   maxAge: 30 * 24 * 60 * 60 * 1000,
 };
