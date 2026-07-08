@@ -1,0 +1,26 @@
+{
+  "name": "kpis-system",
+  "private": true,
+  "version": "0.1.0",
+  "description": "pulse KPI Management & Data Collection Platform — monorepo",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts",
+    "db:migrate": "pnpm --filter @pulse/api db:migrate",
+    "db:seed": "pnpm --filter @pulse/api db:seed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2"
+  }
+}

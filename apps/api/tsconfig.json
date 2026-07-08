@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@pulse/contracts": ["../../packages/contracts/src"]
+    }
+  },
+  "include": ["src", "test", "prisma/seed.ts"]
+}

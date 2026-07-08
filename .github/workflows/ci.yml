@@ -1,0 +1,184 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse_kpi
+  REDIS_URL: redis://localhost:6379
+
+jobs:
+  # ── Stage 1: static quality gates ─────────────────────────────────────────
+  quality:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+
+  # ── Stage 2: unit tests (no infrastructure) ───────────────────────────────
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage
+          path: apps/api/coverage
+          if-no-files-found: ignore
+
+  # ── Stage 3: API integration tests against live Postgres + Redis ──────────
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [quality, unit]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pulse
+          POSTGRES_PASSWORD: pulse
+          POSTGRES_DB: pulse_kpi
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pulse"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migrate & seed database
+        run: |
+          pnpm --filter @pulse/api exec prisma migrate deploy
+          pnpm db:seed
+      - name: Start API
+        run: |
+          pnpm --filter @pulse/api build
+          node apps/api/dist/main.js &
+          npx wait-on http://localhost:4000/api/health --timeout 60000
+        env:
+          JWT_SECRET: ci-only-secret
+      - name: Run integration suite
+        run: pnpm --filter @pulse/api test:integration
+        env:
+          API_URL: http://localhost:4000
+
+  # ── Stage 4: full E2E (web + api + db) ────────────────────────────────────
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [integration]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pulse
+          POSTGRES_PASSWORD: pulse
+          POSTGRES_DB: pulse_kpi
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pulse"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Migrate, seed, build & start the stack
+        run: |
+          pnpm --filter @pulse/api exec prisma migrate deploy
+          pnpm db:seed
+          pnpm build
+          node apps/api/dist/main.js &
+          pnpm --filter @pulse/web start &
+          npx wait-on http://localhost:4000/api/health http://localhost:3000 --timeout 120000
+        env:
+          JWT_SECRET: ci-only-secret
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+      - run: pnpm test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+
+  # ── Stage 5: security audit (non-blocking advisory) ───────────────────────
+  security:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high
+
+  # ── Stage 6: deploy (main only, after all gates pass) ─────────────────────
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [e2e, security]
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run production migrations
+        run: pnpm --filter @pulse/api exec prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      # Swap this step for your target platform (Vercel, ECS, Azure App Service…)
+      - name: Deploy
+        run: echo "Deploy artifacts to hosting platform"
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}

@@ -1,0 +1,220 @@
+// pulse KPI System — core data model
+// Postgres 16. JSONB powers the schema-driven Form Builder + flexible KPI metadata.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Identity & Dynamic RBAC ───────────────────────────
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  displayName  String
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  roles        UserRole[]
+  sessions     Session[]
+  submissions  FormSubmission[]
+  kpiEntries   KpiEntry[]
+  auditEvents  AuditLog[]
+
+  @@index([departmentId])
+}
+
+model Department {
+  id     String @id @default(uuid())
+  name   String @unique
+  users  User[]
+  kpiMaps KpiAssignment[]
+}
+
+/// Dynamic roles: created by admins at runtime, never hard-coded.
+model Role {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  isSystem    Boolean @default(false) // seed roles (e.g. "admin") are protected from deletion
+  createdAt   DateTime @default(now())
+
+  permissions RolePermission[]
+  users       UserRole[]
+  kpiMaps     KpiAssignment[]
+}
+
+/// Permission catalog: resource × action, seeded and extensible.
+model Permission {
+  id       String @id @default(uuid())
+  resource String // e.g. "forms", "kpis", "dashboards"
+  action   String // "read" | "write" | "execute" | "manage"
+
+  roles RolePermission[]
+
+  @@unique([resource, action])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  /// Row-level scope: "all" | "department" | "own"
+  scope        String @default("all")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+/// Rotating refresh-token sessions (revocable server-side).
+model Session {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String   @unique
+  userAgent        String?
+  ip               String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────── KPI Definition & Mapping ──────────────────────────
+
+model Kpi {
+  id          String  @id @default(uuid())
+  code        String  @unique // e.g. "DEL-VEL-01"
+  name        String
+  description String?
+  unit        String  // "%", "days", "count", "SAR" …
+  direction   String  // "higher_is_better" | "lower_is_better"
+  target      Decimal?
+  cadence     String  // "weekly" | "monthly" | "quarterly"
+  /// Flexible metadata: thresholds, formula notes, data source hints.
+  metadata    Json?
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments KpiAssignment[]
+  entries     KpiEntry[]
+}
+
+/// Dynamic mapping of a KPI to a role, department, or delivery stream.
+model KpiAssignment {
+  id             String  @id @default(uuid())
+  kpiId          String
+  kpi            Kpi     @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  roleId         String?
+  role           Role?   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  departmentId   String?
+  department     Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  deliveryStream String? // free-form stream tag, e.g. "digital-channels"
+
+  @@unique([kpiId, roleId, departmentId, deliveryStream])
+  @@index([roleId])
+  @@index([departmentId])
+}
+
+/// KPI facts — the time series behind dashboards.
+model KpiEntry {
+  id          String   @id @default(uuid())
+  kpiId       String
+  kpi         Kpi      @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  value       Decimal
+  periodStart DateTime
+  periodEnd   DateTime
+  enteredById String
+  enteredBy   User     @relation(fields: [enteredById], references: [id])
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@unique([kpiId, periodStart, periodEnd])
+  @@index([kpiId, periodStart])
+}
+
+// ─────────────────────────── Schema-driven Form Builder ────────────────────────
+
+model Form {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  status      String   @default("draft") // "draft" | "published" | "archived"
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  versions    FormVersion[]
+}
+
+/// Immutable versions: editing a published form creates a new version, so old
+/// submissions always validate against the schema they were created with.
+model FormVersion {
+  id         String   @id @default(uuid())
+  formId     String
+  form       Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  version    Int
+  /// FormDefinition JSON (validated against @pulse/contracts formDefinitionSchema).
+  definition Json
+  createdAt  DateTime @default(now())
+
+  submissions FormSubmission[]
+
+  @@unique([formId, version])
+}
+
+model FormSubmission {
+  id            String      @id @default(uuid())
+  formVersionId String
+  formVersion   FormVersion @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
+  submittedById String
+  submittedBy   User        @relation(fields: [submittedById], references: [id])
+  /// fieldKey → answer. GIN-indexed for filtering (index added in raw migration).
+  answers       Json
+  createdAt     DateTime    @default(now())
+
+  @@index([formVersionId, createdAt])
+  @@index([submittedById])
+}
+
+// ─────────────────────────── Governance ────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String   // "role.created", "role.permissions.updated", "submissions.exported" …
+  entity    String
+  entityId  String?
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+/// Branding configuration for the landing page/portal (logo URL, strings).
+model BrandSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
