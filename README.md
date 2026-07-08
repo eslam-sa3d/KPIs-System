@@ -28,6 +28,22 @@ pnpm db:migrate && pnpm db:seed       # schema + default roles/admin
 pnpm dev                              # api on :4000, web on :3000
 ```
 
+## Deployments
+
+Push to `main` triggers everything — no manual steps:
+
+| What | Where | How |
+|---|---|---|
+| Full stack (recommended) | **Render** — web `pulse-web-wu0e.onrender.com`, API `pulse-api-k8ga.onrender.com`, plus managed Postgres & key-value | [render.yaml](render.yaml) blueprint, auto-sync on push |
+| Frontend mirror | **GitHub Pages** — `eslam-sa3d.github.io/KPIs-System` | [deploy-pages.yml](.github/workflows/deploy-pages.yml) publishes the static export to `gh-pages` |
+| Quality gates | **GitHub Actions** — lint → typecheck → unit → integration (live Postgres/Redis) → E2E (Playwright) → audit | [ci.yml](.github/workflows/ci.yml) |
+
+Notes:
+- The web app is a static export (`next build` → `out/`); the API is the only server. Set `NEXT_PUBLIC_API_URL` at build time to point a frontend at an API.
+- API CORS origins come from the `CORS_ORIGINS` env var (comma-separated).
+- The API seeds idempotently on boot (`prisma migrate deploy && pnpm db:seed`); override the default admin with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`.
+- Render free-tier: services sleep after 15 min idle (~30–50s cold start); the free Postgres expires 30 days after creation unless upgraded.
+
 ## Engineering standards
 
 - **API contract** — every response is wrapped in the `ApiEnvelope` (`packages/contracts/src/envelope.ts`). No exceptions; enforced by a global interceptor + exception filter.
