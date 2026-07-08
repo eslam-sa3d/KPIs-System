@@ -4,15 +4,36 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "preserve",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "noEmit": true,
     "allowJs": true,
     "incremental": true,
-    "plugins": [{ "name": "next" }],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "paths": {
-      "@pulse/contracts": ["../../packages/contracts/src"],
-      "@pulse/theme": ["../../packages/theme/src"]
-    }
+      "@pulse/contracts": [
+        "../../packages/contracts/src"
+      ],
+      "@pulse/theme": [
+        "../../packages/theme/src"
+      ]
+    },
+    "isolatedModules": true
   },
-  "include": ["app", "next-env.d.ts", ".next/types/**/*.ts"]
+  "include": [
+    "app",
+    "lib",
+    "next-env.d.ts",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

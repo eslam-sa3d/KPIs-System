@@ -21,7 +21,10 @@ function makePrismaStub() {
   return {
     user: { findUnique: vi.fn() },
     session: {
-      create: vi.fn(async ({ data }: { data: object }) => ({ id: 'session-new', ...data })),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'session-new',
+        ...data,
+      })),
       findUnique: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),

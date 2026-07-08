@@ -26,14 +26,22 @@ export const palette = {
   },
 } as const;
 
-/** Ordered categorical series for charts (per brand chart palette). */
+/**
+ * Ordered categorical series for charts. Assign in this fixed order, never
+ * cycled; >6 series folds into "Other".
+ *
+ * Accessibility (validated 2026-07 against white surface): CVD separation
+ * passes (worst adjacent ΔE 23), but oasis/sea/sunset sit below 3:1 contrast
+ * — charts using them MUST ship direct labels + a legend + 2px mark gaps
+ * (never color alone). `sun` (#ffdd40, 1.3:1) is excluded from the series;
+ * use it only as an outlined fill accent.
+ */
 export const chartSeries = [
   palette.primary.purple,
   palette.primary.coral,
   palette.tertiary.oasis,
-  palette.tertiary.sea,
   palette.tertiary.sunset,
-  palette.tertiary.sun,
+  palette.tertiary.sea,
   palette.secondary.moonLight,
 ] as const;
 

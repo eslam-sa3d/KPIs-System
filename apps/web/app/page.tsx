@@ -18,7 +18,7 @@ export default function LandingPage() {
         }}
       >
         <Image src="/brand/pulse-neg.svg" alt="pulse by solutions" width={140} height={61} priority />
-        <Link href="/login" className="btn-primary" style={{ background: 'var(--color-accent)' }}>
+        <Link href="/login" className="btn-primary">
           sign in
         </Link>
       </header>

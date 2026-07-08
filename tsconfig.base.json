@@ -14,10 +14,6 @@
     "sourceMap": true,
     "resolveJsonModule": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "paths": {
-      "@pulse/contracts": ["./packages/contracts/src"],
-      "@pulse/theme": ["./packages/theme/src"]
-    }
+    "emitDecoratorMetadata": true
   }
 }

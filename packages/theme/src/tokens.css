@@ -96,6 +96,9 @@
   --color-text: var(--pulse-air);
   --color-text-muted: var(--pulse-silver-light);
   --color-border: var(--pulse-purple-light);
+  /* purple CTAs vanish on purple — the brand CTA on dark surfaces is coral */
+  --color-primary: var(--pulse-coral);
+  --color-primary-hover: color-mix(in srgb, var(--pulse-coral) 85%, var(--pulse-onyx));
 }
 
 @font-face {

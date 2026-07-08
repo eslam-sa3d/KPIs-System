@@ -34,6 +34,7 @@
     "@nestjs/testing": "^10.4.15",
     "@types/cookie-parser": "^1.4.8",
     "@types/express": "^5.0.0",
+    "@types/supertest": "^6.0.2",
     "prisma": "^6.1.0",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",

@@ -12,6 +12,8 @@ import { FormsController } from './modules/forms/forms.controller';
 import { FormsService } from './modules/forms/forms.service';
 import { SubmissionsService } from './modules/forms/submissions.service';
 import { HealthController } from './modules/health/health.controller';
+import { KpisController } from './modules/kpis/kpis.controller';
+import { KpisService } from './modules/kpis/kpis.service';
 import { PermissionsGuard } from './modules/rbac/permissions.guard';
 import { RbacService } from './modules/rbac/rbac.service';
 import { RolesController } from './modules/rbac/roles.controller';
@@ -27,13 +29,20 @@ import { RolesController } from './modules/rbac/roles.controller';
       verifyOptions: { issuer: 'pulse-kpi' },
     }),
   ],
-  controllers: [HealthController, AuthController, RolesController, FormsController],
+  controllers: [
+    HealthController,
+    AuthController,
+    RolesController,
+    KpisController,
+    FormsController,
+  ],
   providers: [
     PrismaService,
     RedisService,
     PasswordHasher,
     AuthService,
     RbacService,
+    KpisService,
     FormsService,
     SubmissionsService,
     // Guard chain runs in registration order:
