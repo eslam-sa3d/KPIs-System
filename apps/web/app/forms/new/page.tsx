@@ -278,7 +278,7 @@ export default function NewFormPage() {
         ]);
       }
     } catch {
-      setError('could not read this file — is it a valid .xlsx spreadsheet?');
+      setError('could not read this file — is it a valid .xlsx, .csv, or .docx file?');
     } finally {
       setImporting(false);
     }
@@ -375,16 +375,17 @@ export default function NewFormPage() {
 
         <div className="builder msform-body">
         <div className="admin-card" style={{ marginBottom: 16 }}>
-          <label>import questions from a spreadsheet</label>
+          <label>import questions from a file</label>
           <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            columns: question (required), type, required, options, help text, page. unrecognized types
-            default to short text.
+            Excel/CSV columns: question (required), type, required, options, help text, page. unrecognized
+            types default to short text. Word (.docx): one question per line, optionally ending in a type
+            hint like "how satisfied are you? (rating)".
           </p>
           <input
             ref={fileInputRef}
             id="excel-import-input"
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx,.xls,.csv,.docx"
             onChange={onImportExcel}
             style={{ display: 'none' }}
           />
@@ -394,7 +395,7 @@ export default function NewFormPage() {
             disabled={importing}
             onClick={() => fileInputRef.current?.click()}
           >
-            {importing ? 'reading file…' : 'import from Excel'}
+            {importing ? 'reading file…' : 'import from Excel, CSV, or Word'}
           </button>
           {importIssues.length > 0 && (
             <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>

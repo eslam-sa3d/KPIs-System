@@ -17,7 +17,7 @@ export interface ParsedFormField {
   highLabel: string;
   acceptedMimeTypes: string;
   maxSizeMb: number;
-  /** page/section column value, or '' if the sheet didn't group questions into pages */
+  /** page/section column value, or '' if the source didn't group questions into pages */
   page: string;
 }
 
@@ -58,6 +58,18 @@ const TYPE_ALIASES: Record<string, FieldType> = {
   file: 'file', 'file upload': 'file', attachment: 'file',
 };
 
+const DEFAULT_FIELD = {
+  helpText: '',
+  options: '',
+  scale: 5,
+  likertScale: 'disagree, neutral, agree',
+  lowLabel: '',
+  highLabel: '',
+  acceptedMimeTypes: 'application/pdf, image/png, image/jpeg',
+  maxSizeMb: 10,
+  page: '',
+};
+
 function normalizeHeader(cell: unknown): string {
   return String(cell ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
@@ -82,16 +94,8 @@ function cellToNumber(cell: unknown, fallback: number, min: number, max: number)
   return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
 }
 
-/**
- * Parses an uploaded spreadsheet into questions for the form builder. Expected
- * columns (header row, any order, only Question is required): Question, Type,
- * Required, Options, Help Text, Scale, Likert Scale, Low Label, High Label,
- * Accepted File Types, Max Size MB, Page. Unrecognized Type values default to
- * short text. Rows with no question text are skipped and reported rather than
- * failing the whole import.
- */
-export async function parseFormWorkbook(file: File): Promise<ParsedFormWorkbook> {
-  const rows = await readSheet(file);
+/** Maps header-row + data-row cells (from a spreadsheet or CSV) onto ParsedFormField[]. */
+function mapRowsToFields(rows: unknown[][]): ParsedFormWorkbook {
   const issues: string[] = [];
 
   if (rows.length === 0) {
@@ -135,18 +139,114 @@ export async function parseFormWorkbook(file: File): Promise<ParsedFormWorkbook>
       required: cellToBoolean(at('required', row)),
       options: cellToString(at('options', row)),
       scale: cellToNumber(at('scale', row), 5, 2, 10),
-      likertScale: cellToString(at('likertScale', row)) || 'disagree, neutral, agree',
+      likertScale: cellToString(at('likertScale', row)) || DEFAULT_FIELD.likertScale,
       lowLabel: cellToString(at('lowLabel', row)),
       highLabel: cellToString(at('highLabel', row)),
-      acceptedMimeTypes: cellToString(at('acceptedMimeTypes', row)) || 'application/pdf, image/png, image/jpeg',
+      acceptedMimeTypes: cellToString(at('acceptedMimeTypes', row)) || DEFAULT_FIELD.acceptedMimeTypes,
       maxSizeMb: cellToNumber(at('maxSizeMb', row), 10, 1, 25),
       page: cellToString(at('page', row)),
     });
   }
 
   if (fields.length === 0 && issues.length === 0) {
-    issues.push('no questions found in the sheet');
+    issues.push('no questions found in the file');
   }
 
   return { fields, issues };
+}
+
+/** Parses RFC4180-ish CSV text (quoted fields, embedded commas/newlines, "" escaping) into rows of cells. */
+function parseCsvText(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+    if (ch === '"') inQuotes = true;
+    else if (ch === ',') { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (ch !== '\r') field += ch;
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+
+  return rows;
+}
+
+/**
+ * A Word document has no columns, so each non-empty line/paragraph becomes a
+ * short-text question. A trailing parenthetical hint that names a known field
+ * type — e.g. "how satisfied are you? (rating)" — sets that question's type;
+ * everything else (required, options, help text) is left at the default and
+ * can be adjusted in the builder afterward.
+ */
+function parseDocxLines(rawText: string): ParsedFormWorkbook {
+  const issues: string[] = [];
+  const fields: ParsedFormField[] = [];
+
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^(\d+[.)]|[-*•])\s+/, ''))
+    .filter(Boolean);
+
+  lines.forEach((line) => {
+    const hint = line.match(/^(.*\S)\s*\(([^()]+)\)\s*$/);
+    const hintType = hint ? TYPE_ALIASES[hint[2]!.trim().toLowerCase()] : undefined;
+    const label = hintType ? hint![1]!.trim() : line;
+
+    fields.push({
+      ...DEFAULT_FIELD,
+      label,
+      type: hintType ?? 'short_text',
+      required: false,
+    });
+  });
+
+  if (fields.length === 0) issues.push('no question lines found in the document');
+  return { fields, issues };
+}
+
+/**
+ * Parses an uploaded file into questions for the form builder.
+ *
+ * .xlsx/.xls/.csv: expected columns (header row, any order, only Question is
+ * required): Question, Type, Required, Options, Help Text, Scale, Likert
+ * Scale, Low Label, High Label, Accepted File Types, Max Size MB, Page.
+ * Unrecognized Type values default to short text; rows with no question text
+ * are skipped and reported rather than failing the whole import.
+ *
+ * .docx: one question per non-empty line/paragraph, in reading order; an
+ * optional "(type)" hint at the end of a line sets that question's type.
+ */
+export async function parseFormWorkbook(file: File): Promise<ParsedFormWorkbook> {
+  const name = file.name.toLowerCase();
+
+  if (name.endsWith('.csv')) {
+    const text = await file.text();
+    return mapRowsToFields(parseCsvText(text));
+  }
+
+  if (name.endsWith('.docx')) {
+    const mammoth = await import('mammoth');
+    const arrayBuffer = await file.arrayBuffer();
+    const { value: rawText } = await mammoth.extractRawText({ arrayBuffer });
+    return parseDocxLines(rawText);
+  }
+
+  const rows = await readSheet(file);
+  return mapRowsToFields(rows);
 }
