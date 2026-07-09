@@ -81,10 +81,18 @@ export class AuthService {
 
     if (session.expiresAt < new Date()) throw invalid;
 
-    await this.prisma.session.update({
-      where: { id: session.id },
+    // Atomic claim: only one of two concurrent refreshes presenting the same
+    // still-valid token (e.g. two tabs racing near access-token expiry) can
+    // flip revokedAt from null. The loser must NOT fall through to the
+    // reuse-detection branch above — it isn't theft, just a lost race — so it
+    // simply fails this one request; the winning tab's rotated cookie is what
+    // survives in the browser, and the next natural refresh recovers cleanly.
+    const claimed = await this.prisma.session.updateMany({
+      where: { id: session.id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    if (claimed.count === 0) throw invalid;
+
     return this.issueGrant(await this.toAuthenticatedUser(session.user), context);
   }
 

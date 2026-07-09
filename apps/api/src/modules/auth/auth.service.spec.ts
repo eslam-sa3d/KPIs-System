@@ -110,16 +110,35 @@ describe('AuthService', () => {
 
     it('rotates: revokes the presented session and issues a new one', async () => {
       prisma.session.findUnique.mockResolvedValue(liveSession);
+      prisma.session.updateMany.mockResolvedValueOnce({ count: 1 });
 
       const { grant, refreshToken } = await service.refresh('raw-token', context);
 
-      expect(prisma.session.update).toHaveBeenCalledWith({
-        where: { id: 'session-1' },
+      expect(prisma.session.updateMany).toHaveBeenCalledWith({
+        where: { id: 'session-1', revokedAt: null },
         data: { revokedAt: expect.any(Date) },
       });
       expect(prisma.session.create).toHaveBeenCalledTimes(1);
       expect(grant.user.id).toBe('user-1');
       expect(refreshToken).toBeTruthy();
+    });
+
+    it('loses a concurrent rotation race cleanly, without nuking other sessions', async () => {
+      // Two tabs present the same still-live token; both pass findUnique before
+      // either write lands. The loser's atomic claim affects zero rows.
+      prisma.session.findUnique.mockResolvedValue(liveSession);
+      prisma.session.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(service.refresh('raw-token', context)).rejects.toMatchObject({
+        code: 'UNAUTHENTICATED',
+      });
+
+      expect(prisma.session.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.session.updateMany).toHaveBeenCalledWith({
+        where: { id: 'session-1', revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
+      expect(prisma.session.create).not.toHaveBeenCalled();
     });
 
     it('treats reuse of a revoked token as theft: revokes ALL user sessions', async () => {
