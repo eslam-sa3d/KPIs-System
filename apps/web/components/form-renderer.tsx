@@ -61,42 +61,6 @@ export function applyPiping(text: string, answers: SubmissionAnswers): string {
   });
 }
 
-/** A custom-drawn radio control (see .control-wrap/.control-radio in globals.css) with a number
- *  caption above it — Google Forms' linear-scale layout, reused by both `rating` and `nps`. */
-function ScaleOption({
-  name, n, checked, onSelect,
-}: { name: string; n: number; checked: boolean; onSelect: () => void }) {
-  return (
-    <label className="scale-option">
-      <span className="scale-option-num">{n}</span>
-      <span className="control-wrap">
-        <input type="radio" name={name} checked={checked} onChange={onSelect} aria-label={String(n)} />
-        <span className="control-radio" aria-hidden="true" />
-      </span>
-    </label>
-  );
-}
-
-/** A custom-drawn radio/checkbox control — see .control-wrap in globals.css. The real
- *  input stays functionally in charge (visually hidden, not removed), so focus/keyboard/
- *  screen-reader behavior is exactly the native element's, just redrawn on top of it. */
-function ControlWrap({
-  type, name, checked, onChange, ariaLabel,
-}: {
-  type: 'radio' | 'checkbox';
-  name?: string;
-  checked: boolean;
-  onChange: () => void;
-  ariaLabel?: string;
-}) {
-  return (
-    <span className="control-wrap">
-      <input type={type} name={name} checked={checked} onChange={onChange} aria-label={ariaLabel} />
-      <span className={type === 'radio' ? 'control-radio' : 'control-checkbox'} aria-hidden="true" />
-    </span>
-  );
-}
-
 /** Exported for reuse by ResponseDetailModal's edit mode — same input for filling and correcting. */
 export function FieldInput({
   field,
@@ -130,12 +94,7 @@ export function FieldInput({
     case 'date':
       return <input id={id} type="date" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
     case 'boolean':
-      return (
-        <span className="control-wrap">
-          <input id={id} type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />
-          <span className="control-checkbox" aria-hidden="true" />
-        </span>
-      );
+      return <input id={id} type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />;
     case 'rating': {
       const current = value as number | undefined;
       if (field.style === 'stars') {
@@ -158,7 +117,11 @@ export function FieldInput({
         <div className="scale-row" role="radiogroup" aria-labelledby={`${id}-label`} id={id}>
           {field.lowLabel && <span className="muted scale-cap">{field.lowLabel}</span>}
           {Array.from({ length: field.scale }, (_, i) => i + 1).map((n) => (
-            <ScaleOption key={n} name={id} n={n} checked={current === n} onSelect={() => onChange(n)} />
+            <button key={n} type="button" role="radio" aria-checked={current === n}
+              className={`scale-pill${current === n ? ' scale-pill-active' : ''}`}
+              onClick={() => onChange(n)}>
+              {n}
+            </button>
           ))}
           {field.highLabel && <span className="muted scale-cap">{field.highLabel}</span>}
         </div>
@@ -170,7 +133,11 @@ export function FieldInput({
         <div className="scale-row" role="radiogroup" id={id}>
           <span className="muted scale-cap">{field.lowLabel}</span>
           {Array.from({ length: 11 }, (_, i) => i).map((n) => (
-            <ScaleOption key={n} name={id} n={n} checked={current === n} onSelect={() => onChange(n)} />
+            <button key={n} type="button" role="radio" aria-checked={current === n}
+              className={`scale-pill${current === n ? ' scale-pill-active' : ''}`}
+              onClick={() => onChange(n)}>
+              {n}
+            </button>
           ))}
           <span className="muted scale-cap">{field.highLabel}</span>
         </div>
@@ -184,14 +151,14 @@ export function FieldInput({
           <span className="check-group" id={id}>
             {field.options.map((o) => (
               <label key={o.value} className="check-item">
-                <ControlWrap type="radio" name={id} checked={raw === o.value} onChange={() => onChange(o.value)} ariaLabel={o.label} />
+                <input type="radio" name={id} checked={raw === o.value} onChange={() => onChange(o.value)} />
                 {o.imageAssetId && <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" />}
                 {o.label}
               </label>
             ))}
             {field.allowOther && (
               <label className="check-item">
-                <ControlWrap type="radio" name={id} checked={isOther} onChange={() => onChange('other:')} ariaLabel="other" />
+                <input type="radio" name={id} checked={isOther} onChange={() => onChange('other:')} />
                 other:
                 {isOther && (
                   <input type="text" aria-label={`${field.label} other`} value={raw.slice(6)}
@@ -225,16 +192,10 @@ export function FieldInput({
         <span className="check-group" id={id}>
           {field.options.map((o) => (
             <label key={o.value} className="check-item">
-              <ControlWrap
-                type="checkbox"
-                checked={selected.includes(o.value)}
-                onChange={() =>
-                  onChange(
-                    selected.includes(o.value) ? selected.filter((v) => v !== o.value) : [...selected, o.value],
-                  )
-                }
-                ariaLabel={o.label}
-              />
+              <input type="checkbox" checked={selected.includes(o.value)}
+                onChange={(e) =>
+                  onChange(e.target.checked ? [...selected, o.value] : selected.filter((v) => v !== o.value))
+                } />
               {o.imageAssetId && <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" />}
               {o.label}
             </label>
@@ -501,10 +462,7 @@ export function FormRenderer({
 }) {
   const [answers, setAnswers] = useState<SubmissionAnswers>(initialAnswers ?? {});
   const [error, setError] = useState<string | null>(null);
-  // per-field validation, Google-Forms-style: only shown after a failed attempt on the
-  // CURRENT page, and re-derived from `answers` on every render so a field's own error
-  // clears the instant it's answered — no manual per-field bookkeeping needed.
-  const [attempted, setAttempted] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submittedScore, setSubmittedScore] = useState<SubmissionScore | null>(null);
   const [submittedEditToken, setSubmittedEditToken] = useState<string | null>(null);
@@ -583,55 +541,36 @@ export function FormRenderer({
     }
   }, [definition]);
 
-  function missingRequiredFields(fields: FormField[]): string[] {
-    return fields
-      .filter((field) => {
-        if (field.capturedFromUrlParam) return false;
-        if (!isVisible(field, answers)) return false;
-        if (!field.required) return false;
-        const value = answers[field.key];
-        return value === undefined || value === null || value === '';
-      })
-      .map((field) => field.key);
-  }
-
-  function scrollToField(key: string) {
-    document.getElementById(`f-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  function pageIsComplete(fields: FormField[]) {
+    return fields.every((field) => {
+      if (field.capturedFromUrlParam) return true;
+      if (!isVisible(field, answers)) return true;
+      if (!field.required) return true;
+      const value = answers[field.key];
+      return value !== undefined && value !== null && value !== '';
+    });
   }
 
   function onNext() {
-    const missing = missingRequiredFields(pageFields);
-    if (missing.length > 0) {
-      setAttempted(true);
-      scrollToField(missing[0]!);
+    if (!pageIsComplete(pageFields)) {
+      setPageError('please answer every required question on this page');
       return;
     }
-    setAttempted(false);
+    setPageError(null);
     const next = path[currentIndex + 1];
     if (next) setCurrentSectionId(next);
   }
 
   function onBack() {
-    setAttempted(false);
+    setPageError(null);
     const prev = path[currentIndex - 1];
     if (prev) setCurrentSectionId(prev);
   }
 
-  function onClearForm() {
-    setAnswers({});
-    setAttempted(false);
-    setError(null);
-    if (hasSections && renderDefinition.sections?.[0]) {
-      setCurrentSectionId(renderDefinition.sections[0].id);
-    }
-  }
-
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const missing = missingRequiredFields(hasSections ? pageFields : orderedFields);
-    if (missing.length > 0) {
-      setAttempted(true);
-      scrollToField(missing[0]!);
+    if (hasSections && !pageIsComplete(pageFields)) {
+      setPageError('please answer every required question on this page');
       return;
     }
     setError(null);
@@ -667,24 +606,15 @@ export function FormRenderer({
           ...(fontStack ? { '--msform-font-family': fontStack } : {}),
         } as React.CSSProperties)
       : undefined;
+  const bannerStyle = theme?.backgroundAssetId ? { backgroundImage: `url(${assetUrl(theme.backgroundAssetId)})` } : undefined;
 
   return (
-    <div className="msform msform-fill" style={accentStyle}>
-      {hasSections && settings.showProgressBar && !submitted && !closed && !notYetOpen && (
-        <div className="msform-progress" aria-hidden="true">
-          <div className="msform-progress-fill" style={{ width: `${((currentIndex + 1) / path.length) * 100}%` }} />
-        </div>
-      )}
-      <header className={`msform-banner${theme?.backgroundAssetId ? ' msform-banner-has-image' : ''}`}>
-        {theme?.backgroundAssetId && (
-          <div className="msform-banner-image" style={{ backgroundImage: `url(${assetUrl(theme.backgroundAssetId)})` }} />
-        )}
-        <div className="msform-banner-body">
-          {theme?.logoAssetId && <img src={assetUrl(theme.logoAssetId)} alt="" className="msform-logo" />}
-          <h1>{definition.title}</h1>
-          {definition.description && <p>{definition.description}</p>}
-          {!submitted && !closed && !notYetOpen && <p className="msform-required-hint">* required</p>}
-        </div>
+    <div className="msform" style={accentStyle}>
+      <header className={`msform-banner${theme?.backgroundAssetId ? ' msform-banner-image' : ''}`} style={bannerStyle}>
+        {theme?.logoAssetId && <img src={assetUrl(theme.logoAssetId)} alt="" className="msform-logo" />}
+        <h1>{definition.title}</h1>
+        {definition.description && <p>{definition.description}</p>}
+        {!submitted && !closed && !notYetOpen && <p className="msform-required-hint">* required</p>}
       </header>
 
       {closed || notYetOpen ? (
@@ -758,9 +688,12 @@ export function FormRenderer({
         </div>
       ) : (
         <form className="fill-form msform-body" onSubmit={handleSubmit}>
-          {hasSections && (currentSection?.title || currentSection?.description || currentSection?.media) && (
-            <div className="msform-page-head">
-              {currentSection?.title && <h2>{currentSection.title}</h2>}
+          {hasSections && (
+            <div style={{ marginBottom: 8 }}>
+              <p className="muted" style={{ margin: 0 }}>
+                page {currentIndex + 1} of {path.length}
+                {currentSection?.title ? ` — ${currentSection.title}` : ''}
+              </p>
               {currentSection?.description && <p className="muted">{currentSection.description}</p>}
               {currentSection?.media && <FieldMedia media={currentSection.media} />}
             </div>
@@ -769,7 +702,7 @@ export function FormRenderer({
             const visibleFields = (hasSections ? pageFields : orderedFields).filter(
               (field) => isVisible(field, answers) && !field.capturedFromUrlParam,
             );
-            const missing = attempted ? new Set(missingRequiredFields(visibleFields)) : new Set<string>();
+            let questionNumber = 0;
             return visibleFields.map((field) => {
               const label = applyPiping(field.label, answers);
               const helpText = field.helpText ? applyPiping(field.helpText, answers) : undefined;
@@ -781,37 +714,31 @@ export function FormRenderer({
                   </div>
                 );
               }
-              const isInvalid = missing.has(field.key);
+              questionNumber += 1;
               return (
-                <div key={field.key} className={`question-card${isInvalid ? ' question-card-invalid' : ''}`}>
+                <div key={field.key} className="question-card">
                   {field.media && <FieldMedia media={field.media} />}
                   <label htmlFor={`f-${field.key}`} className="question-title" id={`f-${field.key}-label`}>
-                    {label}
+                    <span className="question-number">{questionNumber}.</span> {label}
                     {field.required && <span aria-hidden="true" className="question-required"> *</span>}
                   </label>
                   {helpText && <p className="muted">{helpText}</p>}
                   <FieldInput field={field} value={answers[field.key]} uploadPath={uploadPath}
                     onChange={(value) => setAnswers((a) => ({ ...a, [field.key]: value }))} />
-                  {isInvalid && <p role="alert" className="field-error">This is a required question</p>}
                 </div>
               );
             });
           })()}
-          {error && (
-            <p role="alert" className="form-error">{error}</p>
+          {(pageError || error) && (
+            <p role="alert" className="form-error">{pageError ?? error}</p>
           )}
           {(!hasSections || isLastPage) && captchaSlot}
           <div className="page-title-row">
-            <span className="page-title-row-left">
-              {hasSections && currentIndex > 0 && (
-                <button type="button" className="btn-ghost" onClick={onBack}>
-                  ← back
-                </button>
-              )}
-              <button type="button" className="btn-link" onClick={onClearForm}>
-                clear form
+            {hasSections && currentIndex > 0 && (
+              <button type="button" className="btn-ghost" onClick={onBack}>
+                ← back
               </button>
-            </span>
+            )}
             {hasSections && !isLastPage ? (
               <button type="button" className="btn-primary" onClick={onNext}>
                 next →

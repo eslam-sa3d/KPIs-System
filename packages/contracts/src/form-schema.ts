@@ -248,9 +248,6 @@ export const formSettingsSchema = z.object({
    *  no page has a branching rule (see FormRenderer); order-independent
    *  reachability means the server needs no changes to support this. */
   shuffleSections: z.boolean().default(false),
-  /** show a thin progress bar across sectioned/multi-page forms — Google Forms-style
-   *  opt-in, default off (matches Google's own default). */
-  showProgressBar: z.boolean().default(false),
   /** conditional response quotas (SurveyMonkey parity): stop counting toward this
    *  quota's own limit once the field's answer matches `equals` this many times —
    *  distinct from the blanket `maxResponses` above. Reuses the same JSONB-path
