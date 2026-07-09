@@ -162,6 +162,116 @@ describe('v2 field types', () => {
   });
 });
 
+describe('response validation on text fields', () => {
+  const v = compileAnswerValidator(
+    formDefinitionSchema.parse({
+      title: 'validated text',
+      fields: [
+        { key: 'code', label: 'Employee code', type: 'short_text', minLength: 4, pattern: '^[A-Z]{2}\\d{4}$' },
+      ],
+    }),
+  );
+
+  it('accepts an answer meeting the min length and pattern', () => {
+    expect(v.validate({ code: 'AB1234' })).toEqual({ code: 'AB1234' });
+  });
+
+  it('rejects an answer failing the pattern', () => {
+    expect(() => v.validate({ code: 'ab1234' })).toThrow(ZodError);
+  });
+
+  it('rejects an answer shorter than minLength', () => {
+    const short = compileAnswerValidator(
+      formDefinitionSchema.parse({
+        title: 'min length only',
+        fields: [{ key: 'x', label: 'X', type: 'short_text', minLength: 5 }],
+      }),
+    );
+    expect(() => short.validate({ x: 'ab' })).toThrow(ZodError);
+  });
+});
+
+describe('slider field', () => {
+  const v = compileAnswerValidator(
+    formDefinitionSchema.parse({
+      title: 'slider',
+      fields: [{ key: 'satisfaction', label: 'Satisfaction', type: 'slider', min: 0, max: 10, step: 1 }],
+    }),
+  );
+
+  it('accepts a value within range and rejects out-of-range', () => {
+    expect(v.validate({ satisfaction: 7 })).toEqual({ satisfaction: 7 });
+    expect(() => v.validate({ satisfaction: 11 })).toThrow(ZodError);
+  });
+});
+
+describe('contact_info field', () => {
+  const v = compileAnswerValidator(
+    formDefinitionSchema.parse({
+      title: 'contact',
+      fields: [
+        {
+          key: 'contact',
+          label: 'Contact',
+          type: 'contact_info',
+          requireName: true,
+          requireEmail: true,
+          requirePhone: false,
+        },
+      ],
+    }),
+  );
+
+  it('accepts name+email and allows phone to be omitted', () => {
+    expect(v.validate({ contact: { name: 'Ada', email: 'ada@example.com' } })).toEqual({
+      contact: { name: 'Ada', email: 'ada@example.com' },
+    });
+  });
+
+  it('rejects a missing required part or an invalid email', () => {
+    expect(() => v.validate({ contact: { email: 'ada@example.com' } })).toThrow(ZodError);
+    expect(() => v.validate({ contact: { name: 'Ada', email: 'not-an-email' } })).toThrow(ZodError);
+  });
+});
+
+describe('hot_spot field', () => {
+  const v = compileAnswerValidator(
+    formDefinitionSchema.parse({
+      title: 'hot spot',
+      fields: [
+        {
+          key: 'part',
+          label: 'Click the faulty part',
+          type: 'hot_spot',
+          imageAssetId: '11111111-1111-1111-1111-111111111111',
+          regions: [
+            { value: 'engine', label: 'Engine', x: 10, y: 10, width: 20, height: 20 },
+            { value: 'wheel', label: 'Wheel', x: 60, y: 60, width: 15, height: 15 },
+          ],
+        },
+      ],
+    }),
+  );
+
+  it('accepts a known region value and rejects an unknown one', () => {
+    expect(v.validate({ part: 'wheel' })).toEqual({ part: 'wheel' });
+    expect(() => v.validate({ part: 'trunk' })).toThrow(ZodError);
+  });
+});
+
+describe('rating field star style', () => {
+  it('scores identically regardless of style — style is display-only', () => {
+    const stars = compileAnswerValidator(
+      formDefinitionSchema.parse({
+        title: 'stars',
+        fields: [{ key: 'r', label: 'Rate us', type: 'rating', scale: 5, style: 'stars' }],
+      }),
+    );
+    expect(stars.validate({ r: 4 })).toEqual({ r: 4 });
+    expect(() => stars.validate({ r: 6 })).toThrow(ZodError);
+  });
+});
+
 describe('file field with maxFiles', () => {
   it('keeps a single upload id (not an array) when maxFiles is 1, the default', () => {
     const single = compileAnswerValidator(

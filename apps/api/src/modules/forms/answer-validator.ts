@@ -86,8 +86,18 @@ export function isVisible(field: FormField, answers: SubmissionAnswers): boolean
 function validatorFor(field: FormField): ZodTypeAny {
   switch (field.type) {
     case 'short_text':
-    case 'long_text':
-      return z.string().max(field.maxLength);
+    case 'long_text': {
+      let schema = z.string().max(field.maxLength);
+      if (field.minLength !== undefined) schema = schema.min(field.minLength);
+      if (field.pattern) {
+        try {
+          schema = schema.regex(new RegExp(field.pattern), field.patternErrorMessage ?? 'does not match the required format');
+        } catch {
+          // an invalid regex saved to a field shouldn't crash the validator — just skip the pattern check
+        }
+      }
+      return schema;
+    }
     case 'number': {
       let schema = field.integerOnly ? z.number().int() : z.number();
       if (field.min !== undefined) schema = schema.min(field.min);
@@ -142,5 +152,19 @@ function validatorFor(field: FormField): ZodTypeAny {
     case 'section_header':
       // display-only: never has an answer to validate
       return z.undefined();
+    case 'slider':
+      return z.number().min(field.min).max(field.max);
+    case 'contact_info':
+      return z.object({
+        name: field.requireName ? z.string().min(1).max(200) : z.string().max(200).optional(),
+        email: field.requireEmail
+          ? z.string().email().max(320)
+          : z.union([z.string().email().max(320), z.literal('')]).optional(),
+        phone: field.requirePhone ? z.string().min(1).max(40) : z.string().max(40).optional(),
+      });
+    case 'hot_spot': {
+      const values = field.regions.map((r) => r.value);
+      return z.enum(values as [string, ...string[]]);
+    }
   }
 }

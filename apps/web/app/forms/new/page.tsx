@@ -33,6 +33,9 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'ranking', label: 'ranking' },
   { value: 'file', label: 'file upload' },
   { value: 'section_header', label: 'section heading (no answer)' },
+  { value: 'slider', label: 'slider' },
+  { value: 'contact_info', label: 'contact info (name / email / phone)' },
+  { value: 'hot_spot', label: 'hot spot (click a region on an image)' },
 ];
 
 const parseList = (raw: string) =>
@@ -77,6 +80,23 @@ interface DraftField {
   correctValues: string;
   /** short_text: comma-separated, case-insensitive any-of accepted answers */
   correctAnswers: string;
+  /** short_text/long_text: Google Forms-style response validation. 0 = no minimum. */
+  minLength: number;
+  pattern: string;
+  patternErrorMessage: string;
+  /** rating: visual style only */
+  ratingStyle: 'pills' | 'stars';
+  /** slider */
+  sliderMin: number;
+  sliderMax: number;
+  sliderStep: number;
+  /** contact_info: which parts are required */
+  requireName: boolean;
+  requireEmail: boolean;
+  requirePhone: boolean;
+  /** hot_spot */
+  hotSpotAssetId: string;
+  hotSpotRegions: Array<{ value: string; label: string; x: number; y: number; width: number; height: number }>;
 }
 
 const emptyField = (): DraftField => ({
@@ -107,6 +127,18 @@ const emptyField = (): DraftField => ({
   correctValue: '',
   correctValues: '',
   correctAnswers: '',
+  minLength: 0,
+  pattern: '',
+  patternErrorMessage: '',
+  ratingStyle: 'pills',
+  sliderMin: 0,
+  sliderMax: 100,
+  sliderStep: 1,
+  requireName: true,
+  requireEmail: true,
+  requirePhone: false,
+  hotSpotAssetId: '',
+  hotSpotRegions: [],
 });
 
 const toKey = (label: string, index: number) => {
@@ -259,9 +291,20 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
       return {
         ...base,
         type: draft.type,
+        ...(draft.minLength > 0 ? { minLength: draft.minLength } : {}),
+        ...(draft.pattern.trim() ? { pattern: draft.pattern.trim() } : {}),
+        ...(draft.patternErrorMessage.trim() ? { patternErrorMessage: draft.patternErrorMessage.trim() } : {}),
         ...(draft.points > 0 && draft.correctAnswers.trim()
           ? { correctAnswers: parseList(draft.correctAnswers), ...quizPoints }
           : {}),
+      };
+    case 'long_text':
+      return {
+        ...base,
+        type: draft.type,
+        ...(draft.minLength > 0 ? { minLength: draft.minLength } : {}),
+        ...(draft.pattern.trim() ? { pattern: draft.pattern.trim() } : {}),
+        ...(draft.patternErrorMessage.trim() ? { patternErrorMessage: draft.patternErrorMessage.trim() } : {}),
       };
     case 'number':
       return {
@@ -289,6 +332,7 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
         ...base,
         type: draft.type,
         scale: draft.scale,
+        style: draft.ratingStyle,
         ...(draft.lowLabel ? { lowLabel: draft.lowLabel } : {}),
         ...(draft.highLabel ? { highLabel: draft.highLabel } : {}),
       };
@@ -298,6 +342,31 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
         type: draft.type,
         ...(draft.lowLabel ? { lowLabel: draft.lowLabel } : {}),
         ...(draft.highLabel ? { highLabel: draft.highLabel } : {}),
+      };
+    case 'slider':
+      return {
+        ...base,
+        type: draft.type,
+        min: draft.sliderMin,
+        max: draft.sliderMax,
+        step: draft.sliderStep,
+        ...(draft.lowLabel ? { lowLabel: draft.lowLabel } : {}),
+        ...(draft.highLabel ? { highLabel: draft.highLabel } : {}),
+      };
+    case 'contact_info':
+      return {
+        ...base,
+        type: draft.type,
+        requireName: draft.requireName,
+        requireEmail: draft.requireEmail,
+        requirePhone: draft.requirePhone,
+      };
+    case 'hot_spot':
+      return {
+        ...base,
+        type: draft.type,
+        imageAssetId: draft.hotSpotAssetId,
+        regions: draft.hotSpotRegions,
       };
     default:
       return { ...base, type: draft.type };
@@ -553,6 +622,18 @@ export default function NewFormPage() {
           correctValue: '',
           correctValues: '',
           correctAnswers: '',
+          minLength: 0,
+          pattern: '',
+          patternErrorMessage: '',
+          ratingStyle: 'pills' as const,
+          sliderMin: 0,
+          sliderMax: 100,
+          sliderStep: 1,
+          requireName: true,
+          requireEmail: true,
+          requirePhone: false,
+          hotSpotAssetId: '',
+          hotSpotRegions: [],
         })),
       ]);
       setImportIssues(issues);
@@ -1139,10 +1220,46 @@ export default function NewFormPage() {
                   value={field.scale}
                   onChange={(e) => updateField(index, { scale: Number(e.target.value) })}
                 />
+                <label htmlFor={`field-rating-style-${index}`}>style</label>
+                <select
+                  id={`field-rating-style-${index}`}
+                  value={field.ratingStyle}
+                  onChange={(e) => updateField(index, { ratingStyle: e.target.value as 'pills' | 'stars' })}
+                >
+                  <option value="pills">numbered pills</option>
+                  <option value="stars">stars</option>
+                </select>
               </>
             )}
 
-            {(field.type === 'rating' || field.type === 'nps') && (
+            {field.type === 'slider' && (
+              <>
+                <label htmlFor={`field-slider-min-${index}`}>minimum</label>
+                <input
+                  id={`field-slider-min-${index}`}
+                  type="number"
+                  value={field.sliderMin}
+                  onChange={(e) => updateField(index, { sliderMin: Number(e.target.value) })}
+                />
+                <label htmlFor={`field-slider-max-${index}`}>maximum</label>
+                <input
+                  id={`field-slider-max-${index}`}
+                  type="number"
+                  value={field.sliderMax}
+                  onChange={(e) => updateField(index, { sliderMax: Number(e.target.value) })}
+                />
+                <label htmlFor={`field-slider-step-${index}`}>step</label>
+                <input
+                  id={`field-slider-step-${index}`}
+                  type="number"
+                  min={0.01}
+                  value={field.sliderStep}
+                  onChange={(e) => updateField(index, { sliderStep: Number(e.target.value) })}
+                />
+              </>
+            )}
+
+            {(field.type === 'rating' || field.type === 'nps' || field.type === 'slider') && (
               <>
                 <label htmlFor={`field-low-${index}`}>low-end label (optional)</label>
                 <input
@@ -1159,6 +1276,150 @@ export default function NewFormPage() {
                   placeholder="extremely likely"
                 />
               </>
+            )}
+
+            {(field.type === 'short_text' || field.type === 'long_text') && (
+              <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
+                <span className="muted" style={{ fontSize: 12 }}>response validation (optional)</span>
+                <label htmlFor={`field-minlen-${index}`}>minimum length</label>
+                <input
+                  id={`field-minlen-${index}`}
+                  type="number"
+                  min={0}
+                  value={field.minLength || ''}
+                  onChange={(e) => updateField(index, { minLength: e.target.value === '' ? 0 : Number(e.target.value) })}
+                  placeholder="no minimum"
+                />
+                <label htmlFor={`field-pattern-${index}`}>must match pattern (regex, optional)</label>
+                <input
+                  id={`field-pattern-${index}`}
+                  value={field.pattern}
+                  onChange={(e) => updateField(index, { pattern: e.target.value })}
+                  placeholder="e.g. ^[A-Z]{2}\\d{4}$"
+                />
+                {field.pattern && (
+                  <>
+                    <label htmlFor={`field-pattern-msg-${index}`}>error message when it doesn't match</label>
+                    <input
+                      id={`field-pattern-msg-${index}`}
+                      value={field.patternErrorMessage}
+                      onChange={(e) => updateField(index, { patternErrorMessage: e.target.value })}
+                      placeholder="please enter a valid value"
+                    />
+                  </>
+                )}
+              </div>
+            )}
+
+            {field.type === 'contact_info' && (
+              <>
+                <span className="builder-required">
+                  <input
+                    id={`field-req-name-${index}`}
+                    type="checkbox"
+                    checked={field.requireName}
+                    onChange={(e) => updateField(index, { requireName: e.target.checked })}
+                  />
+                  <label htmlFor={`field-req-name-${index}`}>require name</label>
+                </span>
+                <span className="builder-required">
+                  <input
+                    id={`field-req-email-${index}`}
+                    type="checkbox"
+                    checked={field.requireEmail}
+                    onChange={(e) => updateField(index, { requireEmail: e.target.checked })}
+                  />
+                  <label htmlFor={`field-req-email-${index}`}>require email</label>
+                </span>
+                <span className="builder-required">
+                  <input
+                    id={`field-req-phone-${index}`}
+                    type="checkbox"
+                    checked={field.requirePhone}
+                    onChange={(e) => updateField(index, { requirePhone: e.target.checked })}
+                  />
+                  <label htmlFor={`field-req-phone-${index}`}>require phone</label>
+                </span>
+              </>
+            )}
+
+            {field.type === 'hot_spot' && (
+              <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
+                <label htmlFor={`field-hotspot-image-${index}`}>image</label>
+                <input
+                  id={`field-hotspot-image-${index}`}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) =>
+                    e.target.files?.[0] &&
+                    uploadAsset<{ id: string }>(e.target.files[0]).then((uploaded) =>
+                      updateField(index, { hotSpotAssetId: uploaded.id }),
+                    )
+                  }
+                />
+                {field.hotSpotAssetId && (
+                  <img src={assetUrl(field.hotSpotAssetId)} alt="" className="option-image" style={{ maxWidth: 240 }} />
+                )}
+                <span className="muted" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
+                  regions (x/y/width/height as % of the image)
+                </span>
+                {field.hotSpotRegions.map((region, ri) => (
+                  <div key={ri} className="builder-required" style={{ marginTop: 4, flexWrap: 'wrap' }}>
+                    <input
+                      aria-label="region label"
+                      value={region.label}
+                      placeholder="label"
+                      style={{ width: 100 }}
+                      onChange={(e) => {
+                        const next = [...field.hotSpotRegions];
+                        next[ri] = { ...next[ri]!, label: e.target.value, value: e.target.value };
+                        updateField(index, { hotSpotRegions: next });
+                      }}
+                    />
+                    {(['x', 'y', 'width', 'height'] as const).map((axis) => (
+                      <input
+                        key={axis}
+                        aria-label={axis}
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={region[axis]}
+                        placeholder={axis}
+                        style={{ width: 60 }}
+                        onChange={(e) => {
+                          const next = [...field.hotSpotRegions];
+                          next[ri] = { ...next[ri]!, [axis]: Number(e.target.value) };
+                          updateField(index, { hotSpotRegions: next });
+                        }}
+                      />
+                    ))}
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() =>
+                        updateField(index, { hotSpotRegions: field.hotSpotRegions.filter((_, i) => i !== ri) })
+                      }
+                    >
+                      remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ marginTop: 4 }}
+                  onClick={() =>
+                    updateField(index, {
+                      hotSpotRegions: [
+                        ...field.hotSpotRegions,
+                        { value: `region_${field.hotSpotRegions.length + 1}`, label: `region ${field.hotSpotRegions.length + 1}`, x: 10, y: 10, width: 20, height: 20 },
+                      ],
+                    })
+                  }
+                >
+                  + add region
+                </button>
+              </div>
             )}
 
             {field.type !== 'section_header' && (

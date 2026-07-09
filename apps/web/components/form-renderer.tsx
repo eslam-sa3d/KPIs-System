@@ -78,6 +78,22 @@ export function FieldInput({
       return <input id={id} type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />;
     case 'rating': {
       const current = value as number | undefined;
+      if (field.style === 'stars') {
+        return (
+          <div className="scale-row star-row" role="radiogroup" aria-labelledby={`${id}-label`} id={id}>
+            {field.lowLabel && <span className="muted scale-cap">{field.lowLabel}</span>}
+            {Array.from({ length: field.scale }, (_, i) => i + 1).map((n) => (
+              <button key={n} type="button" role="radio" aria-checked={current === n}
+                aria-label={`${n} star${n === 1 ? '' : 's'}`}
+                className={`star-pill${current !== undefined && n <= current ? ' star-pill-active' : ''}`}
+                onClick={() => onChange(n)}>
+                ★
+              </button>
+            ))}
+            {field.highLabel && <span className="muted scale-cap">{field.highLabel}</span>}
+          </div>
+        );
+      }
       return (
         <div className="scale-row" role="radiogroup" aria-labelledby={`${id}-label`} id={id}>
           {field.lowLabel && <span className="muted scale-cap">{field.lowLabel}</span>}
@@ -323,6 +339,64 @@ export function FieldInput({
           {uploadState.busy && <p className="muted">uploading…</p>}
           {attachedName && !uploadState.busy && <p className="muted">✓ {attachedName}</p>}
           {uploadState.error && <p role="alert" className="form-error">{uploadState.error}</p>}
+        </div>
+      );
+    }
+    case 'slider': {
+      const current = (value as number | undefined) ?? field.min;
+      return (
+        <div className="slider-row" id={id}>
+          {field.lowLabel && <span className="muted scale-cap">{field.lowLabel}</span>}
+          <input
+            type="range"
+            min={field.min}
+            max={field.max}
+            step={field.step}
+            value={current}
+            onChange={(e) => onChange(Number(e.target.value))}
+            aria-label={field.label}
+          />
+          <span className="slider-value muted">{current}</span>
+          {field.highLabel && <span className="muted scale-cap">{field.highLabel}</span>}
+        </div>
+      );
+    }
+    case 'contact_info': {
+      const current = (value as Record<string, string> | undefined) ?? {};
+      const set = (part: string, v: string) => onChange({ ...current, [part]: v });
+      return (
+        <div className="contact-info-grid" id={id}>
+          <label htmlFor={`${id}-name`} className="muted">
+            name{field.requireName && ' *'}
+          </label>
+          <input id={`${id}-name`} value={current.name ?? ''} onChange={(e) => set('name', e.target.value)} />
+          <label htmlFor={`${id}-email`} className="muted">
+            email{field.requireEmail && ' *'}
+          </label>
+          <input id={`${id}-email`} type="email" value={current.email ?? ''} onChange={(e) => set('email', e.target.value)} />
+          <label htmlFor={`${id}-phone`} className="muted">
+            phone{field.requirePhone && ' *'}
+          </label>
+          <input id={`${id}-phone`} type="tel" value={current.phone ?? ''} onChange={(e) => set('phone', e.target.value)} />
+        </div>
+      );
+    }
+    case 'hot_spot': {
+      const current = value as string | undefined;
+      return (
+        <div className="hot-spot-frame" id={id}>
+          <img src={assetUrl(field.imageAssetId)} alt="" className="hot-spot-image" />
+          {field.regions.map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              aria-label={r.label}
+              aria-pressed={current === r.value}
+              className={`hot-spot-region${current === r.value ? ' hot-spot-region-active' : ''}`}
+              style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.width}%`, height: `${r.height}%` }}
+              onClick={() => onChange(r.value)}
+            />
+          ))}
         </div>
       );
     }

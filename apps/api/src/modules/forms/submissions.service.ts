@@ -266,7 +266,8 @@ export class SubmissionsService {
           }
           return { ...base, counts, average };
         }
-        case 'number': {
+        case 'number':
+        case 'slider': {
           const nums = values as number[];
           return {
             ...base,
@@ -275,6 +276,15 @@ export class SubmissionsService {
             max: answered ? Math.max(...nums) : null,
           };
         }
+        case 'hot_spot': {
+          const counts: Record<string, number> = {};
+          for (const v of values as string[]) counts[v] = (counts[v] ?? 0) + 1;
+          return { ...base, counts };
+        }
+        case 'contact_info':
+          // a compound name/email/phone answer has no single chartable shape — the
+          // headline "answered" count above is the useful signal for this type
+          return { ...base };
         case 'likert': {
           // statement → scale-index → count
           const matrix: Record<string, Record<string, number>> = {};

@@ -327,6 +327,7 @@ function extractAssetIds(definition: FormDefinition): string[] {
     if (field.media?.assetId) ids.add(field.media.assetId);
     if ('options' in field) for (const o of field.options) if (o.imageAssetId) ids.add(o.imageAssetId);
     if ('statements' in field) for (const s of field.statements) if (s.imageAssetId) ids.add(s.imageAssetId);
+    if (field.type === 'hot_spot') ids.add(field.imageAssetId);
   }
   for (const section of definition.sections ?? []) {
     if (section.media?.assetId) ids.add(section.media.assetId);

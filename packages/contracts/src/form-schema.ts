@@ -8,6 +8,7 @@ import { END_OF_FORM, FormSection, SectionBranchRule, formSectionSchema } from '
  *  trigger-field picker and the validator never drift apart. */
 export const BRANCH_TRIGGER_TYPES: FieldType[] = [
   'select', 'multi_select', 'rating', 'likert', 'boolean', 'nps', 'short_text', 'long_text', 'number', 'date',
+  'slider', 'hot_spot',
 ];
 
 /**
@@ -34,6 +35,12 @@ export const FIELD_TYPES = [
   'file',
   /** display-only: a heading + optional help text, no answer, never required. */
   'section_header',
+  /** continuous drag input — a number answer, distinct UX from the discrete rating pills */
+  'slider',
+  /** compound name+email+phone question, each part independently required */
+  'contact_info',
+  /** click a named region on an image; answer is that region's value */
+  'hot_spot',
 ] as const;
 
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -75,6 +82,10 @@ export const formFieldSchema = z.discriminatedUnion('type', [
   baseField.extend({
     type: z.literal('short_text'),
     maxLength: z.number().int().positive().max(500).default(200),
+    /** Google Forms-style "response validation" */
+    minLength: z.number().int().positive().optional(),
+    pattern: z.string().max(200).optional(),
+    patternErrorMessage: z.string().max(200).optional(),
     /** quiz mode: any case-insensitive match counts as correct */
     correctAnswers: z.array(z.string().min(1).max(500)).optional(),
     points: z.number().positive().optional(),
@@ -82,6 +93,9 @@ export const formFieldSchema = z.discriminatedUnion('type', [
   baseField.extend({
     type: z.literal('long_text'),
     maxLength: z.number().int().positive().max(10_000).default(2000),
+    minLength: z.number().int().positive().optional(),
+    pattern: z.string().max(200).optional(),
+    patternErrorMessage: z.string().max(200).optional(),
   }),
   baseField.extend({
     type: z.literal('number'),
@@ -124,6 +138,8 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     scale: z.number().int().min(2).max(10).default(5),
     lowLabel: z.string().max(60).optional(),
     highLabel: z.string().max(60).optional(),
+    /** visual style only — same value/scoring semantics either way */
+    style: z.enum(['pills', 'stars']).default('pills'),
   }),
   /** Net Promoter Score: fixed 0–10 */
   baseField.extend({
@@ -153,6 +169,40 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     maxFiles: z.number().int().min(1).max(10).default(1),
   }),
   baseField.extend({ type: z.literal('section_header') }),
+  baseField.extend({
+    type: z.literal('slider'),
+    min: z.number().default(0),
+    max: z.number().default(100),
+    step: z.number().positive().default(1),
+    lowLabel: z.string().max(60).optional(),
+    highLabel: z.string().max(60).optional(),
+  }),
+  /** Compound name+email+phone question — each part independently required. */
+  baseField.extend({
+    type: z.literal('contact_info'),
+    requireName: z.boolean().default(true),
+    requireEmail: z.boolean().default(true),
+    requirePhone: z.boolean().default(false),
+  }),
+  /** Click a named region on an image. Regions are 0–100 percentages of the
+   *  image's own box, so they stay aligned at any render size. */
+  baseField.extend({
+    type: z.literal('hot_spot'),
+    imageAssetId: z.string().uuid(),
+    regions: z
+      .array(
+        z.object({
+          value: z.string().min(1).max(200),
+          label: z.string().min(1).max(200),
+          x: z.number().min(0).max(100),
+          y: z.number().min(0).max(100),
+          width: z.number().positive().max(100),
+          height: z.number().positive().max(100),
+        }),
+      )
+      .min(1)
+      .max(20),
+  }),
 ]);
 
 /** Per-form collection settings (MS-Forms parity). */
@@ -358,7 +408,8 @@ export type FormField = z.infer<typeof formFieldSchema>;
 export type FormDefinition = z.infer<typeof formDefinitionSchema>;
 
 /** A submission maps fieldKey → answer. Likert answers are row→scale-index
- *  records; rankings are ordered arrays of option values. */
+ *  records; rankings are ordered arrays of option values; contact_info answers
+ *  are a name/email/phone record of strings. */
 export const submissionAnswersSchema = z.record(
   fieldKey,
   z.union([
@@ -367,6 +418,7 @@ export const submissionAnswersSchema = z.record(
     z.boolean(),
     z.array(z.string()),
     z.record(z.string(), z.number()),
+    z.record(z.string(), z.string()),
     z.null(),
   ]),
 );
