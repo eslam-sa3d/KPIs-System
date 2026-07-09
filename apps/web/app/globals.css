@@ -549,50 +549,6 @@ h1, h2, h3 {
   flex-shrink: 0;
 }
 
-/* ── action / filter cards ─────────────────────────────────────── */
-.p-rec-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.p-rec-card {
-  border-radius: var(--dash-radius);
-  padding: 14px;
-  cursor: pointer;
-  transition: all 0.15s;
-  border: 1px solid transparent;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-}
-
-.p-rec-card:hover {
-  transform: translateY(-1px);
-  border-color: var(--border-strong);
-}
-
-.p-rec-num {
-  font-size: 24px;
-  font-weight: var(--font-weight-bold);
-  font-family: var(--mono);
-  line-height: 1;
-  margin-bottom: 4px;
-}
-
-.p-rec-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.p-rec-sub {
-  font-size: 10px;
-  color: var(--text-3);
-  margin-top: 2px;
-}
-
 /* ── status color families (bg tint / accent) — mapped to the pulse
    brand palette: purple(moon-light)=exceed, oasis=high-performer,
    sea=on-track, sunset=needs-improvement, coral=critical, silver=pending ── */
@@ -603,17 +559,11 @@ h1, h2, h3 {
 .p-status-critical { --kc: var(--red); background: var(--red-bg); }
 .p-status-pending { --kc: var(--text-3); background: color-mix(in srgb, var(--text-3) 10%, transparent); }
 
-.p-status-exceed .p-rec-num,
 .p-status-exceed .p-kpi-icon { color: var(--purple); }
-.p-status-high .p-rec-num,
 .p-status-high .p-kpi-icon { color: var(--green); }
-.p-status-track .p-rec-num,
 .p-status-track .p-kpi-icon { color: var(--blue); }
-.p-status-improve .p-rec-num,
 .p-status-improve .p-kpi-icon { color: var(--amber); }
-.p-status-critical .p-rec-num,
 .p-status-critical .p-kpi-icon { color: var(--red); }
-.p-status-pending .p-rec-num,
 .p-status-pending .p-kpi-icon { color: var(--text-3); }
 
 /* ── member/KPI table card ────────────────────────────────────────── */
@@ -936,10 +886,6 @@ h1, h2, h3 {
 /* ── responsive: dashboard-specific grids ─────────────────────────── */
 @media (min-width: 640px) {
   .p-kpi-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .p-rec-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

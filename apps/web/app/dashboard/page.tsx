@@ -463,30 +463,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div style={{ marginBottom: 14 }}>
-              <div className="p-card-title">action overview — click to filter</div>
-              <div className="p-rec-grid">
-                {STATUS_ORDER.map((s) => (
-                  <button
-                    key={s}
-                    className={`p-rec-card p-status-${s}`}
-                    onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}
-                  >
-                    <div className="p-rec-num">{stats[s]}</div>
-                    <div className="p-rec-label">{STATUS_LABEL[s]}</div>
-                    <div className="p-rec-sub">
-                      {s === 'exceed' && 'beating target by 15%+'}
-                      {s === 'high' && 'meeting or beating target'}
-                      {s === 'track' && 'within 15% of target'}
-                      {s === 'improve' && 'below target — monitor'}
-                      {s === 'critical' && 'well below target'}
-                      {s === 'pending' && 'no entries recorded'}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="p-table-card">
               <div className="p-table-header">
                 <div className="p-filter-pills">
