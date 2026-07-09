@@ -609,7 +609,12 @@ export function FormRenderer({
   const bannerStyle = theme?.backgroundAssetId ? { backgroundImage: `url(${assetUrl(theme.backgroundAssetId)})` } : undefined;
 
   return (
-    <div className="msform" style={accentStyle}>
+    <div className="msform msform-fill" style={accentStyle}>
+      {hasSections && !submitted && !closed && !notYetOpen && (
+        <div className="msform-progress" aria-hidden="true">
+          <div className="msform-progress-fill" style={{ width: `${((currentIndex + 1) / path.length) * 100}%` }} />
+        </div>
+      )}
       <header className={`msform-banner${theme?.backgroundAssetId ? ' msform-banner-image' : ''}`} style={bannerStyle}>
         {theme?.logoAssetId && <img src={assetUrl(theme.logoAssetId)} alt="" className="msform-logo" />}
         <h1>{definition.title}</h1>
@@ -688,12 +693,9 @@ export function FormRenderer({
         </div>
       ) : (
         <form className="fill-form msform-body" onSubmit={handleSubmit}>
-          {hasSections && (
-            <div style={{ marginBottom: 8 }}>
-              <p className="muted" style={{ margin: 0 }}>
-                page {currentIndex + 1} of {path.length}
-                {currentSection?.title ? ` — ${currentSection.title}` : ''}
-              </p>
+          {hasSections && (currentSection?.title || currentSection?.description || currentSection?.media) && (
+            <div className="msform-page-head">
+              {currentSection?.title && <h2>{currentSection.title}</h2>}
               {currentSection?.description && <p className="muted">{currentSection.description}</p>}
               {currentSection?.media && <FieldMedia media={currentSection.media} />}
             </div>

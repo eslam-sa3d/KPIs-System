@@ -1311,6 +1311,160 @@ h1, h2, h3 {
   padding: var(--space-12);
 }
 
+/* ── Google-Forms-style visual treatment for the respondent fill experience ──
+   Scoped to .msform-fill (added only by FormRenderer's own wrapper) so none
+   of this reaches the admin builder page, which carries just .msform. ──── */
+
+.msform-fill {
+  background: color-mix(in srgb, var(--msform-accent, var(--pulse-purple)) 4%, var(--color-bg));
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.msform-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.msform-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--msform-accent, var(--color-primary));
+  transition: width var(--transition-base);
+}
+
+.msform-fill .msform-banner {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.msform-fill .msform-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 10px;
+  background: var(--msform-accent, var(--pulse-purple));
+}
+
+.msform-fill .msform-banner p {
+  color: var(--color-text-muted);
+}
+
+/* a custom background image keeps the previous photo-header treatment —
+   it already reads fine as-is and isn't part of the "no image" makeover */
+.msform-fill .msform-banner.msform-banner-image {
+  background: linear-gradient(
+    135deg,
+    var(--msform-accent, var(--pulse-purple)) 0%,
+    color-mix(in srgb, var(--msform-accent, var(--pulse-purple)) 55%, white) 100%
+  );
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: multiply;
+  color: var(--pulse-air);
+}
+
+.msform-fill .msform-banner.msform-banner-image::before {
+  content: none;
+}
+
+.msform-fill .msform-banner.msform-banner-image p {
+  color: var(--pulse-silver-light);
+}
+
+.msform-fill .msform-page-head {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--shadow-card);
+}
+
+.msform-fill .msform-page-head h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  margin: 0;
+}
+
+.msform-fill .msform-page-head p {
+  margin-top: var(--space-2);
+}
+
+.msform-fill .question-card {
+  border-radius: var(--radius-lg);
+  border-color: color-mix(in srgb, var(--color-border) 60%, transparent);
+  box-shadow: 0 1px 2px rgb(29 37 45 / 0.06), 0 6px 20px rgb(29 37 45 / 0.06);
+}
+
+.msform-fill .section-header-card {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.msform-fill .section-header-title {
+  font-size: var(--font-size-xl);
+  border-left: 4px solid var(--msform-accent, var(--pulse-purple));
+  padding-left: var(--space-3);
+}
+
+/* underline-style short-answer/paragraph/number/date inputs, Google Forms'
+   most recognizable input trait — select/file/range keep their boxed style */
+.msform-fill .fill-form input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+.msform-fill .fill-form textarea {
+  border: none;
+  border-bottom: 1.5px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  padding: var(--space-2) 2px;
+}
+
+.msform-fill .fill-form input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):focus,
+.msform-fill .fill-form textarea:focus {
+  outline: none;
+  border-bottom: 2px solid var(--msform-accent, var(--color-primary));
+  padding-bottom: calc(var(--space-2) - 0.5px);
+}
+
+.msform-fill .fill-form select {
+  border-radius: var(--radius-md);
+}
+
+/* rating/NPS pills → circular, closer to Google's linear-scale look */
+.msform-fill .scale-pill {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.msform-fill .btn-primary,
+.msform-fill .btn-ghost {
+  border-radius: 999px;
+  padding-left: var(--space-6);
+  padding-right: var(--space-6);
+}
+
+.msform-fill input[type='radio'],
+.msform-fill input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.msform-fill .check-item {
+  padding: var(--space-2) 0;
+  gap: var(--space-3);
+}
+
 .quiz-score {
   font-size: var(--font-size-lg);
 }
