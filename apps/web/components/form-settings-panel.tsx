@@ -189,6 +189,19 @@ export function FormSettingsPanel({
         TURNSTILE_SECRET_KEY / NEXT_PUBLIC_TURNSTILE_SITE_KEY configured to take effect)
       </label>
 
+      <label htmlFor="fs-webhook">webhook URL (optional)</label>
+      <input
+        id="fs-webhook"
+        type="url"
+        value={draft.webhookUrl ?? ''}
+        onChange={(e) => setDraft((d) => ({ ...d, webhookUrl: e.target.value === '' ? undefined : e.target.value }))}
+        placeholder="https://example.com/hooks/pulse-forms"
+      />
+      <p className="muted" style={{ fontSize: 11, margin: '2px 0 8px' }}>
+        every new response is POSTed here as JSON ({'{formSlug, submissionId, answers, score, createdAt}'});
+        delivery failures are logged and never block the submission.
+      </p>
+
       <label className="check-item">
         <input
           type="checkbox"

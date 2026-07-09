@@ -268,6 +268,9 @@ export const formSettingsSchema = z.object({
   /** require a passing Cloudflare Turnstile check on public submissions — default
    *  off, since most forms here are internal. See TurnstileService. */
   requireCaptcha: z.boolean().default(false),
+  /** fire-and-forget POST of every new submission to this URL — failures are
+   *  logged, never block or fail the submission itself. */
+  webhookUrl: z.string().url().max(2000).optional(),
 });
 
 export type FormSettings = z.infer<typeof formSettingsSchema>;

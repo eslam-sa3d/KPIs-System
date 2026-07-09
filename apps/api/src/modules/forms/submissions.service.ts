@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   FormDefinition,
   FormFieldSummary,
@@ -19,6 +19,7 @@ import { PrismaService } from '../../infra/prisma.service';
 import { compileAnswerValidator } from './answer-validator';
 import { FormsService } from './forms.service';
 import { QuizScore, scoreSubmission } from './quiz-scoring';
+import { buildSummaryPdf, buildSummaryPptx } from './report-export';
 import { TurnstileService } from './turnstile.service';
 
 /**
@@ -28,6 +29,8 @@ import { TurnstileService } from './turnstile.service';
  */
 @Injectable()
 export class SubmissionsService {
+  private readonly logger = new Logger(SubmissionsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly forms: FormsService,
@@ -37,7 +40,7 @@ export class SubmissionsService {
   async submit(formSlug: string, rawAnswers: SubmissionAnswers, submittedById: string) {
     const { form, version, definition, settings } = await this.forms.getLatestVersion(formSlug);
     await this.enforceSettings(form.id, settings, submittedById, null, rawAnswers);
-    return this.persist(form.id, version.id, definition, settings, rawAnswers, submittedById, null);
+    return this.persist(form.slug, form.id, version.id, definition, settings, rawAnswers, submittedById, null);
   }
 
   /** Anonymous submission via a public share link. `respondentFingerprint` is a random id the
@@ -51,7 +54,7 @@ export class SubmissionsService {
     const { form, version, definition, settings } = await this.forms.getByPublicToken(token);
     await this.turnstile.verify(settings.requireCaptcha, turnstileToken);
     await this.enforceSettings(form.id, settings, null, respondentFingerprint, rawAnswers);
-    return this.persist(form.id, version.id, definition, settings, rawAnswers, null, respondentFingerprint);
+    return this.persist(form.slug, form.id, version.id, definition, settings, rawAnswers, null, respondentFingerprint);
   }
 
   /** Fetches a respondent's own previously-submitted answers to prefill the edit form. */
@@ -178,6 +181,7 @@ export class SubmissionsService {
   }
 
   private async persist(
+    formSlug: string,
     formId: string,
     formVersionId: string,
     definition: FormDefinition,
@@ -198,6 +202,15 @@ export class SubmissionsService {
         editToken: settings.allowRespondentEdit ? randomBytes(24).toString('base64url') : undefined,
       },
     });
+    if (settings.webhookUrl) {
+      this.fireWebhook(settings.webhookUrl, {
+        formSlug,
+        submissionId: submission.id,
+        answers,
+        score,
+        createdAt: submission.createdAt,
+      });
+    }
     if (uploadIds.length) {
       await this.prisma.formFileUpload.updateMany({
         where: { id: { in: uploadIds } },
@@ -205,6 +218,23 @@ export class SubmissionsService {
       });
     }
     return submission;
+  }
+
+  /** Fire-and-forget: never awaited by callers, never blocks or fails the submission it fires
+   *  for. A short timeout keeps a slow/unreachable endpoint from leaking sockets. */
+  private fireWebhook(url: string, payload: object): void {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+      .catch((cause) => {
+        this.logger.warn(`webhook delivery to ${url} failed: ${cause instanceof Error ? cause.message : cause}`);
+      })
+      .finally(() => clearTimeout(timeout));
   }
 
   /** Admin correction: re-validates against the CURRENT version's compiled schema (not the
@@ -452,6 +482,38 @@ export class SubmissionsService {
     for (const row of rows) sheet.addRow(row);
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
+  }
+
+  /** PDF report built from the already-computed per-field summary — no new aggregation. */
+  async exportPdf(formSlug: string, actorId: string | null): Promise<Buffer> {
+    const { definition } = await this.forms.getLatestVersion(formSlug);
+    const summary = await this.summary(formSlug);
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'submissions.exported_pdf',
+        entity: 'Form',
+        entityId: formSlug,
+        detail: { count: summary.responses },
+      },
+    });
+    return buildSummaryPdf(definition.title, summary);
+  }
+
+  /** Slide-deck version of the same report as exportPdf. */
+  async exportPptx(formSlug: string, actorId: string | null): Promise<Buffer> {
+    const { definition } = await this.forms.getLatestVersion(formSlug);
+    const summary = await this.summary(formSlug);
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'submissions.exported_pptx',
+        entity: 'Form',
+        entityId: formSlug,
+        detail: { count: summary.responses },
+      },
+    });
+    return buildSummaryPptx(definition.title, summary);
   }
 
   private async buildExportTable(

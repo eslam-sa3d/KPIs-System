@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formDefinitionSchema, formSettingsSchema } from '@pulse/contracts';
 import { Prisma } from '@prisma/client';
 import { SubmissionsService } from './submissions.service';
 
 const turnstileStub = { verify: vi.fn(async () => undefined) };
 
-const activeForm = { id: 'form-1', publicToken: null };
+const activeForm = { id: 'form-1', slug: 'demo', publicToken: null };
 
 function makePrismaStub() {
   return {
@@ -227,6 +227,54 @@ describe('SubmissionsService respondent self-edit', () => {
 
     const result = await service.getByEditToken('public-tok', 'tok-abc');
     expect(result).toEqual({ answers: { team: 'x' } });
+  });
+});
+
+describe('SubmissionsService webhook delivery', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('fires a POST to the configured webhook on submit, without blocking the response', async () => {
+    const prisma = makePrismaStub();
+    const fetchMock = vi.fn(async (_url: string, _init: { body: string }) => ({ ok: true }));
+    global.fetch = fetchMock as never;
+    const forms = makeFormsStub({ webhookUrl: 'https://example.com/hook' });
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit('demo', { team: 'x' }, 'user-1');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('https://example.com/hook');
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({ formSlug: 'demo', submissionId: 'sub-new', answers: { team: 'x' } });
+  });
+
+  it('does not fire a webhook when none is configured', async () => {
+    const prisma = makePrismaStub();
+    const fetchMock = vi.fn(async () => ({ ok: true }));
+    global.fetch = fetchMock as never;
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit('demo', { team: 'x' }, 'user-1');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not fail the submission when webhook delivery throws', async () => {
+    const prisma = makePrismaStub();
+    global.fetch = vi.fn(async () => {
+      throw new Error('network down');
+    }) as never;
+    const forms = makeFormsStub({ webhookUrl: 'https://example.com/hook' });
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await expect(service.submit('demo', { team: 'x' }, 'user-1')).resolves.toBeDefined();
+    expect(prisma.formSubmission.create).toHaveBeenCalledTimes(1);
   });
 });
 

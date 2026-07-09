@@ -299,6 +299,28 @@ export class FormsController {
       .setHeader('Content-Disposition', `attachment; filename="${slug}-submissions.xlsx"`)
       .send(buffer);
   }
+
+  /** Summary report (not raw rows, unlike the exports above) as a PDF. */
+  @Get(':slug/submissions/export.pdf')
+  @FormPermission('view')
+  async exportPdf(@Param('slug') slug: string, @Req() req: AuthedRequest, @Res() res: Response) {
+    const buffer = await this.submissions.exportPdf(slug, req.user.id);
+    res
+      .type('application/pdf')
+      .setHeader('Content-Disposition', `attachment; filename="${slug}-summary.pdf"`)
+      .send(buffer);
+  }
+
+  /** Same summary report as exportPdf, as a slide deck. */
+  @Get(':slug/submissions/export.pptx')
+  @FormPermission('view')
+  async exportPptx(@Param('slug') slug: string, @Req() req: AuthedRequest, @Res() res: Response) {
+    const buffer = await this.submissions.exportPptx(slug, req.user.id);
+    res
+      .type('application/vnd.openxmlformats-officedocument.presentationml.presentation')
+      .setHeader('Content-Disposition', `attachment; filename="${slug}-summary.pptx"`)
+      .send(buffer);
+  }
 }
 
 /** Anonymous fill via tokenized share links — no session, tight rate limits. */

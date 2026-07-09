@@ -231,6 +231,18 @@ function FormView() {
             >
               export xlsx
             </button>
+            <button
+              className="btn-ghost"
+              onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.pdf`, `${slug}-summary.pdf`)}
+            >
+              export PDF
+            </button>
+            <button
+              className="btn-ghost"
+              onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.pptx`, `${slug}-summary.pptx`)}
+            >
+              export PPTX
+            </button>
             {canModerate && (rows?.length ?? 0) > 0 && (
               <button className="btn-ghost" onClick={onDeleteAll}>
                 delete all responses
