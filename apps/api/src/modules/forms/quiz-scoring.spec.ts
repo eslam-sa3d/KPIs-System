@@ -63,7 +63,19 @@ describe('scoreSubmission', () => {
       author: 'shakespeare', // case-insensitive match
       moons: 2,
     });
-    expect(score).toEqual({ earnedPoints: 10, totalPoints: 10, percent: 100, passed: null });
+    expect(score).toEqual({
+      earnedPoints: 10,
+      totalPoints: 10,
+      percent: 100,
+      passed: null,
+      perField: {
+        capital: { correct: true },
+        oceans: { correct: true },
+        round: { correct: true },
+        author: { correct: true },
+        moons: { correct: true },
+      },
+    });
   });
 
   it('gives partial credit and rounds the percent', () => {
@@ -111,5 +123,35 @@ describe('scoreSubmission', () => {
     const score = scoreSubmission(quiz, { capital: 'paris' });
     expect(score!.totalPoints).toBe(10); // every gradable field still counts toward the total
     expect(score!.earnedPoints).toBe(2); // only the answered-and-correct one is credited
+  });
+
+  it('includes per-field feedback text when configured, keyed by outcome', () => {
+    const withFeedback: FormDefinition = formDefinitionSchema.parse({
+      title: 'geography quiz',
+      fields: [
+        {
+          key: 'capital',
+          label: 'Capital of France?',
+          type: 'select',
+          options: [
+            { value: 'paris', label: 'Paris' },
+            { value: 'lyon', label: 'Lyon' },
+          ],
+          correctValue: 'paris',
+          points: 2,
+          feedbackCorrect: 'nice!',
+          feedbackIncorrect: 'nope, it’s Paris.',
+        },
+      ],
+    });
+    const correct = scoreSubmission(withFeedback, { capital: 'paris' });
+    const incorrect = scoreSubmission(withFeedback, { capital: 'lyon' });
+    expect(correct!.perField.capital).toEqual({ correct: true, feedback: 'nice!' });
+    expect(incorrect!.perField.capital).toEqual({ correct: false, feedback: 'nope, it’s Paris.' });
+  });
+
+  it('omits the feedback key entirely when no feedback text is configured', () => {
+    const score = scoreSubmission(quiz, { capital: 'paris' });
+    expect(score!.perField.capital).toEqual({ correct: true });
   });
 });

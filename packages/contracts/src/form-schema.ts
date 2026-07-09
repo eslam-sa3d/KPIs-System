@@ -101,6 +101,9 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     /** quiz mode: any case-insensitive match counts as correct */
     correctAnswers: z.array(z.string().min(1).max(500)).optional(),
     points: z.number().positive().optional(),
+    /** quiz mode: shown per-question on the thank-you screen, see quiz-scoring.ts's perField */
+    feedbackCorrect: z.string().max(500).optional(),
+    feedbackIncorrect: z.string().max(500).optional(),
   }),
   baseField.extend({
     type: z.literal('long_text'),
@@ -116,6 +119,8 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     integerOnly: z.boolean().default(false),
     correctValue: z.number().optional(),
     points: z.number().positive().optional(),
+    feedbackCorrect: z.string().max(500).optional(),
+    feedbackIncorrect: z.string().max(500).optional(),
   }),
   baseField.extend({ type: z.literal('date') }),
   baseField.extend({
@@ -130,6 +135,8 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     /** quiz mode: must match an option's value exactly */
     correctValue: z.string().optional(),
     points: z.number().positive().optional(),
+    feedbackCorrect: z.string().max(500).optional(),
+    feedbackIncorrect: z.string().max(500).optional(),
   }),
   baseField.extend({
     type: z.literal('multi_select'),
@@ -139,11 +146,15 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     /** quiz mode: the respondent's selections must equal this SET exactly (order-independent) */
     correctValues: z.array(z.string()).optional(),
     points: z.number().positive().optional(),
+    feedbackCorrect: z.string().max(500).optional(),
+    feedbackIncorrect: z.string().max(500).optional(),
   }),
   baseField.extend({
     type: z.literal('boolean'),
     correctValue: z.boolean().optional(),
     points: z.number().positive().optional(),
+    feedbackCorrect: z.string().max(500).optional(),
+    feedbackIncorrect: z.string().max(500).optional(),
   }),
   baseField.extend({
     type: z.literal('rating'),

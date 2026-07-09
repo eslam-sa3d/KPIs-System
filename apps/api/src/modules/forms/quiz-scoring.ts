@@ -15,6 +15,8 @@ export interface QuizScore {
   percent: number | null;
   /** null unless a passThresholdPercent was configured */
   passed: boolean | null;
+  /** per-gradable-question outcome, for the thank-you screen's "see feedback" section */
+  perField: Record<string, { correct: boolean; feedback?: string }>;
 }
 
 function pointsFor(field: FormField): number {
@@ -64,6 +66,11 @@ function isCorrect(field: FormField, answer: SubmissionAnswers[string] | undefin
   }
 }
 
+function feedbackFor(field: FormField, correct: boolean): string | undefined {
+  if (!('feedbackCorrect' in field)) return undefined;
+  return correct ? field.feedbackCorrect : field.feedbackIncorrect;
+}
+
 export function scoreSubmission(
   definition: FormDefinition,
   answers: SubmissionAnswers,
@@ -74,15 +81,19 @@ export function scoreSubmission(
 
   let earnedPoints = 0;
   let totalPoints = 0;
+  const perField: QuizScore['perField'] = {};
   for (const field of gradableFields) {
     const points = pointsFor(field);
     totalPoints += points;
-    if (isCorrect(field, answers[field.key])) earnedPoints += points;
+    const correct = isCorrect(field, answers[field.key]);
+    if (correct) earnedPoints += points;
+    const feedback = feedbackFor(field, correct);
+    perField[field.key] = { correct, ...(feedback ? { feedback } : {}) };
   }
 
   const percent = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : null;
   const passed =
     passThresholdPercent === undefined || percent === null ? null : percent >= passThresholdPercent;
 
-  return { earnedPoints, totalPoints, percent, passed };
+  return { earnedPoints, totalPoints, percent, passed, perField };
 }

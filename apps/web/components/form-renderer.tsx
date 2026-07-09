@@ -429,6 +429,8 @@ export interface SubmissionScore {
   totalPoints: number;
   percent: number | null;
   passed: boolean | null;
+  /** per-gradable-question outcome + configured feedback, for the thank-you screen */
+  perField?: Record<string, { correct: boolean; feedback?: string }>;
 }
 
 /**
@@ -646,6 +648,27 @@ export function FormRenderer({
               )}
             </p>
           )}
+          {settings.quizMode &&
+            settings.showScoreToRespondent &&
+            submittedScore?.perField &&
+            Object.keys(submittedScore.perField).length > 0 && (
+              <details className="quiz-feedback">
+                <summary>see feedback</summary>
+                <ul>
+                  {Object.entries(submittedScore.perField).map(([key, outcome]) => {
+                    const field = definition.fields.find((f) => f.key === key);
+                    return (
+                      <li key={key}>
+                        <span className={outcome.correct ? 'quiz-passed' : 'quiz-failed'}>
+                          {field?.label ?? key} — {outcome.correct ? 'correct' : 'incorrect'}
+                        </span>
+                        {outcome.feedback && <p className="muted">{outcome.feedback}</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </details>
+            )}
           {submittedEditToken && editUrlFor && (
             <p className="muted">
               <a href={editUrlFor(submittedEditToken)}>edit your response</a>

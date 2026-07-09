@@ -80,6 +80,9 @@ interface DraftField {
   correctValues: string;
   /** short_text: comma-separated, case-insensitive any-of accepted answers */
   correctAnswers: string;
+  /** quiz mode: shown per-question on the thank-you screen. '' = no feedback text. */
+  feedbackCorrect: string;
+  feedbackIncorrect: string;
   /** short_text/long_text: Google Forms-style response validation. 0 = no minimum. */
   minLength: number;
   pattern: string;
@@ -130,6 +133,8 @@ const emptyField = (): DraftField => ({
   correctValue: '',
   correctValues: '',
   correctAnswers: '',
+  feedbackCorrect: '',
+  feedbackIncorrect: '',
   minLength: 0,
   pattern: '',
   patternErrorMessage: '',
@@ -259,6 +264,10 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
   const withImages = (values: string[]) =>
     values.map((o) => ({ value: o, label: o, ...(draft.optionImages[o] ? { imageAssetId: draft.optionImages[o] } : {}) }));
   const quizPoints = draft.points > 0 ? { points: draft.points } : {};
+  const quizFeedback = {
+    ...(draft.feedbackCorrect.trim() ? { feedbackCorrect: draft.feedbackCorrect.trim() } : {}),
+    ...(draft.feedbackIncorrect.trim() ? { feedbackIncorrect: draft.feedbackIncorrect.trim() } : {}),
+  };
   switch (draft.type) {
     case 'select': {
       const options = withImages(parseList(draft.options));
@@ -269,7 +278,9 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
         layout: draft.layout,
         allowOther: draft.allowOther,
         shuffleOptions: draft.shuffleOptions,
-        ...(draft.points > 0 && draft.correctValue ? { correctValue: draft.correctValue, ...quizPoints } : {}),
+        ...(draft.points > 0 && draft.correctValue
+          ? { correctValue: draft.correctValue, ...quizPoints, ...quizFeedback }
+          : {}),
       };
     }
     case 'multi_select': {
@@ -280,7 +291,7 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
         options,
         shuffleOptions: draft.shuffleOptions,
         ...(draft.points > 0 && draft.correctValues.trim()
-          ? { correctValues: parseList(draft.correctValues), ...quizPoints }
+          ? { correctValues: parseList(draft.correctValues), ...quizPoints, ...quizFeedback }
           : {}),
       };
     }
@@ -289,7 +300,7 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
         ...base,
         type: draft.type,
         ...(draft.points > 0 && draft.correctValue
-          ? { correctValue: draft.correctValue === 'true', ...quizPoints }
+          ? { correctValue: draft.correctValue === 'true', ...quizPoints, ...quizFeedback }
           : {}),
       };
     case 'short_text':
@@ -300,7 +311,7 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
         ...(draft.pattern.trim() ? { pattern: draft.pattern.trim() } : {}),
         ...(draft.patternErrorMessage.trim() ? { patternErrorMessage: draft.patternErrorMessage.trim() } : {}),
         ...(draft.points > 0 && draft.correctAnswers.trim()
-          ? { correctAnswers: parseList(draft.correctAnswers), ...quizPoints }
+          ? { correctAnswers: parseList(draft.correctAnswers), ...quizPoints, ...quizFeedback }
           : {}),
       };
     case 'long_text':
@@ -316,7 +327,7 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
         ...base,
         type: draft.type,
         ...(draft.points > 0 && draft.correctValue !== ''
-          ? { correctValue: Number(draft.correctValue), ...quizPoints }
+          ? { correctValue: Number(draft.correctValue), ...quizPoints, ...quizFeedback }
           : {}),
       };
     case 'ranking': {
@@ -628,6 +639,8 @@ export default function NewFormPage() {
           correctValue: '',
           correctValues: '',
           correctAnswers: '',
+          feedbackCorrect: '',
+          feedbackIncorrect: '',
           minLength: 0,
           pattern: '',
           patternErrorMessage: '',
@@ -1188,6 +1201,22 @@ export default function NewFormPage() {
                   value={field.points || ''}
                   onChange={(e) => updateField(index, { points: e.target.value === '' ? 0 : Number(e.target.value) })}
                   placeholder="0"
+                />
+
+                <label htmlFor={`field-feedback-correct-${index}`}>feedback if correct (optional)</label>
+                <input
+                  id={`field-feedback-correct-${index}`}
+                  value={field.feedbackCorrect}
+                  onChange={(e) => updateField(index, { feedbackCorrect: e.target.value })}
+                  placeholder="shown on the thank-you screen's feedback section"
+                />
+
+                <label htmlFor={`field-feedback-incorrect-${index}`}>feedback if incorrect (optional)</label>
+                <input
+                  id={`field-feedback-incorrect-${index}`}
+                  value={field.feedbackIncorrect}
+                  onChange={(e) => updateField(index, { feedbackIncorrect: e.target.value })}
+                  placeholder="shown on the thank-you screen's feedback section"
                 />
               </div>
             )}
