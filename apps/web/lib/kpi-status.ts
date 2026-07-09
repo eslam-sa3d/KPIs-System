@@ -49,3 +49,15 @@ export function statusOf(attainment: number | null): StatusKey {
 }
 
 export const STATUS_ORDER: StatusKey[] = ['exceed', 'high', 'track', 'improve', 'critical', 'pending'];
+
+/** Pulse brand colors per status band — the single source of truth for both
+ *  CSS (via .p-status-* classes, see globals.css) and SVG chart fills
+ *  (recharts needs real hex, not custom-property indirection). */
+export const STATUS_COLOR: Record<StatusKey, string> = {
+  exceed: '#a54ee1', // moon-light
+  high: '#00c48c', // oasis
+  track: '#1dced8', // sea
+  improve: '#ff6a39', // sunset
+  critical: '#ff375e', // coral
+  pending: '#8e9aa0', // silver
+};

@@ -1,6 +1,7 @@
 'use client';
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { STATUS_COLOR } from '../lib/kpi-status';
 
 export interface DistributionRow {
   level: string;
@@ -12,11 +13,11 @@ export interface DistributionRow {
 }
 
 const SERIES: Array<{ key: keyof Omit<DistributionRow, 'level'>; label: string; color: string }> = [
-  { key: 'exceed', label: 'Exceed', color: '#a855f7' },
-  { key: 'high', label: 'High performer', color: '#22c55e' },
-  { key: 'track', label: 'On track', color: '#3b82f6' },
-  { key: 'improve', label: 'Needs improvement', color: '#f59e0b' },
-  { key: 'critical', label: 'Critical', color: '#ef4444' },
+  { key: 'exceed', label: 'Exceed', color: STATUS_COLOR.exceed },
+  { key: 'high', label: 'High performer', color: STATUS_COLOR.high },
+  { key: 'track', label: 'On track', color: STATUS_COLOR.track },
+  { key: 'improve', label: 'Needs improvement', color: STATUS_COLOR.improve },
+  { key: 'critical', label: 'Critical', color: STATUS_COLOR.critical },
 ];
 
 /** Stacked bar: KPI status distribution per level (cadence group). */

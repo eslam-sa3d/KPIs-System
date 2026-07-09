@@ -124,9 +124,8 @@ h1, h2, h3 {
   margin-top: var(--space-2);
 }
 
-/* Base pulse-branded content wrapper — used standalone by the public
-   /f fill page (no sidebar, no .portal ancestor). The authenticated shell
-   overrides this further below (.p-main .portal-main) once nested. */
+/* Base pulse-branded content wrapper — the single content area every
+   authenticated page renders into (and the standalone public /f page). */
 .portal-main {
   max-width: 1080px;
   margin: 0 auto;
@@ -148,427 +147,229 @@ h1, h2, h3 {
   }
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   PORTAL APP SHELL — sidebar + topbar, its own scoped design-token
-   system (light by default, `.portal[data-theme="dark"]` switches to
-   dark). Deliberately independent from the public pulse brand tokens
-   used on the landing/login pages — those live outside `.portal` and
-   are untouched. Existing shared classes (`.btn-primary`, `.btn-ghost`,
-   `.admin-card`, `.data-table`, `.tabs`, `.muted`, headings…) get
-   `.portal`-scoped overrides further below so every page inherits this
-   look with no JSX changes.
-   ══════════════════════════════════════════════════════════════════ */
-.portal {
-  --bg: #f4f5f9;
-  --surface: #ffffff;
-  --card: #ffffff;
-  --card-hover: #f0f1f8;
-  --border: rgba(15, 17, 23, 0.08);
-  --border-strong: rgba(15, 17, 23, 0.14);
-  --text: #14161f;
-  --text-2: #4d5370;
-  --text-3: #7b8199;
-  --accent: #5b6af5;
-  --accent-glow: rgba(91, 106, 245, 0.12);
-  --accent-light: #4a56d6;
-  --green: #22c55e;
-  --green-bg: rgba(34, 197, 94, 0.1);
-  --amber: #f59e0b;
-  --amber-bg: rgba(245, 158, 11, 0.1);
-  --red: #ef4444;
-  --red-bg: rgba(239, 68, 68, 0.1);
-  --purple: #a855f7;
-  --purple-bg: rgba(168, 85, 247, 0.1);
-  --blue: #3b82f6;
-  --blue-bg: rgba(59, 130, 246, 0.1);
-  --dash-radius: 10px;
-  --dash-radius-lg: 14px;
-  --mono: 'JetBrains Mono', ui-monospace, monospace;
-
+/* ── portal shell: pulse-branded header (mobile-first: base rules target
+   small screens, min-width: 880px progressively restores the roomy
+   desktop layout) ──────────────────────────────────────────────────── */
+.portal-header {
   display: flex;
-  min-height: 100vh;
-  background: var(--bg);
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  color: var(--color-text);
+  position: relative;
+}
+
+.portal-header .btn-ghost {
+  color: var(--color-text);
+}
+
+.portal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+@media (min-width: 880px) {
+  .portal-header {
+    padding: var(--space-3) var(--space-8);
+  }
+
+  .portal-header-actions {
+    gap: var(--space-4);
+  }
+}
+
+/* ── portal nav: hamburger + slide-down panel on mobile, inline on desktop ── */
+.portal-header-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0; /* let the logo shrink instead of forcing header overflow */
+}
+
+.portal-nav-desktop {
+  display: none;
+}
+
+.portal-nav-desktop a {
+  color: var(--color-text);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.portal-nav-desktop a:hover {
+  background: var(--color-surface);
+}
+
+.portal-user-desktop,
+.portal-signout-desktop {
+  display: none;
+}
+
+/* hamburger toggle — 44px square tap target */
+.nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--pulse-purple-light);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.nav-toggle-bars,
+.nav-toggle-bars::before,
+.nav-toggle-bars::after {
+  content: '';
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--pulse-air);
+  border-radius: 1px;
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.nav-toggle-bars {
+  position: relative;
+}
+
+.nav-toggle-bars::before {
+  position: absolute;
+  top: -6px;
+  left: 0;
+}
+
+.nav-toggle-bars::after {
+  position: absolute;
+  top: 6px;
+  left: 0;
+}
+
+.nav-toggle-bars-open {
+  background: transparent;
+}
+
+.nav-toggle-bars-open::before {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.nav-toggle-bars-open::after {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+/* the mobile dropdown panel — collapsed via max-height so it animates open */
+.portal-nav-mobile {
+  display: flex;
+  flex-direction: column;
+  max-height: 0;
+  overflow: hidden;
+  background: var(--pulse-purple-dark);
+  transition: max-height 0.25s ease;
+}
+
+.portal-nav-mobile-open {
+  max-height: 30rem;
+}
+
+.portal-nav-mobile a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--pulse-air);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid color-mix(in srgb, var(--pulse-air) 12%, transparent);
+}
+
+.portal-nav-mobile-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+}
+
+.portal-nav-mobile-footer .portal-user {
+  color: var(--pulse-silver-light);
+  font-size: var(--font-size-sm);
+}
+
+@media (min-width: 880px) {
+  .portal-header-nav {
+    gap: var(--space-8);
+  }
+
+  .portal-nav-desktop {
+    display: flex;
+    gap: var(--space-4);
+  }
+
+  .portal-user-desktop,
+  .portal-signout-desktop {
+    display: inline-flex;
+  }
+
+  .nav-toggle {
+    display: none;
+  }
+
+  .portal-nav-mobile {
+    display: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   DASHBOARD CONTENT — the KPI overview page's own component library
+   (status strip, charts, action cards, table, detail drawer). Scoped to
+   `.p-dashboard` (wraps just the dashboard page's content, nested inside
+   the ordinary `.portal-main`) with tokens that resolve to the SAME pulse
+   brand palette used everywhere else — no separate theme, no light/dark
+   toggle, just this page's own richer layout on brand colors.
+   ══════════════════════════════════════════════════════════════════ */
+.p-dashboard {
+  --bg: var(--color-bg);
+  --surface: var(--pulse-air);
+  --card: var(--pulse-air);
+  --card-hover: var(--pulse-silver-light);
+  --border: var(--color-border);
+  --border-strong: var(--pulse-silver);
+  --text: var(--color-text);
+  --text-2: var(--pulse-onyx);
+  --text-3: var(--color-text-muted);
+  --accent: var(--pulse-purple);
+  --accent-glow: color-mix(in srgb, var(--pulse-purple) 12%, transparent);
+  --accent-light: var(--pulse-purple-dark);
+  --green: var(--pulse-chart-oasis);
+  --green-bg: color-mix(in srgb, var(--pulse-chart-oasis) 12%, transparent);
+  --amber: var(--pulse-chart-sunset);
+  --amber-bg: color-mix(in srgb, var(--pulse-chart-sunset) 12%, transparent);
+  --red: var(--pulse-coral);
+  --red-bg: color-mix(in srgb, var(--pulse-coral) 12%, transparent);
+  --purple: var(--pulse-moon-light);
+  --purple-bg: color-mix(in srgb, var(--pulse-moon-light) 12%, transparent);
+  --blue: var(--pulse-chart-sea);
+  --blue-bg: color-mix(in srgb, var(--pulse-chart-sea) 12%, transparent);
+  --dash-radius: var(--radius-sm);
+  --dash-radius-lg: var(--radius-md);
+  --mono: var(--font-family-base);
+
   color: var(--text);
   font-size: 14px;
   line-height: 1.5;
 }
 
-.portal[data-theme='dark'] {
-  --bg: #0f1117;
-  --surface: #181c27;
-  --card: #1e2333;
-  --card-hover: #242840;
-  --border: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --text: #f0f2f8;
-  --text-2: #9ba3c0;
-  --text-3: #5c6484;
-  --accent-glow: rgba(91, 106, 245, 0.18);
-  --accent-light: #7c8cf8;
-}
-
-/* ── sidebar ───────────────────────────────────────────────────── */
-.p-sidebar {
-  width: 220px;
-  flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 100vh;
-  z-index: 100;
-  transform: translateX(-100%);
-  transition: transform 0.2s ease;
-}
-
-.p-sidebar-open {
-  transform: translateX(0);
-  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.4);
-}
-
-.p-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.p-sidebar-logo {
-  padding: 18px;
-  border-bottom: 1px solid var(--border);
-}
-
-.p-logo-mark {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.p-logo-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  line-height: 1.2;
-}
-
-.p-logo-sub {
-  font-size: 10px;
-  color: var(--text-3);
-  margin-top: 1px;
-}
-
-.p-sidebar-section {
-  padding: 12px 16px 6px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.p-sidebar-nav {
-  padding: 0 8px;
-  display: flex;
-  flex-direction: column;
-}
-
-.p-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 8px 10px;
-  margin: 1px 0;
-  border-radius: var(--dash-radius);
-  color: var(--text-2);
-  font-size: 13px;
-  font-weight: 500;
-  text-decoration: none;
-  cursor: pointer;
-  transition: all 0.15s;
-  border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
-}
-
-.p-nav-item:hover {
-  background: var(--card);
-  color: var(--text);
-}
-
-.p-nav-item.active {
-  background: var(--accent-glow);
-  color: var(--accent-light);
-  font-weight: 600;
-}
-
-.p-sidebar-levels {
-  padding: 4px 8px;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.p-ltab {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 40px;
-  padding: 8px 10px;
-  margin-bottom: 2px;
-  border-radius: var(--dash-radius);
-  cursor: pointer;
-  transition: all 0.15s;
-  border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
-  color: var(--text-2);
-  font-size: 13px;
-  font-family: inherit;
-}
-
-.p-ltab:hover {
-  background: var(--card);
-  color: var(--text);
-}
-
-.p-ltab.active {
-  background: var(--accent-glow);
-  color: var(--accent-light);
-  font-weight: 600;
-}
-
-.p-ltab-badge {
-  font-size: 10px;
-  padding: 2px 7px;
-  border-radius: 20px;
-  background: var(--card);
-  color: var(--text-3);
-  min-width: 24px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.p-ltab.active .p-ltab-badge {
-  background: rgba(91, 106, 245, 0.2);
-  color: var(--accent-light);
-}
-
-.p-sidebar-footer {
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  font-size: 11px;
-  color: var(--text-3);
-}
-
-.p-sidebar-footer-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-/* ── topbar ────────────────────────────────────────────────────── */
-.p-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.p-topbar-left {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-
-.p-topbar-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.p-topbar-sub {
-  font-size: 11px;
-  color: var(--text-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.p-topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-/* mobile hamburger — 44px tap target, hidden once the sidebar docks inline */
-.p-nav-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--dash-radius);
-  color: var(--text-2);
-  cursor: pointer;
-}
-
-.p-sidebar-backdrop {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 0.4);
-  z-index: 99;
-}
-
-.p-sidebar-backdrop-open {
-  display: block;
-}
-
-/* the shell's scrollable content area — same class the standalone public
-   /f page uses for its simple centered layout (see the base .portal-main
-   rule further below); nested one level deeper here it's restyled for the
-   sidebar-docked shell instead of being centered with its own max-width. */
-.p-main .portal-main {
-  max-width: none;
-  margin: 0;
-  padding: 16px;
-}
-
-.p-main .portal-main h1,
-.p-main .portal-main h2,
-.p-main .portal-main h3 {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.p-main .portal-main .portal-subtitle,
-.p-main .portal-main .muted {
-  color: var(--text-3);
-}
-
-@media (min-width: 900px) {
-  .p-sidebar {
-    position: static;
-    transform: none;
-    box-shadow: none;
-  }
-
-  .p-nav-toggle {
-    display: none;
-  }
-
-  .p-topbar {
-    padding: 14px 24px;
-  }
-
-  .p-main .portal-main {
-    padding: 20px 24px;
-  }
-}
-
-/* ── scoped overrides: existing shared classes inherit the shell look ── */
-.portal .btn-primary {
-  background: var(--accent);
-  color: #fff;
-  border-radius: 8px;
-  font-weight: 500;
-  padding: 8px 16px;
-  font-size: 13px;
-}
-
-.portal .btn-primary:hover {
-  background: var(--accent-light);
-}
-
-.portal .btn-ghost {
-  background: var(--card);
-  color: var(--text-2);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  font-size: 13px;
-  padding: 7px 14px;
-  min-height: 0;
-}
-
-.portal .btn-ghost:hover {
-  background: var(--card-hover);
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-
-.portal .admin-card,
-.portal .kpi-tile,
-.portal .kpi-detail,
-.portal .question-card,
-.portal .msform-thanks {
-  background: var(--card);
-  border-color: var(--border);
-  color: var(--text);
-}
-
-.portal .data-table {
-  background: var(--card);
-  border-color: var(--border);
-  color: var(--text);
-}
-
-.portal .data-table th,
-.portal .data-table td {
-  border-bottom-color: var(--border);
-}
-
-.portal .data-table th {
-  color: var(--text-3);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 600;
-}
-
-.portal .tabs {
-  border-bottom-color: var(--border);
-}
-
-.portal .tabs [role='tab'] {
-  color: var(--text-3);
-}
-
-.portal .tabs [role='tab'][aria-selected='true'] {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-
-.portal input,
-.portal select,
-.portal textarea {
-  background: var(--card);
-  border-color: var(--border-strong);
-  color: var(--text);
-}
-
-/* ── theme toggle ──────────────────────────────────────────────── */
+/* small toolbar button (export, etc.) — brand-neutral so it sits fine next
+   to .btn-primary/.btn-ghost without competing for primary-action weight */
 .p-theme-toggle {
   font-size: 12px;
   padding: 7px 12px;
-  border-radius: 8px;
+  border-radius: var(--dash-radius);
   border: 1px solid var(--border-strong);
   background: var(--card);
   color: var(--text-2);
@@ -635,7 +436,7 @@ h1, h2, h3 {
 
 .p-kpi-val {
   font-size: 24px;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--text);
   font-family: var(--mono);
   line-height: 1;
@@ -774,7 +575,7 @@ h1, h2, h3 {
 
 .p-rec-num {
   font-size: 24px;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   font-family: var(--mono);
   line-height: 1;
   margin-bottom: 4px;
@@ -792,9 +593,9 @@ h1, h2, h3 {
   margin-top: 2px;
 }
 
-/* ── status color families (bg tint / accent) — mirrors the reference's
-   purple=exceed, green=high-performer, blue=on-track, amber=needs-
-   improvement, red=critical, slate=pending palette ─────────────────── */
+/* ── status color families (bg tint / accent) — mapped to the pulse
+   brand palette: purple(moon-light)=exceed, oasis=high-performer,
+   sea=on-track, sunset=needs-improvement, coral=critical, silver=pending ── */
 .p-status-exceed { --kc: var(--purple); background: var(--purple-bg); }
 .p-status-high { --kc: var(--green); background: var(--green-bg); }
 .p-status-track { --kc: var(--blue); background: var(--blue-bg); }
@@ -822,6 +623,26 @@ h1, h2, h3 {
   border-radius: var(--dash-radius-lg);
   overflow: hidden;
   margin-bottom: 16px;
+}
+
+.p-table-card .data-table {
+  background: var(--card);
+  border: none;
+  border-radius: 0;
+}
+
+.p-table-card .data-table th,
+.p-table-card .data-table td {
+  border-bottom-color: var(--border);
+  color: var(--text);
+}
+
+.p-table-card .data-table th {
+  color: var(--text-3);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
 }
 
 .p-table-header {
@@ -861,7 +682,7 @@ h1, h2, h3 {
 .p-fpill.active {
   background: var(--accent-glow);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  color: var(--accent-light);
+  color: var(--accent);
 }
 
 .p-table-footer {
@@ -889,7 +710,7 @@ h1, h2, h3 {
 }
 
 .p-th-sorted {
-  color: var(--accent-light);
+  color: var(--accent);
 }
 
 .p-sort-icon {
@@ -937,7 +758,7 @@ h1, h2, h3 {
 
 .p-action-btn:hover {
   border-color: var(--accent);
-  color: var(--accent-light);
+  color: var(--accent);
 }
 
 /* ── detail drawer ─────────────────────────────────────────────── */
@@ -1016,7 +837,7 @@ h1, h2, h3 {
   font-size: 15px;
   font-weight: 700;
   margin-bottom: 10px;
-  color: #fff;
+  color: var(--pulse-air);
   background: var(--accent);
 }
 
@@ -1095,6 +916,7 @@ h1, h2, h3 {
     grid-template-columns: 1.5fr 1fr;
   }
 }
+
 
 /* ── KPI stat tiles ────────────────────────────────────────────── */
 .tile-grid {
