@@ -7,13 +7,14 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { FormRenderer, SubmissionScore } from '../../../components/form-renderer';
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
 import { ShareLinkPanel } from '../../../components/share-link-panel';
+import { AccessControlPanel } from '../../../components/access-control-panel';
 import { ResponseSummary, ResponseSummaryData } from '../../../components/response-summary';
 import { ResponseDetailModal } from '../../../components/response-detail-modal';
 import { api, downloadFile } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
 interface FormDetail {
-  form: { id: string; slug: string; status: string; publicToken: string | null };
+  form: { id: string; slug: string; status: string; publicToken: string | null; restricted: boolean };
   version: { id: string; version: number };
   definition: FormDefinition;
   settings: FormSettings;
@@ -295,6 +296,13 @@ function FormView() {
             onSaved={(next) => setDetail((d) => (d ? { ...d, settings: next } : d))}
           />
           <ShareLinkPanel formId={form.id} publicToken={form.publicToken} />
+          <AccessControlPanel
+            formId={form.id}
+            restricted={form.restricted}
+            onRestrictedChange={(next) =>
+              setDetail((d) => (d ? { ...d, form: { ...d.form, restricted: next } } : d))
+            }
+          />
         </section>
       )}
     </PortalShell>

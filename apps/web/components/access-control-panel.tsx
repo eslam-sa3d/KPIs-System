@@ -1,0 +1,168 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { api } from '../lib/api-client';
+
+interface UserOption {
+  id: string;
+  email: string;
+  displayName: string;
+}
+
+interface CollaboratorRow {
+  id: string;
+  userId: string;
+  canManage: boolean;
+  user: { id: string; displayName: string; email: string };
+}
+
+/** "Specific people" sharing + co-owners — an allow-list layered on top of the
+ *  anonymous public link (ShareLinkPanel), which stays untouched either way. */
+export function AccessControlPanel({
+  formId,
+  restricted,
+  onRestrictedChange,
+}: {
+  formId: string;
+  restricted: boolean;
+  onRestrictedChange: (next: boolean) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [collaborators, setCollaborators] = useState<CollaboratorRow[] | null>(null);
+  const [users, setUsers] = useState<UserOption[] | null>(null);
+  const [filter, setFilter] = useState('');
+  const [pickUserId, setPickUserId] = useState('');
+  const [pickCanManage, setPickCanManage] = useState(false);
+
+  useEffect(() => {
+    if (!restricted) return;
+    api<CollaboratorRow[]>(`/v1/forms/${formId}/collaborators`).then(setCollaborators);
+    api<UserOption[]>('/v1/users?pageSize=200').then(setUsers);
+  }, [formId, restricted]);
+
+  async function toggleRestricted(next: boolean) {
+    setBusy(true);
+    try {
+      await api(`/v1/forms/${formId}/restricted`, {
+        method: 'POST',
+        body: JSON.stringify({ restricted: next }),
+      });
+      onRestrictedChange(next);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function invite() {
+    if (!pickUserId) return;
+    setBusy(true);
+    try {
+      await api(`/v1/forms/${formId}/collaborators`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: pickUserId, canManage: pickCanManage }),
+      });
+      setCollaborators(await api<CollaboratorRow[]>(`/v1/forms/${formId}/collaborators`));
+      setPickUserId('');
+      setPickCanManage(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(userId: string) {
+    setBusy(true);
+    try {
+      await api(`/v1/forms/${formId}/collaborators/${userId}`, { method: 'DELETE' });
+      setCollaborators((current) => current?.filter((c) => c.userId !== userId) ?? null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const invitedIds = new Set((collaborators ?? []).map((c) => c.userId));
+  const candidates = (users ?? []).filter(
+    (u) =>
+      !invitedIds.has(u.id) &&
+      (u.displayName.toLowerCase().includes(filter.toLowerCase()) ||
+        u.email.toLowerCase().includes(filter.toLowerCase())),
+  );
+
+  return (
+    <div className="admin-card">
+      <h2>access</h2>
+      <p className="muted">
+        by default, anyone signed in with the "view forms" permission can open this form. restricting it
+        limits that to specific people — the public share link above is unaffected either way.
+      </p>
+
+      <label className="check-item">
+        <input
+          type="checkbox"
+          checked={restricted}
+          disabled={busy}
+          onChange={(e) => toggleRestricted(e.target.checked)}
+        />
+        restrict to specific people
+      </label>
+
+      {restricted && (
+        <>
+          <label htmlFor="ac-filter">invite someone</label>
+          <input
+            id="ac-filter"
+            value={filter}
+            onChange={(e) => {
+              setFilter(e.target.value);
+              setPickUserId('');
+            }}
+            placeholder="search by name or email"
+          />
+          {filter && candidates.length > 0 && (
+            <select
+              aria-label="matching users"
+              size={Math.min(5, candidates.length)}
+              value={pickUserId}
+              onChange={(e) => setPickUserId(e.target.value)}
+            >
+              {candidates.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.displayName} ({u.email})
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="builder-required">
+            <input
+              id="ac-can-manage"
+              type="checkbox"
+              checked={pickCanManage}
+              onChange={(e) => setPickCanManage(e.target.checked)}
+            />
+            <label htmlFor="ac-can-manage">co-owner (can also edit and manage this form)</label>
+          </span>
+          <button type="button" className="btn-ghost" disabled={!pickUserId || busy} onClick={invite}>
+            invite
+          </button>
+
+          <label>people with access</label>
+          {collaborators === null ? (
+            <p className="muted">loading…</p>
+          ) : collaborators.length === 0 ? (
+            <p className="muted">no one invited yet — only you and admins can open this form.</p>
+          ) : (
+            <ul className="summary-samples">
+              {collaborators.map((c) => (
+                <li key={c.id}>
+                  {c.user.displayName} ({c.user.email}) {c.canManage && '· co-owner'}{' '}
+                  <button type="button" className="btn-ghost" disabled={busy} onClick={() => remove(c.userId)}>
+                    remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

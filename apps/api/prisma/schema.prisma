@@ -30,6 +30,8 @@ model User {
   auditEvents  AuditLog[]
   fileUploads  FormFileUpload[]
   formAssets   FormAsset[]
+  formCollaborations FormCollaborator[] @relation("FormCollaboratorUser")
+  formCollaboratorInvites FormCollaborator[] @relation("FormCollaboratorAddedBy")
 
   @@index([departmentId])
 }
@@ -165,13 +167,36 @@ model Form {
   settings    Json?
   /// Non-null enables the anonymous public fill link (/f?token=…)
   publicToken String?  @unique
+  /// When true, only the creator, a FormCollaborator, or a forms:manage holder
+  /// may view/fill/manage this form via the portal — independent of the
+  /// anonymous public link above, which stays open-to-anyone once enabled.
+  restricted  Boolean  @default(false)
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  versions    FormVersion[]
-  fileUploads FormFileUpload[]
-  assets      FormAsset[]
+  versions      FormVersion[]
+  fileUploads   FormFileUpload[]
+  assets        FormAsset[]
+  collaborators FormCollaborator[]
+}
+
+/// A specific person granted access to one restricted form, bypassing the
+/// org-wide forms:read/forms:write RBAC requirement for that form only.
+model FormCollaborator {
+  id          String   @id @default(uuid())
+  formId      String
+  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation("FormCollaboratorUser", fields: [userId], references: [id], onDelete: Cascade)
+  /// false = can view/fill only; true = co-owner (can also edit/publish/manage this form)
+  canManage   Boolean  @default(false)
+  addedById   String?
+  addedBy     User?    @relation("FormCollaboratorAddedBy", fields: [addedById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([formId, userId])
+  @@index([userId])
 }
 
 /// Immutable versions: editing a published form creates a new version, so old

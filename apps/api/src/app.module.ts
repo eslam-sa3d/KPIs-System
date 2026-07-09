@@ -16,6 +16,7 @@ import { UsersService } from './modules/users/users.service';
 import { FormsController, PublicFormsController } from './modules/forms/forms.controller';
 import { AssetsService } from './modules/forms/assets.service';
 import { FileUploadsService } from './modules/forms/file-uploads.service';
+import { FormAccessGuard } from './modules/forms/form-access.guard';
 import { FormsService } from './modules/forms/forms.service';
 import { SubmissionsService } from './modules/forms/submissions.service';
 import { HealthController } from './modules/health/health.controller';
@@ -65,6 +66,7 @@ import { RolesController } from './modules/rbac/roles.controller';
     { provide: APP_GUARD, useClass: ThrottlerGuard }, // 1. rate limit
     { provide: APP_GUARD, useClass: JwtAuthGuard },   // 2. authenticate (@Public opts out)
     { provide: APP_GUARD, useClass: PermissionsGuard }, // 3. authorize (@RequirePermissions)
+    { provide: APP_GUARD, useClass: FormAccessGuard }, // 4. narrow further for restricted forms
   ],
 })
 export class AppModule {}

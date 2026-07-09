@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
+import { RbacService } from '../rbac/rbac.service';
 import { AssetsService } from './assets.service';
 
 /**
@@ -22,6 +23,7 @@ export class FormsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly assets: AssetsService,
+    private readonly rbac: RbacService,
   ) {}
 
   async createForm(slug: string, definition: unknown, createdById: string) {
@@ -164,6 +166,78 @@ export class FormsService {
       }),
     ]);
     return { publicToken };
+  }
+
+  /** Restricting a form limits portal view/fill to the creator, collaborators, and forms:manage holders.
+   *  The anonymous public link (above) is untouched — it's opt-in and always anonymous regardless. */
+  async setRestricted(formId: string, restricted: boolean, actorId: string) {
+    await this.getOwnedForm(formId, actorId);
+    await this.prisma.$transaction([
+      this.prisma.form.update({ where: { id: formId }, data: { restricted } }),
+      this.prisma.auditLog.create({
+        data: {
+          actorId,
+          action: restricted ? 'form.restricted_enabled' : 'form.restricted_disabled',
+          entity: 'Form',
+          entityId: formId,
+        },
+      }),
+    ]);
+    return { restricted };
+  }
+
+  async listCollaborators(formId: string) {
+    return this.prisma.formCollaborator.findMany({
+      where: { formId },
+      include: { user: { select: { id: true, displayName: true, email: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async inviteCollaborator(formId: string, userId: string, canManage: boolean, actorId: string) {
+    await this.getOwnedForm(formId, actorId);
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw AppError.notFound('User', userId);
+
+    const collaborator = await this.prisma.formCollaborator.upsert({
+      where: { formId_userId: { formId, userId } },
+      create: { formId, userId, canManage, addedById: actorId },
+      update: { canManage },
+      include: { user: { select: { id: true, displayName: true, email: true } } },
+    });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'form.collaborator_added', entity: 'Form', entityId: formId, detail: { userId, canManage } },
+    });
+    return collaborator;
+  }
+
+  async removeCollaborator(formId: string, userId: string, actorId: string) {
+    await this.getOwnedForm(formId, actorId);
+    await this.prisma.formCollaborator.deleteMany({ where: { formId, userId } });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'form.collaborator_removed', entity: 'Form', entityId: formId, detail: { userId } },
+    });
+    return null;
+  }
+
+  /** Loads a form and asserts the actor may manage it: the creator, a canManage
+   *  collaborator, or a global forms:manage holder — narrower than forms:write
+   *  (which lets anyone create/edit forms) for actions specific to ONE form. */
+  private async getOwnedForm(formId: string, actorId: string) {
+    const form = await this.prisma.form.findUnique({
+      where: { id: formId },
+      include: { collaborators: { where: { userId: actorId } } },
+    });
+    if (!form) throw AppError.notFound('Form', formId);
+
+    const isOwner = form.createdById === actorId;
+    const isManagingCollaborator = form.collaborators.some((c) => c.canManage);
+    if (isOwner || isManagingCollaborator) return form;
+
+    const granted = await this.rbac.getEffectivePermissions(actorId);
+    if (granted.has('forms:manage')) return form;
+
+    throw AppError.forbidden('Only the form owner, a co-owner, or an admin can manage this form');
   }
 
   /** MS-Forms "copy form": new slug, same latest definition, fresh settings. */

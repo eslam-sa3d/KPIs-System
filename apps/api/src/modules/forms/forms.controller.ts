@@ -100,6 +100,44 @@ export class FormsController {
     return this.forms.setShareLink(formId, Boolean(body?.enabled), req.user.id);
   }
 
+  /** Restricts portal access to the creator, collaborators, and forms:manage holders.
+   *  forms:write is the coarse gate; FormsService.getOwnedForm enforces the real ownership check. */
+  @Post(':formId/restricted')
+  @RequirePermissions('forms:write')
+  setRestricted(
+    @Param('formId') formId: string,
+    @Body() body: { restricted: boolean },
+    @Req() req: AuthedRequest,
+  ) {
+    return this.forms.setRestricted(formId, Boolean(body?.restricted), req.user.id);
+  }
+
+  @Get(':formId/collaborators')
+  @RequirePermissions('forms:write')
+  listCollaborators(@Param('formId') formId: string) {
+    return this.forms.listCollaborators(formId);
+  }
+
+  @Post(':formId/collaborators')
+  @RequirePermissions('forms:write')
+  inviteCollaborator(
+    @Param('formId') formId: string,
+    @Body() body: { userId: string; canManage?: boolean },
+    @Req() req: AuthedRequest,
+  ) {
+    return this.forms.inviteCollaborator(formId, body.userId, Boolean(body?.canManage), req.user.id);
+  }
+
+  @Delete(':formId/collaborators/:userId')
+  @RequirePermissions('forms:write')
+  removeCollaborator(
+    @Param('formId') formId: string,
+    @Param('userId') userId: string,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.forms.removeCollaborator(formId, userId, req.user.id);
+  }
+
   @Post(':formId/duplicate')
   @RequirePermissions('forms:write')
   duplicate(@Param('formId') formId: string, @Req() req: AuthedRequest) {
