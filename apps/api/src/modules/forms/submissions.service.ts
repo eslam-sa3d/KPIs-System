@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import {
   FormDefinition,
+  FormFieldSummary,
+  FormResponseSummary,
   FormSettings,
   PAGE_DEFAULTS,
   PageQuery,
@@ -115,7 +117,7 @@ export class SubmissionsService {
   }
 
   /** MS-Forms-style per-question aggregates for the summary dashboard. */
-  async summary(formSlug: string) {
+  async summary(formSlug: string): Promise<FormResponseSummary> {
     const { version, definition } = await this.forms.getLatestVersion(formSlug);
     const submissions = await this.prisma.formSubmission.findMany({
       where: { formVersionId: version.id },
@@ -123,7 +125,7 @@ export class SubmissionsService {
       orderBy: { createdAt: 'asc' },
     });
 
-    const fields = definition.fields.map((field) => {
+    const fields: FormFieldSummary[] = definition.fields.map((field) => {
       const values = submissions
         .map((s) => (s.answers as SubmissionAnswers)[field.key])
         .filter((v) => v !== undefined && v !== null && v !== '');
@@ -207,8 +209,8 @@ export class SubmissionsService {
 
     return {
       responses: submissions.length,
-      firstResponseAt: submissions[0]?.createdAt ?? null,
-      lastResponseAt: submissions[submissions.length - 1]?.createdAt ?? null,
+      firstResponseAt: submissions[0]?.createdAt.toISOString() ?? null,
+      lastResponseAt: submissions[submissions.length - 1]?.createdAt.toISOString() ?? null,
       fields,
     };
   }

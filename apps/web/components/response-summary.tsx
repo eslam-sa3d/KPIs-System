@@ -1,29 +1,9 @@
 'use client';
 
+import type { FormResponseSummary } from '@pulse/contracts';
 import { palette } from '@pulse/theme';
 
-type FieldSummary = {
-  key: string;
-  label: string;
-  type: string;
-  answered: number;
-  counts?: Record<string, number>;
-  average?: number | null;
-  min?: number | null;
-  max?: number | null;
-  npsScore?: number;
-  matrix?: Record<string, Record<string, number>>;
-  scale?: string[];
-  averagePosition?: Record<string, number>;
-  samples?: string[];
-};
-
-export interface ResponseSummaryData {
-  responses: number;
-  firstResponseAt: string | null;
-  lastResponseAt: string | null;
-  fields: FieldSummary[];
-}
+export type ResponseSummaryData = FormResponseSummary;
 
 /** One brand-purple hue, light→dark by share of total — a sequential ramp, not categorical. */
 function barColor(share: number): string {
