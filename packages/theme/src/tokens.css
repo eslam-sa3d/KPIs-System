@@ -5,6 +5,12 @@
  * Never hard-code hex values in app code — consume these variables.
  */
 
+/* Material Design 3 color-role tokens (--md-sys-color-*), generated from the
+   pulse brand seed — see m3-scheme.css's header comment and
+   scripts/generate-m3-tokens.mjs. The semantic aliases below resolve through
+   these roles rather than the raw --pulse-* hexes directly. */
+@import './m3-scheme.css';
+
 :root {
   /* ── primary palette ─────────────────────────────────────────── */
   --pulse-air: #ffffff;        /* air    — pantone n/a  */
@@ -26,26 +32,29 @@
   --pulse-chart-sea: #1dced8;      /* pantone 311C  */
   --pulse-chart-coral: #ff375e;    /* coral doubles as a chart series */
 
-  /* ── semantic aliases (what app code should actually use) ────── */
-  --color-bg: var(--pulse-air);
-  --color-surface: var(--pulse-air);
-  --color-text: var(--pulse-onyx);
-  /* Not var(--pulse-silver) — that Pantone-referenced brand token is ≈2.9:1
-     against white, below WCAG AA's 4.5:1 for text. This is a separate,
-     text-only darkening of the same hue, kept independent so --pulse-silver
-     itself stays true to the brand guideline for non-text uses (icons, etc). */
-  --color-text-muted: #5b6570;
-  --color-border: var(--pulse-silver-light);
-  --color-primary: var(--pulse-purple);
-  --color-primary-hover: var(--pulse-purple-dark);
-  --color-primary-soft: var(--pulse-purple-light);
-  --color-accent: var(--pulse-coral);          /* highlights — use sparingly:
-                                                  "if you highlight everything,
-                                                   you highlight nothing" */
-  --color-on-primary: var(--pulse-air);
-  --color-success: var(--pulse-chart-oasis);
-  --color-warning: var(--pulse-chart-sunset);
-  --color-danger: var(--pulse-coral);
+  /* ── semantic aliases (what app code should actually use) ─────────
+     Resolve through the M3 color roles (m3-scheme.css) rather than the raw
+     --pulse-* hexes, so the whole app picks up light/dark M3 schemes for
+     free. --pulse-* itself is untouched below — still the literal brand
+     reference for the logo, chart series, and print contexts. */
+  --color-bg: var(--md-sys-color-surface);
+  --color-surface: var(--md-sys-color-surface-container-low);
+  --color-text: var(--md-sys-color-on-surface);
+  --color-text-muted: var(--md-sys-color-on-surface-variant);
+  --color-border: var(--md-sys-color-outline-variant);
+  --color-primary: var(--md-sys-color-primary);
+  /* interim only — Phase 4 (state layers) replaces hover backgrounds with a
+     proper M3 state-layer overlay; this stays functional until then. */
+  --color-primary-hover: color-mix(in srgb, var(--md-sys-color-primary) 88%, black);
+  --color-primary-soft: var(--md-sys-color-primary-container);
+  --color-accent: var(--md-sys-color-tertiary); /* pulse coral, promoted to M3's tertiary
+                                                    role — highlights, use sparingly:
+                                                    "if you highlight everything,
+                                                     you highlight nothing" */
+  --color-on-primary: var(--md-sys-color-on-primary);
+  --color-success: var(--pulse-chart-oasis);   /* M3 has no standard "success" role */
+  --color-warning: var(--pulse-chart-sunset);  /* M3 has no standard "warning" role */
+  --color-danger: var(--md-sys-color-error);
 
   /* ── typography ──────────────────────────────────────────────── */
   /* Primary: stc forward. System/secondary fallback: Arial (per guidelines). */
@@ -81,12 +90,48 @@
   --space-12: 3rem;
   --space-16: 4rem;
 
-  /* ── shape & elevation ───────────────────────────────────────── */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --shadow-card: 0 2px 12px rgb(29 37 45 / 0.08);
-  --shadow-modal: 0 8px 32px rgb(29 37 45 / 0.16);
+  /* ── shape (M3 shape scale, https://m3.material.io/styles/shape) ── */
+  --md-sys-shape-corner-none: 0px;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-full: 999px;
+
+  /* legacy aliases — repointed to the nearest M3 step (was 6/10/16px) */
+  --radius-sm: var(--md-sys-shape-corner-small);
+  --radius-md: var(--md-sys-shape-corner-medium);
+  --radius-lg: var(--md-sys-shape-corner-large);
+
+  /* ── elevation (M3 tonal-surface + shadow, https://m3.material.io/styles/elevation) ──
+     Each level pairs a shadow with a surface-tint overlay (primary mixed into
+     surface) — color-mix() is already used elsewhere in this codebase. */
+  --md-sys-elevation-level0: none;
+  --md-sys-elevation-level1:
+    0 1px 2px rgb(0 0 0 / 0.30),
+    0 1px 3px 1px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-level2:
+    0 1px 2px rgb(0 0 0 / 0.30),
+    0 2px 6px 2px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-level3:
+    0 1px 3px rgb(0 0 0 / 0.30),
+    0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-level4:
+    0 1px 3px rgb(0 0 0 / 0.30),
+    0 6px 10px 4px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-level5:
+    0 1px 3px rgb(0 0 0 / 0.30),
+    0 8px 12px 6px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-tint-level1: color-mix(in srgb, var(--md-sys-color-primary) 5%, transparent);
+  --md-sys-elevation-tint-level2: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
+  --md-sys-elevation-tint-level3: color-mix(in srgb, var(--md-sys-color-primary) 11%, transparent);
+  --md-sys-elevation-tint-level4: color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent);
+  --md-sys-elevation-tint-level5: color-mix(in srgb, var(--md-sys-color-primary) 14%, transparent);
+
+  /* legacy aliases */
+  --shadow-card: var(--md-sys-elevation-level1);
+  --shadow-modal: var(--md-sys-elevation-level3);
 
   /* ── motion ──────────────────────────────────────────────────── */
   --transition-fast: 120ms ease;

@@ -11,6 +11,11 @@ overrides:
   tmp@<0.2.6: '>=0.2.6'
   vite@<=6.4.2: '>=6.4.3 <7'
 
+patchedDependencies:
+  '@material/material-color-utilities@0.4.0':
+    hash: b3q7szkgb5laj6ofmeernkrekq
+    path: patches/@material__material-color-utilities@0.4.0.patch
+
 importers:
 
   .:
@@ -181,7 +186,11 @@ importers:
         specifier: ^3.2.6
         version: 3.2.7(@types/node@26.1.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.0)
 
-  packages/theme: {}
+  packages/theme:
+    devDependencies:
+      '@material/material-color-utilities':
+        specifier: ^0.4.0
+        version: 0.4.0(patch_hash=b3q7szkgb5laj6ofmeernkrekq)
 
 packages:
 
@@ -764,6 +773,9 @@ packages:
   '@lukeed/csprng@1.1.0':
     resolution: {integrity: sha512-Z7C/xXCiGWsg0KuKsHTKJxbWhpI3Vs5GwLfOean7MGyVFGqdRgBbAjOCh6u4bbjPc/8MJ2pZmK/0DLdCbivLDA==}
     engines: {node: '>=8'}
+
+  '@material/material-color-utilities@0.4.0':
+    resolution: {integrity: sha512-dlq6VExJReb8dhjj3a/yTigr3ncNwoFmL5Iy2ENtbDX03EmNeOEdZ+vsaGrj7RTuO+mB7L58II4LCsl4NpM8uw==}
 
   '@nestjs/cli@10.4.9':
     resolution: {integrity: sha512-s8qYd97bggqeK7Op3iD49X2MpFtW4LVNLAwXFkfbRxKME6IYT7X0muNTJ2+QfI8hpbNx9isWkrLWIp+g5FOhiA==}
@@ -4319,6 +4331,8 @@ snapshots:
       call-bind: 1.0.9
 
   '@lukeed/csprng@1.1.0': {}
+
+  '@material/material-color-utilities@0.4.0(patch_hash=b3q7szkgb5laj6ofmeernkrekq)': {}
 
   '@nestjs/cli@10.4.9':
     dependencies:
