@@ -12,6 +12,7 @@ import {
 import { ZodError } from 'zod';
 import ExcelJS from 'exceljs';
 import { Prisma } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
 import { AppError } from '../../common/app-error';
 import { paged } from '../../common/envelope.interceptor';
 import { PrismaService } from '../../infra/prisma.service';
@@ -33,7 +34,7 @@ export class SubmissionsService {
 
   async submit(formSlug: string, rawAnswers: SubmissionAnswers, submittedById: string) {
     const { form, version, definition, settings } = await this.forms.getLatestVersion(formSlug);
-    await this.enforceSettings(form.id, settings, submittedById, null);
+    await this.enforceSettings(form.id, settings, submittedById, null, rawAnswers);
     return this.persist(form.id, version.id, definition, settings, rawAnswers, submittedById, null);
   }
 
@@ -41,8 +42,43 @@ export class SubmissionsService {
    *  controller stores in a cookie — the only "identity" an anonymous filler has. */
   async submitPublic(token: string, rawAnswers: SubmissionAnswers, respondentFingerprint: string | null) {
     const { form, version, definition, settings } = await this.forms.getByPublicToken(token);
-    await this.enforceSettings(form.id, settings, null, respondentFingerprint);
+    await this.enforceSettings(form.id, settings, null, respondentFingerprint, rawAnswers);
     return this.persist(form.id, version.id, definition, settings, rawAnswers, null, respondentFingerprint);
+  }
+
+  /** Fetches a respondent's own previously-submitted answers to prefill the edit form. */
+  async getByEditToken(formToken: string, editToken: string) {
+    const { form } = await this.forms.getByPublicToken(formToken);
+    const existing = await this.prisma.formSubmission.findFirst({
+      where: { editToken, formVersion: { formId: form.id } },
+      select: { answers: true },
+    });
+    if (!existing) throw AppError.notFound('Submission', editToken);
+    return { answers: existing.answers as SubmissionAnswers };
+  }
+
+  /** Lets a respondent revise their own submission — re-validates against the CURRENT
+   *  version's compiled schema, same as admin edit, but gated by the token returned at
+   *  submit time rather than an admin permission. */
+  async updateByEditToken(formToken: string, editToken: string, rawAnswers: SubmissionAnswers) {
+    const { form, definition, settings } = await this.forms.getByPublicToken(formToken);
+    const existing = await this.prisma.formSubmission.findFirst({
+      where: { editToken, formVersion: { formId: form.id } },
+    });
+    if (!existing) throw AppError.notFound('Submission', editToken);
+
+    const { answers, uploadIds, score } = await this.validateAndScore(form.id, definition, settings, rawAnswers);
+    const submission = await this.prisma.formSubmission.update({
+      where: { id: existing.id },
+      data: { answers, score: score ? (score as unknown as Prisma.InputJsonValue) : Prisma.DbNull },
+    });
+    if (uploadIds.length) {
+      await this.prisma.formFileUpload.updateMany({
+        where: { id: { in: uploadIds } },
+        data: { submissionId: submission.id },
+      });
+    }
+    return submission;
   }
 
   private async enforceSettings(
@@ -50,6 +86,7 @@ export class SubmissionsService {
     settings: FormSettings,
     submittedById: string | null,
     respondentFingerprint: string | null,
+    rawAnswers: SubmissionAnswers,
   ) {
     const closed = new AppError('CONFLICT', 'This form is not accepting responses');
     if (!settings.acceptingResponses) throw closed;
@@ -60,6 +97,16 @@ export class SubmissionsService {
     if (settings.maxResponses) {
       const count = await this.prisma.formSubmission.count({ where: { formVersion: { formId } } });
       if (count >= settings.maxResponses) throw closed;
+    }
+
+    for (const quota of settings.quotas) {
+      if (rawAnswers[quota.fieldKey] !== quota.equals) continue;
+      const count = await this.prisma.formSubmission.count({
+        where: { formVersion: { formId }, answers: { path: [quota.fieldKey], equals: quota.equals } },
+      });
+      if (count >= quota.limit) {
+        throw new AppError('CONFLICT', `This form is no longer accepting responses of that kind`);
+      }
     }
 
     if (settings.oneResponsePerUser && (submittedById || respondentFingerprint)) {
@@ -140,6 +187,7 @@ export class SubmissionsService {
         respondentFingerprint,
         answers,
         score: score ? (score as unknown as Prisma.InputJsonValue) : undefined,
+        editToken: settings.allowRespondentEdit ? randomBytes(24).toString('base64url') : undefined,
       },
     });
     if (uploadIds.length) {

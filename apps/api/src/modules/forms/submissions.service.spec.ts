@@ -136,6 +136,81 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
     await service.submit('demo', { team: 'x' }, 'user-1');
     expect(prisma.formSubmission.create).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects once a matching quota is reached, independent of maxResponses', async () => {
+    prisma.formSubmission.count.mockResolvedValue(2); // quota count (no maxResponses set in this test)
+    const forms = makeFormsStub({ quotas: [{ fieldKey: 'team', equals: 'x', limit: 2 }] });
+    const service = new SubmissionsService(prisma as never, forms as never);
+    await expect(service.submit('demo', { team: 'x' }, 'user-1')).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+  });
+
+  it('does not enforce a quota for an answer that does not match its equals value', async () => {
+    prisma.formSubmission.count.mockResolvedValue(999); // would reject if checked
+    const forms = makeFormsStub({ quotas: [{ fieldKey: 'team', equals: 'y', limit: 1 }] });
+    const service = new SubmissionsService(prisma as never, forms as never);
+    await service.submit('demo', { team: 'x' }, 'user-1');
+    expect(prisma.formSubmission.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('generates an edit token when allowRespondentEdit is on', async () => {
+    const forms = makeFormsStub({ allowRespondentEdit: true });
+    const service = new SubmissionsService(prisma as never, forms as never);
+    await service.submit('demo', { team: 'x' }, 'user-1');
+    expect(prisma.formSubmission.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ editToken: expect.any(String) }),
+    });
+  });
+
+  it('omits the edit token when allowRespondentEdit is off', async () => {
+    const forms = makeFormsStub({ allowRespondentEdit: false });
+    const service = new SubmissionsService(prisma as never, forms as never);
+    await service.submit('demo', { team: 'x' }, 'user-1');
+    expect(prisma.formSubmission.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ editToken: undefined }),
+    });
+  });
+});
+
+describe('SubmissionsService respondent self-edit', () => {
+  it('updates a submission found by its edit token', async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.findFirst.mockResolvedValue({ id: 'sub-1', editToken: 'tok-abc' });
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never);
+
+    await service.updateByEditToken('public-tok', 'tok-abc', { team: 'y' });
+
+    expect(prisma.formSubmission.findFirst).toHaveBeenCalledWith({
+      where: { editToken: 'tok-abc', formVersion: { formId: 'form-1' } },
+    });
+    expect(prisma.formSubmission.update).toHaveBeenCalledWith({
+      where: { id: 'sub-1' },
+      data: { answers: { team: 'y' }, score: Prisma.DbNull },
+    });
+  });
+
+  it('rejects an unknown edit token', async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.findFirst.mockResolvedValue(null);
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never);
+
+    await expect(service.updateByEditToken('public-tok', 'nope', { team: 'y' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('fetches a submission by its edit token for prefill', async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.findFirst.mockResolvedValue({ answers: { team: 'x' } });
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never);
+
+    const result = await service.getByEditToken('public-tok', 'tok-abc');
+    expect(result).toEqual({ answers: { team: 'x' } });
+  });
 });
 
 describe('SubmissionsService file-answer integrity', () => {

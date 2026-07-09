@@ -109,6 +109,76 @@ export function FormSettingsPanel({
         placeholder="no limit"
       />
 
+      <label>response quotas (optional)</label>
+      <p className="muted" style={{ fontSize: 11, margin: '2px 0 8px' }}>
+        stop counting a specific answer once it hits its own limit — e.g. close after 50 responses
+        where role = manager — independent of the blanket limit above.
+      </p>
+      {draft.quotas.map((quota, i) => (
+        <div key={i} className="builder-required" style={{ flexWrap: 'wrap' }}>
+          <input
+            aria-label="field key"
+            value={quota.fieldKey}
+            onChange={(e) =>
+              setDraft((d) => ({
+                ...d,
+                quotas: d.quotas.map((q, qi) => (qi === i ? { ...q, fieldKey: e.target.value } : q)),
+              }))
+            }
+            placeholder="field key"
+          />
+          <input
+            aria-label="equals"
+            value={quota.equals}
+            onChange={(e) =>
+              setDraft((d) => ({
+                ...d,
+                quotas: d.quotas.map((q, qi) => (qi === i ? { ...q, equals: e.target.value } : q)),
+              }))
+            }
+            placeholder="answer value"
+          />
+          <input
+            aria-label="limit"
+            type="number"
+            min={1}
+            value={quota.limit}
+            onChange={(e) =>
+              setDraft((d) => ({
+                ...d,
+                quotas: d.quotas.map((q, qi) => (qi === i ? { ...q, limit: Number(e.target.value) } : q)),
+              }))
+            }
+            placeholder="limit"
+          />
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => setDraft((d) => ({ ...d, quotas: d.quotas.filter((_, qi) => qi !== i) }))}
+          >
+            remove
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="btn-ghost"
+        onClick={() =>
+          setDraft((d) => ({ ...d, quotas: [...d.quotas, { fieldKey: '', equals: '', limit: 50 }] }))
+        }
+      >
+        + add quota
+      </button>
+
+      <label className="check-item">
+        <input
+          type="checkbox"
+          checked={draft.allowRespondentEdit}
+          onChange={(e) => setDraft((d) => ({ ...d, allowRespondentEdit: e.target.checked }))}
+        />
+        let respondents edit their own response via a link shown after submitting
+      </label>
+
       <label className="check-item">
         <input
           type="checkbox"

@@ -78,6 +78,9 @@ const baseField = z.object({
   required: z.boolean().default(false),
   visibleWhen: visibleWhenSchema.optional(),
   media: mediaSchema.optional(),
+  /** UTM-style hidden field: never shown to the respondent — its value is read once from
+   *  this query-string parameter on load and submitted automatically. */
+  capturedFromUrlParam: z.string().max(100).optional(),
 });
 
 const optionItem = z.object({
@@ -234,6 +237,23 @@ export const formSettingsSchema = z.object({
    *  no page has a branching rule (see FormRenderer); order-independent
    *  reachability means the server needs no changes to support this. */
   shuffleSections: z.boolean().default(false),
+  /** conditional response quotas (SurveyMonkey parity): stop counting toward this
+   *  quota's own limit once the field's answer matches `equals` this many times —
+   *  distinct from the blanket `maxResponses` above. Reuses the same JSONB-path
+   *  equality concept as the response-list drill-down filter. */
+  quotas: z
+    .array(
+      z.object({
+        fieldKey,
+        equals: z.string().min(1).max(200),
+        limit: z.number().int().positive(),
+      }),
+    )
+    .max(20)
+    .default([]),
+  /** lets a respondent revise their own submission via a signed edit token
+   *  returned at submit time — distinct from admin-only response editing. */
+  allowRespondentEdit: z.boolean().default(false),
 });
 
 export type FormSettings = z.infer<typeof formSettingsSchema>;

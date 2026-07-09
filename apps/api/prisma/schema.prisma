@@ -231,6 +231,9 @@ model FormSubmission {
   /// QuizScore JSON ({earnedPoints, totalPoints, percent, passed}), computed once at
   /// submit time against the version's definition — null for non-quiz forms.
   score         Json?
+  /// Set at submit time only when the form's `allowRespondentEdit` setting is on —
+  /// lets the respondent revise this submission via PATCH .../submissions/:editToken.
+  editToken     String?     @unique
   createdAt     DateTime    @default(now())
 
   fileUploads   FormFileUpload[]

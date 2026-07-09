@@ -97,6 +97,9 @@ interface DraftField {
   /** hot_spot */
   hotSpotAssetId: string;
   hotSpotRegions: Array<{ value: string; label: string; x: number; y: number; width: number; height: number }>;
+  /** UTM-style hidden field: '' = a normal, respondent-filled question. When set, this
+   *  question is never shown — its value is read once from this query-string parameter. */
+  capturedFromUrlParam: string;
 }
 
 const emptyField = (): DraftField => ({
@@ -139,6 +142,7 @@ const emptyField = (): DraftField => ({
   requirePhone: false,
   hotSpotAssetId: '',
   hotSpotRegions: [],
+  capturedFromUrlParam: '',
 });
 
 const toKey = (label: string, index: number) => {
@@ -250,6 +254,7 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
           },
         }
       : {}),
+    ...(draft.capturedFromUrlParam.trim() ? { capturedFromUrlParam: draft.capturedFromUrlParam.trim() } : {}),
   };
   const withImages = (values: string[]) =>
     values.map((o) => ({ value: o, label: o, ...(draft.optionImages[o] ? { imageAssetId: draft.optionImages[o] } : {}) }));
@@ -634,6 +639,7 @@ export default function NewFormPage() {
           requirePhone: false,
           hotSpotAssetId: '',
           hotSpotRegions: [],
+          capturedFromUrlParam: '',
         })),
       ]);
       setImportIssues(issues);
@@ -1017,6 +1023,18 @@ export default function NewFormPage() {
                 </>
               );
             })()}
+
+            {field.type !== 'section_header' && (
+              <>
+                <label htmlFor={`field-captured-param-${index}`}>capture from URL parameter (optional)</label>
+                <input
+                  id={`field-captured-param-${index}`}
+                  value={field.capturedFromUrlParam}
+                  onChange={(e) => updateField(index, { capturedFromUrlParam: e.target.value })}
+                  placeholder="e.g. utm_source — never shown to the respondent when set"
+                />
+              </>
+            )}
 
             {(field.type === 'select' || field.type === 'multi_select' || field.type === 'ranking') && (
               <>

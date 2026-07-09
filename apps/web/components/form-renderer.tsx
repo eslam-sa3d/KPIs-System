@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
 import { ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
@@ -433,18 +433,26 @@ export function FormRenderer({
   settings,
   onSubmit,
   uploadPath,
+  initialAnswers,
+  editUrlFor,
 }: {
   definition: FormDefinition;
   settings: FormSettings;
-  onSubmit: (answers: SubmissionAnswers) => Promise<{ score?: SubmissionScore | null } | void>;
+  onSubmit: (answers: SubmissionAnswers) => Promise<{ score?: SubmissionScore | null; editToken?: string | null } | void>;
   /** base path for file-field uploads, e.g. "/v1/forms/:slug/uploads" or "/v1/public/forms/:token/uploads" */
   uploadPath: string;
+  /** seeds the answer state — used when the respondent arrived via an edit link. */
+  initialAnswers?: SubmissionAnswers;
+  /** builds the "edit your response" link shown on the thank-you screen from a returned
+   *  edit token; omitted entirely when the caller has no page to send the respondent back to. */
+  editUrlFor?: (editToken: string) => string;
 }) {
-  const [answers, setAnswers] = useState<SubmissionAnswers>({});
+  const [answers, setAnswers] = useState<SubmissionAnswers>(initialAnswers ?? {});
   const [error, setError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submittedScore, setSubmittedScore] = useState<SubmissionScore | null>(null);
+  const [submittedEditToken, setSubmittedEditToken] = useState<string | null>(null);
 
   const hasSections = Boolean(definition.sections && definition.sections.length > 0);
 
@@ -504,8 +512,25 @@ export function FormRenderer({
   const closed =
     !settings.acceptingResponses || (settings.closesAt && now > Date.parse(settings.closesAt));
 
+  // hidden/UTM-style fields: read once from the query string and never shown to the
+  // respondent — see the capturedFromUrlParam exclusion in visibleFields below.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const captured: SubmissionAnswers = {};
+    for (const field of definition.fields) {
+      if (!field.capturedFromUrlParam) continue;
+      const value = params.get(field.capturedFromUrlParam);
+      if (value !== null) captured[field.key] = value;
+    }
+    if (Object.keys(captured).length > 0) {
+      setAnswers((prev) => ({ ...captured, ...prev }));
+    }
+  }, [definition]);
+
   function pageIsComplete(fields: FormField[]) {
     return fields.every((field) => {
+      if (field.capturedFromUrlParam) return true;
       if (!isVisible(field, answers)) return true;
       if (!field.required) return true;
       const value = answers[field.key];
@@ -552,6 +577,7 @@ export function FormRenderer({
       );
       const result = await onSubmit(visible);
       setSubmittedScore(result?.score ?? null);
+      setSubmittedEditToken(result?.editToken ?? null);
       setSubmitted(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Submission failed');
@@ -602,7 +628,20 @@ export function FormRenderer({
               )}
             </p>
           )}
-          <button className="btn-ghost" onClick={() => { setAnswers({}); setSubmitted(false); setSubmittedScore(null); }}>
+          {submittedEditToken && editUrlFor && (
+            <p className="muted">
+              <a href={editUrlFor(submittedEditToken)}>edit your response</a>
+            </p>
+          )}
+          <button
+            className="btn-ghost"
+            onClick={() => {
+              setAnswers({});
+              setSubmitted(false);
+              setSubmittedScore(null);
+              setSubmittedEditToken(null);
+            }}
+          >
             submit another response
           </button>
         </div>
@@ -619,7 +658,9 @@ export function FormRenderer({
             </div>
           )}
           {(() => {
-            const visibleFields = (hasSections ? pageFields : orderedFields).filter((field) => isVisible(field, answers));
+            const visibleFields = (hasSections ? pageFields : orderedFields).filter(
+              (field) => isVisible(field, answers) && !field.capturedFromUrlParam,
+            );
             let questionNumber = 0;
             return visibleFields.map((field) => {
               const label = applyPiping(field.label, answers);

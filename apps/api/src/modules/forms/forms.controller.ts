@@ -338,4 +338,25 @@ export class PublicFormsController {
   ) {
     return this.uploads.uploadPublic(token, fieldKey, file);
   }
+
+  /** Prefills the respondent's own edit form. Same access model as updateByEditToken below. */
+  @Public()
+  @Get(':token/submissions/:editToken')
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  getByEditToken(@Param('token') token: string, @Param('editToken') editToken: string) {
+    return this.submissions.getByEditToken(token, editToken);
+  }
+
+  /** Respondent self-edit — only reachable when the form's `allowRespondentEdit` setting is on
+   *  and the caller has the edit token returned at submit time; see SubmissionsService.persist. */
+  @Public()
+  @Patch(':token/submissions/:editToken')
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  updateByEditToken(
+    @Param('token') token: string,
+    @Param('editToken') editToken: string,
+    @Body(new ZodValidationPipe(submissionAnswersSchema)) answers: SubmissionAnswers,
+  ) {
+    return this.submissions.updateByEditToken(token, editToken, answers);
+  }
 }
