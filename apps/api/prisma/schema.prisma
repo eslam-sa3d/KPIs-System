@@ -191,11 +191,14 @@ model FormVersion {
 }
 
 model FormSubmission {
-  id            String      @id @default(uuid())
-  formVersionId String
-  formVersion   FormVersion @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
-  submittedById String?
-  submittedBy   User?       @relation(fields: [submittedById], references: [id])
+  id                   String      @id @default(uuid())
+  formVersionId        String
+  formVersion          FormVersion @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
+  submittedById        String?
+  submittedBy          User?       @relation(fields: [submittedById], references: [id])
+  /// Random id from a cookie set on first visit — the only "identity" an anonymous
+  /// public-link respondent has, used to enforce oneResponsePerUser without an account.
+  respondentFingerprint String?
   /// fieldKey → answer. GIN-indexed for filtering (index added in raw migration).
   answers       Json
   createdAt     DateTime    @default(now())
@@ -204,6 +207,7 @@ model FormSubmission {
 
   @@index([formVersionId, createdAt])
   @@index([submittedById])
+  @@index([respondentFingerprint])
 }
 
 /// Uploaded files for `file`-type fields. Stored as a DB blob (not object

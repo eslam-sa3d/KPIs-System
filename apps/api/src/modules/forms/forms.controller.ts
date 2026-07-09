@@ -16,7 +16,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { PageQuery, SubmissionAnswers, submissionAnswersSchema } from '@pulse/contracts';
-import type { Response } from 'express';
+import { randomBytes } from 'node:crypto';
+import type { Request, Response } from 'express';
 import { memoryStorage } from 'multer';
 import { Public } from '../auth/public.decorator';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
@@ -35,6 +36,19 @@ const UPLOAD_INTERCEPTOR = FileInterceptor('file', { storage: memoryStorage(), l
 // design assets are capped tighter (5MB, enforced again in AssetsService) —
 // this is just the outer multer ceiling, same pattern as UPLOAD_INTERCEPTOR
 const ASSET_INTERCEPTOR = FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+/** Anonymous respondent fingerprint — a random id in a long-lived, non-sensitive cookie, the only
+ *  "identity" a public-link filler has, used to enforce oneResponsePerUser without an account.
+ *  Same cross-site cookie reasoning as the auth refresh cookie (see auth.controller.ts). */
+const RESPONDENT_COOKIE = 'pulse_pf';
+const respondentCookieSameSite = (process.env.REFRESH_COOKIE_SAMESITE ?? 'strict') as 'strict' | 'lax' | 'none';
+const respondentCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production' || respondentCookieSameSite === 'none',
+  sameSite: respondentCookieSameSite,
+  path: '/api/v1/public/forms',
+  maxAge: 365 * 24 * 60 * 60 * 1000,
+};
 
 @Controller('v1/forms')
 export class FormsController {
@@ -233,8 +247,12 @@ export class PublicFormsController {
   submit(
     @Param('token') token: string,
     @Body(new ZodValidationPipe(submissionAnswersSchema)) answers: SubmissionAnswers,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.submissions.submitPublic(token, answers);
+    const fingerprint = req.cookies?.[RESPONDENT_COOKIE] ?? randomBytes(16).toString('base64url');
+    res.cookie(RESPONDENT_COOKIE, fingerprint, respondentCookieOptions);
+    return this.submissions.submitPublic(token, answers, fingerprint);
   }
 
   @Public()

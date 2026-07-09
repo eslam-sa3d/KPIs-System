@@ -76,7 +76,7 @@ export function FormSettingsPanel({
           checked={draft.oneResponsePerUser}
           onChange={(e) => setDraft((d) => ({ ...d, oneResponsePerUser: e.target.checked }))}
         />
-        limit to one response per signed-in user
+        limit to one response per person (signed-in users by account, anonymous respondents by browser)
       </label>
 
       <label className="check-item">
@@ -87,6 +87,18 @@ export function FormSettingsPanel({
         />
         shuffle question order per respondent
       </label>
+
+      <label htmlFor="fs-max-responses">stop accepting responses after (optional)</label>
+      <input
+        id="fs-max-responses"
+        type="number"
+        min={1}
+        value={draft.maxResponses ?? ''}
+        onChange={(e) =>
+          setDraft((d) => ({ ...d, maxResponses: e.target.value === '' ? undefined : Number(e.target.value) }))
+        }
+        placeholder="no limit"
+      />
 
       <label htmlFor="fs-thanks">thank-you message</label>
       <input

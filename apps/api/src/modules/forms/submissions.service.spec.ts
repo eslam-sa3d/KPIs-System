@@ -95,14 +95,44 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
     });
   });
 
-  it('does not check one-response-per-user for anonymous public submissions', async () => {
+  it('skips one-response-per-user for an anonymous submission with no fingerprint', async () => {
     const forms = makeFormsStub({ oneResponsePerUser: true });
     const service = new SubmissionsService(prisma as never, forms as never);
-    await service.submitPublic('tok', { team: 'x' });
+    await service.submitPublic('tok', { team: 'x' }, null);
     expect(prisma.formSubmission.findFirst).not.toHaveBeenCalled();
     expect(prisma.formSubmission.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ submittedById: null }),
+      data: expect.objectContaining({ submittedById: null, respondentFingerprint: null }),
     });
+  });
+
+  it('enforces one-response-per-user for anonymous submissions via their cookie fingerprint', async () => {
+    prisma.formSubmission.findFirst.mockResolvedValue({ id: 'existing' });
+    const forms = makeFormsStub({ oneResponsePerUser: true });
+    const service = new SubmissionsService(prisma as never, forms as never);
+    await expect(service.submitPublic('tok', { team: 'x' }, 'fp-1')).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect(prisma.formSubmission.findFirst).toHaveBeenCalledWith({
+      where: { formVersion: { formId: 'form-1' }, OR: [{ respondentFingerprint: 'fp-1' }] },
+      select: { id: true },
+    });
+  });
+
+  it('rejects once maxResponses is reached', async () => {
+    prisma.formSubmission.count.mockResolvedValue(3);
+    const forms = makeFormsStub({ maxResponses: 3 });
+    const service = new SubmissionsService(prisma as never, forms as never);
+    await expect(service.submit('demo', { team: 'x' }, 'user-1')).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+  });
+
+  it('accepts submissions below maxResponses', async () => {
+    prisma.formSubmission.count.mockResolvedValue(2);
+    const forms = makeFormsStub({ maxResponses: 3 });
+    const service = new SubmissionsService(prisma as never, forms as never);
+    await service.submit('demo', { team: 'x' }, 'user-1');
+    expect(prisma.formSubmission.create).toHaveBeenCalledTimes(1);
   });
 });
 

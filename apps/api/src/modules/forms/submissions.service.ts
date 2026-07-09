@@ -31,21 +31,23 @@ export class SubmissionsService {
 
   async submit(formSlug: string, rawAnswers: SubmissionAnswers, submittedById: string) {
     const { form, version, definition, settings } = await this.forms.getLatestVersion(formSlug);
-    await this.enforceSettings(form.id, settings, submittedById);
-    return this.persist(form.id, version.id, definition, rawAnswers, submittedById);
+    await this.enforceSettings(form.id, settings, submittedById, null);
+    return this.persist(form.id, version.id, definition, rawAnswers, submittedById, null);
   }
 
-  /** Anonymous submission via a public share link. */
-  async submitPublic(token: string, rawAnswers: SubmissionAnswers) {
+  /** Anonymous submission via a public share link. `respondentFingerprint` is a random id the
+   *  controller stores in a cookie — the only "identity" an anonymous filler has. */
+  async submitPublic(token: string, rawAnswers: SubmissionAnswers, respondentFingerprint: string | null) {
     const { form, version, definition, settings } = await this.forms.getByPublicToken(token);
-    await this.enforceSettings(form.id, settings, null);
-    return this.persist(form.id, version.id, definition, rawAnswers, null);
+    await this.enforceSettings(form.id, settings, null, respondentFingerprint);
+    return this.persist(form.id, version.id, definition, rawAnswers, null, respondentFingerprint);
   }
 
   private async enforceSettings(
     formId: string,
     settings: FormSettings,
     submittedById: string | null,
+    respondentFingerprint: string | null,
   ) {
     const closed = new AppError('CONFLICT', 'This form is not accepting responses');
     if (!settings.acceptingResponses) throw closed;
@@ -53,9 +55,20 @@ export class SubmissionsService {
     if (settings.opensAt && now < new Date(settings.opensAt)) throw closed;
     if (settings.closesAt && now > new Date(settings.closesAt)) throw closed;
 
-    if (settings.oneResponsePerUser && submittedById) {
+    if (settings.maxResponses) {
+      const count = await this.prisma.formSubmission.count({ where: { formVersion: { formId } } });
+      if (count >= settings.maxResponses) throw closed;
+    }
+
+    if (settings.oneResponsePerUser && (submittedById || respondentFingerprint)) {
       const existing = await this.prisma.formSubmission.findFirst({
-        where: { submittedById, formVersion: { formId } },
+        where: {
+          formVersion: { formId },
+          OR: [
+            ...(submittedById ? [{ submittedById }] : []),
+            ...(respondentFingerprint ? [{ respondentFingerprint }] : []),
+          ],
+        },
         select: { id: true },
       });
       if (existing) {
@@ -70,6 +83,7 @@ export class SubmissionsService {
     definition: FormDefinition,
     rawAnswers: SubmissionAnswers,
     submittedById: string | null,
+    respondentFingerprint: string | null,
   ) {
     let answers: SubmissionAnswers;
     try {
@@ -101,7 +115,7 @@ export class SubmissionsService {
     }
 
     const submission = await this.prisma.formSubmission.create({
-      data: { formVersionId, submittedById, answers },
+      data: { formVersionId, submittedById, respondentFingerprint, answers },
     });
     if (uploadIds.length) {
       await this.prisma.formFileUpload.updateMany({

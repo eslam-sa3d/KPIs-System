@@ -292,10 +292,21 @@ export function FormRenderer({
     definition.sections?.[0]?.id ?? null,
   );
 
-  const orderedFields = useMemo(() => {
+  const shuffledQuestionOrder = useMemo(() => {
     if (!settings.shuffleQuestions) return definition.fields;
     return [...definition.fields].sort(() => Math.random() - 0.5);
   }, [definition, settings.shuffleQuestions]);
+
+  // a second, independent shuffle layered on top: per-field option order (select/
+  // multi_select/ranking), computed once per fill session just like question order above
+  const orderedFields = useMemo(
+    () =>
+      shuffledQuestionOrder.map((field) => {
+        if (!('shuffleOptions' in field) || !field.shuffleOptions) return field;
+        return { ...field, options: [...field.options].sort(() => Math.random() - 0.5) };
+      }),
+    [shuffledQuestionOrder],
+  );
 
   // recomputed on every answer change: a branch decision made on the current
   // page can only be resolved once its trigger field has been answered.

@@ -37,6 +37,8 @@ interface DraftField {
   options: string;
   layout: 'dropdown' | 'radio';
   allowOther: boolean;
+  /** select/multi_select/ranking: randomize option order per respondent */
+  shuffleOptions: boolean;
   scale: number;
   lowLabel: string;
   highLabel: string;
@@ -66,6 +68,7 @@ const emptyField = (): DraftField => ({
   options: '',
   layout: 'dropdown',
   allowOther: false,
+  shuffleOptions: false,
   scale: 5,
   lowLabel: '',
   highLabel: '',
@@ -197,15 +200,22 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
   switch (draft.type) {
     case 'select': {
       const options = withImages(parseList(draft.options));
-      return { ...base, type: draft.type, options, layout: draft.layout, allowOther: draft.allowOther };
+      return {
+        ...base,
+        type: draft.type,
+        options,
+        layout: draft.layout,
+        allowOther: draft.allowOther,
+        shuffleOptions: draft.shuffleOptions,
+      };
     }
     case 'multi_select': {
       const options = withImages(parseList(draft.options));
-      return { ...base, type: draft.type, options };
+      return { ...base, type: draft.type, options, shuffleOptions: draft.shuffleOptions };
     }
     case 'ranking': {
       const options = withImages(parseList(draft.options));
-      return { ...base, type: draft.type, options };
+      return { ...base, type: draft.type, options, shuffleOptions: draft.shuffleOptions };
     }
     case 'likert': {
       const statements = parseList(draft.options).map((o) => ({ value: o, label: o }));
@@ -462,6 +472,7 @@ export default function NewFormPage() {
           options: p.options,
           layout: 'dropdown' as const,
           allowOther: false,
+          shuffleOptions: false,
           scale: p.scale,
           lowLabel: p.lowLabel,
           highLabel: p.highLabel,
@@ -829,6 +840,17 @@ export default function NewFormPage() {
                   onChange={(e) => updateField(index, { options: e.target.value })}
                   placeholder="red, amber, green"
                 />
+                <span className="builder-required">
+                  <input
+                    id={`field-shuffle-${index}`}
+                    type="checkbox"
+                    checked={field.shuffleOptions}
+                    onChange={(e) => updateField(index, { shuffleOptions: e.target.checked })}
+                  />
+                  <label htmlFor={`field-shuffle-${index}`}>
+                    {field.type === 'ranking' ? 'randomize starting order' : 'shuffle option order per respondent'}
+                  </label>
+                </span>
                 {parseList(field.options).length > 0 && (
                   <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
                     <span className="muted" style={{ fontSize: 12 }}>option images (optional)</span>

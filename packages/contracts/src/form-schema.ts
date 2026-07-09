@@ -94,11 +94,14 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     layout: z.enum(['dropdown', 'radio']).default('dropdown'),
     /** append a free-text "Other" option */
     allowOther: z.boolean().default(false),
+    /** randomize option order per respondent */
+    shuffleOptions: z.boolean().default(false),
   }),
   baseField.extend({
     type: z.literal('multi_select'),
     options: z.array(optionItem).min(1).max(200),
     maxSelections: z.number().int().positive().optional(),
+    shuffleOptions: z.boolean().default(false),
   }),
   baseField.extend({ type: z.literal('boolean') }),
   baseField.extend({
@@ -123,6 +126,8 @@ export const formFieldSchema = z.discriminatedUnion('type', [
   baseField.extend({
     type: z.literal('ranking'),
     options: z.array(optionItem).min(2).max(20),
+    /** randomize the STARTING order shown, before the respondent reorders it */
+    shuffleOptions: z.boolean().default(false),
   }),
   baseField.extend({
     type: z.literal('file'),
@@ -140,6 +145,8 @@ export const formSettingsSchema = z.object({
   oneResponsePerUser: z.boolean().default(false),
   shuffleQuestions: z.boolean().default(false),
   thankYouMessage: z.string().max(500).default('thank you!'),
+  /** stop accepting responses once this many submissions exist */
+  maxResponses: z.number().int().positive().optional(),
 });
 
 export type FormSettings = z.infer<typeof formSettingsSchema>;
