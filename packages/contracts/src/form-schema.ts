@@ -230,6 +230,10 @@ export const formSettingsSchema = z.object({
   passThresholdPercent: z.number().min(0).max(100).optional(),
   /** show the respondent their score/pass-fail on the thank-you screen */
   showScoreToRespondent: z.boolean().default(true),
+  /** randomize page order per respondent — only takes effect client-side when
+   *  no page has a branching rule (see FormRenderer); order-independent
+   *  reachability means the server needs no changes to support this. */
+  shuffleSections: z.boolean().default(false),
 });
 
 export type FormSettings = z.infer<typeof formSettingsSchema>;

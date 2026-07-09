@@ -88,6 +88,15 @@ export function FormSettingsPanel({
         shuffle question order per respondent
       </label>
 
+      <label className="check-item">
+        <input
+          type="checkbox"
+          checked={draft.shuffleSections}
+          onChange={(e) => setDraft((d) => ({ ...d, shuffleSections: e.target.checked }))}
+        />
+        shuffle page order per respondent (only takes effect on forms whose pages have no branching rules)
+      </label>
+
       <label htmlFor="fs-max-responses">stop accepting responses after (optional)</label>
       <input
         id="fs-max-responses"

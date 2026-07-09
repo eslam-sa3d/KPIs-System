@@ -447,8 +447,26 @@ export function FormRenderer({
   const [submittedScore, setSubmittedScore] = useState<SubmissionScore | null>(null);
 
   const hasSections = Boolean(definition.sections && definition.sections.length > 0);
+
+  // page/block randomization: only coherent for pure linear multi-page forms — if any
+  // page branches, the stored (unshuffled) order is what resolveSectionPath's forward-only
+  // DAG check validates against, so shuffling would desync from it. Without branching, the
+  // *set* of reachable/required fields is order-independent, so this is safe client-side-only.
+  const shuffledSections = useMemo(() => {
+    const sections = definition.sections;
+    if (!sections || sections.length === 0) return sections;
+    if (!settings.shuffleSections) return sections;
+    const hasBranching = sections.some(
+      (s) => s.branching || (s.branchRules && s.branchRules.length > 0),
+    );
+    if (hasBranching) return sections;
+    return [...sections].sort(() => Math.random() - 0.5);
+  }, [definition, settings.shuffleSections]);
+
+  const renderDefinition = hasSections ? { ...definition, sections: shuffledSections } : definition;
+
   const [currentSectionId, setCurrentSectionId] = useState<string | null>(
-    definition.sections?.[0]?.id ?? null,
+    renderDefinition.sections?.[0]?.id ?? null,
   );
 
   const shuffledQuestionOrder = useMemo(() => {
@@ -469,10 +487,10 @@ export function FormRenderer({
 
   // recomputed on every answer change: a branch decision made on the current
   // page can only be resolved once its trigger field has been answered.
-  const path = hasSections ? resolveSectionPath(definition, answers).visitedSectionIds : [];
+  const path = hasSections ? resolveSectionPath(renderDefinition, answers).visitedSectionIds : [];
   const currentIndex = currentSectionId ? Math.max(0, path.indexOf(currentSectionId)) : -1;
   const currentSection = hasSections
-    ? (definition.sections!.find((s) => s.id === path[currentIndex]) ?? definition.sections![0])
+    ? (renderDefinition.sections!.find((s) => s.id === path[currentIndex]) ?? renderDefinition.sections![0])
     : undefined;
   const isLastPage = currentIndex === path.length - 1;
   // filtered from the (possibly shuffled) orderedFields, not definition.fields
@@ -519,7 +537,7 @@ export function FormRenderer({
     }
     setError(null);
     try {
-      const reachable = hasSections ? resolveSectionPath(definition, answers).reachableFieldKeys : null;
+      const reachable = hasSections ? resolveSectionPath(renderDefinition, answers).reachableFieldKeys : null;
       const visible = Object.fromEntries(
         Object.entries(answers).filter(([key, value]) => {
           const field = definition.fields.find((f) => f.key === key);
