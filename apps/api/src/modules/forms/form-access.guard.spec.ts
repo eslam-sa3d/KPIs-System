@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExecutionContext } from '@nestjs/common';
 import { AppError } from '../../common/app-error';
 import { FormAccessGuard } from './form-access.guard';
+import { FormPermissionAction } from './form-permission.decorator';
 
 function makeContext(params: Record<string, string>, user?: { id: string }): ExecutionContext {
   return {
     switchToHttp: () => ({ getRequest: () => ({ params, user }) }),
+    getHandler: () => undefined,
+    getClass: () => undefined,
   } as unknown as ExecutionContext;
 }
 
@@ -15,7 +18,12 @@ describe('FormAccessGuard', () => {
     formCollaborator: { findUnique: ReturnType<typeof vi.fn> };
   };
   let rbac: { getEffectivePermissions: ReturnType<typeof vi.fn> };
+  let reflector: { getAllAndOverride: ReturnType<typeof vi.fn> };
   let guard: FormAccessGuard;
+
+  function setAction(action: FormPermissionAction | undefined) {
+    reflector.getAllAndOverride.mockReturnValue(action);
+  }
 
   beforeEach(() => {
     prisma = {
@@ -23,7 +31,8 @@ describe('FormAccessGuard', () => {
       formCollaborator: { findUnique: vi.fn() },
     };
     rbac = { getEffectivePermissions: vi.fn(async () => new Set()) };
-    guard = new FormAccessGuard(prisma as never, rbac as never);
+    reflector = { getAllAndOverride: vi.fn(() => undefined) };
+    guard = new FormAccessGuard(prisma as never, rbac as never, reflector as never);
   });
 
   it('passes through routes with no slug/formId param', async () => {
@@ -36,7 +45,7 @@ describe('FormAccessGuard', () => {
     expect(prisma.form.findUnique).not.toHaveBeenCalled();
   });
 
-  it('allows anyone when the form is not restricted', async () => {
+  it('allows anyone when the form is not restricted and has no @FormPermission', async () => {
     prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
     await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'stranger' }))).resolves.toBe(true);
   });
@@ -65,5 +74,61 @@ describe('FormAccessGuard', () => {
     await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'stranger' }))).rejects.toBeInstanceOf(
       AppError,
     );
+  });
+
+  describe('@FormPermission tiers', () => {
+    it('allows the form owner regardless of tier', async () => {
+      setAction('manage');
+      prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
+      await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'owner' }))).resolves.toBe(true);
+    });
+
+    it('allows a canViewResponses collaborator for the view tier', async () => {
+      setAction('view');
+      prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
+      prisma.formCollaborator.findUnique.mockResolvedValue({ canManage: false, canViewResponses: true });
+      await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'viewer' }))).resolves.toBe(true);
+    });
+
+    it('rejects a canViewResponses collaborator for the manage tier', async () => {
+      setAction('manage');
+      prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
+      prisma.formCollaborator.findUnique.mockResolvedValue({ canManage: false, canViewResponses: true });
+      await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'viewer' }))).rejects.toBeInstanceOf(
+        AppError,
+      );
+    });
+
+    it('allows a canManage collaborator for either tier', async () => {
+      setAction('manage');
+      prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
+      prisma.formCollaborator.findUnique.mockResolvedValue({ canManage: true, canViewResponses: false });
+      await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'coowner' }))).resolves.toBe(true);
+    });
+
+    it('falls back to global form_submissions:read for the view tier', async () => {
+      setAction('view');
+      prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
+      prisma.formCollaborator.findUnique.mockResolvedValue(null);
+      rbac.getEffectivePermissions.mockResolvedValue(new Set(['form_submissions:read']));
+      await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'admin' }))).resolves.toBe(true);
+    });
+
+    it('falls back to global form_submissions:manage for the manage tier', async () => {
+      setAction('manage');
+      prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
+      prisma.formCollaborator.findUnique.mockResolvedValue(null);
+      rbac.getEffectivePermissions.mockResolvedValue(new Set(['form_submissions:manage']));
+      await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'admin' }))).resolves.toBe(true);
+    });
+
+    it('rejects a stranger with no tier, no ownership, and no matching global permission', async () => {
+      setAction('view');
+      prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
+      prisma.formCollaborator.findUnique.mockResolvedValue(null);
+      await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'stranger' }))).rejects.toBeInstanceOf(
+        AppError,
+      );
+    });
   });
 });

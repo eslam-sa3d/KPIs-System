@@ -13,6 +13,7 @@ interface CollaboratorRow {
   id: string;
   userId: string;
   canManage: boolean;
+  canViewResponses: boolean;
   user: { id: string; displayName: string; email: string };
 }
 
@@ -33,6 +34,7 @@ export function AccessControlPanel({
   const [filter, setFilter] = useState('');
   const [pickUserId, setPickUserId] = useState('');
   const [pickCanManage, setPickCanManage] = useState(false);
+  const [pickCanViewResponses, setPickCanViewResponses] = useState(false);
 
   useEffect(() => {
     if (!restricted) return;
@@ -59,11 +61,12 @@ export function AccessControlPanel({
     try {
       await api(`/v1/forms/${formId}/collaborators`, {
         method: 'POST',
-        body: JSON.stringify({ userId: pickUserId, canManage: pickCanManage }),
+        body: JSON.stringify({ userId: pickUserId, canManage: pickCanManage, canViewResponses: pickCanViewResponses }),
       });
       setCollaborators(await api<CollaboratorRow[]>(`/v1/forms/${formId}/collaborators`));
       setPickUserId('');
       setPickCanManage(false);
+      setPickCanViewResponses(false);
     } finally {
       setBusy(false);
     }
@@ -140,6 +143,18 @@ export function AccessControlPanel({
             />
             <label htmlFor="ac-can-manage">co-owner (can also edit and manage this form)</label>
           </span>
+          <span className="builder-required">
+            <input
+              id="ac-can-view-responses"
+              type="checkbox"
+              checked={pickCanViewResponses}
+              disabled={pickCanManage}
+              onChange={(e) => setPickCanViewResponses(e.target.checked)}
+            />
+            <label htmlFor="ac-can-view-responses">
+              can view responses (without editing the form — implied by co-owner)
+            </label>
+          </span>
           <button type="button" className="btn-ghost" disabled={!pickUserId || busy} onClick={invite}>
             invite
           </button>
@@ -153,7 +168,8 @@ export function AccessControlPanel({
             <ul className="summary-samples">
               {collaborators.map((c) => (
                 <li key={c.id}>
-                  {c.user.displayName} ({c.user.email}) {c.canManage && '· co-owner'}{' '}
+                  {c.user.displayName} ({c.user.email}){' '}
+                  {c.canManage ? '· co-owner' : c.canViewResponses ? '· can view responses' : ''}{' '}
                   <button type="button" className="btn-ghost" disabled={busy} onClick={() => remove(c.userId)}>
                     remove
                   </button>

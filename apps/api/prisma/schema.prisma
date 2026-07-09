@@ -173,6 +173,8 @@ model Form {
   /// may view/fill/manage this form via the portal — independent of the
   /// anonymous public link above, which stays open-to-anyone once enabled.
   restricted  Boolean  @default(false)
+  /// Simple free-text tag for the forms list filter — not a nested hierarchy.
+  folder      String?
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -193,6 +195,9 @@ model FormCollaborator {
   user        User     @relation("FormCollaboratorUser", fields: [userId], references: [id], onDelete: Cascade)
   /// false = can view/fill only; true = co-owner (can also edit/publish/manage this form)
   canManage   Boolean  @default(false)
+  /// Tier between fill-only and co-owner: can see this form's responses/summary/exports
+  /// without editing the form itself. Implied by canManage — checked independently.
+  canViewResponses Boolean @default(false)
   addedById   String?
   addedBy     User?    @relation("FormCollaboratorAddedBy", fields: [addedById], references: [id])
   createdAt   DateTime @default(now())

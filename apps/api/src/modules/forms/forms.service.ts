@@ -84,6 +84,7 @@ export class FormsService {
         version: latest?.version ?? 0,
         hasPublicLink: Boolean(form.publicToken),
         settings: this.settingsOf(form.settings),
+        folder: form.folder,
         createdAt: form.createdAt,
       };
     });
@@ -225,6 +226,18 @@ export class FormsService {
     return { restricted };
   }
 
+  /** Free-text folder tag for the forms list filter — set to null to clear it. */
+  async setFolder(formId: string, folder: string | null, actorId: string) {
+    await this.getOwnedForm(formId, actorId);
+    await this.prisma.$transaction([
+      this.prisma.form.update({ where: { id: formId }, data: { folder } }),
+      this.prisma.auditLog.create({
+        data: { actorId, action: 'form.folder_set', entity: 'Form', entityId: formId, detail: { folder } },
+      }),
+    ]);
+    return { folder };
+  }
+
   async listCollaborators(formId: string) {
     return this.prisma.formCollaborator.findMany({
       where: { formId },
@@ -233,19 +246,31 @@ export class FormsService {
     });
   }
 
-  async inviteCollaborator(formId: string, userId: string, canManage: boolean, actorId: string) {
+  async inviteCollaborator(
+    formId: string,
+    userId: string,
+    canManage: boolean,
+    actorId: string,
+    canViewResponses = false,
+  ) {
     await this.getOwnedForm(formId, actorId);
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw AppError.notFound('User', userId);
 
     const collaborator = await this.prisma.formCollaborator.upsert({
       where: { formId_userId: { formId, userId } },
-      create: { formId, userId, canManage, addedById: actorId },
-      update: { canManage },
+      create: { formId, userId, canManage, canViewResponses, addedById: actorId },
+      update: { canManage, canViewResponses },
       include: { user: { select: { id: true, displayName: true, email: true } } },
     });
     await this.prisma.auditLog.create({
-      data: { actorId, action: 'form.collaborator_added', entity: 'Form', entityId: formId, detail: { userId, canManage } },
+      data: {
+        actorId,
+        action: 'form.collaborator_added',
+        entity: 'Form',
+        entityId: formId,
+        detail: { userId, canManage, canViewResponses },
+      },
     });
     return collaborator;
   }

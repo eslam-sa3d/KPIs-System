@@ -25,6 +25,7 @@ import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
 import { AssetsService } from './assets.service';
 import { FileUploadsService } from './file-uploads.service';
+import { FormPermission } from './form-permission.decorator';
 import { FormsService } from './forms.service';
 import { SubmissionsService } from './submissions.service';
 
@@ -129,14 +130,31 @@ export class FormsController {
     return this.forms.listCollaborators(formId);
   }
 
+  /** Free-text folder tag shown in the forms list filter. */
+  @Post(':formId/folder')
+  @RequirePermissions('forms:write')
+  setFolder(
+    @Param('formId') formId: string,
+    @Body() body: { folder: string | null },
+    @Req() req: AuthedRequest,
+  ) {
+    return this.forms.setFolder(formId, body?.folder?.trim() || null, req.user.id);
+  }
+
   @Post(':formId/collaborators')
   @RequirePermissions('forms:write')
   inviteCollaborator(
     @Param('formId') formId: string,
-    @Body() body: { userId: string; canManage?: boolean },
+    @Body() body: { userId: string; canManage?: boolean; canViewResponses?: boolean },
     @Req() req: AuthedRequest,
   ) {
-    return this.forms.inviteCollaborator(formId, body.userId, Boolean(body?.canManage), req.user.id);
+    return this.forms.inviteCollaborator(
+      formId,
+      body.userId,
+      Boolean(body?.canManage),
+      req.user.id,
+      Boolean(body?.canViewResponses),
+    );
   }
 
   @Delete(':formId/collaborators/:userId')
@@ -172,7 +190,7 @@ export class FormsController {
   }
 
   @Get(':slug/submissions')
-  @RequirePermissions('form_submissions:read')
+  @FormPermission('view')
   list(
     @Param('slug') slug: string,
     @Query() query: PageQuery & { [filter: `answers.${string}`]: string },
@@ -186,13 +204,13 @@ export class FormsController {
   }
 
   @Get(':slug/submissions/summary')
-  @RequirePermissions('form_submissions:read')
+  @FormPermission('view')
   summary(@Param('slug') slug: string) {
     return this.submissions.summary(slug);
   }
 
   @Patch(':slug/submissions/:submissionId')
-  @RequirePermissions('form_submissions:manage')
+  @FormPermission('manage')
   updateSubmission(
     @Param('slug') slug: string,
     @Param('submissionId') submissionId: string,
@@ -203,7 +221,7 @@ export class FormsController {
   }
 
   @Delete(':slug/submissions/:submissionId')
-  @RequirePermissions('form_submissions:manage')
+  @FormPermission('manage')
   deleteSubmission(
     @Param('slug') slug: string,
     @Param('submissionId') submissionId: string,
@@ -213,7 +231,7 @@ export class FormsController {
   }
 
   @Delete(':slug/submissions')
-  @RequirePermissions('form_submissions:manage')
+  @FormPermission('manage')
   deleteAllSubmissions(@Param('slug') slug: string, @Req() req: AuthedRequest) {
     return this.submissions.deleteAllSubmissions(slug, req.user.id);
   }
@@ -263,7 +281,7 @@ export class FormsController {
 
   /** File download — sends raw CSV via @Res, deliberately outside the JSON envelope. */
   @Get(':slug/submissions/export')
-  @RequirePermissions('form_submissions:read', 'form_submissions:execute')
+  @FormPermission('view')
   async export(@Param('slug') slug: string, @Req() req: AuthedRequest, @Res() res: Response) {
     const csv = await this.submissions.exportCsv(slug, req.user.id);
     res
@@ -273,7 +291,7 @@ export class FormsController {
   }
 
   @Get(':slug/submissions/export.xlsx')
-  @RequirePermissions('form_submissions:read', 'form_submissions:execute')
+  @FormPermission('view')
   async exportXlsx(@Param('slug') slug: string, @Req() req: AuthedRequest, @Res() res: Response) {
     const buffer = await this.submissions.exportXlsx(slug, req.user.id);
     res
