@@ -1127,7 +1127,8 @@ h1, h2, h3 {
 }
 
 .builder-field:hover,
-.builder-field:focus-within {
+.builder-field:focus-within,
+.builder-field.is-active {
   border-left-color: var(--pulse-purple);
   box-shadow: var(--shadow-card);
 }
@@ -1165,6 +1166,48 @@ h1, h2, h3 {
 
 .field-type-group {
   flex: 0 0 200px;
+}
+
+.field-expand-btn {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 200ms ease, color 200ms ease, transform 200ms ease;
+}
+
+.field-expand-btn:hover {
+  background: color-mix(in srgb, var(--pulse-purple) 10%, transparent);
+  color: var(--pulse-purple);
+}
+
+/* ── question card: collapsed-by-default detail, expands on focus/click ── */
+.field-detail-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows 240ms ease, visibility 240ms ease;
+}
+
+.field-detail-wrap.is-open {
+  grid-template-rows: 1fr;
+  visibility: visible;
+}
+
+.field-detail-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow: hidden;
+  min-height: 0;
 }
 
 .builder input.field-title-input:not([type='checkbox']):not([type='radio']) {

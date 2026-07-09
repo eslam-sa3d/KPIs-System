@@ -394,6 +394,7 @@ export default function NewFormPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [fields, setFields] = useState<DraftField[]>([]);
+  const [activeFieldIndex, setActiveFieldIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [published, setPublished] = useState<{ slug: string } | null>(null);
   const [sectionsEnabled, setSectionsEnabled] = useState(false);
@@ -576,6 +577,12 @@ export default function NewFormPage() {
       [next[index], next[target]] = [next[target]!, next[index]!];
       return next;
     });
+    setActiveFieldIndex((current) => {
+      const target = index + delta;
+      if (current === index) return target;
+      if (current === target) return index;
+      return current;
+    });
   }
 
   function duplicateField(index: number) {
@@ -584,6 +591,20 @@ export default function NewFormPage() {
       next.splice(index + 1, 0, { ...current[index]! });
       return next;
     });
+    setActiveFieldIndex(index + 1);
+  }
+
+  function removeField(index: number) {
+    setFields((current) => current.filter((_, i) => i !== index));
+    setActiveFieldIndex((current) => {
+      if (current === null || current === index) return null;
+      return current > index ? current - 1 : current;
+    });
+  }
+
+  function addField(overrides?: Partial<DraftField>) {
+    setActiveFieldIndex(fields.length);
+    setFields((current) => [...current, { ...emptyField(), ...overrides }]);
   }
 
   async function onImportExcel(event: React.ChangeEvent<HTMLInputElement>) {
@@ -897,8 +918,15 @@ export default function NewFormPage() {
 
         <div className="builder-fields-row">
         <div className="builder-fields-col">
-        {fields.map((field, index) => (
-          <fieldset key={index} className="builder-field question-card">
+        {fields.map((field, index) => {
+          const isActive = activeFieldIndex === index;
+          return (
+          <fieldset
+            key={index}
+            className={`builder-field question-card${isActive ? ' is-active' : ''}`}
+            onFocus={() => setActiveFieldIndex(index)}
+            onClick={() => setActiveFieldIndex(index)}
+          >
             <legend className="field-legend">
               <span className="question-number">{index + 1}</span>
             </legend>
@@ -929,7 +957,21 @@ export default function NewFormPage() {
                   ))}
                 </select>
               </div>
+              {!isActive && (
+                <button
+                  type="button"
+                  className="field-expand-btn"
+                  title="edit question"
+                  aria-label="edit question"
+                  onClick={() => setActiveFieldIndex(index)}
+                >
+                  ⌄
+                </button>
+              )}
             </div>
+
+            <div className={`field-detail-wrap${isActive ? ' is-open' : ''}`}>
+            <div className="field-detail-inner">
 
             <label htmlFor={`field-help-${index}`}>help text (optional)</label>
             <input
@@ -1503,7 +1545,7 @@ export default function NewFormPage() {
                   className="btn-ghost"
                   title="remove field"
                   aria-label="remove field"
-                  onClick={() => setFields((current) => current.filter((_, i) => i !== index))}
+                  onClick={() => removeField(index)}
                 >
                   🗑
                 </button>
@@ -1542,13 +1584,17 @@ export default function NewFormPage() {
                 )}
               </div>
             </div>
+
+            </div>
+            </div>
           </fieldset>
-        ))}
+          );
+        })}
 
         <button
           type="button"
           className="msform-add-field"
-          onClick={() => setFields((current) => [...current, emptyField()])}
+          onClick={() => addField()}
         >
           + add field
         </button>
@@ -1560,7 +1606,7 @@ export default function NewFormPage() {
             className="btn-ghost"
             title="add question"
             aria-label="add question"
-            onClick={() => setFields((current) => [...current, emptyField()])}
+            onClick={() => addField()}
           >
             +
           </button>
@@ -1578,7 +1624,7 @@ export default function NewFormPage() {
             className="btn-ghost builder-toolbar-tt"
             title="add title and description"
             aria-label="add title and description"
-            onClick={() => setFields((current) => [...current, { ...emptyField(), type: 'section_header' }])}
+            onClick={() => addField({ type: 'section_header' })}
           >
             Tt
           </button>
@@ -1587,7 +1633,7 @@ export default function NewFormPage() {
             className="btn-ghost"
             title="add image question"
             aria-label="add image question"
-            onClick={() => setFields((current) => [...current, { ...emptyField(), mediaType: 'image' }])}
+            onClick={() => addField({ mediaType: 'image' })}
           >
             🖼
           </button>
@@ -1596,7 +1642,7 @@ export default function NewFormPage() {
             className="btn-ghost"
             title="add video question"
             aria-label="add video question"
-            onClick={() => setFields((current) => [...current, { ...emptyField(), mediaType: 'video' }])}
+            onClick={() => addField({ mediaType: 'video' })}
           >
             🎬
           </button>
