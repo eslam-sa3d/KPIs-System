@@ -2,40 +2,86 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { AuthenticatedUser } from '@pulse/contracts';
 import { logout } from '../lib/api-client';
 import { asset } from '../lib/asset';
 
-const NAV_ITEMS: Array<{ href: string; label: string; permission?: string }> = [
-  { href: '/dashboard', label: 'dashboard' },
-  { href: '/forms', label: 'forms' },
-  { href: '/admin/kpis', label: 'KPIs', permission: 'kpis:write' },
-  { href: '/admin/users', label: 'users', permission: 'users:read' },
-  { href: '/admin/roles', label: 'roles', permission: 'roles:read' },
-  { href: '/admin/branding', label: 'branding', permission: 'branding:write' },
-  { href: '/admin/settings', label: 'settings', permission: 'settings:manage' },
+const NAV_ITEMS: Array<{ href: string; label: string; icon: string; permission?: string }> = [
+  { href: '/dashboard', label: 'dashboard', icon: '▦' },
+  { href: '/forms', label: 'forms', icon: '▤' },
+  { href: '/admin/kpis', label: 'KPIs', icon: '◎', permission: 'kpis:write' },
+  { href: '/admin/users', label: 'users', icon: '◐', permission: 'users:read' },
+  { href: '/admin/roles', label: 'roles', icon: '◈', permission: 'roles:read' },
+  { href: '/admin/branding', label: 'branding', icon: '◇', permission: 'branding:write' },
+  { href: '/admin/settings', label: 'settings', icon: '⚙', permission: 'settings:manage' },
 ];
+
+const THEME_KEY = 'pulse-portal-theme';
 
 export const can = (user: AuthenticatedUser | null, permission: string): boolean =>
   Boolean(user?.permissions?.includes(permission));
 
-/** Authenticated chrome: brand header + permission-gated nav, shared by every portal page. */
+function useTheme() {
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(THEME_KEY);
+      if (saved === 'light' || saved === 'dark') setTheme(saved);
+    } catch {
+      /* localStorage unavailable — keep the light default */
+    }
+  }, []);
+
+  function toggle() {
+    setTheme((current) => {
+      const next = current === 'light' ? 'dark' : 'light';
+      try {
+        window.localStorage.setItem(THEME_KEY, next);
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  return { theme, toggle };
+}
+
+/**
+ * Sidebar + topbar app shell shared by every authenticated page.
+ * Self-contained light/dark token system (default light) — independent
+ * from the public pulse brand tokens used on the landing/login pages.
+ *
+ * `title`/`subtitle`/`actions`/`sidebarExtra` are optional: pages that
+ * don't pass them keep rendering their own in-content heading, so most
+ * pages need zero changes. The dashboard uses the full set.
+ */
 export function PortalShell({
   user,
   children,
+  title,
+  subtitle,
+  actions,
+  sidebarExtra,
 }: {
   user: AuthenticatedUser | null;
   children: React.ReactNode;
+  title?: string;
+  subtitle?: string;
+  actions?: React.ReactNode;
+  sidebarExtra?: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { theme, toggle } = useTheme();
 
-  // close the mobile menu on route changes / navigation clicks
   useEffect(() => {
     setMenuOpen(false);
-  }, [user]);
+  }, [pathname]);
 
   async function onSignOut() {
     await logout();
@@ -45,60 +91,74 @@ export function PortalShell({
   const visibleItems = NAV_ITEMS.filter((item) => !item.permission || can(user, item.permission));
 
   return (
-    <div className="portal">
-      <header className="portal-header" data-surface="purple">
-        <div className="portal-header-nav">
-          <Link href="/dashboard" onClick={() => setMenuOpen(false)}>
-            <Image src={asset('/brand/pulse-neg.svg')} alt="pulse by solutions" width={110} height={48} />
+    <div className="portal" data-theme={theme}>
+      <div
+        className={`p-sidebar-backdrop${menuOpen ? ' p-sidebar-backdrop-open' : ''}`}
+        onClick={() => setMenuOpen(false)}
+      />
+      <aside className={`p-sidebar${menuOpen ? ' p-sidebar-open' : ''}`}>
+        <div className="p-sidebar-logo">
+          <Link href="/dashboard" className="p-logo-mark" onClick={() => setMenuOpen(false)}>
+            <Image src={asset('/brand/pulse-icon.png')} alt="" width={32} height={32} style={{ borderRadius: 8 }} unoptimized />
+            <div>
+              <div className="p-logo-text">pulse</div>
+              <div className="p-logo-sub">by solutions</div>
+            </div>
           </Link>
-          <nav className="portal-nav-desktop" aria-label="main navigation">
-            {visibleItems.map((item) => (
-              <Link key={item.href} href={item.href}>
-                {item.label}
-              </Link>
-            ))}
-          </nav>
         </div>
 
-        <div className="portal-header-actions">
-          <span className="portal-user portal-user-desktop">{user?.displayName}</span>
-          <button className="btn-ghost portal-signout-desktop" onClick={onSignOut}>
-            sign out
-          </button>
+        <div className="p-sidebar-section">views</div>
+        <nav className="p-sidebar-nav" aria-label="main navigation">
+          {visibleItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`p-nav-item${pathname?.startsWith(item.href) ? ' active' : ''}`}
+              onClick={() => setMenuOpen(false)}
+            >
+              <span aria-hidden="true">{item.icon}</span> {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        {sidebarExtra}
+
+        <div className="p-sidebar-footer">
+          {user?.displayName}
+          <div className="p-sidebar-footer-row">
+            <span className="muted">{user?.roles?.join(', ')}</span>
+            <button className="p-theme-toggle" onClick={onSignOut} style={{ padding: '4px 10px' }}>
+              sign out
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <div className="p-main">
+        <header className="p-topbar">
           <button
             type="button"
-            className="nav-toggle"
+            className="p-nav-toggle"
             aria-expanded={menuOpen}
-            aria-controls="portal-mobile-nav"
             aria-label={menuOpen ? 'close menu' : 'open menu'}
             onClick={() => setMenuOpen((open) => !open)}
           >
-            <span className={`nav-toggle-bars${menuOpen ? ' nav-toggle-bars-open' : ''}`} aria-hidden="true" />
+            ☰
           </button>
-        </div>
-      </header>
+          <div className="p-topbar-left">
+            {title && <div className="p-topbar-title">{title}</div>}
+            {subtitle && <div className="p-topbar-sub">{subtitle}</div>}
+          </div>
+          <div className="p-topbar-right">
+            {actions}
+            <button className="p-theme-toggle" onClick={toggle} title="Switch theme">
+              {theme === 'light' ? '☀️ Light' : '🌙 Dark'}
+            </button>
+          </div>
+        </header>
 
-      <nav
-        id="portal-mobile-nav"
-        className={`portal-nav-mobile${menuOpen ? ' portal-nav-mobile-open' : ''}`}
-        aria-label="main navigation"
-        aria-hidden={!menuOpen}
-        data-surface="purple"
-      >
-        {visibleItems.map((item) => (
-          <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>
-            {item.label}
-          </Link>
-        ))}
-        <div className="portal-nav-mobile-footer">
-          {user && <span className="portal-user">{user.displayName}</span>}
-          <button className="btn-ghost" onClick={onSignOut}>
-            sign out
-          </button>
-        </div>
-      </nav>
-
-      <main className="portal-main">{children}</main>
+        <main className="portal-main">{children}</main>
+      </div>
     </div>
   );
 }

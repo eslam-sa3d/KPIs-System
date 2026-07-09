@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { END_OF_FORM, FormSection, formSectionSchema } from './form-sections';
 
 /**
  * Form Builder contract — the schema-of-schemas.
@@ -134,6 +135,8 @@ export const formDefinitionSchema = z
     title: z.string().min(1).max(200),
     description: z.string().max(2000).optional(),
     fields: z.array(formFieldSchema).min(1).max(100),
+    /** optional multi-page layout with forward-only branching between pages */
+    sections: z.array(formSectionSchema).min(1).max(50).optional(),
   })
   .superRefine((form, ctx) => {
     const keys = new Set<string>();
@@ -154,7 +157,110 @@ export const formDefinitionSchema = z
         });
       }
     });
+
+    if (!form.sections) return;
+    validateSections(form.fields, form.sections, ctx);
   });
+
+function validateSections(
+  fields: FormField[],
+  sections: FormSection[],
+  ctx: z.RefinementCtx,
+): void {
+  const fieldByKey = new Map(fields.map((f) => [f.key, f]));
+  const sectionIds = new Set(sections.map((s) => s.id));
+  const sectionIndexById = new Map(sections.map((s, i) => [s.id, i]));
+  const assignedFieldKeys = new Set<string>();
+
+  const duplicateSectionIds = sections
+    .map((s) => s.id)
+    .filter((id, index, all) => all.indexOf(id) !== index);
+  if (duplicateSectionIds.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['sections'],
+      message: `duplicate section id(s): ${[...new Set(duplicateSectionIds)].join(', ')}`,
+    });
+  }
+
+  sections.forEach((section, sectionIndex) => {
+    for (const key of section.fieldKeys) {
+      if (!fieldByKey.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sections', sectionIndex, 'fieldKeys'],
+          message: `section "${section.id}" references unknown field "${key}"`,
+        });
+        continue;
+      }
+      if (assignedFieldKeys.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sections', sectionIndex, 'fieldKeys'],
+          message: `field "${key}" is assigned to more than one section`,
+        });
+      }
+      assignedFieldKeys.add(key);
+    }
+
+    const rule = section.branching;
+    if (!rule) return;
+
+    const trigger = fieldByKey.get(rule.onFieldKey);
+    if (!trigger) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
+        message: `branching references unknown field "${rule.onFieldKey}"`,
+      });
+    } else {
+      if (trigger.type !== 'select') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
+          message: `branching can only key off a "select" field (got "${trigger.type}")`,
+        });
+      }
+      if (!section.fieldKeys.includes(rule.onFieldKey)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
+          message: `branching field "${rule.onFieldKey}" must belong to section "${section.id}"`,
+        });
+      }
+    }
+
+    const targets = [...rule.cases.map((c) => c.goTo), ...(rule.defaultGoTo ? [rule.defaultGoTo] : [])];
+    targets.forEach((target, targetIndex) => {
+      if (target === END_OF_FORM) return;
+      if (!sectionIds.has(target)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sections', sectionIndex, 'branching', 'cases', targetIndex],
+          message: `branching target "${target}" is not a section id`,
+        });
+        return;
+      }
+      // forward-only: a section may only jump to one that comes AFTER it
+      if (sectionIndexById.get(target)! <= sectionIndex) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sections', sectionIndex, 'branching', 'cases', targetIndex],
+          message: `branching target "${target}" must come after section "${section.id}" — only forward jumps are allowed`,
+        });
+      }
+    });
+  });
+
+  const unassigned = fields.map((f) => f.key).filter((key) => !assignedFieldKeys.has(key));
+  if (unassigned.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['sections'],
+      message: `field(s) not assigned to any section: ${unassigned.join(', ')}`,
+    });
+  }
+}
 
 export type FormField = z.infer<typeof formFieldSchema>;
 export type FormDefinition = z.infer<typeof formDefinitionSchema>;
