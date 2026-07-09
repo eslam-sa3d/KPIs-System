@@ -1,25 +1,25 @@
 /**
- * KPI attainment → status band, generalizing the reference dashboard's
- * fixed 0–5 evaluation-score tiers to any KPI's unit via target-attainment
- * ratio (works identically for "%", "days", "points"…).
+ * KPI raw score (0–5 evaluation scale) → status band. Every KPI in this
+ * system is scored 0–5 directly (matches the QA evaluation forms this
+ * dashboard is built around) — status is banded from that raw score, not
+ * from target-attainment ratio. Attainment (actual ÷ target) is still
+ * computed separately (see attainmentOf) and shown as its own metric.
  */
-export type StatusKey = 'exceed' | 'high' | 'track' | 'improve' | 'critical' | 'pending';
+export type StatusKey = 'outstanding' | 'meets' | 'improve' | 'below' | 'pending';
 
 export const STATUS_LABEL: Record<StatusKey, string> = {
-  exceed: 'Exceed',
-  high: 'High performer',
-  track: 'On track',
+  outstanding: 'Outstanding',
+  meets: 'Meet expectations',
   improve: 'Needs improvement',
-  critical: 'Critical',
+  below: 'Below expectations',
   pending: 'Pending',
 };
 
 export const STATUS_ICON: Record<StatusKey, string> = {
-  exceed: '↑',
-  high: '★',
-  track: '✓',
+  outstanding: '↑',
+  meets: '✓',
   improve: '⚠',
-  critical: '●',
+  below: '●',
   pending: '…',
 };
 
@@ -29,7 +29,8 @@ export interface KpiLike {
   entries: Array<{ value: string | number }>;
 }
 
-/** attainment = actual / target, direction-aware — 1.0 means exactly on target. */
+/** attainment = actual / target, direction-aware — 1.0 means exactly on target.
+ *  A separate metric from status (see statusOf) — shown on its own, not banded. */
 export function attainmentOf(kpi: KpiLike): number | null {
   const latest = kpi.entries[0];
   if (!latest || kpi.target === null) return null;
@@ -39,25 +40,26 @@ export function attainmentOf(kpi: KpiLike): number | null {
   return kpi.direction === 'higher_is_better' ? value / target : target / value;
 }
 
-export function statusOf(attainment: number | null): StatusKey {
-  if (attainment === null) return 'pending';
-  if (attainment >= 1.15) return 'exceed';
-  if (attainment >= 1.0) return 'high';
-  if (attainment >= 0.85) return 'track';
-  if (attainment >= 0.7) return 'improve';
-  return 'critical';
+/** Bands a KPI's latest raw value (0–5 scale) into a status. Boundaries are
+ *  exclusive on the low end / inclusive on the high end, except the bottom
+ *  tier which catches everything at or below 2. */
+export function statusOf(value: number | null): StatusKey {
+  if (value === null) return 'pending';
+  if (value > 4) return 'outstanding';
+  if (value > 3) return 'meets';
+  if (value > 2) return 'improve';
+  return 'below';
 }
 
-export const STATUS_ORDER: StatusKey[] = ['exceed', 'high', 'track', 'improve', 'critical', 'pending'];
+export const STATUS_ORDER: StatusKey[] = ['outstanding', 'meets', 'improve', 'below', 'pending'];
 
 /** Pulse brand colors per status band — the single source of truth for both
  *  CSS (via .p-status-* classes, see globals.css) and SVG chart fills
  *  (recharts needs real hex, not custom-property indirection). */
 export const STATUS_COLOR: Record<StatusKey, string> = {
-  exceed: '#a54ee1', // moon-light
-  high: '#00c48c', // oasis
-  track: '#1dced8', // sea
+  outstanding: '#a54ee1', // moon-light
+  meets: '#00c48c', // oasis
   improve: '#ff6a39', // sunset
-  critical: '#ff375e', // coral
+  below: '#ff375e', // coral
   pending: '#8e9aa0', // silver
 };

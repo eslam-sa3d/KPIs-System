@@ -5,19 +5,17 @@ import { STATUS_COLOR } from '../lib/kpi-status';
 
 export interface DistributionRow {
   level: string;
-  exceed: number;
-  high: number;
-  track: number;
+  outstanding: number;
+  meets: number;
   improve: number;
-  critical: number;
+  below: number;
 }
 
 const SERIES: Array<{ key: keyof Omit<DistributionRow, 'level'>; label: string; color: string }> = [
-  { key: 'exceed', label: 'Exceed', color: STATUS_COLOR.exceed },
-  { key: 'high', label: 'High performer', color: STATUS_COLOR.high },
-  { key: 'track', label: 'On track', color: STATUS_COLOR.track },
+  { key: 'outstanding', label: 'Outstanding', color: STATUS_COLOR.outstanding },
+  { key: 'meets', label: 'Meet expectations', color: STATUS_COLOR.meets },
   { key: 'improve', label: 'Needs improvement', color: STATUS_COLOR.improve },
-  { key: 'critical', label: 'Critical', color: STATUS_COLOR.critical },
+  { key: 'below', label: 'Below expectations', color: STATUS_COLOR.below },
 ];
 
 /** Stacked bar: KPI status distribution per level (cadence group). */

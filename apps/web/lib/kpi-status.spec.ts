@@ -39,17 +39,16 @@ describe('attainmentOf', () => {
 });
 
 describe('statusOf', () => {
-  it('bands attainment into the five score tiers plus pending', () => {
+  it('bands a raw 0-5 score into four tiers plus pending', () => {
     expect(statusOf(null)).toBe('pending');
-    expect(statusOf(1.2)).toBe('exceed');
-    expect(statusOf(1.15)).toBe('exceed'); // boundary inclusive
-    expect(statusOf(1.05)).toBe('high');
-    expect(statusOf(1.0)).toBe('high'); // boundary inclusive
-    expect(statusOf(0.9)).toBe('track');
-    expect(statusOf(0.85)).toBe('track'); // boundary inclusive
-    expect(statusOf(0.75)).toBe('improve');
-    expect(statusOf(0.7)).toBe('improve'); // boundary inclusive
-    expect(statusOf(0.69)).toBe('critical');
-    expect(statusOf(0)).toBe('critical');
+    expect(statusOf(5)).toBe('outstanding');
+    expect(statusOf(4.5)).toBe('outstanding');
+    expect(statusOf(4.01)).toBe('outstanding');
+    expect(statusOf(4)).toBe('meets'); // boundary: 4 itself falls to the tier below
+    expect(statusOf(3.5)).toBe('meets');
+    expect(statusOf(3)).toBe('improve'); // boundary: 3 itself falls to the tier below
+    expect(statusOf(2.5)).toBe('improve');
+    expect(statusOf(2)).toBe('below'); // boundary: 2 and under is "below expectations"
+    expect(statusOf(0)).toBe('below');
   });
 });

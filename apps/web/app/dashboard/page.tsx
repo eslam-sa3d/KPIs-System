@@ -54,13 +54,13 @@ function loadStoredUpload(): StoredUpload | null {
 }
 
 function computeKpi(kpi: RawKpi): ComputedKpi {
-  const attainment = attainmentOf(kpi);
   const latest = kpi.entries[0];
+  const latestValue = latest ? Number(latest.value) : null;
   return {
     ...kpi,
-    attainment,
-    status: statusOf(attainment),
-    latestValue: latest ? Number(latest.value) : null,
+    attainment: attainmentOf(kpi),
+    status: statusOf(latestValue),
+    latestValue,
   };
 }
 
@@ -153,7 +153,7 @@ export default function DashboardPage() {
   }, [kpis, level]);
 
   const stats = useMemo(() => {
-    const counts: Record<StatusKey, number> = { exceed: 0, high: 0, track: 0, improve: 0, critical: 0, pending: 0 };
+    const counts: Record<StatusKey, number> = { outstanding: 0, meets: 0, improve: 0, below: 0, pending: 0 };
     levelData.forEach((k) => counts[k.status]++);
     return counts;
   }, [levelData]);
@@ -201,17 +201,16 @@ export default function DashboardPage() {
       const inGroup = (kpis ?? []).filter((k) => k.cadence === g);
       return {
         level: CADENCE_LABEL[g] ?? g,
-        exceed: inGroup.filter((k) => k.status === 'exceed').length,
-        high: inGroup.filter((k) => k.status === 'high').length,
-        track: inGroup.filter((k) => k.status === 'track').length,
+        outstanding: inGroup.filter((k) => k.status === 'outstanding').length,
+        meets: inGroup.filter((k) => k.status === 'meets').length,
         improve: inGroup.filter((k) => k.status === 'improve').length,
-        critical: inGroup.filter((k) => k.status === 'critical').length,
+        below: inGroup.filter((k) => k.status === 'below').length,
       };
     });
   }, [kpis, level, levels]);
 
   const hasDistributionData = distributionData.some(
-    (g) => g.exceed + g.high + g.track + g.improve + g.critical > 0,
+    (g) => g.outstanding + g.meets + g.improve + g.below > 0,
   );
 
   const areaBars = useMemo(
@@ -427,11 +426,10 @@ export default function DashboardPage() {
                       gridColor="var(--border)"
                     />
                     <div className="p-legend-row">
-                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--purple)' }} />Exceed</div>
-                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--green)' }} />High performer</div>
-                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--blue)' }} />On track</div>
+                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--purple)' }} />Outstanding</div>
+                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--green)' }} />Meet expectations</div>
                       <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--amber)' }} />Needs improvement</div>
-                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--red)' }} />Critical</div>
+                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--red)' }} />Below expectations</div>
                     </div>
                   </>
                 ) : (
@@ -452,7 +450,7 @@ export default function DashboardPage() {
                           className="p-bar-fill"
                           style={{
                             width: `${Math.min(100, Math.round((k.attainment ?? 0) * 100))}%`,
-                            background: `var(--${k.status === 'exceed' ? 'purple' : k.status === 'high' ? 'green' : k.status === 'track' ? 'blue' : k.status === 'improve' ? 'amber' : 'red'})`,
+                            background: `var(--${k.status === 'outstanding' ? 'purple' : k.status === 'meets' ? 'green' : k.status === 'improve' ? 'amber' : 'red'})`,
                           }}
                         />
                       </span>

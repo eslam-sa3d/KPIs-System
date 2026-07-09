@@ -549,21 +549,19 @@ h1, h2, h3 {
   flex-shrink: 0;
 }
 
-/* ── status color families (bg tint / accent) — mapped to the pulse
-   brand palette: purple(moon-light)=exceed, oasis=high-performer,
-   sea=on-track, sunset=needs-improvement, coral=critical, silver=pending ── */
-.p-status-exceed { --kc: var(--purple); background: var(--purple-bg); }
-.p-status-high { --kc: var(--green); background: var(--green-bg); }
-.p-status-track { --kc: var(--blue); background: var(--blue-bg); }
+/* ── status color families (bg tint / accent) — mapped to the pulse brand
+   palette: purple(moon-light)=outstanding, oasis=meets-expectations,
+   sunset=needs-improvement, coral=below-expectations, silver=pending ── */
+.p-status-outstanding { --kc: var(--purple); background: var(--purple-bg); }
+.p-status-meets { --kc: var(--green); background: var(--green-bg); }
 .p-status-improve { --kc: var(--amber); background: var(--amber-bg); }
-.p-status-critical { --kc: var(--red); background: var(--red-bg); }
+.p-status-below { --kc: var(--red); background: var(--red-bg); }
 .p-status-pending { --kc: var(--text-3); background: color-mix(in srgb, var(--text-3) 10%, transparent); }
 
-.p-status-exceed .p-kpi-icon { color: var(--purple); }
-.p-status-high .p-kpi-icon { color: var(--green); }
-.p-status-track .p-kpi-icon { color: var(--blue); }
+.p-status-outstanding .p-kpi-icon { color: var(--purple); }
+.p-status-meets .p-kpi-icon { color: var(--green); }
 .p-status-improve .p-kpi-icon { color: var(--amber); }
-.p-status-critical .p-kpi-icon { color: var(--red); }
+.p-status-below .p-kpi-icon { color: var(--red); }
 .p-status-pending .p-kpi-icon { color: var(--text-3); }
 
 /* ── member/KPI table card ────────────────────────────────────────── */
