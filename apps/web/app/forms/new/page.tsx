@@ -81,6 +81,11 @@ const toKey = (label: string, index: number) => {
 interface DraftSection {
   id: string;
   title: string;
+  description: string;
+  mediaType: 'none' | 'image' | 'video';
+  mediaAssetId: string;
+  mediaUrl: string;
+  mediaAlt: string;
   fieldKeys: string[];
   /** the choice/rating/likert field this page branches on, or '' for no per-answer branching */
   branchFieldKey: string;
@@ -95,6 +100,11 @@ interface DraftSection {
 const emptySection = (index: number): DraftSection => ({
   id: `page_${index + 1}`,
   title: '',
+  description: '',
+  mediaType: 'none',
+  mediaAssetId: '',
+  mediaUrl: '',
+  mediaAlt: '',
   fieldKeys: [],
   branchFieldKey: '',
   branchStatement: '',
@@ -185,6 +195,30 @@ export default function NewFormPage() {
 
   function addSection() {
     setSections((current) => [...current, emptySection(current.length)]);
+  }
+
+  /** Builder shortcut: put this question, plus every not-yet-assigned question after it, on a new page. */
+  function splitPageHere(fieldIndex: number) {
+    const fieldKey = keyedFields[fieldIndex]!.key;
+    const newFieldKeys = keyedFields
+      .slice(fieldIndex)
+      .map((f) => f.key)
+      .filter((k) => k === fieldKey || !sections.some((s) => s.fieldKeys.includes(k)));
+
+    setSections((current) => {
+      // pull the moved fields out of whatever page currently holds them, drop pages left empty
+      const cleaned = current
+        .map((s) => ({ ...s, fieldKeys: s.fieldKeys.filter((k) => !newFieldKeys.includes(k)) }))
+        .filter((s) => s.fieldKeys.length > 0);
+
+      // insert right after the page holding the field immediately before this one, if any
+      const priorFieldKey = fieldIndex > 0 ? keyedFields[fieldIndex - 1]!.key : null;
+      const priorPageIndex = priorFieldKey ? cleaned.findIndex((s) => s.fieldKeys.includes(priorFieldKey)) : -1;
+      const insertAt = priorPageIndex === -1 ? cleaned.length : priorPageIndex + 1;
+
+      const newSection: DraftSection = { ...emptySection(insertAt), fieldKeys: newFieldKeys };
+      return [...cleaned.slice(0, insertAt), newSection, ...cleaned.slice(insertAt)];
+    });
   }
 
   function updateSection(index: number, patch: Partial<DraftSection>) {
@@ -323,6 +357,15 @@ export default function NewFormPage() {
     }
   }
 
+  async function onUploadSectionMedia(index: number, file: File) {
+    try {
+      const uploaded = await uploadAsset<{ id: string }>(file);
+      updateSection(index, { mediaType: 'image', mediaAssetId: uploaded.id });
+    } catch {
+      setError('image upload failed');
+    }
+  }
+
   async function onUploadOptionImage(index: number, optionValue: string, file: File) {
     try {
       const uploaded = await uploadAsset<{ id: string }>(file);
@@ -346,6 +389,12 @@ export default function NewFormPage() {
       return {
         id: s.id,
         ...(s.title.trim() ? { title: s.title.trim() } : {}),
+        ...(s.description.trim() ? { description: s.description.trim() } : {}),
+        ...(s.mediaType === 'image' && s.mediaAssetId
+          ? { media: { type: 'image' as const, assetId: s.mediaAssetId, ...(s.mediaAlt ? { alt: s.mediaAlt } : {}) } }
+          : s.mediaType === 'video' && s.mediaUrl
+            ? { media: { type: 'video' as const, url: s.mediaUrl, ...(s.mediaAlt ? { alt: s.mediaAlt } : {}) } }
+            : {}),
         fieldKeys: s.fieldKeys,
         ...(hasBranching
           ? {
@@ -696,6 +745,11 @@ export default function NewFormPage() {
               <button type="button" className="btn-ghost" onClick={() => duplicateField(index)}>
                 duplicate
               </button>
+              {sectionsEnabled && (
+                <button type="button" className="btn-ghost" onClick={() => splitPageHere(index)}>
+                  ⏎ split into a new page here
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-ghost"
@@ -772,6 +826,44 @@ export default function NewFormPage() {
                       onChange={(e) => updateSection(index, { title: e.target.value })}
                       placeholder={section.id}
                     />
+
+                    <label htmlFor={`section-description-${index}`}>page description (optional)</label>
+                    <input
+                      id={`section-description-${index}`}
+                      value={section.description}
+                      onChange={(e) => updateSection(index, { description: e.target.value })}
+                      placeholder="shown under the page title"
+                    />
+
+                    <label htmlFor={`section-media-type-${index}`}>page media (optional)</label>
+                    <select
+                      id={`section-media-type-${index}`}
+                      value={section.mediaType}
+                      onChange={(e) => updateSection(index, { mediaType: e.target.value as DraftSection['mediaType'] })}
+                    >
+                      <option value="none">none</option>
+                      <option value="image">image</option>
+                      <option value="video">video (embed URL)</option>
+                    </select>
+                    {section.mediaType === 'image' && (
+                      <>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => e.target.files?.[0] && onUploadSectionMedia(index, e.target.files[0])}
+                        />
+                        {section.mediaAssetId && (
+                          <img src={assetUrl(section.mediaAssetId)} alt="" className="option-image" />
+                        )}
+                      </>
+                    )}
+                    {section.mediaType === 'video' && (
+                      <input
+                        value={section.mediaUrl}
+                        onChange={(e) => updateSection(index, { mediaUrl: e.target.value })}
+                        placeholder="https://www.youtube.com/embed/…"
+                      />
+                    )}
 
                     <label>questions on this page</label>
                     <div className="perm-grid">

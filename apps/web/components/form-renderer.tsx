@@ -403,6 +403,7 @@ export function FormRenderer({
                 {currentSection?.title ? ` — ${currentSection.title}` : ''}
               </p>
               {currentSection?.description && <p className="muted">{currentSection.description}</p>}
+              {currentSection?.media && <FieldMedia media={currentSection.media} />}
             </div>
           )}
           {(() => {

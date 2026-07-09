@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { mediaSchema } from './form-media';
 import type { FormDefinition, FormField, SubmissionAnswers } from './form-schema';
 
 /**
@@ -71,6 +72,7 @@ export const formSectionSchema = z.object({
   id: sectionId,
   title: z.string().max(200).optional(),
   description: z.string().max(1000).optional(),
+  media: mediaSchema.optional(),
   /** every field belonging to this page, in display order */
   fieldKeys: z.array(z.string().min(1).max(64)).min(1).max(50),
   branching: sectionBranchRuleSchema.optional(),

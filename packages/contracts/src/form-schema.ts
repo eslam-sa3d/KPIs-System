@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { mediaSchema } from './form-media';
 import { END_OF_FORM, FormSection, formSectionSchema } from './form-sections';
 
 /**
@@ -45,18 +46,6 @@ const visibleWhenSchema = z.object({
   operator: z.enum(CONDITION_OPERATORS).default('equals'),
   equals: conditionValue,
 });
-
-/** Inline question/page media: an uploaded FormAsset image, or an external video embed URL. */
-export const mediaSchema = z.object({
-  type: z.enum(['image', 'video']),
-  /** FormAsset id — required when type is "image". */
-  assetId: z.string().uuid().optional(),
-  /** external embed URL (e.g. YouTube) — required when type is "video". */
-  url: z.string().max(1000).optional(),
-  alt: z.string().max(200).optional(),
-});
-
-export type Media = z.infer<typeof mediaSchema>;
 
 const baseField = z.object({
   key: fieldKey,
