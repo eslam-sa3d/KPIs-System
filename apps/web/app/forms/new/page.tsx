@@ -1496,28 +1496,30 @@ export default function NewFormPage() {
             )}
 
             <div className="builder-field-actions">
-              <button type="button" className="btn-ghost" aria-label={`move question ${index + 1} up`}
+              <button type="button" className="btn-ghost" title="move up" aria-label={`move question ${index + 1} up`}
                 disabled={index === 0} onClick={() => moveField(index, -1)}>
-                ↑ move up
+                ↑
               </button>
-              <button type="button" className="btn-ghost" aria-label={`move question ${index + 1} down`}
+              <button type="button" className="btn-ghost" title="move down" aria-label={`move question ${index + 1} down`}
                 disabled={index === fields.length - 1} onClick={() => moveField(index, 1)}>
-                ↓ move down
+                ↓
               </button>
-              <button type="button" className="btn-ghost" onClick={() => duplicateField(index)}>
-                duplicate
+              <button type="button" className="btn-ghost" title="duplicate" aria-label="duplicate question" onClick={() => duplicateField(index)}>
+                ⧉
               </button>
               {sectionsEnabled && (
-                <button type="button" className="btn-ghost" onClick={() => splitPageHere(index)}>
-                  ⏎ split into a new page here
+                <button type="button" className="btn-ghost" title="split into a new page here" aria-label="split into a new page here" onClick={() => splitPageHere(index)}>
+                  ⏎
                 </button>
               )}
               <button
                 type="button"
                 className="btn-ghost"
+                title="remove field"
+                aria-label="remove field"
                 onClick={() => setFields((current) => current.filter((_, i) => i !== index))}
               >
-                remove field
+                🗑
               </button>
             </div>
           </fieldset>
@@ -1761,9 +1763,11 @@ export default function NewFormPage() {
                                 <button
                                   type="button"
                                   className="btn-ghost"
+                                  title="remove this rule"
+                                  aria-label="remove this rule"
                                   onClick={() => removeBranchRule(index, ruleIndex)}
                                 >
-                                  remove this rule
+                                  🗑
                                 </button>
                               </div>
                             </div>
@@ -1779,25 +1783,31 @@ export default function NewFormPage() {
                       <button
                         type="button"
                         className="btn-ghost"
+                        title="move up"
+                        aria-label={`move page ${index + 1} up`}
                         disabled={index === 0}
                         onClick={() => moveSection(index, -1)}
                       >
-                        ↑ move up
+                        ↑
                       </button>
                       <button
                         type="button"
                         className="btn-ghost"
+                        title="move down"
+                        aria-label={`move page ${index + 1} down`}
                         disabled={index === sections.length - 1}
                         onClick={() => moveSection(index, 1)}
                       >
-                        ↓ move down
+                        ↓
                       </button>
                       <button
                         type="button"
                         className="btn-ghost"
+                        title="remove page"
+                        aria-label={`remove page ${index + 1}`}
                         onClick={() => setSections((current) => current.filter((_, i) => i !== index))}
                       >
-                        remove page
+                        🗑
                       </button>
                     </div>
                   </fieldset>
