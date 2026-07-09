@@ -1,12 +1,13 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useEffect } from 'react';
 import { PortalShell } from '../../components/portal-shell';
 import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
 import { api, downloadCsv } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
+import type { RawKpi } from '../../lib/parse-kpi-workbook';
 import {
   STATUS_ICON,
   STATUS_LABEL,
@@ -21,17 +22,6 @@ const KpiDistributionChart = dynamic(() => import('../../components/kpi-distribu
   ssr: false,
   loading: () => <p className="muted">loading chart…</p>,
 });
-
-interface RawKpi {
-  id: string;
-  code: string;
-  name: string;
-  unit: string;
-  direction: 'higher_is_better' | 'lower_is_better';
-  target: string | null;
-  cadence: string;
-  entries: Array<{ value: string; periodStart: string; periodEnd: string }>;
-}
 
 interface ComputedKpi extends RawKpi {
   attainment: number | null;
@@ -56,15 +46,55 @@ function computeKpi(kpi: RawKpi): ComputedKpi {
 
 export default function DashboardPage() {
   const user = useSession();
-  const [kpis, setKpis] = useState<ComputedKpi[] | null>(null);
+  const [liveKpis, setLiveKpis] = useState<ComputedKpi[] | null>(null);
+  const [uploaded, setUploaded] = useState<{ filename: string; kpis: ComputedKpi[]; issues: string[] } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [level, setLevel] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'latestValue', dir: -1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const kpis = uploaded ? uploaded.kpis : liveKpis;
+
   useEffect(() => {
-    if (user) void api<RawKpi[]>('/v1/kpis/my').then((raw) => setKpis(raw.map(computeKpi)));
+    if (user) void api<RawKpi[]>('/v1/kpis/my').then((raw) => setLiveKpis(raw.map(computeKpi)));
   }, [user]);
+
+  async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // allow re-selecting the same file after fixing it
+    if (!file) return;
+
+    setUploadError(null);
+    setParsing(true);
+    try {
+      // lazy-loaded: the xlsx parsing engine only ships once someone actually imports a file
+      const { parseKpiWorkbook } = await import('../../lib/parse-kpi-workbook');
+      const { kpis: parsedKpis, issues } = await parseKpiWorkbook(file);
+      if (parsedKpis.length === 0) {
+        setUploadError(
+          issues[0] ?? 'no usable rows found — check that the sheet has Code, Name, and Value columns',
+        );
+        return;
+      }
+      setUploaded({ filename: file.name, kpis: parsedKpis.map(computeKpi), issues });
+      setLevel('all');
+      setStatusFilter('all');
+    } catch {
+      setUploadError('could not read this file — is it a valid .xlsx spreadsheet?');
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  function onUseLiveData() {
+    setUploaded(null);
+    setUploadError(null);
+    setLevel('all');
+    setStatusFilter('all');
+  }
 
   const levelData = useMemo(() => {
     if (!kpis) return [];
@@ -129,6 +159,10 @@ export default function DashboardPage() {
     });
   }, [kpis, level, levels]);
 
+  const hasDistributionData = distributionData.some(
+    (g) => g.exceed + g.high + g.track + g.improve + g.critical > 0,
+  );
+
   const areaBars = useMemo(
     () =>
       [...levelData]
@@ -191,10 +225,57 @@ export default function DashboardPage() {
               {levelLabel} · click any card or row for details
             </p>
           </div>
-          <button className="p-theme-toggle" onClick={onExportCsv}>
-            Export CSV
-          </button>
+          <span className="builder-field-actions">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={onFileSelected}
+              style={{ display: 'none' }}
+            />
+            <button
+              className="p-theme-toggle"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={parsing}
+            >
+              {parsing ? 'reading file…' : 'Import spreadsheet'}
+            </button>
+            <button className="p-theme-toggle" onClick={onExportCsv}>
+              Export CSV
+            </button>
+          </span>
         </div>
+
+        {uploadError && (
+          <p role="alert" className="form-error" style={{ marginBottom: 16 }}>
+            {uploadError}
+          </p>
+        )}
+
+        {uploaded && (
+          <div className="p-table-card" style={{ marginBottom: 20, padding: '12px 16px' }}>
+            <span className="builder-field-actions" style={{ justifyContent: 'space-between', width: '100%' }}>
+              <span style={{ fontSize: 13 }}>
+                showing data from <strong>{uploaded.filename}</strong> ({uploaded.kpis.length} KPI
+                {uploaded.kpis.length === 1 ? '' : 's'})
+                {uploaded.issues.length > 0 && (
+                  <span className="muted"> · {uploaded.issues.length} row{uploaded.issues.length === 1 ? '' : 's'} skipped</span>
+                )}
+              </span>
+              <button className="btn-ghost" onClick={onUseLiveData}>
+                use live data
+              </button>
+            </span>
+            {uploaded.issues.length > 0 && (
+              <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
+                {uploaded.issues.slice(0, 5).map((issue, i) => (
+                  <li key={i}>{issue}</li>
+                ))}
+                {uploaded.issues.length > 5 && <li>…and {uploaded.issues.length - 5} more</li>}
+              </ul>
+            )}
+          </div>
+        )}
 
         {kpis && kpis.length > 0 && (
           <div className="p-filter-pills" style={{ marginBottom: 20 }}>
@@ -213,8 +294,12 @@ export default function DashboardPage() {
           <p className="muted">loading…</p>
         ) : kpis.length === 0 ? (
           <div className="empty-state">
-            <h2>no KPIs assigned yet</h2>
-            <p className="muted">an admin can map KPIs to your role or department under KPI settings.</p>
+            <h2>no KPIs {uploaded ? 'in this file' : 'assigned yet'}</h2>
+            <p className="muted">
+              {uploaded
+                ? 'the uploaded spreadsheet had no usable rows — check it has Code, Name, and Value columns.'
+                : 'an admin can map KPIs to your role or department under KPI settings, or import a spreadsheet above.'}
+            </p>
           </div>
         ) : (
           <>
@@ -238,18 +323,24 @@ export default function DashboardPage() {
             <div className="p-charts-row">
               <div className="p-card">
                 <div className="p-card-title">KPI status by cadence</div>
-                <KpiDistributionChart
-                  data={distributionData}
-                  textColor="var(--text-3)"
-                  gridColor="var(--border)"
-                />
-                <div className="p-legend-row">
-                  <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--purple)' }} />Exceed</div>
-                  <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--green)' }} />High performer</div>
-                  <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--blue)' }} />On track</div>
-                  <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--amber)' }} />Needs improvement</div>
-                  <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--red)' }} />Critical</div>
-                </div>
+                {hasDistributionData ? (
+                  <>
+                    <KpiDistributionChart
+                      data={distributionData}
+                      textColor="var(--text-3)"
+                      gridColor="var(--border)"
+                    />
+                    <div className="p-legend-row">
+                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--purple)' }} />Exceed</div>
+                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--green)' }} />High performer</div>
+                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--blue)' }} />On track</div>
+                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--amber)' }} />Needs improvement</div>
+                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--red)' }} />Critical</div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="muted" style={{ fontSize: 12 }}>no scored KPIs in this view yet.</p>
+                )}
               </div>
 
               <div className="p-card">
