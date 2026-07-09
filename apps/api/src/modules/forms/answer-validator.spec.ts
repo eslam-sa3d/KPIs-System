@@ -310,6 +310,51 @@ describe('section branching off a likert statement', () => {
   });
 });
 
+describe('section branching off a multi_select field (includes semantics)', () => {
+  const definition: FormDefinition = formDefinitionSchema.parse({
+    title: 'tooling survey',
+    fields: [
+      {
+        key: 'tools_used',
+        label: 'Which tools do you use?',
+        type: 'multi_select',
+        options: [
+          { value: 'figma', label: 'Figma' },
+          { value: 'jira', label: 'Jira' },
+          { value: 'slack', label: 'Slack' },
+        ],
+      },
+      { key: 'jira_feedback', label: 'What do you think of Jira?', type: 'short_text', required: true },
+    ],
+    sections: [
+      {
+        id: 'intro',
+        fieldKeys: ['tools_used'],
+        branching: {
+          onFieldKey: 'tools_used',
+          cases: [{ equals: 'jira', goTo: 'jira_followup' }],
+          defaultGoTo: END_OF_FORM,
+        },
+      },
+      { id: 'jira_followup', fieldKeys: ['jira_feedback'] },
+    ],
+  });
+  const validator = compileAnswerValidator(definition);
+
+  it('follows the case when the selections include the matched option, ignoring the rest', () => {
+    const cleaned = validator.validate({
+      tools_used: ['figma', 'jira', 'slack'],
+      jira_feedback: 'love it',
+    });
+    expect(cleaned).toEqual({ tools_used: ['figma', 'jira', 'slack'], jira_feedback: 'love it' });
+  });
+
+  it('ends the form when the selections do not include the matched option', () => {
+    const cleaned = validator.validate({ tools_used: ['figma', 'slack'] });
+    expect(cleaned).not.toHaveProperty('jira_feedback');
+  });
+});
+
 describe('formDefinitionSchema (builder-side validation)', () => {
   it('rejects duplicate field keys', () => {
     const result = formDefinitionSchema.safeParse({

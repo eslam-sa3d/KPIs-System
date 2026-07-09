@@ -36,7 +36,9 @@ export const sectionBranchRuleSchema = z
      * `equals` is always compared as a string: a `select` case matches the
      * option value verbatim; a `rating` case matches the stringified score
      * (e.g. "4"); a `likert` case matches the stringified 0-based scale
-     * index of the chosen statement (e.g. "0" for the first scale label).
+     * index of the chosen statement (e.g. "0" for the first scale label);
+     * a `multi_select` case matches when the respondent's selections
+     * INCLUDE that option value (not exact-equality — MS Forms semantics).
      */
     cases: z
       .array(
@@ -76,29 +78,38 @@ export const formSectionSchema = z.object({
 
 export type FormSection = z.infer<typeof formSectionSchema>;
 
+type BranchCase = SectionBranchRule['cases'][number];
+
 /**
- * Reduces a branch trigger field's raw answer to the single string a
- * case's `equals` compares against. `select` answers are already strings;
- * `rating` and `likert` are numeric/matrix and need a type-aware reduction
- * (see `sectionBranchRuleSchema` field comments for the exact encoding).
+ * Finds the case (if any) matching the trigger field's answer. `multi_select`
+ * uses "includes" semantics (see `sectionBranchRuleSchema`'s `cases` comment);
+ * every other trigger type reduces to a single string and matches by equality.
  */
-function extractTriggerAnswer(
+function findMatchedCase(
   rule: SectionBranchRule,
   fieldByKey: Map<string, FormField>,
   answers: SubmissionAnswers,
-): string | undefined {
+): BranchCase | undefined {
   if (!rule.onFieldKey) return undefined;
   const field = fieldByKey.get(rule.onFieldKey);
   const raw = answers[rule.onFieldKey];
   if (!field || raw === undefined || raw === null) return undefined;
 
-  if (field.type === 'likert') {
-    if (!rule.onStatement) return undefined;
-    const index = (raw as Record<string, number>)[rule.onStatement];
-    return index === undefined ? undefined : String(index);
+  if (field.type === 'multi_select') {
+    if (!Array.isArray(raw)) return undefined;
+    return rule.cases.find((c) => raw.includes(c.equals));
   }
-  if (field.type === 'rating') return String(raw);
-  return typeof raw === 'string' ? raw : undefined;
+
+  let answer: string | undefined;
+  if (field.type === 'likert') {
+    const index = rule.onStatement === undefined ? undefined : (raw as Record<string, number>)[rule.onStatement];
+    answer = index === undefined ? undefined : String(index);
+  } else if (field.type === 'rating') {
+    answer = String(raw);
+  } else {
+    answer = typeof raw === 'string' ? raw : undefined;
+  }
+  return rule.cases.find((c) => c.equals === answer);
 }
 
 /**
@@ -144,8 +155,7 @@ export function resolveSectionPath(
     let nextId: string | undefined;
 
     if (rule) {
-      const answer = extractTriggerAnswer(rule, fieldByKey, answers);
-      const matched = rule.cases.find((c) => c.equals === answer);
+      const matched = findMatchedCase(rule, fieldByKey, answers);
       nextId = matched?.goTo ?? rule.defaultGoTo;
     }
 

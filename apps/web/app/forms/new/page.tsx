@@ -7,7 +7,6 @@ import { PortalShell } from '../../../components/portal-shell';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
-/** Field types creatable from the UI (file uploads need object storage — later). */
 const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'short_text', label: 'short text' },
   { value: 'long_text', label: 'long text' },
@@ -20,6 +19,7 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'multi_select', label: 'choice (multiple answers)' },
   { value: 'likert', label: 'likert matrix' },
   { value: 'ranking', label: 'ranking' },
+  { value: 'file', label: 'file upload' },
 ];
 
 const parseList = (raw: string) =>
@@ -39,6 +39,9 @@ interface DraftField {
   highLabel: string;
   /** comma-separated likert scale labels, e.g. "disagree,neutral,agree" */
   likertScale: string;
+  /** comma-separated MIME types accepted for a file-upload field */
+  acceptedMimeTypes: string;
+  maxSizeMb: number;
 }
 
 const emptyField = (): DraftField => ({
@@ -53,6 +56,8 @@ const emptyField = (): DraftField => ({
   lowLabel: '',
   highLabel: '',
   likertScale: 'disagree, neutral, agree',
+  acceptedMimeTypes: 'application/pdf, image/png, image/jpeg',
+  maxSizeMb: 10,
 });
 
 const toKey = (label: string, index: number) => {
@@ -108,6 +113,10 @@ function toDefinitionField(draft: DraftField, index: number) {
       const statements = parseList(draft.options).map((o) => ({ value: o, label: o }));
       const scale = parseList(draft.likertScale);
       return { ...base, type: draft.type, statements, scale };
+    }
+    case 'file': {
+      const acceptedMimeTypes = parseList(draft.acceptedMimeTypes);
+      return { ...base, type: draft.type, acceptedMimeTypes, maxSizeMb: draft.maxSizeMb };
     }
     case 'rating':
       return {
@@ -382,6 +391,27 @@ export default function NewFormPage() {
               </>
             )}
 
+            {field.type === 'file' && (
+              <>
+                <label htmlFor={`field-mime-${index}`}>accepted file types (comma-separated MIME types)</label>
+                <input
+                  id={`field-mime-${index}`}
+                  value={field.acceptedMimeTypes}
+                  onChange={(e) => updateField(index, { acceptedMimeTypes: e.target.value })}
+                  placeholder="application/pdf, image/png, image/jpeg"
+                />
+                <label htmlFor={`field-maxsize-${index}`}>max file size (MB, up to 25)</label>
+                <input
+                  id={`field-maxsize-${index}`}
+                  type="number"
+                  min={1}
+                  max={25}
+                  value={field.maxSizeMb}
+                  onChange={(e) => updateField(index, { maxSizeMb: Number(e.target.value) })}
+                />
+              </>
+            )}
+
             {field.type === 'rating' && (
               <>
                 <label htmlFor={`field-scale-n-${index}`}>scale (2–10)</label>
@@ -488,7 +518,7 @@ export default function NewFormPage() {
                 const laterSections = sections.slice(index + 1);
                 const triggerCandidates = keyedFields.filter(
                   (f) =>
-                    (f.type === 'select' || f.type === 'rating' || f.type === 'likert') &&
+                    (f.type === 'select' || f.type === 'multi_select' || f.type === 'rating' || f.type === 'likert') &&
                     section.fieldKeys.includes(f.key),
                 );
                 const trigger = triggerCandidates.find((f) => f.key === section.branchFieldKey);
@@ -569,7 +599,10 @@ export default function NewFormPage() {
                         {trigger && (trigger.type !== 'likert' || section.branchStatement) &&
                           caseKeys.map((key) => (
                             <div key={key}>
-                              <label htmlFor={`section-case-${index}-${key}`}>if "{caseLabelOf(key)}" go to</label>
+                              <label htmlFor={`section-case-${index}-${key}`}>
+                                if {trigger?.type === 'multi_select' ? 'selections include' : 'answer is'} "
+                                {caseLabelOf(key)}" go to
+                              </label>
                               <select
                                 id={`section-case-${index}-${key}`}
                                 value={section.cases[key] ?? ''}

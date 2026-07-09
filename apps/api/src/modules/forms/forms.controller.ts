@@ -1,20 +1,43 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { PageQuery, SubmissionAnswers, submissionAnswersSchema } from '@pulse/contracts';
 import type { Response } from 'express';
+import { memoryStorage } from 'multer';
 import { Public } from '../auth/public.decorator';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
+import { FileUploadsService } from './file-uploads.service';
 import { FormsService } from './forms.service';
 import { SubmissionsService } from './submissions.service';
 
 type AuthedRequest = { user: { id: string } };
+
+// files live in the DB, not disk — memoryStorage keeps the buffer in-process;
+// the per-question maxSizeMb cap is enforced in FileUploadsService, this is
+// just a generous outer ceiling so an oversized body never reaches it
+const UPLOAD_INTERCEPTOR = FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 @Controller('v1/forms')
 export class FormsController {
   constructor(
     private readonly forms: FormsService,
     private readonly submissions: SubmissionsService,
+    private readonly uploads: FileUploadsService,
   ) {}
 
   @Get()
@@ -110,6 +133,39 @@ export class FormsController {
     return this.submissions.deleteSubmission(slug, submissionId, req.user.id);
   }
 
+  @Delete(':slug/submissions')
+  @RequirePermissions('form_submissions:manage')
+  deleteAllSubmissions(@Param('slug') slug: string, @Req() req: AuthedRequest) {
+    return this.submissions.deleteAllSubmissions(slug, req.user.id);
+  }
+
+  @Post(':slug/uploads/:fieldKey')
+  @RequirePermissions('form_submissions:write')
+  @UseInterceptors(UPLOAD_INTERCEPTOR)
+  uploadFile(
+    @Param('slug') slug: string,
+    @Param('fieldKey') fieldKey: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.uploads.upload(slug, fieldKey, file, req.user.id);
+  }
+
+  /** Streams the raw file — deliberately outside the JSON envelope, like the CSV export. */
+  @Get(':slug/uploads/:uploadId')
+  @RequirePermissions('form_submissions:read')
+  async downloadFile(
+    @Param('slug') slug: string,
+    @Param('uploadId') uploadId: string,
+    @Res() res: Response,
+  ) {
+    const upload = await this.uploads.getForDownload(slug, uploadId);
+    res
+      .type(upload.mimeType)
+      .setHeader('Content-Disposition', `attachment; filename="${upload.filename.replace(/"/g, '')}"`)
+      .send(Buffer.from(upload.data));
+  }
+
   /** File download — sends raw CSV via @Res, deliberately outside the JSON envelope. */
   @Get(':slug/submissions/export')
   @RequirePermissions('form_submissions:read', 'form_submissions:execute')
@@ -120,6 +176,16 @@ export class FormsController {
       .setHeader('Content-Disposition', `attachment; filename="${slug}-submissions.csv"`)
       .send(csv);
   }
+
+  @Get(':slug/submissions/export.xlsx')
+  @RequirePermissions('form_submissions:read', 'form_submissions:execute')
+  async exportXlsx(@Param('slug') slug: string, @Req() req: AuthedRequest, @Res() res: Response) {
+    const buffer = await this.submissions.exportXlsx(slug, req.user.id);
+    res
+      .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .setHeader('Content-Disposition', `attachment; filename="${slug}-submissions.xlsx"`)
+      .send(buffer);
+  }
 }
 
 /** Anonymous fill via tokenized share links — no session, tight rate limits. */
@@ -128,6 +194,7 @@ export class PublicFormsController {
   constructor(
     private readonly forms: FormsService,
     private readonly submissions: SubmissionsService,
+    private readonly uploads: FileUploadsService,
   ) {}
 
   @Public()
@@ -147,5 +214,17 @@ export class PublicFormsController {
     @Body(new ZodValidationPipe(submissionAnswersSchema)) answers: SubmissionAnswers,
   ) {
     return this.submissions.submitPublic(token, answers);
+  }
+
+  @Public()
+  @Post(':token/uploads/:fieldKey')
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @UseInterceptors(UPLOAD_INTERCEPTOR)
+  uploadFile(
+    @Param('token') token: string,
+    @Param('fieldKey') fieldKey: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.uploads.uploadPublic(token, fieldKey, file);
   }
 }

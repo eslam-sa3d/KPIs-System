@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import { resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
+import { ApiRequestError, uploadFile } from '../lib/api-client';
 
 export const isVisible = (field: FormField, answers: SubmissionAnswers) => {
   const rule = field.visibleWhen;
@@ -27,12 +28,20 @@ function FieldInput({
   field,
   value,
   onChange,
+  uploadPath,
 }: {
   field: FormField;
   value: SubmissionAnswers[string] | undefined;
   onChange: (value: SubmissionAnswers[string]) => void;
+  uploadPath: string;
 }) {
   const id = `f-${field.key}`;
+  const [uploadState, setUploadState] = useState<{ busy: boolean; filename: string | null; error: string | null }>({
+    busy: false,
+    filename: null,
+    error: null,
+  });
+
   switch (field.type) {
     case 'long_text':
       return <textarea id={id} rows={4} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
@@ -184,6 +193,50 @@ function FieldInput({
         </ol>
       );
     }
+    case 'file': {
+      const fileField: Extract<FormField, { type: 'file' }> = field;
+
+      async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        e.target.value = ''; // allow re-picking the same filename after an error
+        if (!file) return;
+
+        if (!fileField.acceptedMimeTypes.includes(file.type)) {
+          setUploadState({ busy: false, filename: null, error: `"${file.type || 'unknown type'}" is not accepted here` });
+          return;
+        }
+        if (file.size > fileField.maxSizeMb * 1024 * 1024) {
+          setUploadState({ busy: false, filename: null, error: `file exceeds the ${fileField.maxSizeMb}MB limit` });
+          return;
+        }
+
+        setUploadState({ busy: true, filename: null, error: null });
+        try {
+          const uploaded = await uploadFile<{ id: string; filename: string }>(`${uploadPath}/${fileField.key}`, file);
+          setUploadState({ busy: false, filename: uploaded.filename, error: null });
+          onChange(uploaded.id);
+        } catch (cause) {
+          const message = cause instanceof ApiRequestError ? cause.message : 'upload failed';
+          setUploadState({ busy: false, filename: null, error: message });
+        }
+      }
+
+      const attachedName = uploadState.filename ?? (value ? 'file attached' : null);
+      return (
+        <div id={id}>
+          <input
+            type="file"
+            aria-label={fileField.label}
+            accept={fileField.acceptedMimeTypes.join(',')}
+            onChange={(e) => void onPick(e)}
+            disabled={uploadState.busy}
+          />
+          {uploadState.busy && <p className="muted">uploading…</p>}
+          {attachedName && !uploadState.busy && <p className="muted">✓ {attachedName}</p>}
+          {uploadState.error && <p role="alert" className="form-error">{uploadState.error}</p>}
+        </div>
+      );
+    }
     default:
       return <input id={id} type="text" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
   }
@@ -197,10 +250,13 @@ export function FormRenderer({
   definition,
   settings,
   onSubmit,
+  uploadPath,
 }: {
   definition: FormDefinition;
   settings: FormSettings;
   onSubmit: (answers: SubmissionAnswers) => Promise<void>;
+  /** base path for file-field uploads, e.g. "/v1/forms/:slug/uploads" or "/v1/public/forms/:token/uploads" */
+  uploadPath: string;
 }) {
   const [answers, setAnswers] = useState<SubmissionAnswers>({});
   const [error, setError] = useState<string | null>(null);
@@ -327,7 +383,7 @@ export function FormRenderer({
                 {field.required && <span aria-hidden="true" className="question-required"> *</span>}
               </label>
               {field.helpText && <p className="muted">{field.helpText}</p>}
-              <FieldInput field={field} value={answers[field.key]}
+              <FieldInput field={field} value={answers[field.key]} uploadPath={uploadPath}
                 onChange={(value) => setAnswers((a) => ({ ...a, [field.key]: value }))} />
             </div>
           ))}

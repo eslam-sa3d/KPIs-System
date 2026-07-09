@@ -37,6 +37,8 @@ function FormView() {
   const [rows, setRows] = useState<SubmissionRow[] | null>(null);
   const [summary, setSummary] = useState<ResponseSummaryData | null>(null);
   const [filter, setFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
@@ -73,6 +75,15 @@ function FormView() {
     setTimeout(() => setNotice(null), 3000);
   }
 
+  async function onDeleteAll() {
+    const count = rows?.length ?? 0;
+    if (!window.confirm(`Delete all ${count} response${count === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    const result = await api<{ deleted: number }>(`/v1/forms/${slug}/submissions`, { method: 'DELETE' });
+    setRows([]);
+    setNotice(`${result.deleted} response${result.deleted === 1 ? '' : 's'} deleted`);
+    setTimeout(() => setNotice(null), 3000);
+  }
+
   async function onDuplicate() {
     if (!detail) return;
     const copy = await api<{ slug: string }>(`/v1/forms/${detail.form.id}/duplicate`, { method: 'POST' });
@@ -89,6 +100,8 @@ function FormView() {
 
   const { definition, settings, form } = detail;
   const filteredRows = (rows ?? []).filter((row) => {
+    if (dateFrom && row.createdAt < dateFrom) return false;
+    if (dateTo && row.createdAt > `${dateTo}T23:59:59.999Z`) return false;
     if (!filter) return true;
     const haystack = [
       row.submittedBy?.displayName ?? 'anonymous',
@@ -131,7 +144,14 @@ function FormView() {
         )}
       </div>
 
-      {tab === 'form' && <FormRenderer definition={definition} settings={settings} onSubmit={onSubmit} />}
+      {tab === 'form' && (
+        <FormRenderer
+          definition={definition}
+          settings={settings}
+          onSubmit={onSubmit}
+          uploadPath={`/v1/forms/${encodeURIComponent(slug)}/uploads`}
+        />
+      )}
 
       {tab === 'submissions' && (
         <section role="tabpanel" aria-label="submissions">
@@ -142,12 +162,38 @@ function FormView() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             />
+            <span className="builder-required">
+              <label htmlFor="submissions-date-from" className="muted" style={{ fontSize: 12 }}>
+                from
+              </label>
+              <input
+                id="submissions-date-from"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+              <label htmlFor="submissions-date-to" className="muted" style={{ fontSize: 12 }}>
+                to
+              </label>
+              <input id="submissions-date-to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            </span>
             <button
               className="btn-ghost"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export`, `${slug}.csv`)}
             >
               export CSV
             </button>
+            <button
+              className="btn-ghost"
+              onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.xlsx`, `${slug}.xlsx`)}
+            >
+              export xlsx
+            </button>
+            {canModerate && (rows?.length ?? 0) > 0 && (
+              <button className="btn-ghost" onClick={onDeleteAll}>
+                delete all responses
+              </button>
+            )}
           </div>
           {notice && <p className="form-notice">{notice}</p>}
           {rows === null ? (
@@ -175,11 +221,20 @@ function FormView() {
                       const value = row.answers[f.key];
                       return (
                         <td key={f.key}>
-                          {Array.isArray(value)
-                            ? value.join(', ')
-                            : typeof value === 'object' && value !== null
-                              ? JSON.stringify(value)
-                              : String(value ?? '—')}
+                          {f.type === 'file' && typeof value === 'string' && value ? (
+                            <button
+                              className="btn-ghost"
+                              onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${value}`, f.label)}
+                            >
+                              download
+                            </button>
+                          ) : Array.isArray(value) ? (
+                            value.join(', ')
+                          ) : typeof value === 'object' && value !== null ? (
+                            JSON.stringify(value)
+                          ) : (
+                            String(value ?? '—')
+                          )}
                         </td>
                       );
                     })}
@@ -211,6 +266,7 @@ function FormView() {
                 submission={selected}
                 index={selectedIndex}
                 total={filteredRows.length}
+                slug={slug}
                 onClose={() => setSelectedRowId(null)}
                 onPrev={selectedIndex > 0 ? () => setSelectedRowId(filteredRows[selectedIndex - 1]!.id) : null}
                 onNext={

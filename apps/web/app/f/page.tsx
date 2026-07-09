@@ -43,7 +43,12 @@ function PublicForm() {
         ) : !data ? (
           <p className="muted">loading…</p>
         ) : (
-          <FormRenderer definition={data.definition} settings={data.settings} onSubmit={submit} />
+          <FormRenderer
+            definition={data.definition}
+            settings={data.settings}
+            onSubmit={submit}
+            uploadPath={`/v1/public/forms/${encodeURIComponent(token)}/uploads`}
+          />
         )}
       </div>
     </main>

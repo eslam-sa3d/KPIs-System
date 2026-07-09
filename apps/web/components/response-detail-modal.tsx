@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import type { FormDefinition, SubmissionAnswers } from '@pulse/contracts';
+import { downloadFile } from '../lib/api-client';
 
 export interface DetailedSubmission {
   id: string;
@@ -27,6 +28,7 @@ export function ResponseDetailModal({
   submission,
   index,
   total,
+  slug,
   onClose,
   onPrev,
   onNext,
@@ -35,6 +37,8 @@ export function ResponseDetailModal({
   submission: DetailedSubmission;
   index: number;
   total: number;
+  /** form slug — needed to build the authenticated file-download URL */
+  slug: string;
   onClose: () => void;
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
@@ -72,12 +76,26 @@ export function ResponseDetailModal({
         </div>
         <div className="response-modal-body">
           <dl>
-            {definition.fields.map((field) => (
-              <div key={field.key} className="response-modal-qa">
-                <dt>{field.label}</dt>
-                <dd>{formatAnswer(submission.answers[field.key])}</dd>
-              </div>
-            ))}
+            {definition.fields.map((field) => {
+              const value = submission.answers[field.key];
+              return (
+                <div key={field.key} className="response-modal-qa">
+                  <dt>{field.label}</dt>
+                  <dd>
+                    {field.type === 'file' && typeof value === 'string' && value ? (
+                      <button
+                        className="btn-ghost"
+                        onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${value}`, field.label)}
+                      >
+                        download attachment
+                      </button>
+                    ) : (
+                      formatAnswer(value)
+                    )}
+                  </dd>
+                </div>
+              );
+            })}
           </dl>
         </div>
         <div className="response-modal-footer">

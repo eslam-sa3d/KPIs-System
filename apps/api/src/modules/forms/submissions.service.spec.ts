@@ -12,6 +12,11 @@ function makePrismaStub() {
       findMany: vi.fn(),
       count: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
+    },
+    formFileUpload: {
+      findMany: vi.fn(async (): Promise<Array<{ id: string }>> => []),
+      updateMany: vi.fn(async () => ({ count: 0 })),
     },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(async (arg: unknown) =>
@@ -98,6 +103,76 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
     expect(prisma.formSubmission.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ submittedById: null }),
     });
+  });
+});
+
+describe('SubmissionsService file-answer integrity', () => {
+  const fileDefinition = formDefinitionSchema.parse({
+    title: 'attach a receipt',
+    fields: [
+      {
+        key: 'receipt',
+        label: 'Receipt',
+        type: 'file',
+        acceptedMimeTypes: ['application/pdf'],
+      },
+    ],
+  });
+
+  function makeFileFormsStub() {
+    return {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'version-1' },
+        definition: fileDefinition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+  }
+
+  it('rejects a file answer that does not reference a real upload for this form', async () => {
+    const prisma = makePrismaStub();
+    prisma.formFileUpload.findMany.mockResolvedValue([]); // upload id not found
+    const service = new SubmissionsService(prisma as never, makeFileFormsStub() as never);
+    await expect(service.submit('attach-a-receipt', { receipt: 'upload-x' }, 'user-1')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(prisma.formSubmission.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a file answer that resolves to a real upload, and links it to the new submission', async () => {
+    const prisma = makePrismaStub();
+    prisma.formFileUpload.findMany.mockResolvedValue([{ id: 'upload-x' }]);
+    const service = new SubmissionsService(prisma as never, makeFileFormsStub() as never);
+    await service.submit('attach-a-receipt', { receipt: 'upload-x' }, 'user-1');
+    expect(prisma.formSubmission.create).toHaveBeenCalledTimes(1);
+    expect(prisma.formFileUpload.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['upload-x'] } },
+      data: { submissionId: 'sub-new' },
+    });
+  });
+});
+
+describe('SubmissionsService.deleteAllSubmissions', () => {
+  it('deletes every submission on the current version and audit-logs the count', async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.deleteMany.mockResolvedValue({ count: 7 });
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never);
+
+    const result = await service.deleteAllSubmissions('demo', 'admin-1');
+
+    expect(prisma.formSubmission.deleteMany).toHaveBeenCalledWith({ where: { formVersionId: 'version-1' } });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: {
+        actorId: 'admin-1',
+        action: 'submissions.deleted_all',
+        entity: 'Form',
+        entityId: 'demo',
+        detail: { count: 7 },
+      },
+    });
+    expect(result).toEqual({ deleted: 7 });
   });
 });
 

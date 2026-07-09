@@ -28,6 +28,7 @@ model User {
   submissions  FormSubmission[]
   kpiEntries   KpiEntry[]
   auditEvents  AuditLog[]
+  fileUploads  FormFileUpload[]
 
   @@index([departmentId])
 }
@@ -168,6 +169,7 @@ model Form {
   updatedAt   DateTime @updatedAt
 
   versions    FormVersion[]
+  fileUploads FormFileUpload[]
 }
 
 /// Immutable versions: editing a published form creates a new version, so old
@@ -196,8 +198,35 @@ model FormSubmission {
   answers       Json
   createdAt     DateTime    @default(now())
 
+  fileUploads   FormFileUpload[]
+
   @@index([formVersionId, createdAt])
   @@index([submittedById])
+}
+
+/// Uploaded files for `file`-type fields. Stored as a DB blob (not object
+/// storage) — the deliberate tradeoff for an internal tool with a per-file
+/// size cap (see formFieldSchema's `file` variant, maxSizeMb) over standing
+/// up an external bucket. Uploaded ahead of the submission (the field
+/// answer is this row's id); `submissionId` is attached once the containing
+/// submission is created, and orphaned pre-submit uploads are swept below.
+model FormFileUpload {
+  id           String          @id @default(uuid())
+  formId       String
+  form         Form            @relation(fields: [formId], references: [id], onDelete: Cascade)
+  fieldKey     String
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  data         Bytes
+  uploadedById String?
+  uploadedBy   User?           @relation(fields: [uploadedById], references: [id])
+  submissionId String?
+  submission   FormSubmission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  createdAt    DateTime        @default(now())
+
+  @@index([formId])
+  @@index([submissionId])
 }
 
 // ─────────────────────────── Governance ────────────────────────────────────────

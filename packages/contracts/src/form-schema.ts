@@ -215,11 +215,12 @@ function validateSections(
           message: `branching references unknown field "${rule.onFieldKey}"`,
         });
       } else {
-        if (trigger.type !== 'select' && trigger.type !== 'rating' && trigger.type !== 'likert') {
+        const validTriggerTypes = ['select', 'multi_select', 'rating', 'likert'];
+        if (!validTriggerTypes.includes(trigger.type)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
-            message: `branching can only key off a "select", "rating", or "likert" field (got "${trigger.type}")`,
+            message: `branching can only key off a ${validTriggerTypes.map((t) => `"${t}"`).join(', ')} field (got "${trigger.type}")`,
           });
         }
         if (!section.fieldKeys.includes(rule.onFieldKey)) {

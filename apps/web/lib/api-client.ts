@@ -98,13 +98,34 @@ export async function logout(): Promise<void> {
   currentUser = null;
 }
 
-/** Authenticated file download (e.g. CSV export) — outside the JSON envelope. */
-export async function downloadFile(path: string, filename: string): Promise<void> {
+/** Multipart file upload (question attachments) — bypasses the JSON envelope's Content-Type. */
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const body = new FormData();
+  body.append('file', file);
+  const response = await fetch(`${API_URL}/api${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    body,
+  });
+  const envelope = (await response.json()) as ApiEnvelope<T>;
+  if (!envelope.success) {
+    const status = envelope.error.code === 'UNAUTHENTICATED' ? 401 : 400;
+    throw new ApiRequestError(envelope.error.code, envelope.error.message, status);
+  }
+  return envelope.data;
+}
+
+/** Authenticated file download (e.g. CSV export, an uploaded attachment) — outside the JSON envelope. */
+export async function downloadFile(path: string, fallbackFilename: string): Promise<void> {
   const response = await fetch(`${API_URL}/api${path}`, {
     credentials: 'include',
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
   });
-  if (!response.ok) throw new ApiRequestError('INTERNAL_ERROR', 'Export failed', response.status);
+  if (!response.ok) throw new ApiRequestError('INTERNAL_ERROR', 'Download failed', response.status);
+  // prefer the server's Content-Disposition filename (e.g. the uploader's original filename) when present
+  const match = response.headers.get('Content-Disposition')?.match(/filename="?([^"]+)"?/);
+  const filename = match?.[1] ?? fallbackFilename;
   const url = URL.createObjectURL(await response.blob());
   const anchor = document.createElement('a');
   anchor.href = url;

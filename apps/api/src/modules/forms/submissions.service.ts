@@ -10,6 +10,7 @@ import {
   buildPaginationMeta,
 } from '@pulse/contracts';
 import { ZodError } from 'zod';
+import * as XLSX from 'xlsx';
 import { AppError } from '../../common/app-error';
 import { paged } from '../../common/envelope.interceptor';
 import { PrismaService } from '../../infra/prisma.service';
@@ -31,14 +32,14 @@ export class SubmissionsService {
   async submit(formSlug: string, rawAnswers: SubmissionAnswers, submittedById: string) {
     const { form, version, definition, settings } = await this.forms.getLatestVersion(formSlug);
     await this.enforceSettings(form.id, settings, submittedById);
-    return this.persist(version.id, definition, rawAnswers, submittedById);
+    return this.persist(form.id, version.id, definition, rawAnswers, submittedById);
   }
 
   /** Anonymous submission via a public share link. */
   async submitPublic(token: string, rawAnswers: SubmissionAnswers) {
     const { form, version, definition, settings } = await this.forms.getByPublicToken(token);
     await this.enforceSettings(form.id, settings, null);
-    return this.persist(version.id, definition, rawAnswers, null);
+    return this.persist(form.id, version.id, definition, rawAnswers, null);
   }
 
   private async enforceSettings(
@@ -64,6 +65,7 @@ export class SubmissionsService {
   }
 
   private async persist(
+    formId: string,
     formVersionId: string,
     definition: FormDefinition,
     rawAnswers: SubmissionAnswers,
@@ -80,9 +82,34 @@ export class SubmissionsService {
       }
       throw error;
     }
-    return this.prisma.formSubmission.create({
+
+    // file answers are opaque upload ids — confirm they were actually
+    // uploaded for THIS form before trusting them (the trust boundary
+    // compileAnswerValidator can't cover, since it has no DB access)
+    const fileFieldKeys = new Set(definition.fields.filter((f) => f.type === 'file').map((f) => f.key));
+    const uploadIds = Object.entries(answers)
+      .filter(([key]) => fileFieldKeys.has(key))
+      .map(([, value]) => value as string);
+    if (uploadIds.length) {
+      const found = await this.prisma.formFileUpload.findMany({
+        where: { id: { in: uploadIds }, formId },
+        select: { id: true },
+      });
+      if (found.length !== uploadIds.length) {
+        throw AppError.validation([{ path: 'file', message: 'one or more uploaded files could not be found' }]);
+      }
+    }
+
+    const submission = await this.prisma.formSubmission.create({
       data: { formVersionId, submittedById, answers },
     });
+    if (uploadIds.length) {
+      await this.prisma.formFileUpload.updateMany({
+        where: { id: { in: uploadIds } },
+        data: { submissionId: submission.id },
+      });
+    }
+    return submission;
   }
 
   /** Paginated list with optional per-field equality filters (JSONB path query). */
@@ -237,8 +264,44 @@ export class SubmissionsService {
     return null;
   }
 
+  /** Bulk-clear every response on the current version (audited, count logged). */
+  async deleteAllSubmissions(formSlug: string, actorId: string) {
+    const { version } = await this.forms.getLatestVersion(formSlug);
+    const { count } = await this.prisma.formSubmission.deleteMany({
+      where: { formVersionId: version.id },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'submissions.deleted_all',
+        entity: 'Form',
+        entityId: formSlug,
+        detail: { count },
+      },
+    });
+    return { deleted: count };
+  }
+
   /** CSV export of all submissions for the latest version (audited). */
   async exportCsv(formSlug: string, actorId: string): Promise<string> {
+    const { header, rows } = await this.buildExportTable(formSlug, actorId);
+    return [header, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\n');
+  }
+
+  /** Same data as exportCsv, as an .xlsx workbook (audited separately). */
+  async exportXlsx(formSlug: string, actorId: string): Promise<Buffer> {
+    const { header, rows } = await this.buildExportTable(formSlug, actorId, 'submissions.exported_xlsx');
+    const sheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Responses');
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  }
+
+  private async buildExportTable(
+    formSlug: string,
+    actorId: string,
+    auditAction = 'submissions.exported',
+  ): Promise<{ header: string[]; rows: string[][] }> {
     const { version, definition } = await this.forms.getLatestVersion(formSlug);
     const submissions = await this.prisma.formSubmission.findMany({
       where: { formVersionId: version.id },
@@ -249,7 +312,7 @@ export class SubmissionsService {
     await this.prisma.auditLog.create({
       data: {
         actorId,
-        action: 'submissions.exported',
+        action: auditAction,
         entity: 'Form',
         entityId: formSlug,
         detail: { count: submissions.length },
@@ -266,7 +329,7 @@ export class SubmissionsService {
         ...keys.map((k) => serializeCsvCell(answers[k])),
       ];
     });
-    return [header, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\n');
+    return { header, rows };
   }
 }
 
