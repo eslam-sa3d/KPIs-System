@@ -25,6 +25,7 @@ export default function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const reload = useCallback(() => api<DemoDataStatus>('/v1/settings/demo-data').then(setStatus), []);
 
@@ -32,14 +33,14 @@ export default function SettingsPage() {
     if (user) void reload();
   }, [user, reload]);
 
-  async function run(method: 'POST' | 'DELETE', confirmText: string | null, successNote: string) {
-    if (confirmText && !window.confirm(confirmText)) return;
+  async function run(method: 'POST' | 'DELETE', successNote: string) {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       setStatus(await api<DemoDataStatus>('/v1/settings/demo-data', { method }));
       setNotice(successNote);
+      setConfirmRemove(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The request failed');
     } finally {
@@ -85,23 +86,25 @@ export default function SettingsPage() {
               <button
                 className="btn-primary"
                 disabled={busy || status.present}
-                onClick={() => run('POST', null, 'demo data created — check the dashboard and forms')}
+                onClick={() => run('POST', 'demo data created — check the dashboard and forms')}
               >
                 {busy ? 'working…' : 'add demo data'}
               </button>
-              <button
-                className="btn-ghost"
-                disabled={busy || !status.present}
-                onClick={() =>
-                  run(
-                    'DELETE',
-                    'Remove all demo data? Only demo-tagged records are deleted.',
-                    'demo data removed',
-                  )
-                }
-              >
-                remove demo data
-              </button>
+              {confirmRemove ? (
+                <>
+                  <span className="muted">remove all demo data? only demo-tagged records are deleted.</span>
+                  <button className="btn-ghost" disabled={busy} onClick={() => run('DELETE', 'demo data removed')}>
+                    confirm remove
+                  </button>
+                  <button className="btn-ghost" onClick={() => setConfirmRemove(false)}>
+                    cancel
+                  </button>
+                </>
+              ) : (
+                <button className="btn-ghost" disabled={busy || !status.present} onClick={() => setConfirmRemove(true)}>
+                  remove demo data
+                </button>
+              )}
             </div>
 
             {status.present && (

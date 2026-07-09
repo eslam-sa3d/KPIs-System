@@ -50,6 +50,9 @@ model Role {
   name        String  @unique
   description String?
   isSystem    Boolean @default(false) // seed roles (e.g. "admin") are protected from deletion
+  /// deactivating a role stops it granting permissions to its members without
+  /// deleting it — same pattern as User.isActive and Kpi/EvaluationArea.isActive
+  isActive    Boolean @default(true)
   createdAt   DateTime @default(now())
 
   permissions RolePermission[]

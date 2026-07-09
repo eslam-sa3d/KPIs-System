@@ -342,11 +342,32 @@ export default function DashboardPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th className="p-th-sortable" onClick={() => sortBy('name')}>name</th>
+                    <th
+                      className="p-th-sortable"
+                      aria-sort={sort.key === 'name' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
+                    >
+                      <button type="button" onClick={() => sortBy('name')}>
+                        name
+                      </button>
+                    </th>
                     <th>areas</th>
-                    <th className="p-th-sortable" onClick={() => sortBy('latestValue')}>latest</th>
+                    <th
+                      className="p-th-sortable"
+                      aria-sort={sort.key === 'latestValue' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
+                    >
+                      <button type="button" onClick={() => sortBy('latestValue')}>
+                        latest
+                      </button>
+                    </th>
                     <th>status</th>
-                    <th className="p-th-sortable" onClick={() => sortBy('updated')}>last updated</th>
+                    <th
+                      className="p-th-sortable"
+                      aria-sort={sort.key === 'updated' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
+                    >
+                      <button type="button" onClick={() => sortBy('updated')}>
+                        last updated
+                      </button>
+                    </th>
                     <th>action</th>
                   </tr>
                 </thead>
@@ -359,7 +380,21 @@ export default function DashboardPage() {
                     </tr>
                   ) : (
                     tableData.map((k) => (
-                      <tr key={k.id} onClick={() => setSelectedId(k.id)} style={{ cursor: 'pointer' }}>
+                      <tr
+                        key={k.id}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`view ${k.name}`}
+                        onClick={() => setSelectedId(k.id)}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedId(k.id);
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <td style={{ fontWeight: 500 }}>{k.name}</td>
                         <td className="muted">{k.areas.length}</td>
                         <td>

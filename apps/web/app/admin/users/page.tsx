@@ -176,6 +176,11 @@ export default function UsersAdminPage() {
         const canEditRoles = can(user, 'roles:manage') && can(user, 'users:write');
         return users === null ? (
           <p className="muted">loading…</p>
+        ) : users.length === 0 ? (
+          <div className="empty-state">
+            <h2>no users yet</h2>
+            <p className="muted">create the first account above to start granting access.</p>
+          </div>
         ) : (
           <table className="data-table">
             <thead>

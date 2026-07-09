@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CreateRoleInput, PermissionKey } from '@pulse/contracts';
+import { CreateRoleInput, PermissionKey, UpdateRoleInput } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 import { RedisService } from '../../infra/redis.service';
@@ -24,7 +24,7 @@ export class RbacService {
     if (cached) return new Set(JSON.parse(cached) as PermissionKey[]);
 
     const roles = await this.prisma.userRole.findMany({
-      where: { userId, user: { isActive: true } },
+      where: { userId, user: { isActive: true }, role: { isActive: true } },
       include: { role: { include: { permissions: { include: { permission: true } } } } },
     });
 
@@ -60,6 +60,7 @@ export class RbacService {
           name: role.name,
           description: role.description,
           isSystem: role.isSystem,
+          isActive: role.isActive,
           memberCount: role._count.users,
           permissions: role.permissions.map(({ permission, scope }) => ({
             resource: permission.resource,
@@ -129,6 +130,56 @@ export class RbacService {
     });
 
     await this.invalidateRoleMembers(roleId);
+  }
+
+  /** Admin: rename/re-describe a role, or deactivate/reactivate it. System roles are protected. */
+  async updateRole(roleId: string, input: UpdateRoleInput, actorId: string) {
+    const role = await this.prisma.role.findUnique({ where: { id: roleId } });
+    if (!role) throw AppError.notFound('Role', roleId);
+    if (role.isSystem) throw AppError.forbidden('System roles cannot be modified');
+
+    if (input.name && input.name !== role.name) {
+      const clash = await this.prisma.role.findUnique({ where: { name: input.name } });
+      if (clash) throw new AppError('CONFLICT', `Role "${input.name}" already exists`);
+    }
+
+    const updated = await this.prisma.role.update({
+      where: { id: roleId },
+      data: { name: input.name, description: input.description, isActive: input.isActive },
+    });
+
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'role.updated', entity: 'Role', entityId: roleId, detail: input },
+    });
+
+    if (input.isActive !== undefined) await this.invalidateRoleMembers(roleId);
+    return updated;
+  }
+
+  /** Admin: permanently remove a role. Blocked for system roles and roles with
+   *  members — deactivate a role with members instead so no one's access
+   *  silently changes without an explicit reassignment. */
+  async deleteRole(roleId: string, actorId: string) {
+    const role = await this.prisma.role.findUnique({
+      where: { id: roleId },
+      include: { _count: { select: { users: true } } },
+    });
+    if (!role) throw AppError.notFound('Role', roleId);
+    if (role.isSystem) throw AppError.forbidden('System roles cannot be deleted');
+    if (role._count.users > 0) {
+      throw new AppError(
+        'CONFLICT',
+        `"${role.name}" has ${role._count.users} member(s) — deactivate it instead, or remove its members first`,
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.rolePermission.deleteMany({ where: { roleId } }),
+      this.prisma.role.delete({ where: { id: roleId } }),
+      this.prisma.auditLog.create({
+        data: { actorId, action: 'role.deleted', entity: 'Role', entityId: roleId, detail: { name: role.name } },
+      }),
+    ]);
   }
 
   async assignRoleToUser(userId: string, roleId: string, actorId: string) {

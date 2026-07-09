@@ -1,5 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Req } from '@nestjs/common';
-import { ACTIONS, CreateRoleInput, RESOURCES, createRoleSchema } from '@pulse/contracts';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req } from '@nestjs/common';
+import {
+  ACTIONS,
+  CreateRoleInput,
+  RESOURCES,
+  UpdateRoleInput,
+  createRoleSchema,
+  updateRoleSchema,
+} from '@pulse/contracts';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from './require-permissions.decorator';
 import { RbacService } from './rbac.service';
@@ -28,6 +35,22 @@ export class RolesController {
     @Req() req: { user: { id: string } },
   ) {
     return this.rbac.createRole(input, req.user.id);
+  }
+
+  @Patch(':roleId')
+  @RequirePermissions('roles:manage')
+  updateRole(
+    @Param('roleId') roleId: string,
+    @Body(new ZodValidationPipe(updateRoleSchema)) input: UpdateRoleInput,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.rbac.updateRole(roleId, input, req.user.id);
+  }
+
+  @Delete(':roleId')
+  @RequirePermissions('roles:manage')
+  deleteRole(@Param('roleId') roleId: string, @Req() req: { user: { id: string } }) {
+    return this.rbac.deleteRole(roleId, req.user.id);
   }
 
   @Put(':roleId/permissions')

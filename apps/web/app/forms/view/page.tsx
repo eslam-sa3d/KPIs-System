@@ -51,6 +51,8 @@ function FormView() {
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [fieldFilter, setFieldFilter] = useState<{ key: string; label: string; value: string } | null>(null);
+  const [confirmDeleteRowId, setConfirmDeleteRowId] = useState<string | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   const reloadDetail = useCallback(() => {
     if (slug) void api<FormDetail>(`/v1/forms/${encodeURIComponent(slug)}`).then(setDetail);
@@ -102,18 +104,17 @@ function FormView() {
   }
 
   async function onDelete(submissionId: string) {
-    if (!window.confirm('Delete this submission? This cannot be undone.')) return;
     await api(`/v1/forms/${slug}/submissions/${submissionId}`, { method: 'DELETE' });
     setRows((current) => (current ? current.filter((r) => r.id !== submissionId) : current));
+    setConfirmDeleteRowId(null);
     setNotice('submission deleted');
     setTimeout(() => setNotice(null), 3000);
   }
 
   async function onDeleteAll() {
-    const count = rows?.length ?? 0;
-    if (!window.confirm(`Delete all ${count} response${count === 1 ? '' : 's'}? This cannot be undone.`)) return;
     const result = await api<{ deleted: number }>(`/v1/forms/${slug}/submissions`, { method: 'DELETE' });
     setRows([]);
+    setConfirmDeleteAll(false);
     setNotice(`${result.deleted} response${result.deleted === 1 ? '' : 's'} deleted`);
     setTimeout(() => setNotice(null), 3000);
   }
@@ -243,11 +244,23 @@ function FormView() {
             >
               export PPTX
             </button>
-            {canModerate && (rows?.length ?? 0) > 0 && (
-              <button className="btn-ghost" onClick={onDeleteAll}>
-                delete all responses
-              </button>
-            )}
+            {canModerate &&
+              (rows?.length ?? 0) > 0 &&
+              (confirmDeleteAll ? (
+                <>
+                  <span className="muted">delete all {rows?.length ?? 0} responses?</span>
+                  <button className="btn-ghost" onClick={onDeleteAll}>
+                    confirm delete all
+                  </button>
+                  <button className="btn-ghost" onClick={() => setConfirmDeleteAll(false)}>
+                    cancel
+                  </button>
+                </>
+              ) : (
+                <button className="btn-ghost" onClick={() => setConfirmDeleteAll(true)}>
+                  delete all responses
+                </button>
+              ))}
           </div>
           {notice && <p className="form-notice">{notice}</p>}
           {rows === null ? (
@@ -309,11 +322,21 @@ function FormView() {
                         <button className="btn-ghost" onClick={() => setSelectedRowId(row.id)}>
                           view
                         </button>
-                        {canModerate && (
-                          <button className="btn-ghost" onClick={() => onDelete(row.id)}>
-                            delete
-                          </button>
-                        )}
+                        {canModerate &&
+                          (confirmDeleteRowId === row.id ? (
+                            <>
+                              <button className="btn-ghost" onClick={() => onDelete(row.id)}>
+                                confirm
+                              </button>
+                              <button className="btn-ghost" onClick={() => setConfirmDeleteRowId(null)}>
+                                cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button className="btn-ghost" onClick={() => setConfirmDeleteRowId(row.id)}>
+                              delete
+                            </button>
+                          ))}
                       </span>
                     </td>
                   </tr>

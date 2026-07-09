@@ -108,3 +108,118 @@ describe('RbacService role assignment', () => {
     expect(redis.store.has('rbac:perms:user-1')).toBe(false);
   });
 });
+
+describe('RbacService.updateRole / deleteRole', () => {
+  let redis: ReturnType<typeof makeRedisStub>;
+  let prisma: {
+    role: {
+      findUnique: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+    };
+    rolePermission: { deleteMany: ReturnType<typeof vi.fn> };
+    userRole: { findMany: ReturnType<typeof vi.fn> };
+    auditLog: { create: ReturnType<typeof vi.fn> };
+    $transaction: ReturnType<typeof vi.fn>;
+  };
+  let service: RbacService;
+
+  beforeEach(() => {
+    redis = makeRedisStub();
+    prisma = {
+      role: {
+        findUnique: vi.fn(),
+        update: vi.fn().mockResolvedValue({ id: 'role-1', name: 'renamed' }),
+        delete: vi.fn().mockResolvedValue({}),
+      },
+      rolePermission: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      userRole: { findMany: vi.fn().mockResolvedValue([]) },
+      auditLog: { create: vi.fn().mockResolvedValue({}) },
+      $transaction: vi.fn((ops: Array<Promise<unknown>>) => Promise.all(ops)),
+    };
+    service = new RbacService(prisma as never, redis as never);
+  });
+
+  it('updateRole renames a non-system role and audit-logs it', async () => {
+    prisma.role.findUnique
+      .mockResolvedValueOnce({ id: 'role-1', name: 'old', isSystem: false })
+      .mockResolvedValueOnce(null);
+
+    await service.updateRole('role-1', { name: 'renamed' }, 'admin-1');
+
+    expect(prisma.role.update).toHaveBeenCalledWith({
+      where: { id: 'role-1' },
+      data: { name: 'renamed', description: undefined, isActive: undefined },
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'role.updated', entityId: 'role-1' }) }),
+    );
+  });
+
+  it('updateRole rejects renaming a system role', async () => {
+    prisma.role.findUnique.mockResolvedValue({ id: 'role-1', name: 'admin', isSystem: true });
+
+    await expect(service.updateRole('role-1', { name: 'x' }, 'admin-1')).rejects.toThrow(
+      'System roles cannot be modified',
+    );
+    expect(prisma.role.update).not.toHaveBeenCalled();
+  });
+
+  it('updateRole rejects a name that collides with another role', async () => {
+    prisma.role.findUnique
+      .mockResolvedValueOnce({ id: 'role-1', name: 'old', isSystem: false })
+      .mockResolvedValueOnce({ id: 'role-2', name: 'taken' });
+
+    await expect(service.updateRole('role-1', { name: 'taken' }, 'admin-1')).rejects.toThrow('already exists');
+  });
+
+  it('updateRole invalidates every member cache when toggling isActive', async () => {
+    prisma.role.findUnique.mockResolvedValue({ id: 'role-1', name: 'x', isSystem: false });
+    prisma.userRole.findMany.mockResolvedValue([{ userId: 'user-1' }, { userId: 'user-2' }]);
+    redis.store.set('rbac:perms:user-1', '[]');
+    redis.store.set('rbac:perms:user-2', '[]');
+
+    await service.updateRole('role-1', { isActive: false }, 'admin-1');
+
+    expect(redis.store.has('rbac:perms:user-1')).toBe(false);
+    expect(redis.store.has('rbac:perms:user-2')).toBe(false);
+  });
+
+  it('deleteRole removes a role with no members and audit-logs it', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role-1',
+      name: 'temp',
+      isSystem: false,
+      _count: { users: 0 },
+    });
+
+    await service.deleteRole('role-1', 'admin-1');
+
+    expect(prisma.role.delete).toHaveBeenCalledWith({ where: { id: 'role-1' } });
+    expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  it('deleteRole rejects a system role', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role-1',
+      name: 'admin',
+      isSystem: true,
+      _count: { users: 3 },
+    });
+
+    await expect(service.deleteRole('role-1', 'admin-1')).rejects.toThrow('cannot be deleted');
+    expect(prisma.role.delete).not.toHaveBeenCalled();
+  });
+
+  it('deleteRole rejects a role that still has members', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role-1',
+      name: 'qa-lead',
+      isSystem: false,
+      _count: { users: 2 },
+    });
+
+    await expect(service.deleteRole('role-1', 'admin-1')).rejects.toThrow('member');
+    expect(prisma.role.delete).not.toHaveBeenCalled();
+  });
+});
