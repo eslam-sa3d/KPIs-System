@@ -97,6 +97,15 @@ export function FormSettingsPanel({
         shuffle page order per respondent (only takes effect on forms whose pages have no branching rules)
       </label>
 
+      <label className="check-item">
+        <input
+          type="checkbox"
+          checked={draft.showProgressBar}
+          onChange={(e) => setDraft((d) => ({ ...d, showProgressBar: e.target.checked }))}
+        />
+        show a progress bar across pages (only applies to multi-page forms)
+      </label>
+
       <label htmlFor="fs-max-responses">stop accepting responses after (optional)</label>
       <input
         id="fs-max-responses"

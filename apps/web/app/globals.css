@@ -1340,6 +1340,9 @@ h1, h2, h3 {
   overflow: hidden;
   background: var(--color-surface);
   color: var(--color-text);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .msform-fill .msform-banner::before {
@@ -1350,30 +1353,24 @@ h1, h2, h3 {
   background: var(--msform-accent, var(--pulse-purple));
 }
 
-.msform-fill .msform-banner p {
-  color: var(--color-text-muted);
-}
-
-/* a custom background image keeps the previous photo-header treatment —
-   it already reads fine as-is and isn't part of the "no image" makeover */
-.msform-fill .msform-banner.msform-banner-image {
-  background: linear-gradient(
-    135deg,
-    var(--msform-accent, var(--pulse-purple)) 0%,
-    color-mix(in srgb, var(--msform-accent, var(--pulse-purple)) 55%, white) 100%
-  );
+/* a custom background image is its own band at the top of the card — Google's actual
+   image-header layout — instead of the old text-blended-over-photo treatment */
+.msform-fill .msform-banner-image {
+  height: 160px;
   background-size: cover;
   background-position: center;
-  background-blend-mode: multiply;
-  color: var(--pulse-air);
 }
 
-.msform-fill .msform-banner.msform-banner-image::before {
+.msform-fill .msform-banner-has-image::before {
   content: none;
 }
 
-.msform-fill .msform-banner.msform-banner-image p {
-  color: var(--pulse-silver-light);
+.msform-fill .msform-banner-body {
+  padding: var(--space-8);
+}
+
+.msform-fill .msform-banner-body p {
+  color: var(--color-text-muted);
 }
 
 .msform-fill .msform-page-head {
@@ -1411,6 +1408,17 @@ h1, h2, h3 {
   padding-left: var(--space-3);
 }
 
+.msform-fill .question-card-invalid {
+  border-color: var(--pulse-coral);
+  box-shadow: 0 0 0 1px var(--pulse-coral);
+}
+
+.msform-fill .field-error {
+  color: var(--pulse-coral);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
 /* underline-style short-answer/paragraph/number/date inputs, Google Forms'
    most recognizable input trait — select/file/range keep their boxed style */
 .msform-fill .fill-form input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
@@ -1433,24 +1441,51 @@ h1, h2, h3 {
   border-radius: var(--radius-md);
 }
 
-/* rating/NPS pills → circular, closer to Google's linear-scale look */
-.msform-fill .scale-pill {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  min-height: 40px;
-  padding: 0;
-  border-radius: 50%;
-  display: inline-flex;
+/* rating/NPS: a number caption above a plain radio — Google's actual linear-scale
+   layout, not a number rendered inside the clickable control itself */
+.msform-fill .scale-option {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.msform-fill .scale-option-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.msform-fill .scale-row {
+  align-items: flex-end;
 }
 
 .msform-fill .btn-primary,
 .msform-fill .btn-ghost {
-  border-radius: 999px;
+  border-radius: 8px;
   padding-left: var(--space-6);
   padding-right: var(--space-6);
+}
+
+.msform-fill .btn-link {
+  background: none;
+  border: none;
+  color: var(--msform-accent, var(--color-primary));
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  padding: var(--space-2) var(--space-1);
+}
+
+.msform-fill .btn-link:hover {
+  text-decoration: underline;
+}
+
+.msform-fill .page-title-row-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .msform-fill input[type='radio'],
@@ -1461,8 +1496,149 @@ h1, h2, h3 {
 }
 
 .msform-fill .check-item {
-  padding: var(--space-2) 0;
+  position: relative;
+  padding: var(--space-2);
   gap: var(--space-3);
+  border-radius: var(--radius-sm);
+  transition: background 120ms ease;
+}
+
+.msform-fill .check-item:hover {
+  background: color-mix(in srgb, var(--msform-accent, var(--color-primary)) 6%, transparent);
+}
+
+/* custom-drawn radio/checkbox — the native input stays functionally in charge
+   (visually hidden, not removed), so focus/keyboard/screen-reader behavior is
+   exactly the native element's; see ControlWrap in form-renderer.tsx. */
+.msform-fill .control-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.msform-fill .control-wrap input[type='radio'],
+.msform-fill .control-wrap input[type='checkbox'] {
+  position: absolute;
+  inset: 0;
+  width: 20px;
+  height: 20px;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.msform-fill .control-radio,
+.msform-fill .control-checkbox {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.msform-fill .control-radio {
+  border-radius: 50%;
+}
+
+.msform-fill .control-checkbox {
+  border-radius: 4px;
+}
+
+.msform-fill .control-wrap input:checked ~ .control-radio,
+.msform-fill .control-wrap input:checked ~ .control-checkbox {
+  border-color: var(--msform-accent, var(--color-primary));
+}
+
+.msform-fill .control-radio::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--msform-accent, var(--color-primary));
+  transform: scale(0);
+  transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.msform-fill .control-wrap input:checked ~ .control-radio::after {
+  transform: scale(1);
+}
+
+.msform-fill .control-wrap input:checked ~ .control-checkbox {
+  background: var(--msform-accent, var(--color-primary));
+}
+
+.msform-fill .control-checkbox::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 6px;
+  height: 11px;
+  border: solid var(--pulse-air);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 120ms ease 20ms;
+}
+
+.msform-fill .control-wrap input:checked ~ .control-checkbox::after {
+  transform: rotate(45deg) scale(1);
+}
+
+.msform-fill .control-wrap input:focus-visible ~ .control-radio,
+.msform-fill .control-wrap input:focus-visible ~ .control-checkbox {
+  outline: 2px solid var(--msform-accent, var(--color-primary));
+  outline-offset: 2px;
+}
+
+/* ripple: a centered pulse on click, not a true click-origin ripple (which needs
+   pointer-position JS) — a disclosed approximation of Google's Material ripple */
+.msform-fill .control-radio::before,
+.msform-fill .control-checkbox::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: var(--msform-accent, var(--color-primary));
+  opacity: 0;
+  transform: scale(0);
+  pointer-events: none;
+}
+
+.msform-fill .control-wrap input:active ~ .control-radio::before,
+.msform-fill .control-wrap input:active ~ .control-checkbox::before {
+  animation: msform-ripple 400ms ease-out;
+}
+
+@keyframes msform-ripple {
+  from {
+    opacity: 0.28;
+    transform: scale(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msform-fill .control-radio::after,
+  .msform-fill .control-checkbox::after,
+  .msform-fill .control-radio::before,
+  .msform-fill .control-checkbox::before {
+    transition: none;
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .msform-fill .msform-banner-body {
+    padding: var(--space-4);
+  }
 }
 
 .quiz-score {
