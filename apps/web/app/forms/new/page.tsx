@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { BRANCH_TRIGGER_TYPES, CONDITION_OPERATORS, END_OF_FORM, FORM_FONT_FAMILIES, type FieldType } from '@pulse/contracts';
 import { palette } from '@pulse/theme';
 
@@ -37,6 +37,25 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'contact_info', label: 'contact info (name / email / phone)' },
   { value: 'hot_spot', label: 'hot spot (click a region on an image)' },
 ];
+
+const FIELD_TYPE_ICON: Record<FieldType, string> = {
+  short_text: '—',
+  long_text: '☰',
+  number: '#',
+  date: '📅',
+  boolean: '◐',
+  rating: '★',
+  nps: '📊',
+  select: '◉',
+  multi_select: '☑',
+  likert: '▤',
+  ranking: '↕',
+  file: '📎',
+  section_header: 'Tt',
+  slider: '🎚',
+  contact_info: '👤',
+  hot_spot: '⌖',
+};
 
 const parseList = (raw: string) =>
   raw.split(',').map((s) => s.trim()).filter(Boolean);
@@ -395,6 +414,10 @@ export default function NewFormPage() {
   const [description, setDescription] = useState('');
   const [fields, setFields] = useState<DraftField[]>([]);
   const [activeFieldIndex, setActiveFieldIndex] = useState<number | null>(null);
+  const [dragFieldIndex, setDragFieldIndex] = useState<number | null>(null);
+  const [dragOverFieldIndex, setDragOverFieldIndex] = useState<number | null>(null);
+  const fieldRefs = useRef<Array<HTMLFieldSetElement | null>>([]);
+  const [toolbarTop, setToolbarTop] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [published, setPublished] = useState<{ slug: string } | null>(null);
   const [sectionsEnabled, setSectionsEnabled] = useState(false);
@@ -606,6 +629,26 @@ export default function NewFormPage() {
     setActiveFieldIndex(fields.length);
     setFields((current) => [...current, { ...emptyField(), ...overrides }]);
   }
+
+  function reorderFieldByDrag(from: number, to: number) {
+    setFields((current) => {
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved!);
+      return next;
+    });
+    setActiveFieldIndex(to);
+  }
+
+  useLayoutEffect(() => {
+    function recomputeToolbarTop() {
+      const el = fieldRefs.current[activeFieldIndex ?? 0];
+      if (el) setToolbarTop(el.offsetTop);
+    }
+    recomputeToolbarTop();
+    window.addEventListener('resize', recomputeToolbarTop);
+    return () => window.removeEventListener('resize', recomputeToolbarTop);
+  }, [activeFieldIndex, fields.length]);
 
   async function onImportExcel(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -923,15 +966,52 @@ export default function NewFormPage() {
           return (
           <fieldset
             key={index}
-            className={`builder-field question-card${isActive ? ' is-active' : ''}`}
+            ref={(el) => {
+              fieldRefs.current[index] = el;
+            }}
+            className={`builder-field question-card${isActive ? ' is-active' : ''}${
+              dragFieldIndex === index ? ' is-dragging' : ''
+            }${dragOverFieldIndex === index && dragFieldIndex !== index ? ' is-drag-over' : ''}`}
             onFocus={() => setActiveFieldIndex(index)}
             onClick={() => setActiveFieldIndex(index)}
+            onDragOver={(e) => {
+              if (dragFieldIndex === null) return;
+              e.preventDefault();
+              setDragOverFieldIndex(index);
+            }}
+            onDragLeave={() => setDragOverFieldIndex((current) => (current === index ? null : current))}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragFieldIndex !== null && dragFieldIndex !== index) {
+                reorderFieldByDrag(dragFieldIndex, index);
+              }
+              setDragFieldIndex(null);
+              setDragOverFieldIndex(null);
+            }}
           >
             <legend className="field-legend">
               <span className="question-number">{index + 1}</span>
             </legend>
 
             <div className="field-head-row">
+              <button
+                type="button"
+                className="field-drag-handle"
+                draggable
+                title="drag to reorder"
+                aria-label="drag to reorder"
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  setDragFieldIndex(index);
+                  setActiveFieldIndex(index);
+                }}
+                onDragEnd={() => {
+                  setDragFieldIndex(null);
+                  setDragOverFieldIndex(null);
+                }}
+              >
+                ⠿
+              </button>
               <div className="field-title-group">
                 <label htmlFor={`field-label-${index}`}>field label</label>
                 <input
@@ -944,18 +1024,32 @@ export default function NewFormPage() {
               </div>
               <div className="field-type-group">
                 <label htmlFor={`field-type-${index}`}>field type</label>
-                <select
-                  id={`field-type-${index}`}
-                  className="field-type-select"
-                  value={field.type}
-                  onChange={(e) => updateField(index, { type: e.target.value as FieldType })}
-                >
-                  {FIELD_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <details className="field-type-dropdown">
+                  <summary id={`field-type-${index}`} className="field-type-summary">
+                    <span className="field-type-icon">{FIELD_TYPE_ICON[field.type]}</span>
+                    <span className="field-type-summary-label">
+                      {FIELD_TYPE_OPTIONS.find((option) => option.value === field.type)?.label}
+                    </span>
+                  </summary>
+                  <div className="field-type-menu" role="listbox" aria-label="field type">
+                    {FIELD_TYPE_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="option"
+                        aria-selected={field.type === option.value}
+                        className={`field-type-option${field.type === option.value ? ' is-selected' : ''}`}
+                        onClick={(e) => {
+                          updateField(index, { type: option.value });
+                          e.currentTarget.closest('details')?.removeAttribute('open');
+                        }}
+                      >
+                        <span className="field-type-icon">{FIELD_TYPE_ICON[option.value]}</span>
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </details>
               </div>
               {!isActive && (
                 <button
@@ -1105,13 +1199,55 @@ export default function NewFormPage() {
 
             {(field.type === 'select' || field.type === 'multi_select' || field.type === 'ranking') && (
               <>
-                <label htmlFor={`field-options-${index}`}>options (comma-separated)</label>
-                <input
-                  id={`field-options-${index}`}
-                  value={field.options}
-                  onChange={(e) => updateField(index, { options: e.target.value })}
-                  placeholder="red, amber, green"
-                />
+                <label>options</label>
+                <div className="option-rows">
+                  {parseList(field.options).map((optionValue, optionIndex) => (
+                    <div key={optionIndex} className="option-row">
+                      <span
+                        className={`option-row-mark${
+                          field.type === 'multi_select' ? ' is-checkbox' : field.type === 'ranking' ? ' is-rank' : ''
+                        }`}
+                      >
+                        {field.type === 'ranking' ? optionIndex + 1 : ''}
+                      </span>
+                      <input
+                        value={optionValue}
+                        onChange={(e) => {
+                          const list = parseList(field.options);
+                          list[optionIndex] = e.target.value;
+                          updateField(index, { options: list.join(', ') });
+                        }}
+                        placeholder={`option ${optionIndex + 1}`}
+                      />
+                      <button
+                        type="button"
+                        className="option-row-remove"
+                        title="remove option"
+                        aria-label={`remove option ${optionIndex + 1}`}
+                        onClick={() => {
+                          const list = parseList(field.options).filter((_, i) => i !== optionIndex);
+                          updateField(index, { options: list.join(', ') });
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="option-row-add"
+                    onClick={() => {
+                      const list = parseList(field.options);
+                      list.push(`option ${list.length + 1}`);
+                      updateField(index, { options: list.join(', ') });
+                    }}
+                  >
+                    <span
+                      className={`option-row-mark${field.type === 'multi_select' ? ' is-checkbox' : ''}`}
+                    />
+                    add option{field.type === 'select' && field.allowOther ? ' or add "other"' : ''}
+                  </button>
+                </div>
                 <span className="builder-required">
                   <input
                     id={`field-shuffle-${index}`}
@@ -1568,21 +1704,47 @@ export default function NewFormPage() {
                 </span>
               )}
 
-              <div className="field-actions-secondary">
-                <button type="button" className="btn-ghost" title="move up" aria-label={`move question ${index + 1} up`}
-                  disabled={index === 0} onClick={() => moveField(index, -1)}>
-                  ↑
-                </button>
-                <button type="button" className="btn-ghost" title="move down" aria-label={`move question ${index + 1} down`}
-                  disabled={index === fields.length - 1} onClick={() => moveField(index, 1)}>
-                  ↓
-                </button>
-                {sectionsEnabled && (
-                  <button type="button" className="btn-ghost" title="split into a new page here" aria-label="split into a new page here" onClick={() => splitPageHere(index)}>
-                    ⏎
+              <details className="field-kebab">
+                <summary className="field-kebab-summary" aria-label="more actions" title="more actions">
+                  ⋮
+                </summary>
+                <div className="field-kebab-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={index === 0}
+                    onClick={(e) => {
+                      moveField(index, -1);
+                      e.currentTarget.closest('details')?.removeAttribute('open');
+                    }}
+                  >
+                    ↑ move up
                   </button>
-                )}
-              </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={index === fields.length - 1}
+                    onClick={(e) => {
+                      moveField(index, 1);
+                      e.currentTarget.closest('details')?.removeAttribute('open');
+                    }}
+                  >
+                    ↓ move down
+                  </button>
+                  {sectionsEnabled && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={(e) => {
+                        splitPageHere(index);
+                        e.currentTarget.closest('details')?.removeAttribute('open');
+                      }}
+                    >
+                      ⏎ split into a new page here
+                    </button>
+                  )}
+                </div>
+              </details>
             </div>
 
             </div>
@@ -1600,7 +1762,7 @@ export default function NewFormPage() {
         </button>
         </div>
 
-        <aside className="builder-toolbar" aria-label="add to form">
+        <aside className="builder-toolbar" aria-label="add to form" style={{ top: toolbarTop }}>
           <button
             type="button"
             className="btn-ghost"
