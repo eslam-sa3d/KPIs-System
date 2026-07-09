@@ -5,12 +5,14 @@ import {
   KpiAssignmentInput,
   PageQuery,
   RecordEvaluationAreaEntryInput,
+  UpdateEvaluationAreaEntryInput,
   UpdateEvaluationAreaInput,
   UpdateKpiInput,
   createEvaluationAreaSchema,
   createKpiSchema,
   kpiAssignmentSchema,
   recordEvaluationAreaEntrySchema,
+  updateEvaluationAreaEntrySchema,
   updateEvaluationAreaSchema,
   updateKpiSchema,
 } from '@pulse/contracts';
@@ -26,8 +28,8 @@ export class KpisController {
 
   @Post()
   @RequirePermissions('kpis:write')
-  create(@Body(new ZodValidationPipe(createKpiSchema)) input: CreateKpiInput) {
-    return this.kpis.createKpi(input);
+  create(@Body(new ZodValidationPipe(createKpiSchema)) input: CreateKpiInput, @Req() req: AuthedRequest) {
+    return this.kpis.createKpi(input, req.user.id);
   }
 
   @Get()
@@ -45,14 +47,18 @@ export class KpisController {
 
   @Patch(':id')
   @RequirePermissions('kpis:write')
-  update(@Param('id') id: string, @Body(new ZodValidationPipe(updateKpiSchema)) input: UpdateKpiInput) {
-    return this.kpis.updateKpi(id, input);
+  update(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateKpiSchema)) input: UpdateKpiInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpis.updateKpi(id, input, req.user.id);
   }
 
   @Delete(':id')
   @RequirePermissions('kpis:manage')
-  remove(@Param('id') id: string) {
-    return this.kpis.deleteKpi(id);
+  remove(@Param('id') id: string, @Req() req: AuthedRequest) {
+    return this.kpis.deleteKpi(id, req.user.id);
   }
 
   @Post(':kpiId/assignments')
@@ -70,8 +76,9 @@ export class KpisController {
   createArea(
     @Param('kpiId') kpiId: string,
     @Body(new ZodValidationPipe(createEvaluationAreaSchema)) input: CreateEvaluationAreaInput,
+    @Req() req: AuthedRequest,
   ) {
-    return this.kpis.createEvaluationArea(kpiId, input);
+    return this.kpis.createEvaluationArea(kpiId, input, req.user.id);
   }
 
   @Patch(':kpiId/areas/:areaId')
@@ -80,14 +87,15 @@ export class KpisController {
     @Param('kpiId') kpiId: string,
     @Param('areaId') areaId: string,
     @Body(new ZodValidationPipe(updateEvaluationAreaSchema)) input: UpdateEvaluationAreaInput,
+    @Req() req: AuthedRequest,
   ) {
-    return this.kpis.updateEvaluationArea(kpiId, areaId, input);
+    return this.kpis.updateEvaluationArea(kpiId, areaId, input, req.user.id);
   }
 
   @Delete(':kpiId/areas/:areaId')
   @RequirePermissions('kpis:manage')
-  removeArea(@Param('kpiId') kpiId: string, @Param('areaId') areaId: string) {
-    return this.kpis.deleteEvaluationArea(kpiId, areaId);
+  removeArea(@Param('kpiId') kpiId: string, @Param('areaId') areaId: string, @Req() req: AuthedRequest) {
+    return this.kpis.deleteEvaluationArea(kpiId, areaId, req.user.id);
   }
 
   @Post(':kpiId/areas/:areaId/entries')
@@ -99,6 +107,29 @@ export class KpisController {
     @Req() req: AuthedRequest,
   ) {
     return this.kpis.recordEntry(kpiId, areaId, input, req.user.id);
+  }
+
+  @Patch(':kpiId/areas/:areaId/entries/:entryId')
+  @RequirePermissions('kpi_entries:write')
+  updateEntry(
+    @Param('kpiId') kpiId: string,
+    @Param('areaId') areaId: string,
+    @Param('entryId') entryId: string,
+    @Body(new ZodValidationPipe(updateEvaluationAreaEntrySchema)) input: UpdateEvaluationAreaEntryInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpis.updateEntry(kpiId, areaId, entryId, input, req.user.id);
+  }
+
+  @Delete(':kpiId/areas/:areaId/entries/:entryId')
+  @RequirePermissions('kpi_entries:manage')
+  removeEntry(
+    @Param('kpiId') kpiId: string,
+    @Param('areaId') areaId: string,
+    @Param('entryId') entryId: string,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpis.deleteEntry(kpiId, areaId, entryId, req.user.id);
   }
 
   @Get(':kpiId/areas/:areaId/series')

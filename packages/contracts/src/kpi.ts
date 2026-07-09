@@ -64,3 +64,13 @@ export const recordEvaluationAreaEntrySchema = z
   });
 
 export type RecordEvaluationAreaEntryInput = z.infer<typeof recordEvaluationAreaEntrySchema>;
+
+/** Correcting a mis-entered score — only the value/note, not who or which
+ *  period it's for (that's the entry's identity; move it by deleting and
+ *  re-recording instead). */
+export const updateEvaluationAreaEntrySchema = z.object({
+  value: z.number().min(0).max(5).optional(),
+  note: z.string().max(1000).optional(),
+});
+
+export type UpdateEvaluationAreaEntryInput = z.infer<typeof updateEvaluationAreaEntrySchema>;

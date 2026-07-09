@@ -6,6 +6,7 @@ import {
   PAGE_DEFAULTS,
   PageQuery,
   RecordEvaluationAreaEntryInput,
+  UpdateEvaluationAreaEntryInput,
   UpdateEvaluationAreaInput,
   UpdateKpiInput,
   buildPaginationMeta,
@@ -27,21 +28,46 @@ const RECENT_ENTRIES_TAKE = 12;
 export class KpisService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createKpi(input: CreateKpiInput) {
-    return this.prisma.kpi.create({ data: input });
+  async createKpi(input: CreateKpiInput, actorId: string) {
+    const kpi = await this.prisma.kpi.create({ data: input });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'kpi.created', entity: 'Kpi', entityId: kpi.id, detail: input },
+    });
+    return kpi;
   }
 
-  async updateKpi(id: string, input: UpdateKpiInput) {
+  async updateKpi(id: string, input: UpdateKpiInput, actorId: string) {
     const kpi = await this.prisma.kpi.findUnique({ where: { id } });
     if (!kpi) throw AppError.notFound('KPI', id);
-    return this.prisma.kpi.update({ where: { id }, data: input });
+    const updated = await this.prisma.kpi.update({ where: { id }, data: input });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'kpi.updated', entity: 'Kpi', entityId: id, detail: input },
+    });
+    return updated;
   }
 
-  /** Hard delete — cascades to its Evaluation Areas, their entries, and assignments. */
-  async deleteKpi(id: string) {
-    const kpi = await this.prisma.kpi.findUnique({ where: { id } });
+  /** Hard delete — cascades to its Evaluation Areas, their entries, and
+   *  assignments. Blocked once any entry has ever been recorded under it, so
+   *  scored history can't be silently destroyed — deactivate instead. */
+  async deleteKpi(id: string, actorId: string) {
+    const kpi = await this.prisma.kpi.findUnique({
+      where: { id },
+      include: { evaluationAreas: { include: { _count: { select: { entries: true } } } } },
+    });
     if (!kpi) throw AppError.notFound('KPI', id);
+
+    const entryCount = kpi.evaluationAreas.reduce((sum, area) => sum + area._count.entries, 0);
+    if (entryCount > 0) {
+      throw new AppError(
+        'CONFLICT',
+        `"${kpi.name}" has ${entryCount} recorded score(s) across its evaluation areas — deactivate it instead`,
+      );
+    }
+
     await this.prisma.kpi.delete({ where: { id } });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'kpi.deleted', entity: 'Kpi', entityId: id, detail: { name: kpi.name } },
+    });
     return null;
   }
 
@@ -131,23 +157,56 @@ export class KpisService {
     });
   }
 
-  async createEvaluationArea(kpiId: string, input: CreateEvaluationAreaInput) {
+  async createEvaluationArea(kpiId: string, input: CreateEvaluationAreaInput, actorId: string) {
     const kpi = await this.prisma.kpi.findUnique({ where: { id: kpiId } });
     if (!kpi) throw AppError.notFound('KPI', kpiId);
-    return this.prisma.evaluationArea.create({ data: { kpiId, ...input } });
+    const area = await this.prisma.evaluationArea.create({ data: { kpiId, ...input } });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'evaluation_area.created', entity: 'EvaluationArea', entityId: area.id, detail: input },
+    });
+    return area;
   }
 
-  async updateEvaluationArea(kpiId: string, areaId: string, input: UpdateEvaluationAreaInput) {
+  async updateEvaluationArea(
+    kpiId: string,
+    areaId: string,
+    input: UpdateEvaluationAreaInput,
+    actorId: string,
+  ) {
     const area = await this.prisma.evaluationArea.findFirst({ where: { id: areaId, kpiId } });
     if (!area) throw AppError.notFound('Evaluation area', areaId);
-    return this.prisma.evaluationArea.update({ where: { id: areaId }, data: input });
+    const updated = await this.prisma.evaluationArea.update({ where: { id: areaId }, data: input });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'evaluation_area.updated', entity: 'EvaluationArea', entityId: areaId, detail: input },
+    });
+    return updated;
   }
 
-  /** Hard delete — cascades to its entries. */
-  async deleteEvaluationArea(kpiId: string, areaId: string) {
-    const area = await this.prisma.evaluationArea.findFirst({ where: { id: areaId, kpiId } });
+  /** Hard delete — cascades to its entries. Blocked once it has any recorded
+   *  entries, for the same reason as deleteKpi — deactivate instead. */
+  async deleteEvaluationArea(kpiId: string, areaId: string, actorId: string) {
+    const area = await this.prisma.evaluationArea.findFirst({
+      where: { id: areaId, kpiId },
+      include: { _count: { select: { entries: true } } },
+    });
     if (!area) throw AppError.notFound('Evaluation area', areaId);
+    if (area._count.entries > 0) {
+      throw new AppError(
+        'CONFLICT',
+        `"${area.name}" has ${area._count.entries} recorded score(s) — deactivate it instead`,
+      );
+    }
+
     await this.prisma.evaluationArea.delete({ where: { id: areaId } });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'evaluation_area.deleted',
+        entity: 'EvaluationArea',
+        entityId: areaId,
+        detail: { name: area.name },
+      },
+    });
     return null;
   }
 
@@ -189,7 +248,7 @@ export class KpisService {
       );
     }
 
-    return this.prisma.evaluationAreaEntry.create({
+    const entry = await this.prisma.evaluationAreaEntry.create({
       data: {
         evaluationAreaId: areaId,
         personId: input.personId,
@@ -200,6 +259,66 @@ export class KpisService {
         note: input.note,
       },
     });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: enteredById,
+        action: 'evaluation_area_entry.recorded',
+        entity: 'EvaluationAreaEntry',
+        entityId: entry.id,
+        detail: { areaId, personId: input.personId, value: input.value },
+      },
+    });
+    return entry;
+  }
+
+  /** Fix a mis-entered score without touching who it's for or which period —
+   *  those are the entry's identity; re-record instead if either is wrong. */
+  async updateEntry(
+    kpiId: string,
+    areaId: string,
+    entryId: string,
+    input: UpdateEvaluationAreaEntryInput,
+    actorId: string,
+  ) {
+    const entry = await this.prisma.evaluationAreaEntry.findFirst({
+      where: { id: entryId, evaluationAreaId: areaId, evaluationArea: { kpiId } },
+    });
+    if (!entry) throw AppError.notFound('Evaluation area entry', entryId);
+
+    const updated = await this.prisma.evaluationAreaEntry.update({
+      where: { id: entryId },
+      data: input,
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'evaluation_area_entry.updated',
+        entity: 'EvaluationAreaEntry',
+        entityId: entryId,
+        detail: input,
+      },
+    });
+    return updated;
+  }
+
+  async deleteEntry(kpiId: string, areaId: string, entryId: string, actorId: string) {
+    const entry = await this.prisma.evaluationAreaEntry.findFirst({
+      where: { id: entryId, evaluationAreaId: areaId, evaluationArea: { kpiId } },
+    });
+    if (!entry) throw AppError.notFound('Evaluation area entry', entryId);
+
+    await this.prisma.evaluationAreaEntry.delete({ where: { id: entryId } });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'evaluation_area_entry.deleted',
+        entity: 'EvaluationAreaEntry',
+        entityId: entryId,
+        detail: { personId: entry.personId, value: entry.value.toString() },
+      },
+    });
+    return null;
   }
 
   /** Time series for one Evaluation Area, optionally scoped to a single evaluatee. */
