@@ -33,6 +33,26 @@ type SortKey = 'code' | 'name' | 'cadence' | 'latestValue' | 'status' | 'updated
 
 const CADENCE_LABEL: Record<string, string> = { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly' };
 
+// persisted across reloads until the user imports a different file or resets —
+// stored as raw parsed rows (not the computed/derived fields) so it stays
+// correct even if the status/attainment logic changes later
+const UPLOAD_STORAGE_KEY = 'pulse:dashboard:uploaded-kpis';
+
+interface StoredUpload {
+  filename: string;
+  rawKpis: RawKpi[];
+  issues: string[];
+}
+
+function loadStoredUpload(): StoredUpload | null {
+  try {
+    const raw = window.localStorage.getItem(UPLOAD_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as StoredUpload) : null;
+  } catch {
+    return null;
+  }
+}
+
 function computeKpi(kpi: RawKpi): ComputedKpi {
   const attainment = attainmentOf(kpi);
   const latest = kpi.entries[0];
@@ -50,6 +70,7 @@ export default function DashboardPage() {
   const [uploaded, setUploaded] = useState<{ filename: string; kpis: ComputedKpi[]; issues: string[] } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [level, setLevel] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
@@ -61,6 +82,15 @@ export default function DashboardPage() {
   useEffect(() => {
     if (user) void api<RawKpi[]>('/v1/kpis/my').then((raw) => setLiveKpis(raw.map(computeKpi)));
   }, [user]);
+
+  // restore a previously-uploaded sheet on reload — stays active until the
+  // user imports a different file or resets, independent of the live API data
+  useEffect(() => {
+    const stored = loadStoredUpload();
+    if (stored) {
+      setUploaded({ filename: stored.filename, kpis: stored.rawKpis.map(computeKpi), issues: stored.issues });
+    }
+  }, []);
 
   async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -79,9 +109,14 @@ export default function DashboardPage() {
         );
         return;
       }
+      window.localStorage.setItem(
+        UPLOAD_STORAGE_KEY,
+        JSON.stringify({ filename: file.name, rawKpis: parsedKpis, issues }),
+      );
       setUploaded({ filename: file.name, kpis: parsedKpis.map(computeKpi), issues });
       setLevel('all');
       setStatusFilter('all');
+      setShowImportModal(false);
     } catch {
       setUploadError('could not read this file — is it a valid .xlsx spreadsheet?');
     } finally {
@@ -90,10 +125,12 @@ export default function DashboardPage() {
   }
 
   function onUseLiveData() {
+    window.localStorage.removeItem(UPLOAD_STORAGE_KEY);
     setUploaded(null);
     setUploadError(null);
     setLevel('all');
     setStatusFilter('all');
+    setShowImportModal(false);
   }
 
   const levelData = useMemo(() => {
@@ -226,19 +263,8 @@ export default function DashboardPage() {
             </p>
           </div>
           <span className="builder-field-actions">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={onFileSelected}
-              style={{ display: 'none' }}
-            />
-            <button
-              className="p-theme-toggle"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={parsing}
-            >
-              {parsing ? 'reading file…' : 'Import spreadsheet'}
+            <button className="p-theme-toggle" onClick={() => setShowImportModal(true)}>
+              {uploaded ? `📄 ${uploaded.filename}` : 'Import spreadsheet'}
             </button>
             <button className="p-theme-toggle" onClick={onExportCsv}>
               Export CSV
@@ -246,34 +272,64 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        {uploadError && (
-          <p role="alert" className="form-error" style={{ marginBottom: 16 }}>
-            {uploadError}
-          </p>
-        )}
-
-        {uploaded && (
-          <div className="p-table-card" style={{ marginBottom: 20, padding: '12px 16px' }}>
-            <span className="builder-field-actions" style={{ justifyContent: 'space-between', width: '100%' }}>
-              <span style={{ fontSize: 13 }}>
-                showing data from <strong>{uploaded.filename}</strong> ({uploaded.kpis.length} KPI
-                {uploaded.kpis.length === 1 ? '' : 's'})
-                {uploaded.issues.length > 0 && (
-                  <span className="muted"> · {uploaded.issues.length} row{uploaded.issues.length === 1 ? '' : 's'} skipped</span>
+        {showImportModal && (
+          <div className="response-modal-backdrop" onClick={() => setShowImportModal(false)}>
+            <div
+              className="response-modal-card"
+              role="dialog"
+              aria-modal="true"
+              aria-label="import spreadsheet"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="response-modal-header">
+                <h2>Import spreadsheet</h2>
+                <button className="btn-ghost" onClick={() => setShowImportModal(false)} aria-label="close">
+                  close
+                </button>
+              </div>
+              <div className="response-modal-body">
+                {uploaded ? (
+                  <>
+                    <p>
+                      Currently showing data from <strong>{uploaded.filename}</strong> ({uploaded.kpis.length} KPI
+                      {uploaded.kpis.length === 1 ? '' : 's'}).
+                    </p>
+                    {uploaded.issues.length > 0 && (
+                      <ul className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+                        {uploaded.issues.slice(0, 5).map((issue, i) => (
+                          <li key={i}>{issue}</li>
+                        ))}
+                        {uploaded.issues.length > 5 && <li>…and {uploaded.issues.length - 5} more</li>}
+                      </ul>
+                    )}
+                    <button className="btn-ghost" onClick={onUseLiveData}>
+                      reset to live data
+                    </button>
+                    <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
+                  </>
+                ) : (
+                  <p className="muted">no spreadsheet imported — showing live KPI data.</p>
                 )}
-              </span>
-              <button className="btn-ghost" onClick={onUseLiveData}>
-                use live data
-              </button>
-            </span>
-            {uploaded.issues.length > 0 && (
-              <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
-                {uploaded.issues.slice(0, 5).map((issue, i) => (
-                  <li key={i}>{issue}</li>
-                ))}
-                {uploaded.issues.length > 5 && <li>…and {uploaded.issues.length - 5} more</li>}
-              </ul>
-            )}
+                <label htmlFor="dashboard-import-file" style={{ display: 'block', marginTop: uploaded ? 0 : 4 }}>
+                  {uploaded ? 'replace with a new spreadsheet' : 'choose a spreadsheet (.xlsx)'}
+                </label>
+                <input
+                  id="dashboard-import-file"
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={onFileSelected}
+                  disabled={parsing}
+                  style={{ marginTop: 8 }}
+                />
+                {parsing && <p className="muted">reading file…</p>}
+                {uploadError && (
+                  <p role="alert" className="form-error">
+                    {uploadError}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -411,8 +467,8 @@ export default function DashboardPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th className="p-th-sortable" onClick={() => sortBy('code')}>code</th>
                     <th className="p-th-sortable" onClick={() => sortBy('name')}>name</th>
+                    <th>title</th>
                     <th className="p-th-sortable" onClick={() => sortBy('cadence')}>cadence</th>
                     <th className="p-th-sortable" onClick={() => sortBy('latestValue')}>latest</th>
                     <th>status</th>
@@ -430,8 +486,8 @@ export default function DashboardPage() {
                   ) : (
                     tableData.map((k) => (
                       <tr key={k.id} onClick={() => setSelectedId(k.id)} style={{ cursor: 'pointer' }}>
-                        <td style={{ fontFamily: 'var(--mono)', color: 'var(--text-3)' }}>{k.code}</td>
                         <td style={{ fontWeight: 500 }}>{k.name}</td>
+                        <td className="muted">{k.title ?? '—'}</td>
                         <td className="muted">{CADENCE_LABEL[k.cadence] ?? k.cadence}</td>
                         <td>
                           <span className={`p-score-ring p-status-${k.status}`}>

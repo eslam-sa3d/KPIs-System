@@ -14,6 +14,8 @@ export interface RawKpi {
   target: string | null;
   cadence: string;
   entries: Array<{ value: string; periodStart: string; periodEnd: string }>;
+  /** job title / role, when the source data has one (e.g. an evaluation export's "Your Role") */
+  title?: string;
 }
 
 export interface ParsedWorkbook {
@@ -176,6 +178,7 @@ function parseEvaluationExport(rows: Row[]): ParsedWorkbook {
 
   const testerNameCols: number[] = [];
   const periodCols: number[] = [];
+  const roleCols: number[] = [];
   let completionTimeCol: number | undefined;
   let startTimeCol: number | undefined;
   const scoreCols: number[] = [];
@@ -183,6 +186,7 @@ function parseEvaluationExport(rows: Row[]): ParsedWorkbook {
   header.forEach((h, index) => {
     if (h.startsWith('testername')) testerNameCols.push(index);
     else if (h.startsWith('evaluationperiod')) periodCols.push(index);
+    else if (h.startsWith('yourrole')) roleCols.push(index);
     else if (h === 'completiontime') completionTimeCol = index;
     else if (h === 'starttime') startTimeCol = index;
     else if (!EVAL_METADATA_PREFIXES.some((prefix) => h.startsWith(prefix))) scoreCols.push(index);
@@ -231,6 +235,8 @@ function parseEvaluationExport(rows: Row[]): ParsedWorkbook {
       };
       byTester.set(code, kpi);
     }
+    const role = String(firstNonEmpty(row, roleCols) ?? '').trim();
+    if (role) kpi.title = role; // most-recently-processed submission's role wins
     kpi.entries.push({ value: String(Math.round(average * 100) / 100), periodStart: date, periodEnd: date });
   }
 

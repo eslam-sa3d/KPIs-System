@@ -629,12 +629,49 @@ h1, h2, h3 {
   background: var(--card);
   border: none;
   border-radius: 0;
+  /* fixed layout so the columns stretch to fill the card instead of
+     shrink-wrapping their content and leaving empty space on the right —
+     name is the one flexible column, everything else gets a fixed share */
+  table-layout: fixed;
 }
 
 .p-table-card .data-table th,
 .p-table-card .data-table td {
   border-bottom-color: var(--border);
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.p-table-card .data-table th:nth-child(2),
+.p-table-card .data-table td:nth-child(2) {
+  width: 14%;
+}
+
+.p-table-card .data-table th:nth-child(3),
+.p-table-card .data-table td:nth-child(3) {
+  width: 10%;
+}
+
+.p-table-card .data-table th:nth-child(4),
+.p-table-card .data-table td:nth-child(4) {
+  width: 10%;
+}
+
+.p-table-card .data-table th:nth-child(5),
+.p-table-card .data-table td:nth-child(5) {
+  width: 14%;
+}
+
+.p-table-card .data-table th:nth-child(6),
+.p-table-card .data-table td:nth-child(6) {
+  width: 12%;
+}
+
+.p-table-card .data-table th:nth-child(7),
+.p-table-card .data-table td:nth-child(7) {
+  width: 10%;
 }
 
 .p-table-card .data-table th {
