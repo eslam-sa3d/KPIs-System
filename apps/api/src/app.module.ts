@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaService } from './infra/prisma.service';
 import { RedisService } from './infra/redis.service';
@@ -30,6 +31,8 @@ import { RolesController } from './modules/rbac/roles.controller';
   imports: [
     // Global rate limiting; auth endpoints declare tighter @Throttle overrides.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    // Powers @Cron in FileUploadsService/AssetsService (orphaned-upload sweeps).
+    ScheduleModule.forRoot(),
     JwtModule.register({
       global: true,
       secret: process.env.JWT_SECRET,

@@ -270,6 +270,18 @@ function FormView() {
                             >
                               download
                             </button>
+                          ) : f.type === 'file' && Array.isArray(value) && value.length > 0 ? (
+                            <span className="builder-field-actions">
+                              {value.map((uploadId, i) => (
+                                <button
+                                  key={uploadId}
+                                  className="btn-ghost"
+                                  onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${uploadId}`, `${f.label}-${i + 1}`)}
+                                >
+                                  {i + 1}
+                                </button>
+                              ))}
+                            </span>
                           ) : Array.isArray(value) ? (
                             value.join(', ')
                           ) : typeof value === 'object' && value !== null ? (

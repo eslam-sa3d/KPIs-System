@@ -133,8 +133,12 @@ function validatorFor(field: FormField): ZodTypeAny {
           message: 'ranking must order every option exactly once',
         });
     }
-    case 'file':
-      return z.string().min(1).max(500);
+    case 'file': {
+      const uploadId = z.string().min(1).max(500);
+      // maxFiles===1 (every pre-existing form) keeps the original single-id shape —
+      // this is the real trust boundary for the per-question file-count cap.
+      return field.maxFiles > 1 ? z.array(uploadId).min(1).max(field.maxFiles) : uploadId;
+    }
     case 'section_header':
       // display-only: never has an answer to validate
       return z.undefined();

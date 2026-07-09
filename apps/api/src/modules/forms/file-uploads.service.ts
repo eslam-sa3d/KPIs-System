@@ -1,8 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { FormDefinition } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 import { FormsService } from './forms.service';
+
+const ORPHAN_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Files for `file`-type fields are uploaded ahead of the containing
@@ -12,10 +15,22 @@ import { FormsService } from './forms.service';
  */
 @Injectable()
 export class FileUploadsService {
+  private readonly logger = new Logger(FileUploadsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly forms: FormsService,
   ) {}
+
+  /** A file is uploaded before its containing submission exists (see class comment) — if the
+   *  respondent never actually submits, that row is orphaned forever without this sweep. */
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async sweepOrphanedUploads(): Promise<void> {
+    const { count } = await this.prisma.formFileUpload.deleteMany({
+      where: { submissionId: null, createdAt: { lt: new Date(Date.now() - ORPHAN_AGE_MS) } },
+    });
+    if (count > 0) this.logger.log(`swept ${count} orphaned file upload(s)`);
+  }
 
   async upload(formSlug: string, fieldKey: string, file: Express.Multer.File, uploadedById: string | null) {
     const { form, definition } = await this.forms.getLatestVersion(formSlug);

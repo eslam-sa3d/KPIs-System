@@ -162,6 +162,33 @@ describe('v2 field types', () => {
   });
 });
 
+describe('file field with maxFiles', () => {
+  it('keeps a single upload id (not an array) when maxFiles is 1, the default', () => {
+    const single = compileAnswerValidator(
+      formDefinitionSchema.parse({
+        title: 'single upload',
+        fields: [{ key: 'receipt', label: 'Receipt', type: 'file', acceptedMimeTypes: ['application/pdf'] }],
+      }),
+    );
+    expect(single.validate({ receipt: 'upload-1' })).toEqual({ receipt: 'upload-1' });
+    expect(() => single.validate({ receipt: ['upload-1'] })).toThrow(ZodError);
+  });
+
+  it('accepts an array of upload ids up to maxFiles, and rejects over the cap', () => {
+    const multi = compileAnswerValidator(
+      formDefinitionSchema.parse({
+        title: 'multi upload',
+        fields: [
+          { key: 'photos', label: 'Photos', type: 'file', acceptedMimeTypes: ['image/png'], maxFiles: 3 },
+        ],
+      }),
+    );
+    expect(multi.validate({ photos: ['a', 'b'] })).toEqual({ photos: ['a', 'b'] });
+    expect(() => multi.validate({ photos: ['a', 'b', 'c', 'd'] })).toThrow(ZodError);
+    expect(() => multi.validate({ photos: [] })).toThrow(ZodError); // at least one required when present
+  });
+});
+
 describe('section_header field', () => {
   it('is display-only: never required, never stored, and rejects any submitted value', () => {
     const withHeader = compileAnswerValidator(

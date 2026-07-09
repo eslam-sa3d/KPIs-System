@@ -60,6 +60,9 @@ export function FieldInput({
     filename: null,
     error: null,
   });
+  // multi-file (maxFiles>1): filenames for ids uploaded THIS session — reloading an
+  // in-progress answer only shows ids, so older attachments fall back to a generic label
+  const [attachedNames, setAttachedNames] = useState<Record<string, string>>({});
 
   switch (field.type) {
     case 'long_text':
@@ -220,30 +223,91 @@ export function FieldInput({
     }
     case 'file': {
       const fileField: Extract<FormField, { type: 'file' }> = field;
+      const multi = fileField.maxFiles > 1;
 
-      async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
-        e.target.value = ''; // allow re-picking the same filename after an error
-        if (!file) return;
-
+      function validate(file: File): string | null {
         if (!fileField.acceptedMimeTypes.includes(file.type)) {
-          setUploadState({ busy: false, filename: null, error: `"${file.type || 'unknown type'}" is not accepted here` });
-          return;
+          return `"${file.type || 'unknown type'}" is not accepted here`;
         }
         if (file.size > fileField.maxSizeMb * 1024 * 1024) {
-          setUploadState({ busy: false, filename: null, error: `file exceeds the ${fileField.maxSizeMb}MB limit` });
+          return `file exceeds the ${fileField.maxSizeMb}MB limit`;
+        }
+        return null;
+      }
+
+      async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+        const files = Array.from(e.target.files ?? []);
+        e.target.value = ''; // allow re-picking the same filename after an error
+        if (files.length === 0) return;
+
+        const currentIds = multi ? ((value as string[] | undefined) ?? []) : [];
+        if (multi && currentIds.length + files.length > fileField.maxFiles) {
+          setUploadState({ busy: false, filename: null, error: `up to ${fileField.maxFiles} files allowed` });
           return;
+        }
+        for (const file of files) {
+          const problem = validate(file);
+          if (problem) {
+            setUploadState({ busy: false, filename: null, error: problem });
+            return;
+          }
         }
 
         setUploadState({ busy: true, filename: null, error: null });
         try {
-          const uploaded = await uploadFile<{ id: string; filename: string }>(`${uploadPath}/${fileField.key}`, file);
-          setUploadState({ busy: false, filename: uploaded.filename, error: null });
-          onChange(uploaded.id);
+          const uploaded = await Promise.all(
+            files.map((file) => uploadFile<{ id: string; filename: string }>(`${uploadPath}/${fileField.key}`, file)),
+          );
+          if (multi) {
+            setAttachedNames((names) => ({
+              ...names,
+              ...Object.fromEntries(uploaded.map((u) => [u.id, u.filename])),
+            }));
+            onChange([...currentIds, ...uploaded.map((u) => u.id)]);
+            setUploadState({ busy: false, filename: null, error: null });
+          } else {
+            setUploadState({ busy: false, filename: uploaded[0]!.filename, error: null });
+            onChange(uploaded[0]!.id);
+          }
         } catch (cause) {
           const message = cause instanceof ApiRequestError ? cause.message : 'upload failed';
           setUploadState({ busy: false, filename: null, error: message });
         }
+      }
+
+      if (multi) {
+        const ids = (value as string[] | undefined) ?? [];
+        return (
+          <div id={id}>
+            <input
+              type="file"
+              multiple
+              aria-label={fileField.label}
+              accept={fileField.acceptedMimeTypes.join(',')}
+              onChange={(e) => void onPick(e)}
+              disabled={uploadState.busy || ids.length >= fileField.maxFiles}
+            />
+            <p className="muted">{ids.length} / {fileField.maxFiles} files</p>
+            {ids.length > 0 && (
+              <ul className="summary-samples">
+                {ids.map((fileId) => (
+                  <li key={fileId}>
+                    {attachedNames[fileId] ?? 'file attached'}{' '}
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => onChange(ids.filter((v) => v !== fileId))}
+                    >
+                      remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {uploadState.busy && <p className="muted">uploading…</p>}
+            {uploadState.error && <p role="alert" className="form-error">{uploadState.error}</p>}
+          </div>
+        );
       }
 
       const attachedName = uploadState.filename ?? (value ? 'file attached' : null);

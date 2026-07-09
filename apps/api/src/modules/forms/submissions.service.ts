@@ -101,9 +101,10 @@ export class SubmissionsService {
     }
 
     const fileFieldKeys = new Set(definition.fields.filter((f) => f.type === 'file').map((f) => f.key));
+    // maxFiles>1 answers are an array of upload ids rather than a single one — flatten either shape
     const uploadIds = Object.entries(answers)
       .filter(([key]) => fileFieldKeys.has(key))
-      .map(([, value]) => value as string);
+      .flatMap(([, value]) => (Array.isArray(value) ? (value as string[]) : [value as string]));
     if (uploadIds.length) {
       const found = await this.prisma.formFileUpload.findMany({
         where: { id: { in: uploadIds }, formId },

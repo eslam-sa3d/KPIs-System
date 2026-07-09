@@ -57,6 +57,7 @@ interface DraftField {
   /** comma-separated MIME types accepted for a file-upload field */
   acceptedMimeTypes: string;
   maxSizeMb: number;
+  maxFiles: number;
   /** option value -> uploaded FormAsset id, for select/multi_select/ranking "image choice" options */
   optionImages: Record<string, string>;
   mediaType: 'none' | 'image' | 'video';
@@ -93,6 +94,7 @@ const emptyField = (): DraftField => ({
   likertScale: 'disagree, neutral, agree',
   acceptedMimeTypes: 'application/pdf, image/png, image/jpeg',
   maxSizeMb: 10,
+  maxFiles: 1,
   optionImages: {},
   mediaType: 'none',
   mediaAssetId: '',
@@ -280,7 +282,7 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
     }
     case 'file': {
       const acceptedMimeTypes = parseList(draft.acceptedMimeTypes);
-      return { ...base, type: draft.type, acceptedMimeTypes, maxSizeMb: draft.maxSizeMb };
+      return { ...base, type: draft.type, acceptedMimeTypes, maxSizeMb: draft.maxSizeMb, maxFiles: draft.maxFiles };
     }
     case 'rating':
       return {
@@ -538,6 +540,7 @@ export default function NewFormPage() {
           likertScale: p.likertScale,
           acceptedMimeTypes: p.acceptedMimeTypes,
           maxSizeMb: p.maxSizeMb,
+          maxFiles: 1,
           optionImages: {},
           mediaType: 'none' as const,
           mediaAssetId: '',
@@ -1112,6 +1115,15 @@ export default function NewFormPage() {
                   max={25}
                   value={field.maxSizeMb}
                   onChange={(e) => updateField(index, { maxSizeMb: Number(e.target.value) })}
+                />
+                <label htmlFor={`field-maxfiles-${index}`}>max number of files (up to 10)</label>
+                <input
+                  id={`field-maxfiles-${index}`}
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={field.maxFiles}
+                  onChange={(e) => updateField(index, { maxFiles: Number(e.target.value) })}
                 />
               </>
             )}

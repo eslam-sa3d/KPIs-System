@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 
 const ACCEPTED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']);
 const MAX_BYTES = 5 * 1024 * 1024;
+const ORPHAN_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Builder-uploaded design assets: option images, question/page media, and
@@ -16,7 +18,19 @@ const MAX_BYTES = 5 * 1024 * 1024;
  */
 @Injectable()
 export class AssetsService {
+  private readonly logger = new Logger(AssetsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  /** An asset is uploaded while a form is still a draft (see class comment) — if the draft
+   *  is abandoned without publishing, that row is orphaned forever without this sweep. */
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async sweepOrphanedAssets(): Promise<void> {
+    const { count } = await this.prisma.formAsset.deleteMany({
+      where: { formId: null, createdAt: { lt: new Date(Date.now() - ORPHAN_AGE_MS) } },
+    });
+    if (count > 0) this.logger.log(`swept ${count} orphaned design asset(s)`);
+  }
 
   async upload(file: Express.Multer.File | undefined, createdById: string) {
     if (!file) throw AppError.validation([{ path: 'file', message: 'no file was uploaded' }]);

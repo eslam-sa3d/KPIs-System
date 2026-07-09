@@ -168,6 +168,18 @@ export function ResponseDetailModal({
                         >
                           download attachment
                         </button>
+                      ) : field.type === 'file' && Array.isArray(value) && value.length > 0 ? (
+                        <span className="builder-field-actions">
+                          {value.map((uploadId, i) => (
+                            <button
+                              key={uploadId}
+                              className="btn-ghost"
+                              onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${uploadId}`, `${field.label}-${i + 1}`)}
+                            >
+                              download {i + 1}
+                            </button>
+                          ))}
+                        </span>
                       ) : (
                         formatAnswer(value)
                       )}

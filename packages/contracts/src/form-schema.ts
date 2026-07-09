@@ -148,6 +148,9 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     type: z.literal('file'),
     acceptedMimeTypes: z.array(z.string()).min(1),
     maxSizeMb: z.number().positive().max(25).default(10),
+    /** 1 (default) keeps the answer a single upload id, matching every existing form;
+     *  >1 turns the answer into an array of upload ids, up to this count. */
+    maxFiles: z.number().int().min(1).max(10).default(1),
   }),
   baseField.extend({ type: z.literal('section_header') }),
 ]);
