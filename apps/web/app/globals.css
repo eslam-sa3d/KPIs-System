@@ -295,6 +295,39 @@ h3 {
   display: none;
 }
 
+/* Theme toggle — visible at every viewport size (unlike the user-name/sign-out
+   pair above), same contextual-token + state-layer pattern as .portal-nav-desktop
+   a / .nav-toggle so it reads correctly whether the header is on its default
+   surface or the purple [data-surface] override. */
+.theme-toggle {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-radius: var(--md-sys-shape-corner-full);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--md-sys-typescale-label-large-size);
+  line-height: var(--md-sys-typescale-label-large-line-height);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  font-weight: var(--md-sys-typescale-label-large-weight);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+
+.theme-toggle:hover {
+  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), var(--color-bg));
+}
+
+.theme-toggle:focus-visible {
+  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-focus-opacity), var(--color-bg));
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+.theme-toggle:active {
+  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-pressed-opacity), var(--color-bg));
+}
+
 /* hamburger toggle — 44px square tap target */
 .nav-toggle {
   display: inline-flex;
