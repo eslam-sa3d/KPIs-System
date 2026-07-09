@@ -897,16 +897,37 @@ export default function NewFormPage() {
 
         {fields.map((field, index) => (
           <fieldset key={index} className="builder-field question-card">
-            <legend>
-              <span className="question-number">{index + 1}.</span> question
+            <legend className="field-legend">
+              <span className="question-number">{index + 1}</span>
             </legend>
 
-            <label htmlFor={`field-label-${index}`}>field label</label>
-            <input
-              id={`field-label-${index}`}
-              value={field.label}
-              onChange={(e) => updateField(index, { label: e.target.value })}
-            />
+            <div className="field-head-row">
+              <div className="field-title-group">
+                <label htmlFor={`field-label-${index}`}>field label</label>
+                <input
+                  id={`field-label-${index}`}
+                  className="field-title-input"
+                  value={field.label}
+                  onChange={(e) => updateField(index, { label: e.target.value })}
+                  placeholder="untitled question"
+                />
+              </div>
+              <div className="field-type-group">
+                <label htmlFor={`field-type-${index}`}>field type</label>
+                <select
+                  id={`field-type-${index}`}
+                  className="field-type-select"
+                  value={field.type}
+                  onChange={(e) => updateField(index, { type: e.target.value as FieldType })}
+                >
+                  {FIELD_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             <label htmlFor={`field-help-${index}`}>help text (optional)</label>
             <input
@@ -927,19 +948,6 @@ export default function NewFormPage() {
                   ))}
               </p>
             )}
-
-            <label htmlFor={`field-type-${index}`}>field type</label>
-            <select
-              id={`field-type-${index}`}
-              value={field.type}
-              onChange={(e) => updateField(index, { type: e.target.value as FieldType })}
-            >
-              {FIELD_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
 
             {field.type !== 'section_header' && (
               <>
@@ -1483,44 +1491,54 @@ export default function NewFormPage() {
               </div>
             )}
 
-            {field.type !== 'section_header' && (
-              <span className="builder-required">
-                <input
-                  id={`field-required-${index}`}
-                  type="checkbox"
-                  checked={field.required}
-                  onChange={(e) => updateField(index, { required: e.target.checked })}
-                />
-                <label htmlFor={`field-required-${index}`}>required</label>
-              </span>
-            )}
-
             <div className="builder-field-actions">
-              <button type="button" className="btn-ghost" title="move up" aria-label={`move question ${index + 1} up`}
-                disabled={index === 0} onClick={() => moveField(index, -1)}>
-                ↑
-              </button>
-              <button type="button" className="btn-ghost" title="move down" aria-label={`move question ${index + 1} down`}
-                disabled={index === fields.length - 1} onClick={() => moveField(index, 1)}>
-                ↓
-              </button>
-              <button type="button" className="btn-ghost" title="duplicate" aria-label="duplicate question" onClick={() => duplicateField(index)}>
-                ⧉
-              </button>
-              {sectionsEnabled && (
-                <button type="button" className="btn-ghost" title="split into a new page here" aria-label="split into a new page here" onClick={() => splitPageHere(index)}>
-                  ⏎
+              <div className="field-actions-primary">
+                <button type="button" className="btn-ghost" title="duplicate" aria-label="duplicate question" onClick={() => duplicateField(index)}>
+                  ⧉
                 </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  title="remove field"
+                  aria-label="remove field"
+                  onClick={() => setFields((current) => current.filter((_, i) => i !== index))}
+                >
+                  🗑
+                </button>
+              </div>
+
+              {field.type !== 'section_header' && (
+                <span className="builder-required field-required-toggle">
+                  <label htmlFor={`field-required-${index}`}>required</label>
+                  <label className="switch">
+                    <input
+                      id={`field-required-${index}`}
+                      type="checkbox"
+                      checked={field.required}
+                      onChange={(e) => updateField(index, { required: e.target.checked })}
+                    />
+                    <span className="switch-track">
+                      <span className="switch-thumb" />
+                    </span>
+                  </label>
+                </span>
               )}
-              <button
-                type="button"
-                className="btn-ghost"
-                title="remove field"
-                aria-label="remove field"
-                onClick={() => setFields((current) => current.filter((_, i) => i !== index))}
-              >
-                🗑
-              </button>
+
+              <div className="field-actions-secondary">
+                <button type="button" className="btn-ghost" title="move up" aria-label={`move question ${index + 1} up`}
+                  disabled={index === 0} onClick={() => moveField(index, -1)}>
+                  ↑
+                </button>
+                <button type="button" className="btn-ghost" title="move down" aria-label={`move question ${index + 1} down`}
+                  disabled={index === fields.length - 1} onClick={() => moveField(index, 1)}>
+                  ↓
+                </button>
+                {sectionsEnabled && (
+                  <button type="button" className="btn-ghost" title="split into a new page here" aria-label="split into a new page here" onClick={() => splitPageHere(index)}>
+                    ⏎
+                  </button>
+                )}
+              </div>
             </div>
           </fieldset>
         ))}
