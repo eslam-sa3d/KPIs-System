@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Req } from '@nestjs/common';
 import { ACTIONS, CreateRoleInput, RESOURCES, createRoleSchema } from '@pulse/contracts';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from './require-permissions.decorator';
@@ -49,5 +49,15 @@ export class RolesController {
     @Req() req: { user: { id: string } },
   ) {
     return this.rbac.assignRoleToUser(userId, roleId, req.user.id);
+  }
+
+  @Delete(':roleId/users/:userId')
+  @RequirePermissions('roles:manage', 'users:write')
+  unassignRole(
+    @Param('roleId') roleId: string,
+    @Param('userId') userId: string,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.rbac.unassignRoleFromUser(userId, roleId, req.user.id);
   }
 }

@@ -31,13 +31,16 @@ export default function UsersAdminPage() {
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [pendingRoleIds, setPendingRoleIds] = useState<Set<string>>(new Set());
+  const [savingRoles, setSavingRoles] = useState(false);
 
   const reload = useCallback(() => api<UserRow[]>('/v1/users?pageSize=100').then(setUsers), []);
 
   useEffect(() => {
     if (!user) return;
     void reload();
-    if (can(user, 'roles:read')) void api<RoleRow[]>('/v1/roles').then(setRoles);
+    if (can(user, 'roles:read') || can(user, 'roles:manage')) void api<RoleRow[]>('/v1/roles').then(setRoles);
     if (can(user, 'departments:read')) void api<DepartmentRow[]>('/v1/departments').then(setDepartments);
   }, [user, reload]);
 
@@ -75,6 +78,46 @@ export default function UsersAdminPage() {
       await reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Updating status failed');
+    }
+  }
+
+  function onStartEditRoles(row: UserRow) {
+    setError(null);
+    setEditingUserId(row.id);
+    setPendingRoleIds(new Set(row.roles.map((r) => r.id)));
+  }
+
+  function onCancelEditRoles() {
+    setEditingUserId(null);
+    setPendingRoleIds(new Set());
+  }
+
+  function onTogglePendingRole(roleId: string) {
+    setPendingRoleIds((current) => {
+      const next = new Set(current);
+      if (next.has(roleId)) next.delete(roleId);
+      else next.add(roleId);
+      return next;
+    });
+  }
+
+  async function onSaveRoles(row: UserRow) {
+    setError(null);
+    setSavingRoles(true);
+    try {
+      const current = new Set(row.roles.map((r) => r.id));
+      const toAdd = [...pendingRoleIds].filter((id) => !current.has(id));
+      const toRemove = [...current].filter((id) => !pendingRoleIds.has(id));
+      await Promise.all([
+        ...toAdd.map((roleId) => api(`/v1/roles/${roleId}/users/${row.id}`, { method: 'POST' })),
+        ...toRemove.map((roleId) => api(`/v1/roles/${roleId}/users/${row.id}`, { method: 'DELETE' })),
+      ]);
+      setEditingUserId(null);
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Updating roles failed');
+    } finally {
+      setSavingRoles(false);
     }
   }
 
@@ -129,40 +172,83 @@ export default function UsersAdminPage() {
         </form>
       )}
 
-      {users === null ? (
-        <p className="muted">loading…</p>
-      ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>name</th>
-              <th>email</th>
-              <th>department</th>
-              <th>roles</th>
-              <th>status</th>
-              {can(user, 'users:manage') && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((row) => (
-              <tr key={row.id}>
-                <td>{row.displayName}</td>
-                <td>{row.email}</td>
-                <td>{row.department?.name ?? '—'}</td>
-                <td>{row.roles.map((r) => r.name).join(', ') || '—'}</td>
-                <td>{row.isActive ? 'active' : 'deactivated'}</td>
-                {can(user, 'users:manage') && (
-                  <td>
-                    <button className="btn-ghost" onClick={() => onToggleStatus(row)}>
-                      {row.isActive ? 'deactivate' : 'activate'}
-                    </button>
-                  </td>
-                )}
+      {(() => {
+        const canEditRoles = can(user, 'roles:manage') && can(user, 'users:write');
+        return users === null ? (
+          <p className="muted">loading…</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>name</th>
+                <th>email</th>
+                <th>department</th>
+                <th>roles</th>
+                <th>status</th>
+                {(can(user, 'users:manage') || canEditRoles) && <th />}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {users.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.displayName}</td>
+                  <td>{row.email}</td>
+                  <td>{row.department?.name ?? '—'}</td>
+                  <td>
+                    {editingUserId === row.id ? (
+                      <span className="check-group">
+                        {roles.map((r) => (
+                          <label key={r.id} className="check-item">
+                            <input
+                              type="checkbox"
+                              checked={pendingRoleIds.has(r.id)}
+                              onChange={() => onTogglePendingRole(r.id)}
+                            />{' '}
+                            {r.name}
+                          </label>
+                        ))}
+                      </span>
+                    ) : (
+                      row.roles.map((r) => r.name).join(', ') || '—'
+                    )}
+                  </td>
+                  <td>{row.isActive ? 'active' : 'deactivated'}</td>
+                  {(can(user, 'users:manage') || canEditRoles) && (
+                    <td>
+                      <span className="builder-field-actions">
+                        {can(user, 'users:manage') && (
+                          <button className="btn-ghost" onClick={() => onToggleStatus(row)}>
+                            {row.isActive ? 'deactivate' : 'activate'}
+                          </button>
+                        )}
+                        {canEditRoles &&
+                          (editingUserId === row.id ? (
+                            <>
+                              <button
+                                className="btn-primary"
+                                disabled={savingRoles}
+                                onClick={() => onSaveRoles(row)}
+                              >
+                                save roles
+                              </button>
+                              <button className="btn-ghost" disabled={savingRoles} onClick={onCancelEditRoles}>
+                                cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button className="btn-ghost" onClick={() => onStartEditRoles(row)}>
+                              change role
+                            </button>
+                          ))}
+                      </span>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      })()}
     </PortalShell>
   );
 }

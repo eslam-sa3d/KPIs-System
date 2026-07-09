@@ -143,6 +143,14 @@ export class RbacService {
     await this.redis.del(cacheKey(userId));
   }
 
+  async unassignRoleFromUser(userId: string, roleId: string, actorId: string) {
+    await this.prisma.userRole.deleteMany({ where: { userId, roleId } });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'role.unassigned', entity: 'User', entityId: userId, detail: { roleId } },
+    });
+    await this.redis.del(cacheKey(userId));
+  }
+
   private async invalidateRoleMembers(roleId: string): Promise<void> {
     const members = await this.prisma.userRole.findMany({ where: { roleId }, select: { userId: true } });
     await Promise.all(members.map(({ userId }) => this.redis.del(cacheKey(userId))));
