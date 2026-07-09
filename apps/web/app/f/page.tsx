@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { FormDefinition, FormSettings } from '@pulse/contracts';
+import type { BrandIdentity, FormDefinition, FormSettings } from '@pulse/contracts';
 import { FormRenderer } from '../../components/form-renderer';
 import { API_URL } from '../../lib/api-client';
 import { asset } from '../../lib/asset';
@@ -13,6 +13,7 @@ function PublicForm() {
   const token = useSearchParams().get('t') ?? '';
   const [data, setData] = useState<{ definition: FormDefinition; settings: FormSettings } | null>(null);
   const [missing, setMissing] = useState(false);
+  const [branding, setBranding] = useState<BrandIdentity | null>(null);
 
   useEffect(() => {
     if (!token) return setMissing(true);
@@ -21,6 +22,13 @@ function PublicForm() {
       .then((env) => (env?.success ? setData(env.data) : setMissing(true)))
       .catch(() => setMissing(true));
   }, [token]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/branding`)
+      .then((r) => r.json())
+      .then((env) => { if (env?.success) setBranding(env.data); })
+      .catch(() => undefined);
+  }, []);
 
   async function submit(answers: object) {
     const res = await fetch(`${API_URL}/api/v1/public/forms/${encodeURIComponent(token)}/submissions`, {
@@ -35,7 +43,11 @@ function PublicForm() {
   return (
     <main className="public-fill">
       <header className="public-fill-header" data-surface="purple">
-        <Image src={asset('/brand/pulse-neg.svg')} alt="pulse by solutions" width={96} height={42} />
+        {branding?.logoUrl ? (
+          <img src={branding.logoUrl} alt={branding.companyName} height={42} style={{ height: 42, width: 'auto' }} />
+        ) : (
+          <Image src={asset('/brand/pulse-neg.svg')} alt="pulse by solutions" width={96} height={42} />
+        )}
       </header>
       <div className="portal-main">
         {missing ? (

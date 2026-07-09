@@ -412,6 +412,25 @@ export default function NewFormPage() {
           )}
         </div>
 
+        {fields.length > 0 && (
+          <div className="page-title-row" style={{ marginBottom: 8 }}>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => setFields((current) => current.map((f) => ({ ...f, required: true })))}
+            >
+              mark all required
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => setFields((current) => current.map((f) => ({ ...f, required: false })))}
+            >
+              mark all optional
+            </button>
+          </div>
+        )}
+
         {fields.map((field, index) => (
           <fieldset key={index} className="builder-field question-card">
             <legend>

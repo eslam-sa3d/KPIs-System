@@ -281,8 +281,10 @@ export function FormRenderer({
     ? (definition.sections!.find((s) => s.id === path[currentIndex]) ?? definition.sections![0])
     : undefined;
   const isLastPage = currentIndex === path.length - 1;
+  // filtered from the (possibly shuffled) orderedFields, not definition.fields
+  // directly, so shuffleQuestions also applies within a page — see orderedFields above
   const pageFields = currentSection
-    ? definition.fields.filter((f) => currentSection.fieldKeys.includes(f.key))
+    ? orderedFields.filter((f) => currentSection.fieldKeys.includes(f.key))
     : [];
 
   const now = Date.now();
@@ -371,10 +373,13 @@ export function FormRenderer({
       ) : (
         <form className="fill-form msform-body" onSubmit={handleSubmit}>
           {hasSections && (
-            <p className="muted" style={{ marginBottom: 8 }}>
-              page {currentIndex + 1} of {path.length}
-              {currentSection?.title ? ` — ${currentSection.title}` : ''}
-            </p>
+            <div style={{ marginBottom: 8 }}>
+              <p className="muted" style={{ margin: 0 }}>
+                page {currentIndex + 1} of {path.length}
+                {currentSection?.title ? ` — ${currentSection.title}` : ''}
+              </p>
+              {currentSection?.description && <p className="muted">{currentSection.description}</p>}
+            </div>
           )}
           {(hasSections ? pageFields : orderedFields).filter((field) => isVisible(field, answers)).map((field, index) => (
             <div key={field.key} className="question-card">
