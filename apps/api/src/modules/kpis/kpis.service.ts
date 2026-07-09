@@ -71,14 +71,51 @@ export class KpisService {
     return null;
   }
 
-  async list(query: PageQuery) {
+  /**
+   * True once every one of the caller's roles that grant kpis:read does so
+   * with a scope narrower than "all" — i.e. list() must be filtered down to
+   * their own roles/department, the same way listMine() already is. A single
+   * "all"-scoped grant (e.g. from an admin role held alongside a narrower
+   * one) is enough to see everything, matching how permission checks
+   * already union across a user's roles rather than intersect.
+   */
+  private async isKpiReadScopeRestricted(userId: string): Promise<boolean> {
+    const grants = await this.prisma.rolePermission.findMany({
+      where: {
+        role: { isActive: true, users: { some: { userId } } },
+        permission: { resource: 'kpis', action: 'read' },
+      },
+      select: { scope: true },
+    });
+    return !grants.some((g) => g.scope === 'all');
+  }
+
+  /** { assignments: { some: { OR: [...] } } } scoped to a user's own roles/department. */
+  private async myAssignmentFilter(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { departmentId: true, roles: { select: { roleId: true } } },
+    });
+    if (!user) throw AppError.notFound('User', userId);
+
+    const roleIds = user.roles.map((r) => r.roleId);
+    const scope: object[] = [{ roleId: { in: roleIds } }];
+    if (user.departmentId) scope.push({ departmentId: user.departmentId });
+    return { assignments: { some: { OR: scope } } };
+  }
+
+  async list(query: PageQuery, userId: string) {
     const page = Math.max(Number(query.page ?? PAGE_DEFAULTS.page), 1);
     const pageSize = Math.min(
       Number(query.pageSize ?? PAGE_DEFAULTS.pageSize),
       PAGE_DEFAULTS.maxPageSize,
     );
 
-    const where = { isActive: true };
+    const restricted = await this.isKpiReadScopeRestricted(userId);
+    const where = {
+      isActive: true,
+      ...(restricted ? await this.myAssignmentFilter(userId) : {}),
+    };
     const [totalItems, items] = await this.prisma.$transaction([
       this.prisma.kpi.count({ where }),
       this.prisma.kpi.findMany({
@@ -129,18 +166,8 @@ export class KpisService {
    * per-person breakdown client-side, no extra endpoint needed.
    */
   async listMine(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { departmentId: true, roles: { select: { roleId: true } } },
-    });
-    if (!user) throw AppError.notFound('User', userId);
-
-    const roleIds = user.roles.map((r) => r.roleId);
-    const scope: object[] = [{ roleId: { in: roleIds } }];
-    if (user.departmentId) scope.push({ departmentId: user.departmentId });
-
     return this.prisma.kpi.findMany({
-      where: { isActive: true, assignments: { some: { OR: scope } } },
+      where: { isActive: true, ...(await this.myAssignmentFilter(userId)) },
       orderBy: { name: 'asc' },
       include: {
         evaluationAreas: {

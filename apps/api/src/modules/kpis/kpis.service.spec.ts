@@ -6,6 +6,7 @@ function makePrismaStub() {
   return {
     kpi: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
     kpiAssignment: { findFirst: vi.fn(), create: vi.fn() },
+    rolePermission: { findMany: vi.fn() },
     evaluationArea: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     evaluationAreaEntry: {
       findUnique: vi.fn(),
@@ -17,7 +18,7 @@ function makePrismaStub() {
     },
     user: { findUnique: vi.fn() },
     auditLog: { create: vi.fn() },
-    $transaction: vi.fn(),
+    $transaction: vi.fn((ops: Array<Promise<unknown>>) => Promise.all(ops)),
   };
 }
 
@@ -297,6 +298,60 @@ describe('KpisService', () => {
       expect(prisma.auditLog.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ action: 'kpi.assigned', entityId: 'kpi-1' }),
       });
+    });
+  });
+
+  describe('list — RolePermission.scope enforcement', () => {
+    it('shows every active KPI when the caller holds an "all"-scoped kpis:read grant', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'all' }]);
+      prisma.kpi.count.mockResolvedValue(2);
+      prisma.kpi.findMany.mockResolvedValue([]);
+
+      await service.list({}, 'user-1');
+
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(prisma.kpi.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
+    });
+
+    it('shows every active KPI when the caller holds both an "all" and a narrower grant (union, not intersect)', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'department' }, { scope: 'all' }]);
+      prisma.kpi.count.mockResolvedValue(2);
+      prisma.kpi.findMany.mockResolvedValue([]);
+
+      await service.list({}, 'user-1');
+
+      expect(prisma.kpi.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
+    });
+
+    it('filters to the caller own roles/department when every kpis:read grant is scoped narrower than "all"', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'department' }]);
+      prisma.user.findUnique.mockResolvedValue({ departmentId: 'dept-1', roles: [{ roleId: 'role-1' }] });
+      prisma.kpi.count.mockResolvedValue(1);
+      prisma.kpi.findMany.mockResolvedValue([]);
+
+      await service.list({}, 'user-1');
+
+      expect(prisma.kpi.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            isActive: true,
+            assignments: { some: { OR: [{ roleId: { in: ['role-1'] } }, { departmentId: 'dept-1' }] } },
+          },
+        }),
+      );
+    });
+
+    it('filters to the caller when they hold no kpis:read grant at all (defensive default)', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([]);
+      prisma.user.findUnique.mockResolvedValue({ departmentId: null, roles: [] });
+      prisma.kpi.count.mockResolvedValue(0);
+      prisma.kpi.findMany.mockResolvedValue([]);
+
+      await service.list({}, 'user-1');
+
+      expect(prisma.kpi.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ assignments: expect.anything() }) }),
+      );
     });
   });
 

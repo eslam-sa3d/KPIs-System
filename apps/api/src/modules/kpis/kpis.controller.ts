@@ -34,8 +34,8 @@ export class KpisController {
 
   @Get()
   @RequirePermissions('kpis:read')
-  list(@Query() query: PageQuery) {
-    return this.kpis.list(query);
+  list(@Query() query: PageQuery, @Req() req: AuthedRequest) {
+    return this.kpis.list(query, req.user.id);
   }
 
   /** KPIs scoped to the caller's own roles/department — powers "my dashboard". */
