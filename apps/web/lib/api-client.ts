@@ -116,6 +116,16 @@ export async function uploadFile<T>(path: string, file: File): Promise<T> {
   return envelope.data;
 }
 
+/** Uploads a builder design asset (option image, question/page media, theme background/logo). */
+export function uploadAsset<T>(file: File): Promise<T> {
+  return uploadFile<T>('/v1/forms/assets', file);
+}
+
+/** Public, unauthenticated URL for a design asset — safe to use directly in an <img src>. */
+export function assetUrl(assetId: string): string {
+  return `${API_URL}/api/v1/forms/assets/${assetId}`;
+}
+
 /** Authenticated file download (e.g. CSV export, an uploaded attachment) — outside the JSON envelope. */
 export async function downloadFile(path: string, fallbackFilename: string): Promise<void> {
   const response = await fetch(`${API_URL}/api${path}`, {

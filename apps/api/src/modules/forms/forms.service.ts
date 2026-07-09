@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
+import { AssetsService } from './assets.service';
 
 /**
  * Form lifecycle: draft → published (immutable versions) → archived.
@@ -18,7 +19,10 @@ import { PrismaService } from '../../infra/prisma.service';
  */
 @Injectable()
 export class FormsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly assets: AssetsService,
+  ) {}
 
   async createForm(slug: string, definition: unknown, createdById: string) {
     const parsed = this.parseDefinition(definition);
@@ -26,7 +30,7 @@ export class FormsService {
     const existing = await this.prisma.form.findUnique({ where: { slug } });
     if (existing) throw new AppError('CONFLICT', `Form slug "${slug}" is already in use`);
 
-    return this.prisma.form.create({
+    const form = await this.prisma.form.create({
       data: {
         slug,
         status: 'published',
@@ -36,6 +40,8 @@ export class FormsService {
       },
       include: { versions: true },
     });
+    await this.assets.claim(form.id, extractAssetIds(parsed));
+    return form;
   }
 
   async publishNewVersion(formId: string, definition: unknown) {
@@ -47,12 +53,14 @@ export class FormsService {
     if (!form) throw AppError.notFound('Form', formId);
 
     const nextVersion = (form.versions[0]?.version ?? 0) + 1;
-    return this.prisma.$transaction([
+    const result = await this.prisma.$transaction([
       this.prisma.formVersion.create({
         data: { formId, version: nextVersion, definition: parsed },
       }),
       this.prisma.form.update({ where: { id: formId }, data: { status: 'published' } }),
     ]);
+    await this.assets.claim(formId, extractAssetIds(parsed));
+    return result;
   }
 
   /** All non-archived forms with their latest version's title, for the list view. */
@@ -197,4 +205,19 @@ export class FormsService {
     }
     return result.data;
   }
+}
+
+/**
+ * Every FormAsset id referenced anywhere in a definition — field/option
+ * media today; page media (phase 3) and theme (phase 6) extend this as
+ * those fields land on the schema.
+ */
+function extractAssetIds(definition: FormDefinition): string[] {
+  const ids = new Set<string>();
+  for (const field of definition.fields) {
+    if (field.media?.assetId) ids.add(field.media.assetId);
+    if ('options' in field) for (const o of field.options) if (o.imageAssetId) ids.add(o.imageAssetId);
+    if ('statements' in field) for (const s of field.statements) if (s.imageAssetId) ids.add(s.imageAssetId);
+  }
+  return [...ids];
 }

@@ -8,14 +8,17 @@ const MAX_BYTES = 5 * 1024 * 1024;
 /**
  * Builder-uploaded design assets: option images, question/page media, and
  * theme background/logo. Distinct from FileUploadsService, which handles
- * RESPONDENT answer files — assets are authored by the form builder and
- * served publicly (they're decorative, not sensitive data).
+ * RESPONDENT answer files. Uploaded while a form is still a draft — before
+ * any Form row exists — so an asset starts orphaned (formId null) and is
+ * claimed once the definition referencing it is actually published; the
+ * exact pattern FileUploadsService already uses for pre-submit uploads.
+ * Served publicly: these are decorative, not sensitive data.
  */
 @Injectable()
 export class AssetsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async upload(formId: string, file: Express.Multer.File | undefined, createdById: string) {
+  async upload(file: Express.Multer.File | undefined, createdById: string) {
     if (!file) throw AppError.validation([{ path: 'file', message: 'no file was uploaded' }]);
     if (!ACCEPTED_MIME_TYPES.has(file.mimetype)) {
       throw AppError.validation([{ path: 'file', message: `"${file.mimetype}" is not an accepted image type` }]);
@@ -24,12 +27,8 @@ export class AssetsService {
       throw AppError.validation([{ path: 'file', message: 'image exceeds the 5MB limit' }]);
     }
 
-    const form = await this.prisma.form.findUnique({ where: { id: formId }, select: { id: true } });
-    if (!form) throw AppError.notFound('Form', formId);
-
-    const row = await this.prisma.formAsset.create({
+    return this.prisma.formAsset.create({
       data: {
-        formId,
         filename: file.originalname,
         mimeType: file.mimetype,
         sizeBytes: file.size,
@@ -39,13 +38,21 @@ export class AssetsService {
       },
       select: { id: true, filename: true, mimeType: true, sizeBytes: true },
     });
-    return row;
   }
 
   /** Public read — no permission check, images must load in a plain <img src>. */
-  async getForDownload(formId: string, assetId: string) {
-    const asset = await this.prisma.formAsset.findFirst({ where: { id: assetId, formId } });
+  async getForDownload(assetId: string) {
+    const asset = await this.prisma.formAsset.findUnique({ where: { id: assetId } });
     if (!asset) throw AppError.notFound('Asset', assetId);
     return asset;
+  }
+
+  /** Attaches every referenced, still-orphaned asset to the form it was just published on. */
+  async claim(formId: string, assetIds: string[]) {
+    if (assetIds.length === 0) return;
+    await this.prisma.formAsset.updateMany({
+      where: { id: { in: assetIds }, formId: null },
+      data: { formId },
+    });
   }
 }

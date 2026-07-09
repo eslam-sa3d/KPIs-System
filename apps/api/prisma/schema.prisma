@@ -233,12 +233,15 @@ model FormFileUpload {
 
 /// Builder-uploaded design assets (option images, question/page media, theme
 /// background & logo) — distinct from FormFileUpload, which holds RESPONDENT
-/// answers. Same DB-blob tradeoff, served publicly since they're decorative,
-/// not sensitive (see AssetsController).
+/// answers. Uploaded while a form is still a draft (no Form row exists yet),
+/// so formId starts null and is claimed once the definition referencing it is
+/// published — same orphan-then-claim pattern as FormFileUpload/submissionId.
+/// Same DB-blob tradeoff, served publicly since they're decorative, not
+/// sensitive (see AssetsService).
 model FormAsset {
   id           String   @id @default(uuid())
-  formId       String
-  form         Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formId       String?
+  form         Form?    @relation(fields: [formId], references: [id], onDelete: Cascade)
   filename     String
   mimeType     String
   sizeBytes    Int

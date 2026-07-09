@@ -162,6 +162,31 @@ describe('v2 field types', () => {
   });
 });
 
+describe('section_header field', () => {
+  it('is display-only: never required, never stored, and rejects any submitted value', () => {
+    const withHeader = compileAnswerValidator(
+      formDefinitionSchema.parse({
+        title: 'with a heading',
+        fields: [
+          { key: 'intro', label: 'Section one', type: 'section_header' },
+          { key: 'name', label: 'Name', type: 'short_text', required: true },
+        ],
+      }),
+    );
+    expect(withHeader.validate({ name: 'Ada' })).toEqual({ name: 'Ada' });
+    expect(() => withHeader.validate({ intro: 'unexpected', name: 'Ada' })).toThrow(ZodError);
+  });
+
+  it('rejects a required section_header at the definition level', () => {
+    expect(() =>
+      formDefinitionSchema.parse({
+        title: 'invalid',
+        fields: [{ key: 'intro', label: 'Section one', type: 'section_header', required: true }],
+      }),
+    ).toThrow(ZodError);
+  });
+});
+
 describe('section branching', () => {
   const branchedDefinition: FormDefinition = formDefinitionSchema.parse({
     title: 'branching survey',

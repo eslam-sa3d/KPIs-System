@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { END_OF_FORM, type FieldType } from '@pulse/contracts';
 import { PortalShell } from '../../../components/portal-shell';
-import { api } from '../../../lib/api-client';
+import { api, assetUrl, uploadAsset } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
 const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
@@ -20,6 +20,7 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'likert', label: 'likert matrix' },
   { value: 'ranking', label: 'ranking' },
   { value: 'file', label: 'file upload' },
+  { value: 'section_header', label: 'section heading (no answer)' },
 ];
 
 const parseList = (raw: string) =>
@@ -42,6 +43,13 @@ interface DraftField {
   /** comma-separated MIME types accepted for a file-upload field */
   acceptedMimeTypes: string;
   maxSizeMb: number;
+  /** option value -> uploaded FormAsset id, for select/multi_select/ranking "image choice" options */
+  optionImages: Record<string, string>;
+  mediaType: 'none' | 'image' | 'video';
+  mediaAssetId: string;
+  /** video: an external embed URL (e.g. YouTube) */
+  mediaUrl: string;
+  mediaAlt: string;
 }
 
 const emptyField = (): DraftField => ({
@@ -58,6 +66,11 @@ const emptyField = (): DraftField => ({
   likertScale: 'disagree, neutral, agree',
   acceptedMimeTypes: 'application/pdf, image/png, image/jpeg',
   maxSizeMb: 10,
+  optionImages: {},
+  mediaType: 'none',
+  mediaAssetId: '',
+  mediaUrl: '',
+  mediaAlt: '',
 });
 
 const toKey = (label: string, index: number) => {
@@ -95,18 +108,25 @@ function toDefinitionField(draft: DraftField, index: number) {
     label: draft.label,
     required: draft.required,
     ...(draft.helpText.trim() ? { helpText: draft.helpText.trim() } : {}),
+    ...(draft.mediaType === 'image' && draft.mediaAssetId
+      ? { media: { type: 'image' as const, assetId: draft.mediaAssetId, ...(draft.mediaAlt ? { alt: draft.mediaAlt } : {}) } }
+      : draft.mediaType === 'video' && draft.mediaUrl
+        ? { media: { type: 'video' as const, url: draft.mediaUrl, ...(draft.mediaAlt ? { alt: draft.mediaAlt } : {}) } }
+        : {}),
   };
+  const withImages = (values: string[]) =>
+    values.map((o) => ({ value: o, label: o, ...(draft.optionImages[o] ? { imageAssetId: draft.optionImages[o] } : {}) }));
   switch (draft.type) {
     case 'select': {
-      const options = parseList(draft.options).map((o) => ({ value: o, label: o }));
+      const options = withImages(parseList(draft.options));
       return { ...base, type: draft.type, options, layout: draft.layout, allowOther: draft.allowOther };
     }
     case 'multi_select': {
-      const options = parseList(draft.options).map((o) => ({ value: o, label: o }));
+      const options = withImages(parseList(draft.options));
       return { ...base, type: draft.type, options };
     }
     case 'ranking': {
-      const options = parseList(draft.options).map((o) => ({ value: o, label: o }));
+      const options = withImages(parseList(draft.options));
       return { ...base, type: draft.type, options };
     }
     case 'likert': {
@@ -255,6 +275,11 @@ export default function NewFormPage() {
           likertScale: p.likertScale,
           acceptedMimeTypes: p.acceptedMimeTypes,
           maxSizeMb: p.maxSizeMb,
+          optionImages: {},
+          mediaType: 'none' as const,
+          mediaAssetId: '',
+          mediaUrl: '',
+          mediaAlt: '',
         })),
       ]);
       setImportIssues(issues);
@@ -286,6 +311,28 @@ export default function NewFormPage() {
       setError('could not read this file — is it a valid .xlsx, .csv, or .docx file?');
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function onUploadFieldMedia(index: number, file: File) {
+    try {
+      const uploaded = await uploadAsset<{ id: string }>(file);
+      updateField(index, { mediaType: 'image', mediaAssetId: uploaded.id });
+    } catch {
+      setError('image upload failed');
+    }
+  }
+
+  async function onUploadOptionImage(index: number, optionValue: string, file: File) {
+    try {
+      const uploaded = await uploadAsset<{ id: string }>(file);
+      setFields((current) =>
+        current.map((f, i) =>
+          i === index ? { ...f, optionImages: { ...f.optionImages, [optionValue]: uploaded.id } } : f,
+        ),
+      );
+    } catch {
+      setError('image upload failed');
     }
   }
 
@@ -465,6 +512,40 @@ export default function NewFormPage() {
               ))}
             </select>
 
+            {field.type !== 'section_header' && (
+              <>
+                <label htmlFor={`field-media-type-${index}`}>question media (optional)</label>
+                <select
+                  id={`field-media-type-${index}`}
+                  value={field.mediaType}
+                  onChange={(e) => updateField(index, { mediaType: e.target.value as DraftField['mediaType'] })}
+                >
+                  <option value="none">none</option>
+                  <option value="image">image</option>
+                  <option value="video">video (embed URL)</option>
+                </select>
+                {field.mediaType === 'image' && (
+                  <>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => e.target.files?.[0] && onUploadFieldMedia(index, e.target.files[0])}
+                    />
+                    {field.mediaAssetId && (
+                      <img src={assetUrl(field.mediaAssetId)} alt="" className="option-image" />
+                    )}
+                  </>
+                )}
+                {field.mediaType === 'video' && (
+                  <input
+                    value={field.mediaUrl}
+                    onChange={(e) => updateField(index, { mediaUrl: e.target.value })}
+                    placeholder="https://www.youtube.com/embed/…"
+                  />
+                )}
+              </>
+            )}
+
             {(field.type === 'select' || field.type === 'multi_select' || field.type === 'ranking') && (
               <>
                 <label htmlFor={`field-options-${index}`}>options (comma-separated)</label>
@@ -474,6 +555,24 @@ export default function NewFormPage() {
                   onChange={(e) => updateField(index, { options: e.target.value })}
                   placeholder="red, amber, green"
                 />
+                {parseList(field.options).length > 0 && (
+                  <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
+                    <span className="muted" style={{ fontSize: 12 }}>option images (optional)</span>
+                    {parseList(field.options).map((optionValue) => (
+                      <div key={optionValue} className="builder-required" style={{ marginTop: 4 }}>
+                        <span style={{ minWidth: 100, display: 'inline-block' }}>{optionValue}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => e.target.files?.[0] && onUploadOptionImage(index, optionValue, e.target.files[0])}
+                        />
+                        {field.optionImages[optionValue] && (
+                          <img src={assetUrl(field.optionImages[optionValue]!)} alt="" className="option-image" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
 
@@ -573,15 +672,17 @@ export default function NewFormPage() {
               </>
             )}
 
-            <span className="builder-required">
-              <input
-                id={`field-required-${index}`}
-                type="checkbox"
-                checked={field.required}
-                onChange={(e) => updateField(index, { required: e.target.checked })}
-              />
-              <label htmlFor={`field-required-${index}`}>required</label>
-            </span>
+            {field.type !== 'section_header' && (
+              <span className="builder-required">
+                <input
+                  id={`field-required-${index}`}
+                  type="checkbox"
+                  checked={field.required}
+                  onChange={(e) => updateField(index, { required: e.target.checked })}
+                />
+                <label htmlFor={`field-required-${index}`}>required</label>
+              </span>
+            )}
 
             <div className="builder-field-actions">
               <button type="button" className="btn-ghost" aria-label={`move question ${index + 1} up`}

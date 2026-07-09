@@ -152,7 +152,9 @@ export class SubmissionsService {
       orderBy: { createdAt: 'asc' },
     });
 
-    const fields: FormFieldSummary[] = definition.fields.map((field) => {
+    const fields: FormFieldSummary[] = definition.fields
+      .filter((field) => field.type !== 'section_header') // display-only, never has an answer
+      .map((field) => {
       const values = submissions
         .map((s) => (s.answers as SubmissionAnswers)[field.key])
         .filter((v) => v !== undefined && v !== null && v !== '');

@@ -135,5 +135,8 @@ function validatorFor(field: FormField): ZodTypeAny {
     }
     case 'file':
       return z.string().min(1).max(500);
+    case 'section_header':
+      // display-only: never has an answer to validate
+      return z.undefined();
   }
 }

@@ -144,26 +144,19 @@ export class FormsController {
     return this.submissions.deleteAllSubmissions(slug, req.user.id);
   }
 
-  @Post(':formId/assets')
+  /** Uploaded while a form is still a draft (no formId yet) — claimed on publish, see FormsService. */
+  @Post('assets')
   @RequirePermissions('forms:write')
   @UseInterceptors(ASSET_INTERCEPTOR)
-  uploadAsset(
-    @Param('formId') formId: string,
-    @UploadedFile() file: Express.Multer.File,
-    @Req() req: AuthedRequest,
-  ) {
-    return this.assets.upload(formId, file, req.user.id);
+  uploadAsset(@UploadedFile() file: Express.Multer.File, @Req() req: AuthedRequest) {
+    return this.assets.upload(file, req.user.id);
   }
 
   /** Design assets (option images, question/page media, theme background & logo) — always public, never sensitive. */
   @Public()
-  @Get(':formId/assets/:assetId')
-  async downloadAsset(
-    @Param('formId') formId: string,
-    @Param('assetId') assetId: string,
-    @Res() res: Response,
-  ) {
-    const asset = await this.assets.getForDownload(formId, assetId);
+  @Get('assets/:assetId')
+  async downloadAsset(@Param('assetId') assetId: string, @Res() res: Response) {
+    const asset = await this.assets.getForDownload(assetId);
     res.type(asset.mimeType).send(Buffer.from(asset.data));
   }
 

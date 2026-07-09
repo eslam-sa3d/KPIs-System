@@ -23,6 +23,8 @@ export const FIELD_TYPES = [
   'likert',
   'ranking',
   'file',
+  /** display-only: a heading + optional help text, no answer, never required. */
+  'section_header',
 ] as const;
 
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -44,17 +46,32 @@ const visibleWhenSchema = z.object({
   equals: conditionValue,
 });
 
+/** Inline question/page media: an uploaded FormAsset image, or an external video embed URL. */
+export const mediaSchema = z.object({
+  type: z.enum(['image', 'video']),
+  /** FormAsset id — required when type is "image". */
+  assetId: z.string().uuid().optional(),
+  /** external embed URL (e.g. YouTube) — required when type is "video". */
+  url: z.string().max(1000).optional(),
+  alt: z.string().max(200).optional(),
+});
+
+export type Media = z.infer<typeof mediaSchema>;
+
 const baseField = z.object({
   key: fieldKey,
   label: z.string().min(1).max(200),
   helpText: z.string().max(500).optional(),
   required: z.boolean().default(false),
   visibleWhen: visibleWhenSchema.optional(),
+  media: mediaSchema.optional(),
 });
 
 const optionItem = z.object({
   value: z.string().min(1).max(200),
   label: z.string().min(1).max(200),
+  /** FormAsset id — renders this option as an image choice. */
+  imageAssetId: z.string().uuid().optional(),
 });
 
 export const formFieldSchema = z.discriminatedUnion('type', [
@@ -115,6 +132,7 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     acceptedMimeTypes: z.array(z.string()).min(1),
     maxSizeMb: z.number().positive().max(25).default(10),
   }),
+  baseField.extend({ type: z.literal('section_header') }),
 ]);
 
 /** Per-form collection settings (MS-Forms parity). */
@@ -149,6 +167,13 @@ export const formDefinitionSchema = z
         });
       }
       keys.add(field.key);
+      if (field.type === 'section_header' && field.required) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['fields', index, 'required'],
+          message: 'a "section_header" field has no answer and cannot be required',
+        });
+      }
       if (field.visibleWhen && !form.fields.some((f) => f.key === field.visibleWhen!.fieldKey)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

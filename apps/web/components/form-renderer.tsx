@@ -2,7 +2,25 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import { resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
-import { ApiRequestError, uploadFile } from '../lib/api-client';
+import { ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
+import type { Media } from '@pulse/contracts';
+
+function FieldMedia({ media }: { media: Media }) {
+  if (media.type === 'image' && media.assetId) {
+    return <img src={assetUrl(media.assetId)} alt={media.alt ?? ''} className="question-media-image" />;
+  }
+  if (media.type === 'video' && media.url) {
+    return (
+      <iframe
+        src={media.url}
+        title={media.alt ?? 'question video'}
+        className="question-media-video"
+        allowFullScreen
+      />
+    );
+  }
+  return null;
+}
 
 export const isVisible = (field: FormField, answers: SubmissionAnswers) => {
   const rule = field.visibleWhen;
@@ -95,6 +113,7 @@ function FieldInput({
             {field.options.map((o) => (
               <label key={o.value} className="check-item">
                 <input type="radio" name={id} checked={raw === o.value} onChange={() => onChange(o.value)} />
+                {o.imageAssetId && <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" />}
                 {o.label}
               </label>
             ))}
@@ -138,6 +157,7 @@ function FieldInput({
                 onChange={(e) =>
                   onChange(e.target.checked ? [...selected, o.value] : selected.filter((v) => v !== o.value))
                 } />
+              {o.imageAssetId && <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" />}
               {o.label}
             </label>
           ))}
@@ -172,6 +192,7 @@ function FieldInput({
     case 'ranking': {
       const order = (value as string[] | undefined) ?? field.options.map((o) => o.value);
       const labelOf = (v: string) => field.options.find((o) => o.value === v)?.label ?? v;
+      const imageOf = (v: string) => field.options.find((o) => o.value === v)?.imageAssetId;
       const move = (index: number, delta: number) => {
         const next = [...order];
         const target = index + delta;
@@ -183,7 +204,10 @@ function FieldInput({
         <ol className="ranking" id={id}>
           {order.map((v, i) => (
             <li key={v} className="ranking-item">
-              <span>{i + 1}. {labelOf(v)}</span>
+              <span>
+                {i + 1}. {imageOf(v) && <img src={assetUrl(imageOf(v)!)} alt="" className="option-image" />}
+                {labelOf(v)}
+              </span>
               <span className="ranking-controls">
                 <button type="button" className="btn-ghost" aria-label={`move ${labelOf(v)} up`} onClick={() => move(i, -1)}>↑</button>
                 <button type="button" className="btn-ghost" aria-label={`move ${labelOf(v)} down`} onClick={() => move(i, 1)}>↓</button>
@@ -381,17 +405,33 @@ export function FormRenderer({
               {currentSection?.description && <p className="muted">{currentSection.description}</p>}
             </div>
           )}
-          {(hasSections ? pageFields : orderedFields).filter((field) => isVisible(field, answers)).map((field, index) => (
-            <div key={field.key} className="question-card">
-              <label htmlFor={`f-${field.key}`} className="question-title" id={`f-${field.key}-label`}>
-                <span className="question-number">{index + 1}.</span> {field.label}
-                {field.required && <span aria-hidden="true" className="question-required"> *</span>}
-              </label>
-              {field.helpText && <p className="muted">{field.helpText}</p>}
-              <FieldInput field={field} value={answers[field.key]} uploadPath={uploadPath}
-                onChange={(value) => setAnswers((a) => ({ ...a, [field.key]: value }))} />
-            </div>
-          ))}
+          {(() => {
+            const visibleFields = (hasSections ? pageFields : orderedFields).filter((field) => isVisible(field, answers));
+            let questionNumber = 0;
+            return visibleFields.map((field) => {
+              if (field.type === 'section_header') {
+                return (
+                  <div key={field.key} className="question-card section-header-card">
+                    <h2 className="section-header-title">{field.label}</h2>
+                    {field.helpText && <p className="muted">{field.helpText}</p>}
+                  </div>
+                );
+              }
+              questionNumber += 1;
+              return (
+                <div key={field.key} className="question-card">
+                  {field.media && <FieldMedia media={field.media} />}
+                  <label htmlFor={`f-${field.key}`} className="question-title" id={`f-${field.key}-label`}>
+                    <span className="question-number">{questionNumber}.</span> {field.label}
+                    {field.required && <span aria-hidden="true" className="question-required"> *</span>}
+                  </label>
+                  {field.helpText && <p className="muted">{field.helpText}</p>}
+                  <FieldInput field={field} value={answers[field.key]} uploadPath={uploadPath}
+                    onChange={(value) => setAnswers((a) => ({ ...a, [field.key]: value }))} />
+                </div>
+              );
+            });
+          })()}
           {(pageError || error) && (
             <p role="alert" className="form-error">{pageError ?? error}</p>
           )}
