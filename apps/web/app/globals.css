@@ -2272,6 +2272,7 @@ h3 {
 
 .landing-hero-heading {
   color: var(--pulse-air);
+  font-family: var(--font-family-base);
   font-size: clamp(3rem, 8vw, 5.5rem);
   font-weight: var(--font-weight-bold);
   line-height: 0.95;
@@ -2312,6 +2313,7 @@ h3 {
 }
 
 .landing-heartbeat-copy {
+  font-family: var(--font-family-base);
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
@@ -2544,6 +2546,7 @@ h3 {
 
 .landing-cta-heading {
   color: var(--pulse-air);
+  font-family: var(--font-family-base);
   font-size: clamp(2rem, 6vw, 4rem);
   font-weight: var(--font-weight-bold);
   line-height: 1.05;
@@ -2785,6 +2788,57 @@ h3 {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+
+/* KPI/Evaluation Area rows double as accordion headers: the name+meta button
+   toggles its own body open/closed, while rename/deactivate/delete stay as
+   separate sibling buttons in .row-actions (a <button> can't nest another
+   interactive element). */
+.accordion-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: none;
+  border: none;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--md-sys-shape-corner-small);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.accordion-toggle:hover {
+  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
+}
+
+.accordion-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.hierarchy-kpi-name {
+  font-size: var(--md-sys-typescale-title-large-size);
+  line-height: var(--md-sys-typescale-title-large-line-height);
+  font-weight: var(--font-weight-light);
+}
+
+.accordion-chevron {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.accordion-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accordion-chevron {
+    transition: none;
+  }
 }
 
 /* Weight ring: a conic-gradient dial, same visual language as the mini-dial
