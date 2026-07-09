@@ -1,12 +1,26 @@
 'use client';
 
 import Image from 'next/image';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { BrandIdentity, FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { FormRenderer, SubmissionScore } from '../../components/form-renderer';
 import { API_URL } from '../../lib/api-client';
 import { asset } from '../../lib/asset';
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+const TURNSTILE_SCRIPT_ID = 'cf-turnstile-script';
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: HTMLElement,
+        options: { sitekey: string; callback: (token: string) => void },
+      ) => void;
+    };
+  }
+}
 
 /** Anonymous public fill page — no session, reached via a share link/QR. */
 function PublicForm() {
@@ -16,6 +30,8 @@ function PublicForm() {
   const [initialAnswers, setInitialAnswers] = useState<SubmissionAnswers | undefined>(undefined);
   const [missing, setMissing] = useState(false);
   const [branding, setBranding] = useState<BrandIdentity | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!token) return setMissing(true);
@@ -40,6 +56,31 @@ function PublicForm() {
       .catch(() => undefined);
   }, []);
 
+  // loads Cloudflare Turnstile only for forms that require it; a real site key must also be
+  // configured (NEXT_PUBLIC_TURNSTILE_SITE_KEY) or the widget silently never renders — same
+  // "safe when unconfigured" pattern as the server-side check in TurnstileService.
+  useEffect(() => {
+    if (!data?.settings.requireCaptcha || !TURNSTILE_SITE_KEY) return;
+    function renderWidget() {
+      if (turnstileRef.current && window.turnstile) {
+        window.turnstile.render(turnstileRef.current, {
+          sitekey: TURNSTILE_SITE_KEY!,
+          callback: (widgetToken: string) => setTurnstileToken(widgetToken),
+        });
+      }
+    }
+    if (document.getElementById(TURNSTILE_SCRIPT_ID)) {
+      renderWidget();
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = TURNSTILE_SCRIPT_ID;
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+    script.async = true;
+    script.onload = renderWidget;
+    document.body.appendChild(script);
+  }, [data?.settings.requireCaptcha]);
+
   async function submit(answers: object) {
     const url = editToken
       ? `${API_URL}/api/v1/public/forms/${encodeURIComponent(token)}/submissions/${encodeURIComponent(editToken)}`
@@ -49,7 +90,10 @@ function PublicForm() {
       // the anonymous respondent-fingerprint cookie (oneResponsePerUser) is only ever
       // set/read if the browser is allowed to send/receive it on this request
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(turnstileToken ? { 'x-turnstile-token': turnstileToken } : {}),
+      },
       body: JSON.stringify(answers),
     });
     const env = await res.json();
@@ -79,6 +123,9 @@ function PublicForm() {
             uploadPath={`/v1/public/forms/${encodeURIComponent(token)}/uploads`}
             initialAnswers={initialAnswers}
             editUrlFor={(newEditToken) => `?t=${encodeURIComponent(token)}&edit=${encodeURIComponent(newEditToken)}`}
+            captchaSlot={
+              data.settings.requireCaptcha && TURNSTILE_SITE_KEY ? <div ref={turnstileRef} /> : undefined
+            }
           />
         )}
       </div>

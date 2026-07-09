@@ -20,6 +20,7 @@ import { FileUploadsService } from './modules/forms/file-uploads.service';
 import { FormAccessGuard } from './modules/forms/form-access.guard';
 import { FormsService } from './modules/forms/forms.service';
 import { SubmissionsService } from './modules/forms/submissions.service';
+import { TurnstileService } from './modules/forms/turnstile.service';
 import { HealthController } from './modules/health/health.controller';
 import { KpisController } from './modules/kpis/kpis.controller';
 import { KpisService } from './modules/kpis/kpis.service';
@@ -62,6 +63,7 @@ import { RolesController } from './modules/rbac/roles.controller';
     KpisService,
     FormsService,
     SubmissionsService,
+    TurnstileService,
     FileUploadsService,
     AssetsService,
     DemoDataService,

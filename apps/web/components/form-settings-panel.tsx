@@ -182,6 +182,16 @@ export function FormSettingsPanel({
       <label className="check-item">
         <input
           type="checkbox"
+          checked={draft.requireCaptcha}
+          onChange={(e) => setDraft((d) => ({ ...d, requireCaptcha: e.target.checked }))}
+        />
+        require a CAPTCHA check on public link submissions (Cloudflare Turnstile — needs
+        TURNSTILE_SECRET_KEY / NEXT_PUBLIC_TURNSTILE_SITE_KEY configured to take effect)
+      </label>
+
+      <label className="check-item">
+        <input
+          type="checkbox"
           checked={draft.quizMode}
           onChange={(e) => setDraft((d) => ({ ...d, quizMode: e.target.checked }))}
         />

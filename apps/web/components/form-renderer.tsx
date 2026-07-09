@@ -435,6 +435,7 @@ export function FormRenderer({
   uploadPath,
   initialAnswers,
   editUrlFor,
+  captchaSlot,
 }: {
   definition: FormDefinition;
   settings: FormSettings;
@@ -446,6 +447,9 @@ export function FormRenderer({
   /** builds the "edit your response" link shown on the thank-you screen from a returned
    *  edit token; omitted entirely when the caller has no page to send the respondent back to. */
   editUrlFor?: (editToken: string) => string;
+  /** rendered above the submit button on the final page — the page's Turnstile widget when
+   *  settings.requireCaptcha is on; omitted for callers that don't wire up CAPTCHA. */
+  captchaSlot?: React.ReactNode;
 }) {
   const [answers, setAnswers] = useState<SubmissionAnswers>(initialAnswers ?? {});
   const [error, setError] = useState<string | null>(null);
@@ -691,6 +695,7 @@ export function FormRenderer({
           {(pageError || error) && (
             <p role="alert" className="form-error">{pageError ?? error}</p>
           )}
+          {(!hasSections || isLastPage) && captchaSlot}
           <div className="page-title-row">
             {hasSections && currentIndex > 0 && (
               <button type="button" className="btn-ghost" onClick={onBack}>

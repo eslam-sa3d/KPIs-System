@@ -19,6 +19,7 @@ import { PrismaService } from '../../infra/prisma.service';
 import { compileAnswerValidator } from './answer-validator';
 import { FormsService } from './forms.service';
 import { QuizScore, scoreSubmission } from './quiz-scoring';
+import { TurnstileService } from './turnstile.service';
 
 /**
  * Submission engine: validates answers against the form version's compiled
@@ -30,6 +31,7 @@ export class SubmissionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly forms: FormsService,
+    private readonly turnstile: TurnstileService,
   ) {}
 
   async submit(formSlug: string, rawAnswers: SubmissionAnswers, submittedById: string) {
@@ -40,8 +42,14 @@ export class SubmissionsService {
 
   /** Anonymous submission via a public share link. `respondentFingerprint` is a random id the
    *  controller stores in a cookie — the only "identity" an anonymous filler has. */
-  async submitPublic(token: string, rawAnswers: SubmissionAnswers, respondentFingerprint: string | null) {
+  async submitPublic(
+    token: string,
+    rawAnswers: SubmissionAnswers,
+    respondentFingerprint: string | null,
+    turnstileToken?: string,
+  ) {
     const { form, version, definition, settings } = await this.forms.getByPublicToken(token);
+    await this.turnstile.verify(settings.requireCaptcha, turnstileToken);
     await this.enforceSettings(form.id, settings, null, respondentFingerprint, rawAnswers);
     return this.persist(form.id, version.id, definition, settings, rawAnswers, null, respondentFingerprint);
   }

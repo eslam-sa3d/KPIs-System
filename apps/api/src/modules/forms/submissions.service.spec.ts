@@ -3,6 +3,8 @@ import { formDefinitionSchema, formSettingsSchema } from '@pulse/contracts';
 import { Prisma } from '@prisma/client';
 import { SubmissionsService } from './submissions.service';
 
+const turnstileStub = { verify: vi.fn(async () => undefined) };
+
 const activeForm = { id: 'form-1', publicToken: null };
 
 function makePrismaStub() {
@@ -59,14 +61,14 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
 
   it('accepts a submission when the form is open', async () => {
     const forms = makeFormsStub({ acceptingResponses: true });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await service.submit('demo', { team: 'x' }, 'user-1');
     expect(prisma.formSubmission.create).toHaveBeenCalledTimes(1);
   });
 
   it('rejects when the form is not accepting responses', async () => {
     const forms = makeFormsStub({ acceptingResponses: false });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await expect(service.submit('demo', { team: 'x' }, 'user-1')).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -74,7 +76,7 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
 
   it('rejects before the scheduled open date', async () => {
     const forms = makeFormsStub({ opensAt: new Date(Date.now() + 86_400_000).toISOString() });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await expect(service.submit('demo', { team: 'x' }, 'user-1')).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -82,7 +84,7 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
 
   it('rejects after the scheduled close date', async () => {
     const forms = makeFormsStub({ closesAt: new Date(Date.now() - 86_400_000).toISOString() });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await expect(service.submit('demo', { team: 'x' }, 'user-1')).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -91,7 +93,7 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
   it('enforces one-response-per-user when a prior submission exists', async () => {
     prisma.formSubmission.findFirst.mockResolvedValue({ id: 'existing' });
     const forms = makeFormsStub({ oneResponsePerUser: true });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await expect(service.submit('demo', { team: 'x' }, 'user-1')).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -99,7 +101,7 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
 
   it('skips one-response-per-user for an anonymous submission with no fingerprint', async () => {
     const forms = makeFormsStub({ oneResponsePerUser: true });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await service.submitPublic('tok', { team: 'x' }, null);
     expect(prisma.formSubmission.findFirst).not.toHaveBeenCalled();
     expect(prisma.formSubmission.create).toHaveBeenCalledWith({
@@ -110,7 +112,7 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
   it('enforces one-response-per-user for anonymous submissions via their cookie fingerprint', async () => {
     prisma.formSubmission.findFirst.mockResolvedValue({ id: 'existing' });
     const forms = makeFormsStub({ oneResponsePerUser: true });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await expect(service.submitPublic('tok', { team: 'x' }, 'fp-1')).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -123,7 +125,7 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
   it('rejects once maxResponses is reached', async () => {
     prisma.formSubmission.count.mockResolvedValue(3);
     const forms = makeFormsStub({ maxResponses: 3 });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await expect(service.submit('demo', { team: 'x' }, 'user-1')).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -132,7 +134,7 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
   it('accepts submissions below maxResponses', async () => {
     prisma.formSubmission.count.mockResolvedValue(2);
     const forms = makeFormsStub({ maxResponses: 3 });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await service.submit('demo', { team: 'x' }, 'user-1');
     expect(prisma.formSubmission.create).toHaveBeenCalledTimes(1);
   });
@@ -140,7 +142,7 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
   it('rejects once a matching quota is reached, independent of maxResponses', async () => {
     prisma.formSubmission.count.mockResolvedValue(2); // quota count (no maxResponses set in this test)
     const forms = makeFormsStub({ quotas: [{ fieldKey: 'team', equals: 'x', limit: 2 }] });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await expect(service.submit('demo', { team: 'x' }, 'user-1')).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -149,23 +151,38 @@ describe('SubmissionsService.submit (settings enforcement)', () => {
   it('does not enforce a quota for an answer that does not match its equals value', async () => {
     prisma.formSubmission.count.mockResolvedValue(999); // would reject if checked
     const forms = makeFormsStub({ quotas: [{ fieldKey: 'team', equals: 'y', limit: 1 }] });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await service.submit('demo', { team: 'x' }, 'user-1');
     expect(prisma.formSubmission.create).toHaveBeenCalledTimes(1);
   });
 
   it('generates an edit token when allowRespondentEdit is on', async () => {
     const forms = makeFormsStub({ allowRespondentEdit: true });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await service.submit('demo', { team: 'x' }, 'user-1');
     expect(prisma.formSubmission.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ editToken: expect.any(String) }),
     });
   });
 
+  it('checks the turnstile service on public submissions with the requireCaptcha setting', async () => {
+    const forms = makeFormsStub({ requireCaptcha: true });
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+    await service.submitPublic('tok', { team: 'x' }, 'fp-1', 'captcha-token');
+    expect(turnstileStub.verify).toHaveBeenCalledWith(true, 'captcha-token');
+  });
+
+  it('rejects a public submission when the turnstile check fails', async () => {
+    const failingTurnstile = { verify: vi.fn(async () => { throw new Error('bad captcha'); }) };
+    const forms = makeFormsStub({ requireCaptcha: true });
+    const service = new SubmissionsService(prisma as never, forms as never, failingTurnstile as never);
+    await expect(service.submitPublic('tok', { team: 'x' }, 'fp-1', 'bad-token')).rejects.toThrow('bad captcha');
+    expect(prisma.formSubmission.create).not.toHaveBeenCalled();
+  });
+
   it('omits the edit token when allowRespondentEdit is off', async () => {
     const forms = makeFormsStub({ allowRespondentEdit: false });
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     await service.submit('demo', { team: 'x' }, 'user-1');
     expect(prisma.formSubmission.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ editToken: undefined }),
@@ -178,7 +195,7 @@ describe('SubmissionsService respondent self-edit', () => {
     const prisma = makePrismaStub();
     prisma.formSubmission.findFirst.mockResolvedValue({ id: 'sub-1', editToken: 'tok-abc' });
     const forms = makeFormsStub();
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
 
     await service.updateByEditToken('public-tok', 'tok-abc', { team: 'y' });
 
@@ -195,7 +212,7 @@ describe('SubmissionsService respondent self-edit', () => {
     const prisma = makePrismaStub();
     prisma.formSubmission.findFirst.mockResolvedValue(null);
     const forms = makeFormsStub();
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
 
     await expect(service.updateByEditToken('public-tok', 'nope', { team: 'y' })).rejects.toMatchObject({
       code: 'NOT_FOUND',
@@ -206,7 +223,7 @@ describe('SubmissionsService respondent self-edit', () => {
     const prisma = makePrismaStub();
     prisma.formSubmission.findFirst.mockResolvedValue({ answers: { team: 'x' } });
     const forms = makeFormsStub();
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
 
     const result = await service.getByEditToken('public-tok', 'tok-abc');
     expect(result).toEqual({ answers: { team: 'x' } });
@@ -240,7 +257,7 @@ describe('SubmissionsService file-answer integrity', () => {
   it('rejects a file answer that does not reference a real upload for this form', async () => {
     const prisma = makePrismaStub();
     prisma.formFileUpload.findMany.mockResolvedValue([]); // upload id not found
-    const service = new SubmissionsService(prisma as never, makeFileFormsStub() as never);
+    const service = new SubmissionsService(prisma as never, makeFileFormsStub() as never, turnstileStub as never);
     await expect(service.submit('attach-a-receipt', { receipt: 'upload-x' }, 'user-1')).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
     });
@@ -250,7 +267,7 @@ describe('SubmissionsService file-answer integrity', () => {
   it('accepts a file answer that resolves to a real upload, and links it to the new submission', async () => {
     const prisma = makePrismaStub();
     prisma.formFileUpload.findMany.mockResolvedValue([{ id: 'upload-x' }]);
-    const service = new SubmissionsService(prisma as never, makeFileFormsStub() as never);
+    const service = new SubmissionsService(prisma as never, makeFileFormsStub() as never, turnstileStub as never);
     await service.submit('attach-a-receipt', { receipt: 'upload-x' }, 'user-1');
     expect(prisma.formSubmission.create).toHaveBeenCalledTimes(1);
     expect(prisma.formFileUpload.updateMany).toHaveBeenCalledWith({
@@ -265,7 +282,7 @@ describe('SubmissionsService.updateSubmission', () => {
     const prisma = makePrismaStub();
     prisma.formSubmission.findFirst.mockResolvedValue({ id: 'sub-1', formVersionId: 'version-1' });
     const forms = makeFormsStub();
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
 
     await service.updateSubmission('demo', 'sub-1', { team: 'y' }, 'admin-1');
 
@@ -282,7 +299,7 @@ describe('SubmissionsService.updateSubmission', () => {
     const prisma = makePrismaStub();
     prisma.formSubmission.findFirst.mockResolvedValue({ id: 'sub-1', formVersionId: 'version-1' });
     const forms = makeFormsStub();
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
 
     await expect(service.updateSubmission('demo', 'sub-1', {}, 'admin-1')).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
@@ -294,7 +311,7 @@ describe('SubmissionsService.updateSubmission', () => {
     const prisma = makePrismaStub();
     prisma.formSubmission.findFirst.mockResolvedValue(null); // not found on the CURRENT version
     const forms = makeFormsStub();
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
 
     await expect(service.updateSubmission('demo', 'sub-old', { team: 'y' }, 'admin-1')).rejects.toMatchObject({
       code: 'NOT_FOUND',
@@ -307,7 +324,7 @@ describe('SubmissionsService.deleteAllSubmissions', () => {
     const prisma = makePrismaStub();
     prisma.formSubmission.deleteMany.mockResolvedValue({ count: 7 });
     const forms = makeFormsStub();
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
 
     const result = await service.deleteAllSubmissions('demo', 'admin-1');
 
@@ -365,7 +382,7 @@ describe('SubmissionsService.summary', () => {
       { answers: { nps: 3, score: 30, mood: { tools: 0 }, prio: ['a', 'b'] }, createdAt: new Date() },
     ]);
 
-    const service = new SubmissionsService(prisma as never, forms as never);
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
     const summary = await service.summary('survey');
 
     expect(summary.responses).toBe(3);

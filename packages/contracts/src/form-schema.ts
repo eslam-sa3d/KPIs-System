@@ -254,6 +254,9 @@ export const formSettingsSchema = z.object({
   /** lets a respondent revise their own submission via a signed edit token
    *  returned at submit time — distinct from admin-only response editing. */
   allowRespondentEdit: z.boolean().default(false),
+  /** require a passing Cloudflare Turnstile check on public submissions — default
+   *  off, since most forms here are internal. See TurnstileService. */
+  requireCaptcha: z.boolean().default(false),
 });
 
 export type FormSettings = z.infer<typeof formSettingsSchema>;

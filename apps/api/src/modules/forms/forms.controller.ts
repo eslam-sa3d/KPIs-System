@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   Param,
   Patch,
@@ -319,12 +320,13 @@ export class PublicFormsController {
   submit(
     @Param('token') token: string,
     @Body(new ZodValidationPipe(submissionAnswersSchema)) answers: SubmissionAnswers,
+    @Headers('x-turnstile-token') turnstileToken: string | undefined,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const fingerprint = req.cookies?.[RESPONDENT_COOKIE] ?? randomBytes(16).toString('base64url');
     res.cookie(RESPONDENT_COOKIE, fingerprint, respondentCookieOptions);
-    return this.submissions.submitPublic(token, answers, fingerprint);
+    return this.submissions.submitPublic(token, answers, fingerprint, turnstileToken);
   }
 
   @Public()
