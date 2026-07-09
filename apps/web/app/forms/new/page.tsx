@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRef, useState } from 'react';
-import { BRANCH_TRIGGER_TYPES, CONDITION_OPERATORS, END_OF_FORM, type FieldType } from '@pulse/contracts';
+import { BRANCH_TRIGGER_TYPES, CONDITION_OPERATORS, END_OF_FORM, FORM_FONT_FAMILIES, type FieldType } from '@pulse/contracts';
 import { palette } from '@pulse/theme';
 
 const THEME_SWATCHES = [
@@ -393,6 +393,7 @@ export default function NewFormPage() {
   const [themeAccentColor, setThemeAccentColor] = useState('');
   const [themeBackgroundAssetId, setThemeBackgroundAssetId] = useState('');
   const [themeLogoAssetId, setThemeLogoAssetId] = useState('');
+  const [themeFontFamily, setThemeFontFamily] = useState<'' | (typeof FORM_FONT_FAMILIES)[number]>('');
 
   const keyedFields = fields.map((f, i) => ({
     key: toKey(f.label, i),
@@ -754,11 +755,12 @@ export default function NewFormPage() {
   }
 
   function buildThemePayload() {
-    if (!themeAccentColor && !themeBackgroundAssetId && !themeLogoAssetId) return undefined;
+    if (!themeAccentColor && !themeBackgroundAssetId && !themeLogoAssetId && !themeFontFamily) return undefined;
     return {
       ...(themeAccentColor ? { accentColor: themeAccentColor } : {}),
       ...(themeBackgroundAssetId ? { backgroundAssetId: themeBackgroundAssetId } : {}),
       ...(themeLogoAssetId ? { logoAssetId: themeLogoAssetId } : {}),
+      ...(themeFontFamily ? { fontFamily: themeFontFamily } : {}),
     };
   }
 
@@ -1814,6 +1816,20 @@ export default function NewFormPage() {
               </button>
             )}
           </div>
+
+          <label htmlFor="theme-font">font (optional)</label>
+          <select
+            id="theme-font"
+            value={themeFontFamily}
+            onChange={(e) => setThemeFontFamily(e.target.value as typeof themeFontFamily)}
+          >
+            <option value="">default (app font)</option>
+            {FORM_FONT_FAMILIES.filter((f) => f !== 'default').map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
 
           <label htmlFor="theme-logo">logo (optional)</label>
           <input

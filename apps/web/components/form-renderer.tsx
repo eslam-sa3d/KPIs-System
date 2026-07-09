@@ -1,9 +1,16 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
+import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type FormTheme, type SubmissionAnswers } from '@pulse/contracts';
 import { ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
+
+/** Google Forms' three-way font choice, mapped to system stacks — no new font files/CDN loads. */
+const FONT_STACKS: Record<NonNullable<FormTheme['fontFamily']>, string | undefined> = {
+  default: undefined,
+  serif: 'Georgia, "Times New Roman", Times, serif',
+  casual: 'ui-rounded, "Segoe UI Rounded", "Trebuchet MS", sans-serif',
+};
 
 function FieldMedia({ media }: { media: Media }) {
   if (media.type === 'image' && media.assetId) {
@@ -589,7 +596,14 @@ export function FormRenderer({
   }
 
   const theme = definition.theme;
-  const accentStyle = theme?.accentColor ? ({ '--msform-accent': theme.accentColor } as React.CSSProperties) : undefined;
+  const fontStack = theme?.fontFamily ? FONT_STACKS[theme.fontFamily] : undefined;
+  const accentStyle =
+    theme?.accentColor || fontStack
+      ? ({
+          ...(theme?.accentColor ? { '--msform-accent': theme.accentColor } : {}),
+          ...(fontStack ? { '--msform-font-family': fontStack } : {}),
+        } as React.CSSProperties)
+      : undefined;
   const bannerStyle = theme?.backgroundAssetId ? { backgroundImage: `url(${assetUrl(theme.backgroundAssetId)})` } : undefined;
 
   return (

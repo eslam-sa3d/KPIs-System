@@ -265,10 +265,15 @@ export const DEFAULT_FORM_SETTINGS: FormSettings = formSettingsSchema.parse({});
 /** Per-form look and feel — lives on the definition (not settings) so
  *  duplicating a form carries its branding, matching how the rest of the
  *  definition is treated. */
+/** Google Forms' own three-way font choice — a well-understood reference point.
+ *  All three map to system font stacks (see FormRenderer), no new font files/CDN loads. */
+export const FORM_FONT_FAMILIES = ['default', 'serif', 'casual'] as const;
+
 export const formThemeSchema = z.object({
   accentColor: z.string().regex(/^#[0-9a-f]{6}$/i, 'expected a hex color like #4f008c').optional(),
   backgroundAssetId: z.string().uuid().optional(),
   logoAssetId: z.string().uuid().optional(),
+  fontFamily: z.enum(FORM_FONT_FAMILIES).optional(),
 });
 
 export type FormTheme = z.infer<typeof formThemeSchema>;

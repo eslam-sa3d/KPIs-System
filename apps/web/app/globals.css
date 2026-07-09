@@ -1143,6 +1143,9 @@ h1, h2, h3 {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  /* --msform-font-family is set inline per-form (FormRenderer) from
+     FormDefinition.theme.fontFamily; falls back to the app's own font stack. */
+  font-family: var(--msform-font-family, inherit);
 }
 
 .msform-banner {
