@@ -1850,6 +1850,23 @@ h1, h2, h3 {
   font-size: var(--font-size-sm);
 }
 
+.summary-bar-row-clickable {
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.summary-bar-row-clickable:hover {
+  background: var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
 .summary-bar-label {
   overflow: hidden;
   text-overflow: ellipsis;

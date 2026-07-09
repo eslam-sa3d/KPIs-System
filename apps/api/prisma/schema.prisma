@@ -167,6 +167,8 @@ model Form {
   settings    Json?
   /// Non-null enables the anonymous public fill link (/f?token=…)
   publicToken String?  @unique
+  /// Non-null enables the token-gated live export link (Excel "Get Data from Web")
+  exportToken String?  @unique
   /// When true, only the creator, a FormCollaborator, or a forms:manage holder
   /// may view/fill/manage this form via the portal — independent of the
   /// anonymous public link above, which stays open-to-anyone once enabled.

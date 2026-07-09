@@ -14,7 +14,14 @@ import { api, downloadFile } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
 interface FormDetail {
-  form: { id: string; slug: string; status: string; publicToken: string | null; restricted: boolean };
+  form: {
+    id: string;
+    slug: string;
+    status: string;
+    publicToken: string | null;
+    exportToken: string | null;
+    restricted: boolean;
+  };
   version: { id: string; version: number };
   definition: FormDefinition;
   settings: FormSettings;
@@ -43,6 +50,7 @@ function FormView() {
   const [dateTo, setDateTo] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [fieldFilter, setFieldFilter] = useState<{ key: string; label: string; value: string } | null>(null);
 
   const reloadDetail = useCallback(() => {
     if (slug) void api<FormDetail>(`/v1/forms/${encodeURIComponent(slug)}`).then(setDetail);
@@ -52,15 +60,39 @@ function FormView() {
     if (user) reloadDetail();
   }, [user, reloadDetail]);
 
+  const loadSubmissions = useCallback(() => {
+    const qs = fieldFilter
+      ? `&answers.${encodeURIComponent(fieldFilter.key)}=${encodeURIComponent(fieldFilter.value)}`
+      : '';
+    void api<SubmissionRow[]>(`/v1/forms/${encodeURIComponent(slug)}/submissions?pageSize=100${qs}`).then(setRows);
+  }, [slug, fieldFilter]);
+
+  const loadSummary = useCallback(() => {
+    void api<ResponseSummaryData>(`/v1/forms/${encodeURIComponent(slug)}/submissions/summary`).then(setSummary);
+  }, [slug]);
+
   useEffect(() => {
     if (!user || !slug) return;
-    if (tab === 'submissions') {
-      void api<SubmissionRow[]>(`/v1/forms/${encodeURIComponent(slug)}/submissions?pageSize=100`).then(setRows);
-    }
-    if (tab === 'summary') {
-      void api<ResponseSummaryData>(`/v1/forms/${encodeURIComponent(slug)}/submissions/summary`).then(setSummary);
-    }
-  }, [user, slug, tab]);
+    if (tab === 'submissions') loadSubmissions();
+    if (tab === 'summary') loadSummary();
+  }, [user, slug, tab, loadSubmissions, loadSummary]);
+
+  // live-ish refresh: re-poll the active tab every 15s while the browser tab is visible,
+  // so new responses show up without a manual reload — no websockets needed at this scale
+  useEffect(() => {
+    if (!user || !slug || (tab !== 'submissions' && tab !== 'summary')) return;
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (tab === 'submissions') loadSubmissions();
+      if (tab === 'summary') loadSummary();
+    }, 15_000);
+    return () => clearInterval(interval);
+  }, [user, slug, tab, loadSubmissions, loadSummary]);
+
+  function onFilterByAnswer(fieldKey: string, label: string, value: string) {
+    setFieldFilter({ key: fieldKey, label, value });
+    setTab('submissions');
+  }
 
   async function onSubmit(answers: SubmissionAnswers) {
     return api<{ score?: SubmissionScore | null }>(`/v1/forms/${encodeURIComponent(slug)}/submissions`, {
@@ -157,6 +189,14 @@ function FormView() {
 
       {tab === 'submissions' && (
         <section role="tabpanel" aria-label="submissions">
+          {fieldFilter && (
+            <p className="form-notice">
+              filtered by {fieldFilter.label}: <strong>{fieldFilter.value}</strong>{' '}
+              <button className="btn-ghost" onClick={() => setFieldFilter(null)}>
+                clear
+              </button>
+            </p>
+          )}
           <div className="page-title-row">
             <input
               aria-label="filter submissions"
@@ -269,12 +309,16 @@ function FormView() {
                 index={selectedIndex}
                 total={filteredRows.length}
                 slug={slug}
+                canEdit={canModerate}
                 onClose={() => setSelectedRowId(null)}
                 onPrev={selectedIndex > 0 ? () => setSelectedRowId(filteredRows[selectedIndex - 1]!.id) : null}
                 onNext={
                   selectedIndex < filteredRows.length - 1
                     ? () => setSelectedRowId(filteredRows[selectedIndex + 1]!.id)
                     : null
+                }
+                onSaved={(updated) =>
+                  setRows((current) => current?.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)) ?? null)
                 }
               />
             );
@@ -284,7 +328,11 @@ function FormView() {
 
       {tab === 'summary' && (
         <section role="tabpanel" aria-label="response summary">
-          {summary === null ? <p className="muted">loading…</p> : <ResponseSummary data={summary} />}
+          {summary === null ? (
+            <p className="muted">loading…</p>
+          ) : (
+            <ResponseSummary data={summary} onFilterByAnswer={onFilterByAnswer} />
+          )}
         </section>
       )}
 
@@ -295,7 +343,7 @@ function FormView() {
             settings={settings}
             onSaved={(next) => setDetail((d) => (d ? { ...d, settings: next } : d))}
           />
-          <ShareLinkPanel formId={form.id} publicToken={form.publicToken} />
+          <ShareLinkPanel formId={form.id} publicToken={form.publicToken} exportToken={form.exportToken} />
           <AccessControlPanel
             formId={form.id}
             restricted={form.restricted}

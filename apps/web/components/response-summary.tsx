@@ -13,25 +13,42 @@ function barColor(share: number): string {
   return `color-mix(in srgb, ${palette.primary.purple} ${100 - Math.round((lightness / 85) * 40)}%, white)`;
 }
 
-function BarBreakdown({ counts, total }: { counts: Record<string, number>; total: number }) {
+function BarBreakdown({
+  counts,
+  total,
+  onSegmentClick,
+}: {
+  counts: Record<string, number>;
+  total: number;
+  /** clicking a bar filters the submissions tab to that exact answer */
+  onSegmentClick?: (value: string) => void;
+}) {
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...entries.map(([, n]) => n));
   return (
     <div className="summary-bars">
-      {entries.map(([label, count]) => (
-        <div key={label} className="summary-bar-row">
-          <span className="summary-bar-label">{label}</span>
-          <div className="summary-bar-track">
-            <div
-              className="summary-bar-fill"
-              style={{ width: `${(count / max) * 100}%`, background: barColor(count / max) }}
-            />
-          </div>
-          <span className="summary-bar-count muted">
-            {count} ({total ? Math.round((count / total) * 100) : 0}%)
-          </span>
-        </div>
-      ))}
+      {entries.map(([label, count]) => {
+        const Row = onSegmentClick ? 'button' : 'div';
+        return (
+          <Row
+            key={label}
+            type={onSegmentClick ? 'button' : undefined}
+            className={`summary-bar-row${onSegmentClick ? ' summary-bar-row-clickable' : ''}`}
+            onClick={onSegmentClick ? () => onSegmentClick(label) : undefined}
+          >
+            <span className="summary-bar-label">{label}</span>
+            <div className="summary-bar-track">
+              <div
+                className="summary-bar-fill"
+                style={{ width: `${(count / max) * 100}%`, background: barColor(count / max) }}
+              />
+            </div>
+            <span className="summary-bar-count muted">
+              {count} ({total ? Math.round((count / total) * 100) : 0}%)
+            </span>
+          </Row>
+        );
+      })}
     </div>
   );
 }
@@ -41,7 +58,14 @@ function BarBreakdown({ counts, total }: { counts: Record<string, number>; total
  * shape driven by the question type. No axis chrome needed at this scale —
  * bars are self-labeled with counts and percentages.
  */
-export function ResponseSummary({ data }: { data: ResponseSummaryData }) {
+export function ResponseSummary({
+  data,
+  onFilterByAnswer,
+}: {
+  data: ResponseSummaryData;
+  /** switches to the submissions tab, pre-filtered to fieldKey === value */
+  onFilterByAnswer?: (fieldKey: string, label: string, value: string) => void;
+}) {
   return (
     <div className="summary-grid">
       <div className="admin-card summary-headline">
@@ -75,7 +99,19 @@ export function ResponseSummary({ data }: { data: ResponseSummaryData }) {
           <h3>{field.label}</h3>
           <p className="muted">{field.answered} response(s)</p>
 
-          {field.counts && <BarBreakdown counts={field.counts} total={field.answered} />}
+          {field.counts && (
+            <BarBreakdown
+              counts={field.counts}
+              total={field.answered}
+              // "other:" answers collapse to a single "other" bucket server-side and
+              // can't be exact-matched back to their free-text value — skip those
+              onSegmentClick={
+                onFilterByAnswer && (field.type === 'select' || field.type === 'multi_select')
+                  ? (value) => value !== 'other' && onFilterByAnswer(field.key, field.label, value)
+                  : undefined
+              }
+            />
+          )}
 
           {field.type === 'nps' && field.npsScore !== undefined && (
             <p className="summary-nps">

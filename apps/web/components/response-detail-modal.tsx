@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormDefinition, SubmissionAnswers } from '@pulse/contracts';
-import { downloadFile } from '../lib/api-client';
-import type { SubmissionScore } from './form-renderer';
+import { api, downloadFile } from '../lib/api-client';
+import { FieldInput, type SubmissionScore } from './form-renderer';
 
 export interface DetailedSubmission {
   id: string;
@@ -31,9 +31,11 @@ export function ResponseDetailModal({
   index,
   total,
   slug,
+  canEdit,
   onClose,
   onPrev,
   onNext,
+  onSaved,
 }: {
   definition: FormDefinition;
   submission: DetailedSubmission;
@@ -41,19 +43,51 @@ export function ResponseDetailModal({
   total: number;
   /** form slug — needed to build the authenticated file-download URL */
   slug: string;
+  /** admin-correction: requires form_submissions:manage, same bar as delete */
+  canEdit: boolean;
   onClose: () => void;
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
+  onSaved: (updated: DetailedSubmission) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<SubmissionAnswers>(submission.answers);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEditing(false);
+    setDraft(submission.answers);
+    setSaveError(null);
+  }, [submission]);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (editing) return; // don't hijack arrow keys / escape while correcting an answer
       if (e.key === 'Escape') onClose();
       if (e.key === 'ArrowLeft' && onPrev) onPrev();
       if (e.key === 'ArrowRight' && onNext) onNext();
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, onPrev, onNext]);
+  }, [editing, onClose, onPrev, onNext]);
+
+  async function onSave() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await api<DetailedSubmission>(`/v1/forms/${slug}/submissions/${submission.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(draft),
+      });
+      onSaved({ ...submission, ...updated });
+      setEditing(false);
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : 'Saving failed');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="response-modal-backdrop" onClick={onClose}>
@@ -84,41 +118,86 @@ export function ResponseDetailModal({
               </p>
             )}
           </div>
-          <button className="btn-ghost" onClick={onClose} aria-label="close">
-            close
-          </button>
+          <span className="builder-field-actions">
+            {canEdit && !editing && (
+              <button className="btn-ghost" onClick={() => setEditing(true)}>
+                edit
+              </button>
+            )}
+            <button className="btn-ghost" onClick={onClose} aria-label="close">
+              close
+            </button>
+          </span>
         </div>
         <div className="response-modal-body">
-          <dl>
-            {definition.fields.map((field) => {
-              const value = submission.answers[field.key];
-              return (
-                <div key={field.key} className="response-modal-qa">
-                  <dt>{field.label}</dt>
-                  <dd>
-                    {field.type === 'file' && typeof value === 'string' && value ? (
-                      <button
-                        className="btn-ghost"
-                        onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${value}`, field.label)}
-                      >
-                        download attachment
-                      </button>
-                    ) : (
-                      formatAnswer(value)
-                    )}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
+          {editing ? (
+            <div className="builder">
+              {definition.fields
+                .filter((f) => f.type !== 'section_header')
+                .map((field) => (
+                  <div key={field.key} className="question-card">
+                    <label htmlFor={`edit-${field.key}`} className="question-title">
+                      {field.label}
+                    </label>
+                    <FieldInput
+                      field={field}
+                      value={draft[field.key]}
+                      uploadPath={`/v1/forms/${slug}/uploads`}
+                      onChange={(value) => setDraft((d) => ({ ...d, [field.key]: value }))}
+                    />
+                  </div>
+                ))}
+              {saveError && (
+                <p role="alert" className="form-error">
+                  {saveError}
+                </p>
+              )}
+            </div>
+          ) : (
+            <dl>
+              {definition.fields.map((field) => {
+                const value = submission.answers[field.key];
+                return (
+                  <div key={field.key} className="response-modal-qa">
+                    <dt>{field.label}</dt>
+                    <dd>
+                      {field.type === 'file' && typeof value === 'string' && value ? (
+                        <button
+                          className="btn-ghost"
+                          onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${value}`, field.label)}
+                        >
+                          download attachment
+                        </button>
+                      ) : (
+                        formatAnswer(value)
+                      )}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          )}
         </div>
         <div className="response-modal-footer">
-          <button className="btn-ghost" onClick={() => onPrev?.()} disabled={!onPrev}>
-            ← previous
-          </button>
-          <button className="btn-ghost" onClick={() => onNext?.()} disabled={!onNext}>
-            next →
-          </button>
+          {editing ? (
+            <>
+              <button className="btn-ghost" onClick={() => { setEditing(false); setDraft(submission.answers); setSaveError(null); }}>
+                cancel
+              </button>
+              <button className="btn-primary" disabled={saving} onClick={onSave}>
+                {saving ? 'saving…' : 'save'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn-ghost" onClick={() => onPrev?.()} disabled={!onPrev}>
+                ← previous
+              </button>
+              <button className="btn-ghost" onClick={() => onNext?.()} disabled={!onNext}>
+                next →
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

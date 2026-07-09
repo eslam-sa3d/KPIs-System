@@ -42,7 +42,8 @@ export const isVisible = (field: FormField, answers: SubmissionAnswers) => {
   }
 };
 
-function FieldInput({
+/** Exported for reuse by ResponseDetailModal's edit mode — same input for filling and correcting. */
+export function FieldInput({
   field,
   value,
   onChange,

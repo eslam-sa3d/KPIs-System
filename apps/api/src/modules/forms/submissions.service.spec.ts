@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { formDefinitionSchema, formSettingsSchema } from '@pulse/contracts';
+import { Prisma } from '@prisma/client';
 import { SubmissionsService } from './submissions.service';
 
 const activeForm = { id: 'form-1', publicToken: null };
@@ -8,6 +9,7 @@ function makePrismaStub() {
   return {
     formSubmission: {
       create: vi.fn(async ({ data }: { data: object }) => ({ id: 'sub-new', ...data })),
+      update: vi.fn(async ({ data }: { data: object }) => ({ id: 'sub-1', ...data })),
       findFirst: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
@@ -179,6 +181,48 @@ describe('SubmissionsService file-answer integrity', () => {
     expect(prisma.formFileUpload.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['upload-x'] } },
       data: { submissionId: 'sub-new' },
+    });
+  });
+});
+
+describe('SubmissionsService.updateSubmission', () => {
+  it('re-validates and updates an existing submission on the current version', async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.findFirst.mockResolvedValue({ id: 'sub-1', formVersionId: 'version-1' });
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never);
+
+    await service.updateSubmission('demo', 'sub-1', { team: 'y' }, 'admin-1');
+
+    expect(prisma.formSubmission.update).toHaveBeenCalledWith({
+      where: { id: 'sub-1' },
+      data: { answers: { team: 'y' }, score: Prisma.DbNull },
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: { actorId: 'admin-1', action: 'submission.updated', entity: 'FormSubmission', entityId: 'sub-1', detail: { formSlug: 'demo' } },
+    });
+  });
+
+  it('rejects an edit that fails validation against the current definition', async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.findFirst.mockResolvedValue({ id: 'sub-1', formVersionId: 'version-1' });
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never);
+
+    await expect(service.updateSubmission('demo', 'sub-1', {}, 'admin-1')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(prisma.formSubmission.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects editing a submission that belongs to an older version', async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.findFirst.mockResolvedValue(null); // not found on the CURRENT version
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never);
+
+    await expect(service.updateSubmission('demo', 'sub-old', { team: 'y' }, 'admin-1')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
     });
   });
 });

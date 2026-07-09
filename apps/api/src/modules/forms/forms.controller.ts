@@ -100,6 +100,16 @@ export class FormsController {
     return this.forms.setShareLink(formId, Boolean(body?.enabled), req.user.id);
   }
 
+  @Post(':formId/export-link')
+  @RequirePermissions('forms:manage')
+  setExportLink(
+    @Param('formId') formId: string,
+    @Body() body: { enabled: boolean },
+    @Req() req: AuthedRequest,
+  ) {
+    return this.forms.setExportLink(formId, Boolean(body?.enabled), req.user.id);
+  }
+
   /** Restricts portal access to the creator, collaborators, and forms:manage holders.
    *  forms:write is the coarse gate; FormsService.getOwnedForm enforces the real ownership check. */
   @Post(':formId/restricted')
@@ -178,6 +188,17 @@ export class FormsController {
   @RequirePermissions('form_submissions:read')
   summary(@Param('slug') slug: string) {
     return this.submissions.summary(slug);
+  }
+
+  @Patch(':slug/submissions/:submissionId')
+  @RequirePermissions('form_submissions:manage')
+  updateSubmission(
+    @Param('slug') slug: string,
+    @Param('submissionId') submissionId: string,
+    @Body(new ZodValidationPipe(submissionAnswersSchema)) answers: SubmissionAnswers,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.submissions.updateSubmission(slug, submissionId, answers, req.user.id);
   }
 
   @Delete(':slug/submissions/:submissionId')
@@ -276,6 +297,19 @@ export class PublicFormsController {
     const { definition, settings } = await this.forms.getByPublicToken(token);
     // expose only what a respondent needs — no ids, no internals
     return { definition, settings };
+  }
+
+  /** Token-gated live export — paste into Excel's "Get Data from Web" and refresh anytime.
+   *  The unguessable token IS the access control, same trust model as the public fill link. */
+  @Public()
+  @Get('export/:exportToken')
+  async exportXlsx(@Param('exportToken') exportToken: string, @Res() res: Response) {
+    const { form } = await this.forms.getByExportToken(exportToken);
+    const buffer = await this.submissions.exportXlsx(form.slug, null);
+    res
+      .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .setHeader('Content-Disposition', `attachment; filename="${form.slug}-live.xlsx"`)
+      .send(buffer);
   }
 
   @Public()

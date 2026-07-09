@@ -79,14 +79,14 @@ export class SubmissionsService {
     }
   }
 
-  private async persist(
+  /** Validates raw answers, checks file-upload ids actually belong to this form (the
+   *  trust boundary compileAnswerValidator can't cover, since it has no DB access), and
+   *  computes the quiz score if applicable. Shared by both new submissions and edits. */
+  private async validateAndScore(
     formId: string,
-    formVersionId: string,
     definition: FormDefinition,
     settings: FormSettings,
     rawAnswers: SubmissionAnswers,
-    submittedById: string | null,
-    respondentFingerprint: string | null,
   ) {
     let answers: SubmissionAnswers;
     try {
@@ -100,9 +100,6 @@ export class SubmissionsService {
       throw error;
     }
 
-    // file answers are opaque upload ids — confirm they were actually
-    // uploaded for THIS form before trusting them (the trust boundary
-    // compileAnswerValidator can't cover, since it has no DB access)
     const fileFieldKeys = new Set(definition.fields.filter((f) => f.type === 'file').map((f) => f.key));
     const uploadIds = Object.entries(answers)
       .filter(([key]) => fileFieldKeys.has(key))
@@ -121,6 +118,20 @@ export class SubmissionsService {
       ? scoreSubmission(definition, answers, settings.passThresholdPercent)
       : null;
 
+    return { answers, uploadIds, score };
+  }
+
+  private async persist(
+    formId: string,
+    formVersionId: string,
+    definition: FormDefinition,
+    settings: FormSettings,
+    rawAnswers: SubmissionAnswers,
+    submittedById: string | null,
+    respondentFingerprint: string | null,
+  ) {
+    const { answers, uploadIds, score } = await this.validateAndScore(formId, definition, settings, rawAnswers);
+
     const submission = await this.prisma.formSubmission.create({
       data: {
         formVersionId,
@@ -134,6 +145,35 @@ export class SubmissionsService {
       await this.prisma.formFileUpload.updateMany({
         where: { id: { in: uploadIds } },
         data: { submissionId: submission.id },
+      });
+    }
+    return submission;
+  }
+
+  /** Admin correction: re-validates against the CURRENT version's compiled schema (not the
+   *  version the respondent originally submitted against) — editing is a forward-looking fix. */
+  async updateSubmission(formSlug: string, submissionId: string, rawAnswers: SubmissionAnswers, actorId: string) {
+    const { form, version, definition, settings } = await this.forms.getLatestVersion(formSlug);
+    const existing = await this.prisma.formSubmission.findFirst({
+      where: { id: submissionId, formVersionId: version.id },
+    });
+    if (!existing) throw AppError.notFound('Submission', submissionId);
+
+    const { answers, uploadIds, score } = await this.validateAndScore(form.id, definition, settings, rawAnswers);
+
+    const [submission] = await this.prisma.$transaction([
+      this.prisma.formSubmission.update({
+        where: { id: submissionId },
+        data: { answers, score: score ? (score as unknown as Prisma.InputJsonValue) : Prisma.DbNull },
+      }),
+      this.prisma.auditLog.create({
+        data: { actorId, action: 'submission.updated', entity: 'FormSubmission', entityId: submissionId, detail: { formSlug } },
+      }),
+    ]);
+    if (uploadIds.length) {
+      await this.prisma.formFileUpload.updateMany({
+        where: { id: { in: uploadIds } },
+        data: { submissionId },
       });
     }
     return submission;
@@ -330,13 +370,14 @@ export class SubmissionsService {
   }
 
   /** CSV export of all submissions for the latest version (audited). */
-  async exportCsv(formSlug: string, actorId: string): Promise<string> {
+  async exportCsv(formSlug: string, actorId: string | null): Promise<string> {
     const { header, rows } = await this.buildExportTable(formSlug, actorId);
     return [header, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\n');
   }
 
-  /** Same data as exportCsv, as an .xlsx workbook (audited separately). */
-  async exportXlsx(formSlug: string, actorId: string): Promise<Buffer> {
+  /** Same data as exportCsv, as an .xlsx workbook (audited separately). `actorId` is null for
+   *  the token-gated live export link — an anonymous-to-the-DB but still access-controlled pull. */
+  async exportXlsx(formSlug: string, actorId: string | null): Promise<Buffer> {
     const { header, rows } = await this.buildExportTable(formSlug, actorId, 'submissions.exported_xlsx');
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Responses');
@@ -348,7 +389,7 @@ export class SubmissionsService {
 
   private async buildExportTable(
     formSlug: string,
-    actorId: string,
+    actorId: string | null,
     auditAction = 'submissions.exported',
   ): Promise<{ header: string[]; rows: string[][] }> {
     const { version, definition } = await this.forms.getLatestVersion(formSlug);

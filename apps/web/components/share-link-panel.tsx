@@ -2,15 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { api } from '../lib/api-client';
+import { API_URL, api } from '../lib/api-client';
 
 /** Public share link + QR (client-generated, no external network call). */
-export function ShareLinkPanel({ formId, publicToken }: { formId: string; publicToken: string | null }) {
+export function ShareLinkPanel({
+  formId,
+  publicToken,
+  exportToken,
+}: {
+  formId: string;
+  publicToken: string | null;
+  exportToken: string | null;
+}) {
   const [token, setToken] = useState(publicToken);
   const [qr, setQr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
+  const [xToken, setXToken] = useState(exportToken);
+  const [xBusy, setXBusy] = useState(false);
+  const [xCopied, setXCopied] = useState(false);
+  const exportUrl = xToken ? `${API_URL}/api/v1/public/forms/export/${xToken}` : null;
 
   const url = token && typeof window !== 'undefined'
     ? `${window.location.origin}${window.location.pathname.replace(/forms\/.*/, '')}f/?t=${token}`
@@ -54,6 +66,26 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
     setTimeout(() => setEmbedCopied(false), 2000);
   }
 
+  async function toggleExportLink(enabled: boolean) {
+    setXBusy(true);
+    try {
+      const result = await api<{ exportToken: string | null }>(`/v1/forms/${formId}/export-link`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled }),
+      });
+      setXToken(result.exportToken);
+    } finally {
+      setXBusy(false);
+    }
+  }
+
+  async function copyExportUrl() {
+    if (!exportUrl) return;
+    await navigator.clipboard.writeText(exportUrl);
+    setXCopied(true);
+    setTimeout(() => setXCopied(false), 2000);
+  }
+
   return (
     <div className="admin-card share-panel">
       <h2>public share link</h2>
@@ -88,6 +120,33 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
               rotate link
             </button>
             <button className="btn-ghost" onClick={() => toggle(false)} disabled={busy}>
+              disable
+            </button>
+          </div>
+        </div>
+      )}
+
+      <h2 style={{ marginTop: 24 }}>live export link</h2>
+      <p className="muted">
+        paste this into Excel's "Get Data → From Web" and refresh anytime for the latest
+        responses — the practical equivalent of Microsoft Forms' "Open in Excel". The link
+        itself is the access control, so treat it like a password.
+      </p>
+      {!xToken ? (
+        <button className="btn-primary" onClick={() => toggleExportLink(true)} disabled={xBusy}>
+          {xBusy ? 'creating…' : 'create live export link'}
+        </button>
+      ) : (
+        <div className="share-panel-active">
+          <div className="share-link-row">
+            <code className="share-link-url">{exportUrl}</code>
+            <button className="btn-ghost" onClick={copyExportUrl}>{xCopied ? 'copied!' : 'copy'}</button>
+          </div>
+          <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
+            <button className="btn-ghost" onClick={() => toggleExportLink(true)} disabled={xBusy}>
+              rotate link
+            </button>
+            <button className="btn-ghost" onClick={() => toggleExportLink(false)} disabled={xBusy}>
               disable
             </button>
           </div>
