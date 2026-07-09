@@ -227,11 +227,16 @@ export default function NewFormPage() {
     try {
       // lazy-loaded: the xlsx parsing engine only ships once someone actually imports a file
       const { parseFormWorkbook } = await import('../../../lib/parse-form-workbook');
-      const { fields: parsed, issues } = await parseFormWorkbook(file);
+      const { fields: parsed, issues, title: parsedTitle, description: parsedDescription } =
+        await parseFormWorkbook(file);
       if (parsed.length === 0) {
         setError(issues[0] ?? 'no usable rows found — check that the sheet has a "question" column');
         return;
       }
+
+      // only a .docx returns these, and only fills in blanks — never overwrites what's already typed
+      if (parsedTitle && !title.trim()) setTitle(parsedTitle);
+      if (parsedDescription && !description.trim()) setDescription(parsedDescription);
 
       const baseIndex = fields.length;
       setFields((current) => [

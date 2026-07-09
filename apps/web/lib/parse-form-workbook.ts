@@ -25,6 +25,9 @@ export interface ParsedFormWorkbook {
   fields: ParsedFormField[];
   /** row-level problems, e.g. "row 4: no question text" — shown to the user, not fatal on their own */
   issues: string[];
+  /** only set by the .docx path, when the document opens with a title/description above the first question */
+  title?: string;
+  description?: string;
 }
 
 // header row cells are matched case/spacing-insensitively against these aliases
@@ -187,37 +190,153 @@ function parseCsvText(text: string): string[][] {
   return rows;
 }
 
+const RATING_OPTION = /^\d/; // "1 - Needs Improvement" … "5 - Excellent"
+const NUMBERED_LINE = /^\d+[.)]\s+(.+)/;
+const LETTERED_LINE = /^[a-z][.)]\s+(.+)/i;
+// a numbered question that opens a new rating category names it once:
+// "SECTION 1 - Leadership & People Management: Coaching & Mentoring"
+const SECTION_HEADER = /^SECTION\s+\d+\s*-\s*([^:]+):\s*(.+)$/i;
+
 /**
- * A Word document has no columns, so each non-empty line/paragraph becomes a
- * short-text question. A trailing parenthetical hint that names a known field
- * type — e.g. "how satisfied are you? (rating)" — sets that question's type;
- * everything else (required, options, help text) is left at the default and
- * can be adjusted in the builder afterward.
+ * Splits a trailing "(...)" off a question line into help text, e.g.
+ * "Evaluatee Full Name (Enter the full name.)" -> label + helpText.
+ */
+function splitHelpText(text: string): { label: string; helpText: string } {
+  const match = text.match(/^(.*\S)\s*\(([^()]+)\)\s*$/);
+  return match ? { label: match[1]!.trim(), helpText: match[2]!.trim() } : { label: text, helpText: '' };
+}
+
+/**
+ * A Word document has no columns, so structure has to be read from plain-text
+ * conventions MS-Forms-style templates commonly use:
+ *
+ *  - a title line, then a description paragraph, before the first numbered question
+ *  - numbered questions ("1. Question text (help text)"), each optionally
+ *    followed by lettered answer options ("a. Option one", "b. Option two…")
+ *  - a rating-scale question's options all start with a digit ("1 - Needs
+ *    Improvement" … "5 - Excellent"); the FIRST such question in a group
+ *    names its category once ("SECTION 1 - Leadership: Coaching &
+ *    Mentoring") — every rating question after it, until the next SECTION
+ *    marker, belongs to that same category and is a statement in one
+ *    combined likert matrix rather than its own field
+ *  - a non-rating question with 2+ lettered options becomes a select field;
+ *    with none, a short-text field
+ *
+ * Falls back gracefully: unrecognized structure just becomes individual
+ * short-text questions, same as before.
  */
 function parseDocxLines(rawText: string): ParsedFormWorkbook {
   const issues: string[] = [];
   const fields: ParsedFormField[] = [];
+  const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
-  const lines = rawText
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^(\d+[.)]|[-*•])\s+/, ''))
-    .filter(Boolean);
+  if (lines.length === 0) {
+    return { fields, issues: ['the document has no content'] };
+  }
 
-  lines.forEach((line) => {
-    const hint = line.match(/^(.*\S)\s*\(([^()]+)\)\s*$/);
-    const hintType = hint ? TYPE_ALIASES[hint[2]!.trim().toLowerCase()] : undefined;
-    const label = hintType ? hint![1]!.trim() : line;
+  let i = 0;
+  let title: string | undefined;
+  let description: string | undefined;
+
+  // a title line precedes the first numbered/lettered content
+  if (!NUMBERED_LINE.test(lines[0]!) && !LETTERED_LINE.test(lines[0]!)) {
+    title = lines[0];
+    i = 1;
+    const descLines: string[] = [];
+    while (i < lines.length && !NUMBERED_LINE.test(lines[i]!) && !LETTERED_LINE.test(lines[i]!)) {
+      descLines.push(lines[i]!);
+      i++;
+    }
+    if (descLines.length > 0) description = descLines.join(' ');
+  }
+
+  // statements accumulate here for the category currently being read; flushed
+  // into a single likert field the moment a DIFFERENT category starts (or a
+  // non-rating question is hit) — flushing inline, rather than batching all
+  // groups at the end, keeps the resulting field order matching the
+  // document's reading order (so a trailing question ends up after the
+  // categories, not before them)
+  let currentCategory: string | null = null;
+  let currentStatements: string[] = [];
+  let currentScale: string[] = [];
+  let seenAnySection = false;
+
+  function flushCurrentCategory() {
+    if (currentCategory && currentStatements.length > 0) {
+      fields.push({
+        ...DEFAULT_FIELD,
+        label: currentCategory,
+        type: 'likert',
+        required: false,
+        options: currentStatements.join(', '),
+        likertScale: currentScale.join(', '),
+        page: currentCategory,
+      });
+    }
+    currentCategory = null;
+    currentStatements = [];
+    currentScale = [];
+  }
+
+  while (i < lines.length) {
+    const qMatch = lines[i]!.match(NUMBERED_LINE);
+    if (!qMatch) {
+      // stray line outside the expected question/option structure — ignore rather than guess
+      i++;
+      continue;
+    }
+    let questionText = qMatch[1]!.trim();
+    i++;
+
+    const options: string[] = [];
+    while (i < lines.length) {
+      const optMatch = lines[i]!.match(LETTERED_LINE);
+      if (!optMatch) break;
+      options.push(optMatch[1]!.trim());
+      i++;
+    }
+
+    const split = splitHelpText(questionText);
+    questionText = split.label;
+
+    const isRatingScale = options.length >= 4 && options.every((o) => RATING_OPTION.test(o));
+    const sectionHeader = questionText.match(SECTION_HEADER);
+
+    if (sectionHeader && isRatingScale) {
+      const category = sectionHeader[1]!.trim();
+      if (category !== currentCategory) flushCurrentCategory();
+      currentCategory = category;
+      currentScale = options;
+      seenAnySection = true;
+      currentStatements.push(sectionHeader[2]!.trim());
+      continue;
+    }
+
+    if (isRatingScale && currentCategory) {
+      // a continuation question in the current category — no marker of its own
+      currentStatements.push(questionText);
+      continue;
+    }
+
+    // not part of a rating group — flush whatever category was open so it
+    // lands before this field, not after
+    flushCurrentCategory();
 
     fields.push({
       ...DEFAULT_FIELD,
-      label,
-      type: hintType ?? 'short_text',
+      label: questionText,
+      helpText: split.helpText,
+      type: options.length >= 2 ? 'select' : 'short_text',
       required: false,
+      options: options.join(', '),
+      page: seenAnySection ? 'Comments' : 'Overview',
     });
-  });
+  }
+
+  flushCurrentCategory();
 
   if (fields.length === 0) issues.push('no question lines found in the document');
-  return { fields, issues };
+  return { fields, issues, title, description };
 }
 
 /**
