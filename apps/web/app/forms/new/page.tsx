@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { END_OF_FORM, type FieldType } from '@pulse/contracts';
 import { PortalShell } from '../../../components/portal-shell';
 import { api } from '../../../lib/api-client';
@@ -147,6 +147,9 @@ export default function NewFormPage() {
   const [published, setPublished] = useState<{ slug: string } | null>(null);
   const [sectionsEnabled, setSectionsEnabled] = useState(false);
   const [sections, setSections] = useState<DraftSection[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importIssues, setImportIssues] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const keyedFields = fields.map((f, i) => ({
     key: toKey(f.label, i),
@@ -211,6 +214,74 @@ export default function NewFormPage() {
       next.splice(index + 1, 0, { ...current[index]! });
       return next;
     });
+  }
+
+  async function onImportExcel(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // allow re-selecting the same file after fixing it
+    if (!file) return;
+
+    setError(null);
+    setImportIssues([]);
+    setImporting(true);
+    try {
+      // lazy-loaded: the xlsx parsing engine only ships once someone actually imports a file
+      const { parseFormWorkbook } = await import('../../../lib/parse-form-workbook');
+      const { fields: parsed, issues } = await parseFormWorkbook(file);
+      if (parsed.length === 0) {
+        setError(issues[0] ?? 'no usable rows found — check that the sheet has a "question" column');
+        return;
+      }
+
+      const baseIndex = fields.length;
+      setFields((current) => [
+        ...current,
+        ...parsed.map((p) => ({
+          label: p.label,
+          helpText: p.helpText,
+          type: p.type,
+          required: p.required,
+          options: p.options,
+          layout: 'dropdown' as const,
+          allowOther: false,
+          scale: p.scale,
+          lowLabel: p.lowLabel,
+          highLabel: p.highLabel,
+          likertScale: p.likertScale,
+          acceptedMimeTypes: p.acceptedMimeTypes,
+          maxSizeMb: p.maxSizeMb,
+        })),
+      ]);
+      setImportIssues(issues);
+
+      if (parsed.some((p) => p.page)) {
+        const importedKeys = parsed.map((p, i) => toKey(p.label, baseIndex + i));
+        const pageOrder: string[] = [];
+        const fieldKeysByPage = new Map<string, string[]>();
+        parsed.forEach((p, i) => {
+          if (!p.page) return;
+          if (!fieldKeysByPage.has(p.page)) {
+            pageOrder.push(p.page);
+            fieldKeysByPage.set(p.page, []);
+          }
+          fieldKeysByPage.get(p.page)!.push(importedKeys[i]!);
+        });
+
+        setSectionsEnabled(true);
+        setSections((current) => [
+          ...current,
+          ...pageOrder.map((pageName, i) => ({
+            ...emptySection(current.length + i),
+            title: pageName,
+            fieldKeys: fieldKeysByPage.get(pageName)!,
+          })),
+        ]);
+      }
+    } catch {
+      setError('could not read this file — is it a valid .xlsx spreadsheet?');
+    } finally {
+      setImporting(false);
+    }
   }
 
   function buildSectionsPayload() {
@@ -303,6 +374,38 @@ export default function NewFormPage() {
         </header>
 
         <div className="builder msform-body">
+        <div className="admin-card" style={{ marginBottom: 16 }}>
+          <label>import questions from a spreadsheet</label>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            columns: question (required), type, required, options, help text, page. unrecognized types
+            default to short text.
+          </p>
+          <input
+            ref={fileInputRef}
+            id="excel-import-input"
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={onImportExcel}
+            style={{ display: 'none' }}
+          />
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={importing}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {importing ? 'reading file…' : 'import from Excel'}
+          </button>
+          {importIssues.length > 0 && (
+            <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
+              {importIssues.slice(0, 5).map((issue, i) => (
+                <li key={i}>{issue}</li>
+              ))}
+              {importIssues.length > 5 && <li>…and {importIssues.length - 5} more</li>}
+            </ul>
+          )}
+        </div>
+
         {fields.map((field, index) => (
           <fieldset key={index} className="builder-field question-card">
             <legend>
