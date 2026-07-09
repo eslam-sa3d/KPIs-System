@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import type { AuthenticatedUser } from '@pulse/contracts';
 import { logout } from '../lib/api-client';
 import { asset } from '../lib/asset';
@@ -29,36 +30,74 @@ export function PortalShell({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // close the mobile menu on route changes / navigation clicks
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [user]);
 
   async function onSignOut() {
     await logout();
     router.replace('/');
   }
 
+  const visibleItems = NAV_ITEMS.filter((item) => !item.permission || can(user, item.permission));
+
   return (
     <div className="portal">
       <header className="portal-header" data-surface="purple">
         <div className="portal-header-nav">
-          <Link href="/dashboard">
+          <Link href="/dashboard" onClick={() => setMenuOpen(false)}>
             <Image src={asset('/brand/pulse-neg.svg')} alt="pulse by solutions" width={110} height={48} />
           </Link>
-          <nav>
-            {NAV_ITEMS.filter((item) => !item.permission || can(user, item.permission)).map(
-              (item) => (
-                <Link key={item.href} href={item.href}>
-                  {item.label}
-                </Link>
-              ),
-            )}
+          <nav className="portal-nav-desktop" aria-label="main navigation">
+            {visibleItems.map((item) => (
+              <Link key={item.href} href={item.href}>
+                {item.label}
+              </Link>
+            ))}
           </nav>
         </div>
+
         <div className="portal-header-actions">
+          <span className="portal-user portal-user-desktop">{user?.displayName}</span>
+          <button className="btn-ghost portal-signout-desktop" onClick={onSignOut}>
+            sign out
+          </button>
+          <button
+            type="button"
+            className="nav-toggle"
+            aria-expanded={menuOpen}
+            aria-controls="portal-mobile-nav"
+            aria-label={menuOpen ? 'close menu' : 'open menu'}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span className={`nav-toggle-bars${menuOpen ? ' nav-toggle-bars-open' : ''}`} aria-hidden="true" />
+          </button>
+        </div>
+      </header>
+
+      <nav
+        id="portal-mobile-nav"
+        className={`portal-nav-mobile${menuOpen ? ' portal-nav-mobile-open' : ''}`}
+        aria-label="main navigation"
+        aria-hidden={!menuOpen}
+        data-surface="purple"
+      >
+        {visibleItems.map((item) => (
+          <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>
+            {item.label}
+          </Link>
+        ))}
+        <div className="portal-nav-mobile-footer">
           {user && <span className="portal-user">{user.displayName}</span>}
           <button className="btn-ghost" onClick={onSignOut}>
             sign out
           </button>
         </div>
-      </header>
+      </nav>
+
       <main className="portal-main">{children}</main>
     </div>
   );

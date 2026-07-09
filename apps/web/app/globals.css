@@ -6,12 +6,27 @@
   margin: 0;
 }
 
+html {
+  /* belt-and-suspenders: nothing should ever force page-wide horizontal
+     scroll on mobile — every wide element (tables, likert matrix) owns its
+     own overflow-x:auto container instead. */
+  overflow-x: hidden;
+  width: 100%;
+}
+
 body {
   font-family: var(--font-family-base);
   font-weight: var(--font-weight-regular);
   color: var(--color-text);
   background: var(--color-bg);
   line-height: var(--line-height-base);
+  overflow-x: hidden;
+  width: 100%;
+}
+
+img, svg {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Brand rule: headlines are lowercase, light-to-medium weight. */
@@ -109,14 +124,16 @@ h1, h2, h3 {
   margin-top: var(--space-2);
 }
 
-/* ── portal shell ──────────────────────────────────────────────── */
+/* ── portal shell (mobile-first: base rules target small screens,
+   min-width: 880px progressively restores the roomy desktop layout) ──── */
 .portal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-3) var(--space-8);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-bg);
   color: var(--color-text);
+  position: relative;
 }
 
 .portal-header .btn-ghost {
@@ -126,13 +143,27 @@ h1, h2, h3 {
 .portal-header-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .portal-main {
   max-width: 1080px;
   margin: 0 auto;
-  padding: var(--space-8);
+  padding: var(--space-4);
+}
+
+@media (min-width: 880px) {
+  .portal-header {
+    padding: var(--space-3) var(--space-8);
+  }
+
+  .portal-header-actions {
+    gap: var(--space-4);
+  }
+
+  .portal-main {
+    padding: var(--space-8);
+  }
 }
 
 .portal-main h1 {
@@ -225,19 +256,19 @@ h1, h2, h3 {
   height: 36px;
 }
 
-/* ── portal nav ────────────────────────────────────────────────── */
+/* ── portal nav: hamburger + slide-down panel on mobile, inline on desktop ── */
 .portal-header-nav {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
-}
-
-.portal-header-nav nav {
-  display: flex;
   gap: var(--space-4);
+  min-width: 0; /* let the logo shrink instead of forcing header overflow */
 }
 
-.portal-header-nav nav a {
+.portal-nav-desktop {
+  display: none;
+}
+
+.portal-nav-desktop a {
   color: var(--color-text);
   text-decoration: none;
   font-weight: var(--font-weight-medium);
@@ -245,15 +276,136 @@ h1, h2, h3 {
   border-radius: var(--radius-sm);
 }
 
-.portal-header-nav nav a:hover {
+.portal-nav-desktop a:hover {
   background: var(--color-surface);
+}
+
+.portal-user-desktop,
+.portal-signout-desktop {
+  display: none;
+}
+
+/* hamburger toggle — 44px square tap target */
+.nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--pulse-purple-light);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.nav-toggle-bars,
+.nav-toggle-bars::before,
+.nav-toggle-bars::after {
+  content: '';
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--pulse-air);
+  border-radius: 1px;
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.nav-toggle-bars {
+  position: relative;
+}
+
+.nav-toggle-bars::before {
+  position: absolute;
+  top: -6px;
+  left: 0;
+}
+
+.nav-toggle-bars::after {
+  position: absolute;
+  top: 6px;
+  left: 0;
+}
+
+.nav-toggle-bars-open {
+  background: transparent;
+}
+
+.nav-toggle-bars-open::before {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.nav-toggle-bars-open::after {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+/* the mobile dropdown panel — collapsed via max-height so it animates open */
+.portal-nav-mobile {
+  display: flex;
+  flex-direction: column;
+  max-height: 0;
+  overflow: hidden;
+  background: var(--pulse-purple-dark);
+  transition: max-height 0.25s ease;
+}
+
+.portal-nav-mobile-open {
+  max-height: 30rem;
+}
+
+.portal-nav-mobile a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--pulse-air);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid color-mix(in srgb, var(--pulse-air) 12%, transparent);
+}
+
+.portal-nav-mobile-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+}
+
+.portal-nav-mobile-footer .portal-user {
+  color: var(--pulse-silver-light);
+  font-size: var(--font-size-sm);
+}
+
+@media (min-width: 880px) {
+  .portal-header-nav {
+    gap: var(--space-8);
+  }
+
+  .portal-nav-desktop {
+    display: flex;
+    gap: var(--space-4);
+  }
+
+  .portal-user-desktop,
+  .portal-signout-desktop {
+    display: inline-flex;
+  }
+
+  .nav-toggle {
+    display: none;
+  }
+
+  .portal-nav-mobile {
+    display: none;
+  }
 }
 
 .page-title-row {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   margin-bottom: var(--space-2);
 }
 
@@ -265,6 +417,12 @@ h1, h2, h3 {
   margin: var(--space-6) 0;
 }
 
+.tabs {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
+}
+
 .tabs [role='tab'] {
   font: inherit;
   font-weight: var(--font-weight-medium);
@@ -272,8 +430,11 @@ h1, h2, h3 {
   border: none;
   border-bottom: 2px solid transparent;
   padding: var(--space-2) var(--space-4);
+  min-height: 44px;
   cursor: pointer;
   color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tabs [role='tab'][aria-selected='true'] {
@@ -282,13 +443,19 @@ h1, h2, h3 {
 }
 
 /* ── data tables ───────────────────────────────────────────────── */
+/* display:block lets the table scroll horizontally on narrow screens while
+   thead/tbody/tr/td keep their default table-* display values (the standard
+   CSS-only responsive-table technique) — no JSX wrapper needed anywhere. */
 .data-table {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border-collapse: collapse;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow: hidden;
 }
 
 .data-table th,
@@ -297,6 +464,7 @@ h1, h2, h3 {
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
   font-size: var(--font-size-sm);
+  max-width: 320px;
 }
 
 .data-table th {
@@ -332,8 +500,18 @@ h1, h2, h3 {
 .builder select,
 .fill-form input:not([type='checkbox']),
 .fill-form select,
-.fill-form textarea,
+.fill-form textarea {
+  width: 100%;
+  font: inherit;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
 .page-title-row input {
+  flex: 1 1 200px;
   font: inherit;
   padding: var(--space-3);
   border: 1px solid var(--color-border);
@@ -883,28 +1061,49 @@ h1, h2, h3 {
 }
 
 /* ── likert matrix ─────────────────────────────────────────────────── */
+/* flex (not grid) so answer columns keep a fixed width instead of
+   shrinking to fit — the row's natural width can then exceed the
+   container and .likert's overflow-x:auto scrolls it, rather than
+   squeezing every column unreadably thin on narrow screens. */
 .likert {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .likert-row {
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) repeat(auto-fit, minmax(64px, 1fr));
+  display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) 0;
+  width: max-content;
+  min-width: 100%;
 }
 
-.likert-head {
-  font-size: var(--font-size-xs);
+/* row-label column (statement text, or the empty head-row spacer above it) */
+.likert-row [role='rowheader'],
+.likert-row [role='columnheader']:first-child {
+  flex: 0 0 140px;
+}
+
+/* answer columns: the scale-label headers and their radio cells beneath */
+.likert-row [role='columnheader']:not(:first-child) {
+  flex: 0 0 72px;
   text-align: center;
 }
 
 .likert-row [role='cell'] {
-  text-align: center;
+  flex: 0 0 72px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+}
+
+.likert-head {
+  font-size: var(--font-size-xs);
 }
 
 /* ── ranking ───────────────────────────────────────────────────────── */
@@ -919,10 +1118,16 @@ h1, h2, h3 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
+}
+
+.ranking-item > span:first-child {
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .ranking-controls {
@@ -1054,5 +1259,111 @@ h1, h2, h3 {
 }
 
 .public-fill-header {
-  padding: var(--space-4) var(--space-8);
+  padding: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .public-fill-header {
+    padding: var(--space-4) var(--space-8);
+  }
+}
+
+/* ── mobile-first: card/banner padding, touch targets, wrap safety ──────
+   Base rules above already read comfortably down to ~360px width thanks to
+   flex-wrap, clamp(), and auto-fit/auto-fill grids. The overrides below
+   trim the handful of fixed large paddings that were sized for desktop and
+   ensure every interactive control meets a 44px touch target on coarse
+   pointers (WCAG 2.5.5 / Apple & Material guidance). */
+@media (max-width: 480px) {
+  .login-card {
+    padding: var(--space-4);
+  }
+
+  .msform-banner {
+    padding: var(--space-4);
+  }
+
+  .msform-title-input {
+    font-size: var(--font-size-lg);
+  }
+
+  .question-card,
+  .admin-card {
+    padding: var(--space-4);
+  }
+
+  .kpi-detail {
+    padding: var(--space-4);
+  }
+
+  .empty-state {
+    padding: var(--space-6);
+  }
+
+  /* stat tiles: bold display-size numbers are a lot at 375px — step down */
+  .kpi-value {
+    font-size: var(--font-size-xl);
+  }
+
+  .summary-headline strong {
+    font-size: var(--font-size-xl);
+  }
+}
+
+/* narrow-viewport grids: drop the desktop minmax() floor so a single
+   column never forces horizontal overflow on a <280px content box */
+@media (max-width: 360px) {
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .perm-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* the free-text "other" input inside a radio row needs its own line on
+   narrow screens rather than squeezing onto the radio's row */
+.check-item {
+  flex-wrap: wrap;
+}
+
+.check-item input[type='text'] {
+  flex: 1 1 100%;
+  min-width: 0;
+  font: inherit;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+/* touch targets: bump interactive controls to 44px on coarse pointers
+   (touchscreens) without changing the tighter, precise mouse layout */
+@media (hover: none) and (pointer: coarse) {
+  .btn-ghost,
+  .btn-primary {
+    min-height: 44px;
+  }
+
+  .scale-pill {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .ranking-controls .btn-ghost {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 20px;
+    height: 20px;
+  }
 }
