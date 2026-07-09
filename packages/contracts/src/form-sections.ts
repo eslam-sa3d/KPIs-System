@@ -18,22 +18,35 @@ const sectionId = z
   .max(64)
   .regex(/^[a-z][a-z0-9_-]*$/, 'section ids must be lower-kebab/snake identifiers');
 
-export const sectionBranchRuleSchema = z.object({
-  /** must reference a `select` field that belongs to this same section */
-  onFieldKey: z.string().min(1).max(64),
-  /** answer value → target section id, or "end" to submit immediately */
-  cases: z
-    .array(
-      z.object({
-        equals: z.string(),
-        goTo: z.union([sectionId, z.literal(END_OF_FORM)]),
-      }),
-    )
-    .min(1)
-    .max(50),
-  /** fallback when no case matches; omitted = fall through to the next section in order */
-  defaultGoTo: z.union([sectionId, z.literal(END_OF_FORM)]).optional(),
-});
+export const sectionBranchRuleSchema = z
+  .object({
+    /** required when `cases` is non-empty: must reference a `select` field belonging to this same section */
+    onFieldKey: z.string().min(1).max(64).optional(),
+    /** answer value → target section id, or "end" to submit immediately */
+    cases: z
+      .array(
+        z.object({
+          equals: z.string(),
+          goTo: z.union([sectionId, z.literal(END_OF_FORM)]),
+        }),
+      )
+      .max(50)
+      .default([]),
+    /**
+     * Fallback when no case matches. With `cases` empty, this is an
+     * UNCONDITIONAL jump — the section's own "always go to" override,
+     * needed to skip a sibling branch and reconverge (no answer required).
+     * Omitted entirely = fall through to the next section in array order.
+     */
+    defaultGoTo: z.union([sectionId, z.literal(END_OF_FORM)]).optional(),
+  })
+  .refine((rule) => rule.cases.length > 0 || rule.defaultGoTo !== undefined, {
+    message: 'branching must set at least one case or a defaultGoTo',
+  })
+  .refine((rule) => rule.cases.length === 0 || rule.onFieldKey !== undefined, {
+    message: 'onFieldKey is required when cases are present',
+    path: ['onFieldKey'],
+  });
 
 export type SectionBranchRule = z.infer<typeof sectionBranchRuleSchema>;
 
@@ -90,7 +103,7 @@ export function resolveSectionPath(
     let nextId: string | undefined;
 
     if (rule) {
-      const answer = answers[rule.onFieldKey];
+      const answer = rule.onFieldKey ? answers[rule.onFieldKey] : undefined;
       const matched = rule.cases.find((c) => c.equals === answer);
       nextId = matched?.goTo ?? rule.defaultGoTo;
     }

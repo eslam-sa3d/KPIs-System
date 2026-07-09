@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import type { FieldType } from '@pulse/contracts';
+import { END_OF_FORM, type FieldType } from '@pulse/contracts';
 import { PortalShell } from '../../../components/portal-shell';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -60,6 +60,27 @@ const toKey = (label: string, index: number) => {
   return /^[a-z]/.test(slug) ? slug : `field_${index + 1}${slug ? `_${slug}` : ''}`;
 };
 
+interface DraftSection {
+  id: string;
+  title: string;
+  fieldKeys: string[];
+  /** the "choice" field this page branches on, or '' for no per-answer branching */
+  branchFieldKey: string;
+  /** option value -> target page id / "end"; unset entries fall through to defaultGoTo */
+  cases: Record<string, string>;
+  /** unconditional/fallback target page id or "end"; '' = continue to the next page normally */
+  defaultGoTo: string;
+}
+
+const emptySection = (index: number): DraftSection => ({
+  id: `page_${index + 1}`,
+  title: '',
+  fieldKeys: [],
+  branchFieldKey: '',
+  cases: {},
+  defaultGoTo: '',
+});
+
 function toDefinitionField(draft: DraftField, index: number) {
   const base = {
     key: toKey(draft.label, index),
@@ -112,6 +133,49 @@ export default function NewFormPage() {
   const [fields, setFields] = useState<DraftField[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [published, setPublished] = useState<{ slug: string } | null>(null);
+  const [sectionsEnabled, setSectionsEnabled] = useState(false);
+  const [sections, setSections] = useState<DraftSection[]>([]);
+
+  const keyedFields = fields.map((f, i) => ({
+    key: toKey(f.label, i),
+    label: f.label.trim() || `question ${i + 1}`,
+    type: f.type,
+    options: parseList(f.options),
+  }));
+  const unassignedFieldKeys = keyedFields
+    .filter((f) => !sections.some((s) => s.fieldKeys.includes(f.key)))
+    .map((f) => f.key);
+
+  function addSection() {
+    setSections((current) => [...current, emptySection(current.length)]);
+  }
+
+  function updateSection(index: number, patch: Partial<DraftSection>) {
+    setSections((current) => current.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+  }
+
+  function moveSection(index: number, delta: number) {
+    setSections((current) => {
+      const target = index + delta;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target]!, next[index]!];
+      return next;
+    });
+  }
+
+  function toggleFieldInSection(sectionIndex: number, fieldKey: string) {
+    setSections((current) =>
+      current.map((s, i) => {
+        if (i === sectionIndex) {
+          const has = s.fieldKeys.includes(fieldKey);
+          return { ...s, fieldKeys: has ? s.fieldKeys.filter((k) => k !== fieldKey) : [...s.fieldKeys, fieldKey] };
+        }
+        // a field can only belong to one page — unassign it elsewhere when checked here
+        return s.fieldKeys.includes(fieldKey) ? { ...s, fieldKeys: s.fieldKeys.filter((k) => k !== fieldKey) } : s;
+      }),
+    );
+  }
 
   function updateField(index: number, patch: Partial<DraftField>) {
     setFields((current) => current.map((f, i) => (i === index ? { ...f, ...patch } : f)));
@@ -135,6 +199,30 @@ export default function NewFormPage() {
     });
   }
 
+  function buildSectionsPayload() {
+    if (!sectionsEnabled || sections.length === 0) return undefined;
+    return sections.map((s) => {
+      const cases = Object.entries(s.cases)
+        .filter(([, goTo]) => goTo)
+        .map(([equals, goTo]) => ({ equals, goTo }));
+      const hasBranching = cases.length > 0 || Boolean(s.defaultGoTo);
+      return {
+        id: s.id,
+        ...(s.title.trim() ? { title: s.title.trim() } : {}),
+        fieldKeys: s.fieldKeys,
+        ...(hasBranching
+          ? {
+              branching: {
+                ...(s.branchFieldKey ? { onFieldKey: s.branchFieldKey } : {}),
+                cases,
+                ...(s.defaultGoTo ? { defaultGoTo: s.defaultGoTo } : {}),
+              },
+            }
+          : {}),
+      };
+    });
+  }
+
   async function onPublish() {
     setError(null);
     try {
@@ -147,6 +235,7 @@ export default function NewFormPage() {
             title,
             ...(description.trim() ? { description: description.trim() } : {}),
             fields: fields.map(toDefinitionField),
+            ...(buildSectionsPayload() ? { sections: buildSectionsPayload() } : {}),
           },
         }),
       });
@@ -361,12 +450,174 @@ export default function NewFormPage() {
           + add field
         </button>
 
+        <div className="admin-card" style={{ marginTop: 24, marginBottom: 16 }}>
+          <span className="builder-required">
+            <input
+              id="sections-toggle"
+              type="checkbox"
+              checked={sectionsEnabled}
+              onChange={(e) => {
+                setSectionsEnabled(e.target.checked);
+                if (e.target.checked && sections.length === 0) setSections([emptySection(0)]);
+              }}
+            />
+            <label htmlFor="sections-toggle">split into pages, with branching</label>
+          </span>
+
+          {sectionsEnabled && (
+            <>
+              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                assign every question to a page. optionally, branch a page's ending on a "choice" question's
+                answer — jumps only reach a LATER page, or end the form early.
+              </p>
+
+              {unassignedFieldKeys.length > 0 && (
+                <p className="form-error">
+                  not yet assigned to a page:{' '}
+                  {unassignedFieldKeys.map((k) => keyedFields.find((f) => f.key === k)?.label).join(', ')}
+                </p>
+              )}
+
+              {sections.map((section, index) => {
+                const laterSections = sections.slice(index + 1);
+                const triggerCandidates = keyedFields.filter(
+                  (f) => f.type === 'select' && section.fieldKeys.includes(f.key),
+                );
+                const trigger = triggerCandidates.find((f) => f.key === section.branchFieldKey);
+
+                return (
+                  <fieldset key={section.id} className="question-card" style={{ marginBottom: 12 }}>
+                    <legend>page {index + 1}</legend>
+
+                    <label htmlFor={`section-title-${index}`}>page title (optional)</label>
+                    <input
+                      id={`section-title-${index}`}
+                      value={section.title}
+                      onChange={(e) => updateSection(index, { title: e.target.value })}
+                      placeholder={section.id}
+                    />
+
+                    <label>questions on this page</label>
+                    <div className="perm-grid">
+                      {keyedFields.length === 0 && <span className="muted">add questions above first.</span>}
+                      {keyedFields.map((f) => (
+                        <span key={f.key} className="builder-required">
+                          <input
+                            id={`section-${index}-${f.key}`}
+                            type="checkbox"
+                            checked={section.fieldKeys.includes(f.key)}
+                            onChange={() => toggleFieldInSection(index, f.key)}
+                          />
+                          <label htmlFor={`section-${index}-${f.key}`}>{f.label}</label>
+                        </span>
+                      ))}
+                    </div>
+
+                    {laterSections.length > 0 && (
+                      <>
+                        <label htmlFor={`section-trigger-${index}`}>branch on (optional)</label>
+                        <select
+                          id={`section-trigger-${index}`}
+                          value={section.branchFieldKey}
+                          onChange={(e) => updateSection(index, { branchFieldKey: e.target.value, cases: {} })}
+                        >
+                          <option value="">no per-answer branching</option>
+                          {triggerCandidates.map((f) => (
+                            <option key={f.key} value={f.key}>
+                              {f.label}
+                            </option>
+                          ))}
+                        </select>
+
+                        {trigger &&
+                          trigger.options.map((opt) => (
+                            <div key={opt}>
+                              <label htmlFor={`section-case-${index}-${opt}`}>if "{opt}" go to</label>
+                              <select
+                                id={`section-case-${index}-${opt}`}
+                                value={section.cases[opt] ?? ''}
+                                onChange={(e) =>
+                                  updateSection(index, { cases: { ...section.cases, [opt]: e.target.value } })
+                                }
+                              >
+                                <option value="">continue normally</option>
+                                {laterSections.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.title.trim() || t.id}
+                                  </option>
+                                ))}
+                                <option value={END_OF_FORM}>end the form</option>
+                              </select>
+                            </div>
+                          ))}
+
+                        <label htmlFor={`section-default-${index}`}>
+                          {trigger ? 'if none of the above match' : 'always jump to (unconditional)'}
+                        </label>
+                        <select
+                          id={`section-default-${index}`}
+                          value={section.defaultGoTo}
+                          onChange={(e) => updateSection(index, { defaultGoTo: e.target.value })}
+                        >
+                          <option value="">continue to the next page</option>
+                          {laterSections.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.title.trim() || t.id}
+                            </option>
+                          ))}
+                          <option value={END_OF_FORM}>end the form</option>
+                        </select>
+                      </>
+                    )}
+
+                    <div className="builder-field-actions">
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        disabled={index === 0}
+                        onClick={() => moveSection(index, -1)}
+                      >
+                        ↑ move up
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        disabled={index === sections.length - 1}
+                        onClick={() => moveSection(index, 1)}
+                      >
+                        ↓ move down
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={() => setSections((current) => current.filter((_, i) => i !== index))}
+                      >
+                        remove page
+                      </button>
+                    </div>
+                  </fieldset>
+                );
+              })}
+
+              <button type="button" className="msform-add-field" onClick={addSection}>
+                + add page
+              </button>
+            </>
+          )}
+        </div>
+
         <div className="page-title-row">
           <button
             type="button"
             className="btn-primary"
             onClick={onPublish}
-            disabled={!title.trim() || fields.length === 0 || fields.some((f) => !f.label.trim())}
+            disabled={
+              !title.trim() ||
+              fields.length === 0 ||
+              fields.some((f) => !f.label.trim()) ||
+              (sectionsEnabled &&
+                (unassignedFieldKeys.length > 0 || sections.some((s) => s.fieldKeys.length === 0)))
+            }
           >
             publish
           </button>

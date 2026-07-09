@@ -162,6 +162,67 @@ describe('v2 field types', () => {
   });
 });
 
+describe('section branching', () => {
+  const branchedDefinition: FormDefinition = formDefinitionSchema.parse({
+    title: 'branching survey',
+    fields: [
+      {
+        key: 'segment',
+        label: 'Which segment are you in?',
+        type: 'select',
+        options: [
+          { value: 'enterprise', label: 'Enterprise' },
+          { value: 'smb', label: 'SMB' },
+        ],
+      },
+      { key: 'seats', label: 'Seat count', type: 'number', required: true },
+      { key: 'budget', label: 'Monthly budget', type: 'number', required: true },
+      { key: 'name', label: 'Your name', type: 'short_text', required: true },
+    ],
+    sections: [
+      {
+        id: 'intro',
+        fieldKeys: ['segment'],
+        branching: {
+          onFieldKey: 'segment',
+          cases: [
+            { equals: 'enterprise', goTo: 'enterprise_path' },
+            { equals: 'smb', goTo: 'smb_path' },
+          ],
+        },
+      },
+      // enterprise_path unconditionally jumps past smb_path straight to outro
+      { id: 'enterprise_path', fieldKeys: ['seats'], branching: { defaultGoTo: 'outro' } },
+      // smb_path has no rule — falls through to the next section in array order (outro)
+      { id: 'smb_path', fieldKeys: ['budget'] },
+      { id: 'outro', fieldKeys: ['name'] },
+    ],
+  });
+
+  const validator = compileAnswerValidator(branchedDefinition);
+
+  it('requires only the fields on the branch path actually taken', () => {
+    const cleaned = validator.validate({ segment: 'enterprise', seats: 50, name: 'Ada' });
+    expect(cleaned).toEqual({ segment: 'enterprise', seats: 50, name: 'Ada' });
+  });
+
+  it('drops answers smuggled in for a section the branch skipped, without requiring them', () => {
+    const cleaned = validator.validate({
+      segment: 'enterprise',
+      seats: 50,
+      name: 'Ada',
+      budget: 999, // smb_path was never reached — must be dropped, not required elsewhere
+    });
+    expect(cleaned).not.toHaveProperty('budget');
+  });
+
+  it('requires the field on the OTHER branch when that path is taken instead', () => {
+    expect(() => validator.validate({ segment: 'smb', name: 'Bo' })).toThrow(ZodError);
+    const cleaned = validator.validate({ segment: 'smb', budget: 200, name: 'Bo' });
+    expect(cleaned).toEqual({ segment: 'smb', budget: 200, name: 'Bo' });
+  });
+});
+
 describe('formDefinitionSchema (builder-side validation)', () => {
   it('rejects duplicate field keys', () => {
     const result = formDefinitionSchema.safeParse({

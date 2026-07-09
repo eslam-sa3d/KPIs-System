@@ -206,27 +206,29 @@ function validateSections(
     const rule = section.branching;
     if (!rule) return;
 
-    const trigger = fieldByKey.get(rule.onFieldKey);
-    if (!trigger) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
-        message: `branching references unknown field "${rule.onFieldKey}"`,
-      });
-    } else {
-      if (trigger.type !== 'select') {
+    if (rule.onFieldKey) {
+      const trigger = fieldByKey.get(rule.onFieldKey);
+      if (!trigger) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
-          message: `branching can only key off a "select" field (got "${trigger.type}")`,
+          message: `branching references unknown field "${rule.onFieldKey}"`,
         });
-      }
-      if (!section.fieldKeys.includes(rule.onFieldKey)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
-          message: `branching field "${rule.onFieldKey}" must belong to section "${section.id}"`,
-        });
+      } else {
+        if (trigger.type !== 'select') {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
+            message: `branching can only key off a "select" field (got "${trigger.type}")`,
+          });
+        }
+        if (!section.fieldKeys.includes(rule.onFieldKey)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
+            message: `branching field "${rule.onFieldKey}" must belong to section "${section.id}"`,
+          });
+        }
       }
     }
 

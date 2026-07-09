@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useMemo, useState } from 'react';
-import type { FormDefinition, FormField, FormSettings, SubmissionAnswers } from '@pulse/contracts';
+import { resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
 
 export const isVisible = (field: FormField, answers: SubmissionAnswers) => {
   const rule = field.visibleWhen;
@@ -204,26 +204,80 @@ export function FormRenderer({
 }) {
   const [answers, setAnswers] = useState<SubmissionAnswers>({});
   const [error, setError] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+
+  const hasSections = Boolean(definition.sections && definition.sections.length > 0);
+  const [currentSectionId, setCurrentSectionId] = useState<string | null>(
+    definition.sections?.[0]?.id ?? null,
+  );
 
   const orderedFields = useMemo(() => {
     if (!settings.shuffleQuestions) return definition.fields;
     return [...definition.fields].sort(() => Math.random() - 0.5);
   }, [definition, settings.shuffleQuestions]);
 
+  // recomputed on every answer change: a branch decision made on the current
+  // page can only be resolved once its trigger field has been answered.
+  const path = hasSections ? resolveSectionPath(definition, answers).visitedSectionIds : [];
+  const currentIndex = currentSectionId ? Math.max(0, path.indexOf(currentSectionId)) : -1;
+  const currentSection = hasSections
+    ? (definition.sections!.find((s) => s.id === path[currentIndex]) ?? definition.sections![0])
+    : undefined;
+  const isLastPage = currentIndex === path.length - 1;
+  const pageFields = currentSection
+    ? definition.fields.filter((f) => currentSection.fieldKeys.includes(f.key))
+    : [];
+
   const now = Date.now();
   const notYetOpen = settings.opensAt && now < Date.parse(settings.opensAt);
   const closed =
     !settings.acceptingResponses || (settings.closesAt && now > Date.parse(settings.closesAt));
 
+  function pageIsComplete(fields: FormField[]) {
+    return fields.every((field) => {
+      if (!isVisible(field, answers)) return true;
+      if (!field.required) return true;
+      const value = answers[field.key];
+      return value !== undefined && value !== null && value !== '';
+    });
+  }
+
+  function onNext() {
+    if (!pageIsComplete(pageFields)) {
+      setPageError('please answer every required question on this page');
+      return;
+    }
+    setPageError(null);
+    const next = path[currentIndex + 1];
+    if (next) setCurrentSectionId(next);
+  }
+
+  function onBack() {
+    setPageError(null);
+    const prev = path[currentIndex - 1];
+    if (prev) setCurrentSectionId(prev);
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (hasSections && !pageIsComplete(pageFields)) {
+      setPageError('please answer every required question on this page');
+      return;
+    }
     setError(null);
     try {
+      const reachable = hasSections ? resolveSectionPath(definition, answers).reachableFieldKeys : null;
       const visible = Object.fromEntries(
         Object.entries(answers).filter(([key, value]) => {
           const field = definition.fields.find((f) => f.key === key);
-          return field && isVisible(field, answers) && value !== null && value !== '';
+          return (
+            field &&
+            isVisible(field, answers) &&
+            (!reachable || reachable.has(key)) &&
+            value !== null &&
+            value !== ''
+          );
         }),
       );
       await onSubmit(visible);
@@ -260,7 +314,13 @@ export function FormRenderer({
         </div>
       ) : (
         <form className="fill-form msform-body" onSubmit={handleSubmit}>
-          {orderedFields.filter((field) => isVisible(field, answers)).map((field, index) => (
+          {hasSections && (
+            <p className="muted" style={{ marginBottom: 8 }}>
+              page {currentIndex + 1} of {path.length}
+              {currentSection?.title ? ` — ${currentSection.title}` : ''}
+            </p>
+          )}
+          {(hasSections ? pageFields : orderedFields).filter((field) => isVisible(field, answers)).map((field, index) => (
             <div key={field.key} className="question-card">
               <label htmlFor={`f-${field.key}`} className="question-title" id={`f-${field.key}-label`}>
                 <span className="question-number">{index + 1}.</span> {field.label}
@@ -271,9 +331,22 @@ export function FormRenderer({
                 onChange={(value) => setAnswers((a) => ({ ...a, [field.key]: value }))} />
             </div>
           ))}
-          {error && <p role="alert" className="form-error">{error}</p>}
-          <div>
-            <button className="btn-primary" type="submit">submit</button>
+          {(pageError || error) && (
+            <p role="alert" className="form-error">{pageError ?? error}</p>
+          )}
+          <div className="page-title-row">
+            {hasSections && currentIndex > 0 && (
+              <button type="button" className="btn-ghost" onClick={onBack}>
+                ← back
+              </button>
+            )}
+            {hasSections && !isLastPage ? (
+              <button type="button" className="btn-primary" onClick={onNext}>
+                next →
+              </button>
+            ) : (
+              <button className="btn-primary" type="submit">submit</button>
+            )}
           </div>
         </form>
       )}
