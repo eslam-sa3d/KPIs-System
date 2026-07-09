@@ -43,9 +43,6 @@
   --color-text-muted: var(--md-sys-color-on-surface-variant);
   --color-border: var(--md-sys-color-outline-variant);
   --color-primary: var(--md-sys-color-primary);
-  /* interim only — Phase 4 (state layers) replaces hover backgrounds with a
-     proper M3 state-layer overlay; this stays functional until then. */
-  --color-primary-hover: color-mix(in srgb, var(--md-sys-color-primary) 88%, black);
   --color-primary-soft: var(--md-sys-color-primary-container);
   --color-accent: var(--md-sys-color-tertiary); /* pulse coral, promoted to M3's tertiary
                                                     role — highlights, use sparingly:
@@ -79,6 +76,68 @@
   --font-size-display: 2.5rem;
   --line-height-tight: 1.2;
   --line-height-base: 1.5;
+
+  /* ── M3 type scale (https://m3.material.io/styles/typography/type-scale-tokens) ──
+     Structure only — built on the brand typeface (--font-family-base) rather
+     than Roboto. M3's own weight vocabulary (regular 400 / medium 500) maps
+     directly onto this codebase's existing --font-weight-regular/-medium. */
+  --md-sys-typescale-display-large-size: 3.5625rem;   /* 57px */
+  --md-sys-typescale-display-large-line-height: 4rem;  /* 64px */
+  --md-sys-typescale-display-large-weight: var(--font-weight-regular);
+  --md-sys-typescale-display-medium-size: 2.8125rem;  /* 45px */
+  --md-sys-typescale-display-medium-line-height: 3.25rem; /* 52px */
+  --md-sys-typescale-display-medium-weight: var(--font-weight-regular);
+  --md-sys-typescale-display-small-size: 2.25rem;     /* 36px */
+  --md-sys-typescale-display-small-line-height: 2.75rem; /* 44px */
+  --md-sys-typescale-display-small-weight: var(--font-weight-regular);
+
+  --md-sys-typescale-headline-large-size: 2rem;       /* 32px */
+  --md-sys-typescale-headline-large-line-height: 2.5rem; /* 40px */
+  --md-sys-typescale-headline-large-weight: var(--font-weight-regular);
+  --md-sys-typescale-headline-medium-size: 1.75rem;   /* 28px */
+  --md-sys-typescale-headline-medium-line-height: 2.25rem; /* 36px */
+  --md-sys-typescale-headline-medium-weight: var(--font-weight-regular);
+  --md-sys-typescale-headline-small-size: 1.5rem;     /* 24px */
+  --md-sys-typescale-headline-small-line-height: 2rem; /* 32px */
+  --md-sys-typescale-headline-small-weight: var(--font-weight-regular);
+
+  --md-sys-typescale-title-large-size: 1.375rem;      /* 22px */
+  --md-sys-typescale-title-large-line-height: 1.75rem; /* 28px */
+  --md-sys-typescale-title-large-weight: var(--font-weight-regular);
+  --md-sys-typescale-title-medium-size: 1rem;         /* 16px */
+  --md-sys-typescale-title-medium-line-height: 1.5rem; /* 24px */
+  --md-sys-typescale-title-medium-weight: var(--font-weight-medium);
+  --md-sys-typescale-title-medium-tracking: 0.009375rem; /* 0.15px */
+  --md-sys-typescale-title-small-size: 0.875rem;      /* 14px */
+  --md-sys-typescale-title-small-line-height: 1.25rem; /* 20px */
+  --md-sys-typescale-title-small-weight: var(--font-weight-medium);
+  --md-sys-typescale-title-small-tracking: 0.00625rem; /* 0.1px */
+
+  --md-sys-typescale-body-large-size: 1rem;           /* 16px */
+  --md-sys-typescale-body-large-line-height: 1.5rem;  /* 24px */
+  --md-sys-typescale-body-large-weight: var(--font-weight-regular);
+  --md-sys-typescale-body-large-tracking: 0.03125rem; /* 0.5px */
+  --md-sys-typescale-body-medium-size: 0.875rem;      /* 14px */
+  --md-sys-typescale-body-medium-line-height: 1.25rem; /* 20px */
+  --md-sys-typescale-body-medium-weight: var(--font-weight-regular);
+  --md-sys-typescale-body-medium-tracking: 0.015625rem; /* 0.25px */
+  --md-sys-typescale-body-small-size: 0.75rem;        /* 12px */
+  --md-sys-typescale-body-small-line-height: 1rem;    /* 16px */
+  --md-sys-typescale-body-small-weight: var(--font-weight-regular);
+  --md-sys-typescale-body-small-tracking: 0.025rem;   /* 0.4px */
+
+  --md-sys-typescale-label-large-size: 0.875rem;      /* 14px */
+  --md-sys-typescale-label-large-line-height: 1.25rem; /* 20px */
+  --md-sys-typescale-label-large-weight: var(--font-weight-medium);
+  --md-sys-typescale-label-large-tracking: 0.00625rem; /* 0.1px */
+  --md-sys-typescale-label-medium-size: 0.75rem;      /* 12px */
+  --md-sys-typescale-label-medium-line-height: 1rem;  /* 16px */
+  --md-sys-typescale-label-medium-weight: var(--font-weight-medium);
+  --md-sys-typescale-label-medium-tracking: 0.03125rem; /* 0.5px */
+  --md-sys-typescale-label-small-size: 0.6875rem;     /* 11px */
+  --md-sys-typescale-label-small-line-height: 1rem;   /* 16px */
+  --md-sys-typescale-label-small-weight: var(--font-weight-medium);
+  --md-sys-typescale-label-small-tracking: 0.03125rem; /* 0.5px */
 
   /* ── spacing (4px scale) ─────────────────────────────────────── */
   --space-1: 0.25rem;
@@ -136,6 +195,15 @@
   /* ── motion ──────────────────────────────────────────────────── */
   --transition-fast: 120ms ease;
   --transition-base: 200ms ease;
+
+  /* ── M3 state layers (https://m3.material.io/foundations/interaction/states) ──
+     Applied inline via color-mix() at the point of use (e.g. `color-mix(in srgb,
+     var(--color-on-primary) var(--md-sys-state-hover-opacity), var(--color-primary))`)
+     rather than a stacked pseudo-element overlay — same visual result, no JS-driven
+     ripple, and it composites correctly regardless of the base color's own format. */
+  --md-sys-state-hover-opacity: 8%;
+  --md-sys-state-focus-opacity: 10%;
+  --md-sys-state-pressed-opacity: 10%;
 }
 
 /* Dark surface context (e.g. hero sections on purple, footer on onyx) */
@@ -147,7 +215,6 @@
   --color-border: var(--pulse-purple-light);
   /* purple CTAs vanish on purple — the brand CTA on dark surfaces is coral */
   --color-primary: var(--pulse-coral);
-  --color-primary-hover: color-mix(in srgb, var(--pulse-coral) 85%, var(--pulse-onyx));
 }
 
 /* Brand font files from pulsebysolutions.com (regular + bold are published).
