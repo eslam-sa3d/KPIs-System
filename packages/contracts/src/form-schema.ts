@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { mediaSchema } from './form-media';
-import { END_OF_FORM, FormSection, formSectionSchema } from './form-sections';
+import { END_OF_FORM, FormSection, SectionBranchRule, formSectionSchema } from './form-sections';
+
+/** Field types with an exact-match-comparable answer — everything except
+ *  ranking (an ordered permutation), file (an opaque upload id), and
+ *  section_header (never has an answer). Shared with the builder UI so the
+ *  trigger-field picker and the validator never drift apart. */
+export const BRANCH_TRIGGER_TYPES: FieldType[] = [
+  'select', 'multi_select', 'rating', 'likert', 'boolean', 'nps', 'short_text', 'long_text', 'number', 'date',
+];
 
 /**
  * Form Builder contract — the schema-of-schemas.
@@ -217,77 +225,80 @@ function validateSections(
       assignedFieldKeys.add(key);
     }
 
-    const rule = section.branching;
-    if (!rule) return;
-
-    if (rule.onFieldKey) {
-      const trigger = fieldByKey.get(rule.onFieldKey);
-      if (!trigger) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
-          message: `branching references unknown field "${rule.onFieldKey}"`,
-        });
-      } else {
-        const validTriggerTypes = ['select', 'multi_select', 'rating', 'likert'];
-        if (!validTriggerTypes.includes(trigger.type)) {
+    const validateRule = (rule: SectionBranchRule, path: (string | number)[]) => {
+      if (rule.onFieldKey) {
+        const trigger = fieldByKey.get(rule.onFieldKey);
+        if (!trigger) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
-            message: `branching can only key off a ${validTriggerTypes.map((t) => `"${t}"`).join(', ')} field (got "${trigger.type}")`,
+            path: [...path, 'onFieldKey'],
+            message: `branching references unknown field "${rule.onFieldKey}"`,
           });
-        }
-        if (!section.fieldKeys.includes(rule.onFieldKey)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
-            message: `branching field "${rule.onFieldKey}" must belong to section "${section.id}"`,
-          });
-        }
-        if (trigger.type === 'likert') {
-          if (!rule.onStatement) {
+        } else {
+          if (!BRANCH_TRIGGER_TYPES.includes(trigger.type)) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              path: ['sections', sectionIndex, 'branching', 'onStatement'],
-              message: 'onStatement is required when branching keys off a "likert" field',
-            });
-          } else if (!trigger.statements.some((s) => s.value === rule.onStatement)) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ['sections', sectionIndex, 'branching', 'onStatement'],
-              message: `"${rule.onStatement}" is not a statement on likert field "${rule.onFieldKey}"`,
+              path: [...path, 'onFieldKey'],
+              message: `branching can only key off a ${BRANCH_TRIGGER_TYPES.map((t) => `"${t}"`).join(', ')} field (got "${trigger.type}")`,
             });
           }
-        } else if (rule.onStatement) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['sections', sectionIndex, 'branching', 'onStatement'],
-            message: 'onStatement is only valid when branching keys off a "likert" field',
-          });
+          if (!section.fieldKeys.includes(rule.onFieldKey)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [...path, 'onFieldKey'],
+              message: `branching field "${rule.onFieldKey}" must belong to section "${section.id}"`,
+            });
+          }
+          if (trigger.type === 'likert') {
+            if (!rule.onStatement) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: [...path, 'onStatement'],
+                message: 'onStatement is required when branching keys off a "likert" field',
+              });
+            } else if (!trigger.statements.some((s) => s.value === rule.onStatement)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: [...path, 'onStatement'],
+                message: `"${rule.onStatement}" is not a statement on likert field "${rule.onFieldKey}"`,
+              });
+            }
+          } else if (rule.onStatement) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [...path, 'onStatement'],
+              message: 'onStatement is only valid when branching keys off a "likert" field',
+            });
+          }
         }
       }
-    }
 
-    const targets = [...rule.cases.map((c) => c.goTo), ...(rule.defaultGoTo ? [rule.defaultGoTo] : [])];
-    targets.forEach((target, targetIndex) => {
-      if (target === END_OF_FORM) return;
-      if (!sectionIds.has(target)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['sections', sectionIndex, 'branching', 'cases', targetIndex],
-          message: `branching target "${target}" is not a section id`,
-        });
-        return;
-      }
-      // forward-only: a section may only jump to one that comes AFTER it
-      if (sectionIndexById.get(target)! <= sectionIndex) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['sections', sectionIndex, 'branching', 'cases', targetIndex],
-          message: `branching target "${target}" must come after section "${section.id}" — only forward jumps are allowed`,
-        });
-      }
-    });
+      const targets = [...rule.cases.map((c) => c.goTo), ...(rule.defaultGoTo ? [rule.defaultGoTo] : [])];
+      targets.forEach((target, targetIndex) => {
+        if (target === END_OF_FORM) return;
+        if (!sectionIds.has(target)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [...path, 'cases', targetIndex],
+            message: `branching target "${target}" is not a section id`,
+          });
+          return;
+        }
+        // forward-only: a section may only jump to one that comes AFTER it
+        if (sectionIndexById.get(target)! <= sectionIndex) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [...path, 'cases', targetIndex],
+            message: `branching target "${target}" must come after section "${section.id}" — only forward jumps are allowed`,
+          });
+        }
+      });
+    };
+
+    if (section.branching) validateRule(section.branching, ['sections', sectionIndex, 'branching']);
+    section.branchRules?.forEach((rule, ruleIndex) =>
+      validateRule(rule, ['sections', sectionIndex, 'branchRules', ruleIndex]),
+    );
   });
 
   const unassigned = fields.map((f) => f.key).filter((key) => !assignedFieldKeys.has(key));

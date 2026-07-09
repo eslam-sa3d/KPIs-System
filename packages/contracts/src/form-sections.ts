@@ -75,7 +75,19 @@ export const formSectionSchema = z.object({
   media: mediaSchema.optional(),
   /** every field belonging to this page, in display order */
   fieldKeys: z.array(z.string().min(1).max(64)).min(1).max(50),
+  /**
+   * @deprecated superseded by `branchRules` (an ordered list — one rule can
+   * only key off a single field, so a page needing more than one independent
+   * trigger needed several sections to work around it). Kept so already-
+   * published FormVersion JSON (immutable once created) keeps validating and
+   * rendering; new/edited forms should only ever write `branchRules`.
+   */
   branching: sectionBranchRuleSchema.optional(),
+  /** Every rule is tried in array order; the first one that matches (by a
+   *  case, or its own defaultGoTo) wins. Lets a page branch on more than one
+   *  question, and — since a page can hold just one field — effectively
+   *  gives per-question routing without a separate graph model. */
+  branchRules: z.array(sectionBranchRuleSchema).max(10).optional(),
 });
 
 export type FormSection = z.infer<typeof formSectionSchema>;
@@ -106,12 +118,35 @@ function findMatchedCase(
   if (field.type === 'likert') {
     const index = rule.onStatement === undefined ? undefined : (raw as Record<string, number>)[rule.onStatement];
     answer = index === undefined ? undefined : String(index);
-  } else if (field.type === 'rating') {
+  } else if (field.type === 'rating' || field.type === 'nps' || field.type === 'number' || field.type === 'boolean') {
+    // all four stringify losslessly for exact-match comparison
     answer = String(raw);
   } else {
+    // short_text, long_text, select, date — already stored as the raw string
     answer = typeof raw === 'string' ? raw : undefined;
   }
   return rule.cases.find((c) => c.equals === answer);
+}
+
+/** Runs a page's branch rules in order; the first one that produces a target (via a
+ *  matched case or its own defaultGoTo) wins. Falls back to the legacy singular
+ *  `branching` field when a section has no `branchRules` (old published definitions). */
+function resolveBranchTarget(
+  section: FormSection,
+  fieldByKey: Map<string, FormField>,
+  answers: SubmissionAnswers,
+): string | undefined {
+  const rules = section.branchRules && section.branchRules.length > 0
+    ? section.branchRules
+    : section.branching
+      ? [section.branching]
+      : [];
+  for (const rule of rules) {
+    const matched = findMatchedCase(rule, fieldByKey, answers);
+    const target = matched?.goTo ?? rule.defaultGoTo;
+    if (target !== undefined) return target;
+  }
+  return undefined;
 }
 
 /**
@@ -153,13 +188,7 @@ export function resolveSectionPath(
     visitedSectionIds.push(current.id);
     for (const key of current.fieldKeys) reachableFieldKeys.add(key);
 
-    const rule = current.branching;
-    let nextId: string | undefined;
-
-    if (rule) {
-      const matched = findMatchedCase(rule, fieldByKey, answers);
-      nextId = matched?.goTo ?? rule.defaultGoTo;
-    }
+    const nextId = resolveBranchTarget(current, fieldByKey, answers);
 
     if (nextId === undefined) {
       // no rule, or no match and no default: fall through to next section in order

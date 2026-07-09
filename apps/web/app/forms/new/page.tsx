@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useRef, useState } from 'react';
-import { END_OF_FORM, type FieldType } from '@pulse/contracts';
+import { BRANCH_TRIGGER_TYPES, CONDITION_OPERATORS, END_OF_FORM, type FieldType } from '@pulse/contracts';
+
+type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 import { PortalShell } from '../../../components/portal-shell';
 import { api, assetUrl, uploadAsset } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -50,6 +52,10 @@ interface DraftField {
   /** video: an external embed URL (e.g. YouTube) */
   mediaUrl: string;
   mediaAlt: string;
+  /** conditional visibility: '' = always visible */
+  visibleWhenFieldKey: string;
+  visibleWhenOperator: ConditionOperator;
+  visibleWhenValue: string;
 }
 
 const emptyField = (): DraftField => ({
@@ -71,12 +77,64 @@ const emptyField = (): DraftField => ({
   mediaAssetId: '',
   mediaUrl: '',
   mediaAlt: '',
+  visibleWhenFieldKey: '',
+  visibleWhenOperator: 'equals',
+  visibleWhenValue: '',
 });
 
 const toKey = (label: string, index: number) => {
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return /^[a-z]/.test(slug) ? slug : `field_${index + 1}${slug ? `_${slug}` : ''}`;
 };
+
+interface KeyedField {
+  key: string;
+  label: string;
+  type: FieldType;
+  options: string[];
+  scale: number;
+  likertScale: string[];
+}
+
+/** The fixed set of possible answers for a trigger field, or null when the domain isn't enumerable
+ *  (short_text/long_text/number/date — the admin must type an exact value to match instead). */
+function caseKeysFor(trigger: KeyedField | undefined): string[] | null {
+  if (!trigger) return null;
+  switch (trigger.type) {
+    case 'rating':
+      return Array.from({ length: trigger.scale }, (_, i) => String(i + 1));
+    case 'nps':
+      return Array.from({ length: 11 }, (_, i) => String(i));
+    case 'boolean':
+      return ['true', 'false'];
+    case 'likert':
+      return trigger.likertScale.map((_, i) => String(i));
+    case 'select':
+    case 'multi_select':
+      return trigger.options;
+    default:
+      return null;
+  }
+}
+
+function caseLabelOf(trigger: KeyedField | undefined, key: string): string {
+  if (trigger?.type === 'likert') return trigger.likertScale[Number(key)] ?? key;
+  if (trigger?.type === 'boolean') return key === 'true' ? 'yes' : 'no';
+  return key;
+}
+
+interface DraftBranchRule {
+  /** the field this rule branches on */
+  fieldKey: string;
+  /** only used when fieldKey names a likert field: which statement drives the branch */
+  statement: string;
+  /** answer (or stringified rating/nps/boolean/likert-index) -> target page id / "end" */
+  cases: Array<{ equals: string; goTo: string }>;
+  /** unconditional/fallback target page id or "end"; '' = continue to the next page normally */
+  defaultGoTo: string;
+}
+
+const emptyBranchRule = (): DraftBranchRule => ({ fieldKey: '', statement: '', cases: [], defaultGoTo: '' });
 
 interface DraftSection {
   id: string;
@@ -87,14 +145,8 @@ interface DraftSection {
   mediaUrl: string;
   mediaAlt: string;
   fieldKeys: string[];
-  /** the choice/rating/likert field this page branches on, or '' for no per-answer branching */
-  branchFieldKey: string;
-  /** only used when branchFieldKey names a likert field: which statement drives the branch */
-  branchStatement: string;
-  /** option value (or stringified rating score / likert scale index) -> target page id / "end" */
-  cases: Record<string, string>;
-  /** unconditional/fallback target page id or "end"; '' = continue to the next page normally */
-  defaultGoTo: string;
+  /** every page can carry more than one independent branch rule (MS-Forms parity) */
+  branchRules: DraftBranchRule[];
 }
 
 const emptySection = (index: number): DraftSection => ({
@@ -106,13 +158,20 @@ const emptySection = (index: number): DraftSection => ({
   mediaUrl: '',
   mediaAlt: '',
   fieldKeys: [],
-  branchFieldKey: '',
-  branchStatement: '',
-  cases: {},
-  defaultGoTo: '',
+  branchRules: [],
 });
 
-function toDefinitionField(draft: DraftField, index: number) {
+/** Coerces the builder's always-string visibleWhen value to match its target field's answer shape
+ *  (a boolean-target field stores real booleans; gt/lt need a real number to compare). */
+function coerceVisibleWhenValue(raw: string, operator: ConditionOperator, targetType: FieldType | undefined) {
+  if (operator === 'gt' || operator === 'lt') return Number(raw);
+  if (targetType === 'boolean') return raw === 'true';
+  if (targetType === 'number' || targetType === 'rating' || targetType === 'nps') return Number(raw);
+  return raw;
+}
+
+function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedField[]) {
+  const visibleWhenTarget = keyedFields.find((f) => f.key === draft.visibleWhenFieldKey);
   const base = {
     key: toKey(draft.label, index),
     label: draft.label,
@@ -123,6 +182,15 @@ function toDefinitionField(draft: DraftField, index: number) {
       : draft.mediaType === 'video' && draft.mediaUrl
         ? { media: { type: 'video' as const, url: draft.mediaUrl, ...(draft.mediaAlt ? { alt: draft.mediaAlt } : {}) } }
         : {}),
+    ...(draft.visibleWhenFieldKey && draft.visibleWhenValue !== ''
+      ? {
+          visibleWhen: {
+            fieldKey: draft.visibleWhenFieldKey,
+            operator: draft.visibleWhenOperator,
+            equals: coerceVisibleWhenValue(draft.visibleWhenValue, draft.visibleWhenOperator, visibleWhenTarget?.type),
+          },
+        }
+      : {}),
   };
   const withImages = (values: string[]) =>
     values.map((o) => ({ value: o, label: o, ...(draft.optionImages[o] ? { imageAssetId: draft.optionImages[o] } : {}) }));
@@ -248,6 +316,97 @@ export default function NewFormPage() {
     );
   }
 
+  function addBranchRule(sectionIndex: number) {
+    setSections((current) =>
+      current.map((s, i) => (i === sectionIndex ? { ...s, branchRules: [...s.branchRules, emptyBranchRule()] } : s)),
+    );
+  }
+
+  function removeBranchRule(sectionIndex: number, ruleIndex: number) {
+    setSections((current) =>
+      current.map((s, i) =>
+        i === sectionIndex ? { ...s, branchRules: s.branchRules.filter((_, ri) => ri !== ruleIndex) } : s,
+      ),
+    );
+  }
+
+  function updateBranchRule(sectionIndex: number, ruleIndex: number, patch: Partial<DraftBranchRule>) {
+    setSections((current) =>
+      current.map((s, i) =>
+        i === sectionIndex
+          ? { ...s, branchRules: s.branchRules.map((r, ri) => (ri === ruleIndex ? { ...r, ...patch } : r)) }
+          : s,
+      ),
+    );
+  }
+
+  function onTriggerFieldChange(sectionIndex: number, ruleIndex: number, fieldKey: string, keys: string[] | null) {
+    updateBranchRule(sectionIndex, ruleIndex, {
+      fieldKey,
+      statement: '',
+      cases: keys ? keys.map((k) => ({ equals: k, goTo: '' })) : [],
+    });
+  }
+
+  function onStatementChange(sectionIndex: number, ruleIndex: number, statement: string, likertScale: string[]) {
+    updateBranchRule(sectionIndex, ruleIndex, {
+      statement,
+      cases: likertScale.map((_, i) => ({ equals: String(i), goTo: '' })),
+    });
+  }
+
+  function updateCase(
+    sectionIndex: number,
+    ruleIndex: number,
+    caseIndex: number,
+    patch: Partial<{ equals: string; goTo: string }>,
+  ) {
+    setSections((current) =>
+      current.map((s, i) =>
+        i === sectionIndex
+          ? {
+              ...s,
+              branchRules: s.branchRules.map((r, ri) =>
+                ri === ruleIndex
+                  ? { ...r, cases: r.cases.map((c, ci) => (ci === caseIndex ? { ...c, ...patch } : c)) }
+                  : r,
+              ),
+            }
+          : s,
+      ),
+    );
+  }
+
+  function addManualCase(sectionIndex: number, ruleIndex: number) {
+    setSections((current) =>
+      current.map((s, i) =>
+        i === sectionIndex
+          ? {
+              ...s,
+              branchRules: s.branchRules.map((r, ri) =>
+                ri === ruleIndex ? { ...r, cases: [...r.cases, { equals: '', goTo: '' }] } : r,
+              ),
+            }
+          : s,
+      ),
+    );
+  }
+
+  function removeCase(sectionIndex: number, ruleIndex: number, caseIndex: number) {
+    setSections((current) =>
+      current.map((s, i) =>
+        i === sectionIndex
+          ? {
+              ...s,
+              branchRules: s.branchRules.map((r, ri) =>
+                ri === ruleIndex ? { ...r, cases: r.cases.filter((_, ci) => ci !== caseIndex) } : r,
+              ),
+            }
+          : s,
+      ),
+    );
+  }
+
   function updateField(index: number, patch: Partial<DraftField>) {
     setFields((current) => current.map((f, i) => (i === index ? { ...f, ...patch } : f)));
   }
@@ -314,6 +473,9 @@ export default function NewFormPage() {
           mediaAssetId: '',
           mediaUrl: '',
           mediaAlt: '',
+          visibleWhenFieldKey: '',
+          visibleWhenOperator: 'equals' as const,
+          visibleWhenValue: '',
         })),
       ]);
       setImportIssues(issues);
@@ -382,10 +544,18 @@ export default function NewFormPage() {
   function buildSectionsPayload() {
     if (!sectionsEnabled || sections.length === 0) return undefined;
     return sections.map((s) => {
-      const cases = Object.entries(s.cases)
-        .filter(([, goTo]) => goTo)
-        .map(([equals, goTo]) => ({ equals, goTo }));
-      const hasBranching = cases.length > 0 || Boolean(s.defaultGoTo);
+      const branchRules = s.branchRules
+        .map((r) => {
+          const cases = r.cases.filter((c) => c.equals && c.goTo).map(({ equals, goTo }) => ({ equals, goTo }));
+          if (cases.length === 0 && !r.defaultGoTo) return null; // empty rule — drop it
+          return {
+            ...(r.fieldKey ? { onFieldKey: r.fieldKey } : {}),
+            ...(r.statement ? { onStatement: r.statement } : {}),
+            cases,
+            ...(r.defaultGoTo ? { defaultGoTo: r.defaultGoTo } : {}),
+          };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
       return {
         id: s.id,
         ...(s.title.trim() ? { title: s.title.trim() } : {}),
@@ -396,16 +566,7 @@ export default function NewFormPage() {
             ? { media: { type: 'video' as const, url: s.mediaUrl, ...(s.mediaAlt ? { alt: s.mediaAlt } : {}) } }
             : {}),
         fieldKeys: s.fieldKeys,
-        ...(hasBranching
-          ? {
-              branching: {
-                ...(s.branchFieldKey ? { onFieldKey: s.branchFieldKey } : {}),
-                ...(s.branchStatement ? { onStatement: s.branchStatement } : {}),
-                cases,
-                ...(s.defaultGoTo ? { defaultGoTo: s.defaultGoTo } : {}),
-              },
-            }
-          : {}),
+        ...(branchRules.length > 0 ? { branchRules } : {}),
       };
     });
   }
@@ -421,7 +582,7 @@ export default function NewFormPage() {
           definition: {
             title,
             ...(description.trim() ? { description: description.trim() } : {}),
-            fields: fields.map(toDefinitionField),
+            fields: fields.map((f, i) => toDefinitionField(f, i, keyedFields)),
             ...(buildSectionsPayload() ? { sections: buildSectionsPayload() } : {}),
           },
         }),
@@ -594,6 +755,70 @@ export default function NewFormPage() {
                 )}
               </>
             )}
+
+            {(() => {
+              const earlierFields = keyedFields.slice(0, index).filter((f) => f.type !== 'section_header');
+              const visibleWhenTarget = earlierFields.find((f) => f.key === field.visibleWhenFieldKey);
+              return (
+                <>
+                  <label htmlFor={`field-visible-field-${index}`}>show only if (optional)</label>
+                  <select
+                    id={`field-visible-field-${index}`}
+                    value={field.visibleWhenFieldKey}
+                    onChange={(e) => updateField(index, { visibleWhenFieldKey: e.target.value, visibleWhenValue: '' })}
+                    disabled={earlierFields.length === 0}
+                  >
+                    <option value="">always visible</option>
+                    {earlierFields.map((f) => (
+                      <option key={f.key} value={f.key}>
+                        {f.label} ({f.type})
+                      </option>
+                    ))}
+                  </select>
+
+                  {field.visibleWhenFieldKey && (
+                    <>
+                      <label htmlFor={`field-visible-op-${index}`}>condition</label>
+                      <select
+                        id={`field-visible-op-${index}`}
+                        value={field.visibleWhenOperator}
+                        onChange={(e) => updateField(index, { visibleWhenOperator: e.target.value as ConditionOperator })}
+                      >
+                        {CONDITION_OPERATORS.map((op) => (
+                          <option key={op} value={op}>
+                            {op.replace('_', ' ')}
+                          </option>
+                        ))}
+                      </select>
+
+                      <label htmlFor={`field-visible-value-${index}`}>value</label>
+                      {visibleWhenTarget?.type === 'boolean' ? (
+                        <select
+                          id={`field-visible-value-${index}`}
+                          value={field.visibleWhenValue}
+                          onChange={(e) => updateField(index, { visibleWhenValue: e.target.value })}
+                        >
+                          <option value="">choose…</option>
+                          <option value="true">yes</option>
+                          <option value="false">no</option>
+                        </select>
+                      ) : (
+                        <input
+                          id={`field-visible-value-${index}`}
+                          value={field.visibleWhenValue}
+                          onChange={(e) => updateField(index, { visibleWhenValue: e.target.value })}
+                          placeholder={
+                            visibleWhenTarget?.type === 'select' || visibleWhenTarget?.type === 'multi_select'
+                              ? 'exact option value'
+                              : 'exact value to match'
+                          }
+                        />
+                      )}
+                    </>
+                  )}
+                </>
+              );
+            })()}
 
             {(field.type === 'select' || field.type === 'multi_select' || field.type === 'ranking') && (
               <>
@@ -800,20 +1025,8 @@ export default function NewFormPage() {
               {sections.map((section, index) => {
                 const laterSections = sections.slice(index + 1);
                 const triggerCandidates = keyedFields.filter(
-                  (f) =>
-                    (f.type === 'select' || f.type === 'multi_select' || f.type === 'rating' || f.type === 'likert') &&
-                    section.fieldKeys.includes(f.key),
+                  (f) => BRANCH_TRIGGER_TYPES.includes(f.type) && section.fieldKeys.includes(f.key),
                 );
-                const trigger = triggerCandidates.find((f) => f.key === section.branchFieldKey);
-                // for select: option values; for likert: its statement values (parsed into .options too)
-                const caseKeys =
-                  trigger?.type === 'rating'
-                    ? Array.from({ length: trigger.scale }, (_, i) => String(i + 1))
-                    : trigger?.type === 'likert'
-                      ? trigger.likertScale.map((_, i) => String(i))
-                      : (trigger?.options ?? []);
-                const caseLabelOf = (key: string) =>
-                  trigger?.type === 'likert' ? (trigger.likertScale[Number(key)] ?? key) : key;
 
                 return (
                   <fieldset key={section.id} className="question-card" style={{ marginBottom: 12 }}>
@@ -883,55 +1096,122 @@ export default function NewFormPage() {
 
                     {laterSections.length > 0 && (
                       <>
-                        <label htmlFor={`section-trigger-${index}`}>branch on (optional)</label>
-                        <select
-                          id={`section-trigger-${index}`}
-                          value={section.branchFieldKey}
-                          onChange={(e) =>
-                            updateSection(index, { branchFieldKey: e.target.value, branchStatement: '', cases: {} })
-                          }
-                        >
-                          <option value="">no per-answer branching</option>
-                          {triggerCandidates.map((f) => (
-                            <option key={f.key} value={f.key}>
-                              {f.label} ({f.type})
-                            </option>
-                          ))}
-                        </select>
+                        <label>branch rules (optional — a page can have more than one)</label>
+                        {section.branchRules.map((rule, ruleIndex) => {
+                          const trigger = triggerCandidates.find((f) => f.key === rule.fieldKey);
+                          const enumerable = caseKeysFor(trigger) !== null;
+                          return (
+                            <div key={ruleIndex} className="admin-card" style={{ padding: 10, marginTop: 8 }}>
+                              <label htmlFor={`section-trigger-${index}-${ruleIndex}`}>branch on</label>
+                              <select
+                                id={`section-trigger-${index}-${ruleIndex}`}
+                                value={rule.fieldKey}
+                                onChange={(e) => {
+                                  const next = triggerCandidates.find((f) => f.key === e.target.value);
+                                  onTriggerFieldChange(index, ruleIndex, e.target.value, caseKeysFor(next));
+                                }}
+                              >
+                                <option value="">choose a question</option>
+                                {triggerCandidates.map((f) => (
+                                  <option key={f.key} value={f.key}>
+                                    {f.label} ({f.type})
+                                  </option>
+                                ))}
+                              </select>
 
-                        {trigger?.type === 'likert' && (
-                          <>
-                            <label htmlFor={`section-statement-${index}`}>which statement drives the branch</label>
-                            <select
-                              id={`section-statement-${index}`}
-                              value={section.branchStatement}
-                              onChange={(e) => updateSection(index, { branchStatement: e.target.value, cases: {} })}
-                            >
-                              <option value="">choose a statement</option>
-                              {trigger.options.map((st) => (
-                                <option key={st} value={st}>
-                                  {st}
-                                </option>
-                              ))}
-                            </select>
-                          </>
-                        )}
+                              {trigger?.type === 'likert' && (
+                                <>
+                                  <label htmlFor={`section-statement-${index}-${ruleIndex}`}>
+                                    which statement drives the branch
+                                  </label>
+                                  <select
+                                    id={`section-statement-${index}-${ruleIndex}`}
+                                    value={rule.statement}
+                                    onChange={(e) => onStatementChange(index, ruleIndex, e.target.value, trigger.likertScale)}
+                                  >
+                                    <option value="">choose a statement</option>
+                                    {trigger.options.map((st) => (
+                                      <option key={st} value={st}>
+                                        {st}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </>
+                              )}
 
-                        {trigger && (trigger.type !== 'likert' || section.branchStatement) &&
-                          caseKeys.map((key) => (
-                            <div key={key}>
-                              <label htmlFor={`section-case-${index}-${key}`}>
-                                if {trigger?.type === 'multi_select' ? 'selections include' : 'answer is'} "
-                                {caseLabelOf(key)}" go to
+                              {trigger && (trigger.type !== 'likert' || rule.statement) && (
+                                enumerable ? (
+                                  rule.cases.map((c, ci) => (
+                                    <div key={c.equals}>
+                                      <label htmlFor={`section-case-${index}-${ruleIndex}-${ci}`}>
+                                        if {trigger.type === 'multi_select' ? 'selections include' : 'answer is'} "
+                                        {caseLabelOf(trigger, c.equals)}" go to
+                                      </label>
+                                      <select
+                                        id={`section-case-${index}-${ruleIndex}-${ci}`}
+                                        value={c.goTo}
+                                        onChange={(e) => updateCase(index, ruleIndex, ci, { goTo: e.target.value })}
+                                      >
+                                        <option value="">continue normally</option>
+                                        {laterSections.map((t) => (
+                                          <option key={t.id} value={t.id}>
+                                            {t.title.trim() || t.id}
+                                          </option>
+                                        ))}
+                                        <option value={END_OF_FORM}>end the form</option>
+                                      </select>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <>
+                                    {rule.cases.map((c, ci) => (
+                                      <div key={ci} className="builder-required">
+                                        <input
+                                          value={c.equals}
+                                          onChange={(e) => updateCase(index, ruleIndex, ci, { equals: e.target.value })}
+                                          placeholder="exact answer to match"
+                                        />
+                                        <select
+                                          value={c.goTo}
+                                          onChange={(e) => updateCase(index, ruleIndex, ci, { goTo: e.target.value })}
+                                        >
+                                          <option value="">go to…</option>
+                                          {laterSections.map((t) => (
+                                            <option key={t.id} value={t.id}>
+                                              {t.title.trim() || t.id}
+                                            </option>
+                                          ))}
+                                          <option value={END_OF_FORM}>end the form</option>
+                                        </select>
+                                        <button
+                                          type="button"
+                                          className="btn-ghost"
+                                          onClick={() => removeCase(index, ruleIndex, ci)}
+                                        >
+                                          remove case
+                                        </button>
+                                      </div>
+                                    ))}
+                                    <button
+                                      type="button"
+                                      className="btn-ghost"
+                                      onClick={() => addManualCase(index, ruleIndex)}
+                                    >
+                                      + add case
+                                    </button>
+                                  </>
+                                )
+                              )}
+
+                              <label htmlFor={`section-default-${index}-${ruleIndex}`}>
+                                {trigger ? 'if none of the above match' : 'always jump to (unconditional)'}
                               </label>
                               <select
-                                id={`section-case-${index}-${key}`}
-                                value={section.cases[key] ?? ''}
-                                onChange={(e) =>
-                                  updateSection(index, { cases: { ...section.cases, [key]: e.target.value } })
-                                }
+                                id={`section-default-${index}-${ruleIndex}`}
+                                value={rule.defaultGoTo}
+                                onChange={(e) => updateBranchRule(index, ruleIndex, { defaultGoTo: e.target.value })}
                               >
-                                <option value="">continue normally</option>
+                                <option value="">continue to the next page</option>
                                 {laterSections.map((t) => (
                                   <option key={t.id} value={t.id}>
                                     {t.title.trim() || t.id}
@@ -939,25 +1219,22 @@ export default function NewFormPage() {
                                 ))}
                                 <option value={END_OF_FORM}>end the form</option>
                               </select>
-                            </div>
-                          ))}
 
-                        <label htmlFor={`section-default-${index}`}>
-                          {trigger ? 'if none of the above match' : 'always jump to (unconditional)'}
-                        </label>
-                        <select
-                          id={`section-default-${index}`}
-                          value={section.defaultGoTo}
-                          onChange={(e) => updateSection(index, { defaultGoTo: e.target.value })}
-                        >
-                          <option value="">continue to the next page</option>
-                          {laterSections.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.title.trim() || t.id}
-                            </option>
-                          ))}
-                          <option value={END_OF_FORM}>end the form</option>
-                        </select>
+                              <div className="builder-field-actions">
+                                <button
+                                  type="button"
+                                  className="btn-ghost"
+                                  onClick={() => removeBranchRule(index, ruleIndex)}
+                                >
+                                  remove this rule
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <button type="button" className="btn-ghost" onClick={() => addBranchRule(index)}>
+                          + add branch rule
+                        </button>
                       </>
                     )}
 

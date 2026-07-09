@@ -248,6 +248,113 @@ describe('section branching', () => {
   });
 });
 
+describe('branchRules (multiple rules per page, expanded trigger types)', () => {
+  const definition: FormDefinition = formDefinitionSchema.parse({
+    title: 'multi-rule branching',
+    fields: [
+      { key: 'vip', label: 'VIP customer?', type: 'boolean' },
+      {
+        key: 'tier',
+        label: 'Tier',
+        type: 'select',
+        options: [
+          { value: 'gold', label: 'Gold' },
+          { value: 'silver', label: 'Silver' },
+        ],
+      },
+      { key: 'name', label: 'Your name', type: 'short_text', required: true },
+      // each path gets its own exclusive field — a field can only belong to one section
+      { key: 'vip_note', label: 'VIP note', type: 'short_text' },
+      { key: 'gold_note', label: 'Gold note', type: 'short_text' },
+      { key: 'standard_note', label: 'Standard note', type: 'short_text' },
+    ],
+    sections: [
+      {
+        id: 'intro',
+        fieldKeys: ['vip', 'tier'],
+        // two independent rules on the SAME page, keying off two different fields —
+        // impossible with the old single `branching` field
+        branchRules: [
+          { onFieldKey: 'vip', cases: [{ equals: 'true', goTo: 'vip_path' }] },
+          { onFieldKey: 'tier', cases: [{ equals: 'gold', goTo: 'gold_path' }], defaultGoTo: 'standard_path' },
+        ],
+      },
+      { id: 'vip_path', fieldKeys: ['vip_note'], branching: { defaultGoTo: 'outro' } },
+      { id: 'gold_path', fieldKeys: ['gold_note'], branching: { defaultGoTo: 'outro' } },
+      { id: 'standard_path', fieldKeys: ['standard_note'], branching: { defaultGoTo: 'outro' } },
+      { id: 'outro', fieldKeys: ['name'] },
+    ],
+  });
+  const validator = compileAnswerValidator(definition);
+
+  it('the first rule to produce a target wins, regardless of later rules', () => {
+    // vip=true matches rule 1 outright — rule 2 (tier) never even considered
+    expect(validator.validate({ vip: true, tier: 'silver', name: 'A' })).toEqual({
+      vip: true,
+      tier: 'silver',
+      name: 'A',
+    });
+  });
+
+  it('falls through to the next rule when an earlier rule has no match and no default', () => {
+    // vip=false: rule 1 has no matching case and no defaultGoTo, so rule 2 (tier=gold) decides
+    expect(validator.validate({ vip: false, tier: 'gold', name: 'A' })).toEqual({
+      vip: false,
+      tier: 'gold',
+      name: 'A',
+    });
+  });
+
+  it("a later rule's own defaultGoTo still fires when none of its cases match", () => {
+    // vip=false, tier=silver: neither rule's cases match, but rule 2 has a defaultGoTo
+    expect(validator.validate({ vip: false, tier: 'silver', name: 'A' })).toEqual({
+      vip: false,
+      tier: 'silver',
+      name: 'A',
+    });
+  });
+
+  it('boolean and number fields are valid branch triggers (stringified exact match)', () => {
+    const numberTriggered: FormDefinition = formDefinitionSchema.parse({
+      title: 'number trigger',
+      fields: [
+        { key: 'age', label: 'Age', type: 'number', required: true },
+        { key: 'guardian_name', label: 'Guardian name', type: 'short_text', required: true },
+        { key: 'name', label: 'Name', type: 'short_text', required: true },
+      ],
+      sections: [
+        {
+          id: 'age_gate',
+          fieldKeys: ['age'],
+          branchRules: [{ onFieldKey: 'age', cases: [{ equals: '17', goTo: 'minor' }], defaultGoTo: 'adult' }],
+        },
+        // minor path ends here (no cascade into "adult"'s fields)
+        { id: 'minor', fieldKeys: ['guardian_name'], branching: { defaultGoTo: END_OF_FORM } },
+        { id: 'adult', fieldKeys: ['name'] },
+      ],
+    });
+    const v = compileAnswerValidator(numberTriggered);
+    expect(v.validate({ age: 17, guardian_name: 'Sam' })).toEqual({ age: 17, guardian_name: 'Sam' });
+    expect(v.validate({ age: 30, name: 'Ada' })).toEqual({ age: 30, name: 'Ada' });
+  });
+
+  it('rejects a branchRules trigger of an unbranchable type (ranking)', () => {
+    expect(() =>
+      formDefinitionSchema.parse({
+        title: 'invalid trigger',
+        fields: [
+          { key: 'prio', label: 'Rank', type: 'ranking', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] },
+          { key: 'name', label: 'Name', type: 'short_text' },
+        ],
+        sections: [
+          { id: 'p1', fieldKeys: ['prio'], branchRules: [{ onFieldKey: 'prio', defaultGoTo: 'p2' }] },
+          { id: 'p2', fieldKeys: ['name'] },
+        ],
+      }),
+    ).toThrow(ZodError);
+  });
+});
+
 describe('section branching off a rating field', () => {
   const definition: FormDefinition = formDefinitionSchema.parse({
     title: 'satisfaction follow-up',
