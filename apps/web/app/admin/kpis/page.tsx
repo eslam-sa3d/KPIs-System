@@ -24,23 +24,7 @@ interface KpiRow {
   /** Relative importance as a percentage (0-100) — informational only. */
   weight: number | null;
   isActive: boolean;
-  assignments: Array<{
-    id: string;
-    roleId: string | null;
-    departmentId: string | null;
-    deliveryStream: string | null;
-  }>;
   evaluationAreas: EvaluationAreaRow[];
-}
-
-interface RoleRow {
-  id: string;
-  name: string;
-}
-
-interface DepartmentRow {
-  id: string;
-  name: string;
 }
 
 interface UserOption {
@@ -49,7 +33,10 @@ interface UserOption {
   displayName: string;
 }
 
-const CADENCES = ['weekly', 'monthly', 'quarterly', 'yearly'] as const;
+// Evaluation Areas are created with this fixed cadence — the field still
+// exists server-side (it drives the Forms→KPI bridge's period calculation)
+// but isn't exposed as a user choice on this page.
+const DEFAULT_AREA_CADENCE = 'quarterly';
 
 /** Empty string (untouched/cleared input) -> undefined, so JSON.stringify
  *  omits the key entirely rather than sending weight: null or NaN. */
@@ -61,8 +48,6 @@ function parseWeight(raw: FormDataEntryValue | null): number | undefined {
 export default function KpisAdminPage() {
   const user = useSession();
   const [kpis, setKpis] = useState<KpiRow[] | null>(null);
-  const [roles, setRoles] = useState<RoleRow[]>([]);
-  const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [people, setPeople] = useState<UserOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -80,8 +65,6 @@ export default function KpisAdminPage() {
   useEffect(() => {
     if (!user) return;
     void reload();
-    if (can(user, 'roles:read')) void api<RoleRow[]>('/v1/roles').then(setRoles);
-    if (can(user, 'departments:read')) void api<DepartmentRow[]>('/v1/departments').then(setDepartments);
     void api<UserOption[]>('/v1/users?pageSize=200').then(setPeople);
   }, [user, reload]);
 
@@ -134,29 +117,13 @@ export default function KpisAdminPage() {
     );
   }
 
-  function onAssign(kpiId: string, event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    report(
-      api(`/v1/kpis/${kpiId}/assignments`, {
-        method: 'POST',
-        body: JSON.stringify({
-          roleId: form.get('roleId') || undefined,
-          departmentId: form.get('departmentId') || undefined,
-          deliveryStream: form.get('deliveryStream') || undefined,
-        }),
-      }),
-      'mapping saved',
-    );
-  }
-
   function onCreateArea(kpiId: string, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     report(
       api(`/v1/kpis/${kpiId}/areas`, {
         method: 'POST',
-        body: JSON.stringify({ name: form.get('name'), cadence: form.get('cadence') }),
+        body: JSON.stringify({ name: form.get('name'), cadence: DEFAULT_AREA_CADENCE }),
       }),
       'evaluation area added',
     );
@@ -314,26 +281,30 @@ export default function KpisAdminPage() {
                   {!kpi.isActive && <span className="muted">(inactive)</span>}
                 </h2>
                 {can(user, 'kpis:write') && (
-                  <span className="builder-field-actions">
-                    <button type="button" className="btn-ghost" onClick={() => setRenamingKpiId(kpi.id)}>
+                  <span className="row-actions">
+                    <button type="button" className="btn-text" onClick={() => setRenamingKpiId(kpi.id)}>
                       rename
                     </button>
-                    <button type="button" className="btn-ghost" onClick={() => onToggleKpiActive(kpi)}>
+                    <button type="button" className="btn-text" onClick={() => onToggleKpiActive(kpi)}>
                       {kpi.isActive ? 'deactivate' : 'reactivate'}
                     </button>
                     {can(user, 'kpis:manage') &&
                       (confirmDeleteKpiId === kpi.id ? (
                         <>
                           <span className="muted">delete permanently?</span>
-                          <button type="button" className="btn-ghost" onClick={() => onDeleteKpi(kpi.id)}>
+                          <button type="button" className="btn-text btn-text-danger" onClick={() => onDeleteKpi(kpi.id)}>
                             confirm delete
                           </button>
-                          <button type="button" className="btn-ghost" onClick={() => setConfirmDeleteKpiId(null)}>
+                          <button type="button" className="btn-text" onClick={() => setConfirmDeleteKpiId(null)}>
                             cancel
                           </button>
                         </>
                       ) : (
-                        <button type="button" className="btn-ghost" onClick={() => setConfirmDeleteKpiId(kpi.id)}>
+                        <button
+                          type="button"
+                          className="btn-text btn-text-danger"
+                          onClick={() => setConfirmDeleteKpiId(kpi.id)}
+                        >
                           delete
                         </button>
                       ))}
@@ -341,34 +312,7 @@ export default function KpisAdminPage() {
                 )}
               </div>
             )}
-            <p className="muted">
-              {kpi.evaluationAreas.length} evaluation area(s) · {kpi.assignments.length} mapping(s)
-            </p>
-
-            {can(user, 'kpis:manage') && (
-              <form className="inline-form" onSubmit={(e) => onAssign(kpi.id, e)}>
-                <select name="roleId" defaultValue="" aria-label={`map ${kpi.name} to role`}>
-                  <option value="">role…</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-                <select name="departmentId" defaultValue="" aria-label={`map ${kpi.name} to department`}>
-                  <option value="">department…</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-                <input name="deliveryStream" placeholder="delivery stream…" aria-label={`map ${kpi.name} to stream`} />
-                <button className="btn-ghost" type="submit">
-                  map
-                </button>
-              </form>
-            )}
+            <p className="muted">{kpi.evaluationAreas.length} evaluation area(s)</p>
 
             <label>evaluation areas</label>
             {kpi.evaluationAreas.length === 0 ? (
@@ -380,27 +324,35 @@ export default function KpisAdminPage() {
                 <div key={area.id} className="builder-field">
                   <div className="page-title-row">
                     <strong>
-                      {area.name} <span className="muted">· {area.cadence}</span>
+                      {area.name}
                       {!area.isActive && <span className="muted"> (inactive)</span>}
                     </strong>
                     {can(user, 'kpis:write') && (
-                      <span className="builder-field-actions">
-                        <button type="button" className="btn-ghost" onClick={() => onToggleAreaActive(kpi.id, area)}>
+                      <span className="row-actions">
+                        <button type="button" className="btn-text" onClick={() => onToggleAreaActive(kpi.id, area)}>
                           {area.isActive ? 'deactivate' : 'reactivate'}
                         </button>
                         {can(user, 'kpis:manage') &&
                           (confirmDeleteAreaId === area.id ? (
                             <>
                               <span className="muted">delete permanently?</span>
-                              <button type="button" className="btn-ghost" onClick={() => onDeleteArea(kpi.id, area.id)}>
+                              <button
+                                type="button"
+                                className="btn-text btn-text-danger"
+                                onClick={() => onDeleteArea(kpi.id, area.id)}
+                              >
                                 confirm delete
                               </button>
-                              <button type="button" className="btn-ghost" onClick={() => setConfirmDeleteAreaId(null)}>
+                              <button type="button" className="btn-text" onClick={() => setConfirmDeleteAreaId(null)}>
                                 cancel
                               </button>
                             </>
                           ) : (
-                            <button type="button" className="btn-ghost" onClick={() => setConfirmDeleteAreaId(area.id)}>
+                            <button
+                              type="button"
+                              className="btn-text btn-text-danger"
+                              onClick={() => setConfirmDeleteAreaId(area.id)}
+                            >
                               delete
                             </button>
                           ))}
@@ -484,10 +436,10 @@ export default function KpisAdminPage() {
                           <span>{sub.name}</span>
                         )}
                         {can(user, 'kpis:write') && renamingSubCriteriaId !== sub.id && (
-                          <span className="builder-field-actions">
+                          <span className="row-actions">
                             <button
                               type="button"
-                              className="btn-ghost"
+                              className="btn-text"
                               onClick={() => setRenamingSubCriteriaId(sub.id)}
                             >
                               rename
@@ -498,14 +450,14 @@ export default function KpisAdminPage() {
                                   <span className="muted">delete permanently?</span>
                                   <button
                                     type="button"
-                                    className="btn-ghost"
+                                    className="btn-text btn-text-danger"
                                     onClick={() => onDeleteSubCriteria(kpi.id, area.id, sub.id)}
                                   >
                                     confirm delete
                                   </button>
                                   <button
                                     type="button"
-                                    className="btn-ghost"
+                                    className="btn-text"
                                     onClick={() => setConfirmDeleteSubCriteriaId(null)}
                                   >
                                     cancel
@@ -514,7 +466,7 @@ export default function KpisAdminPage() {
                               ) : (
                                 <button
                                   type="button"
-                                  className="btn-ghost"
+                                  className="btn-text btn-text-danger"
                                   onClick={() => setConfirmDeleteSubCriteriaId(sub.id)}
                                 >
                                   delete
@@ -546,13 +498,6 @@ export default function KpisAdminPage() {
             {can(user, 'kpis:write') && (
               <form className="inline-form" onSubmit={(e) => onCreateArea(kpi.id, e)}>
                 <input name="name" required minLength={2} placeholder="new area name" aria-label="new area name" />
-                <select name="cadence" defaultValue="quarterly" aria-label="new area cadence">
-                  {CADENCES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
                 <button className="btn-ghost" type="submit">
                   add area
                 </button>

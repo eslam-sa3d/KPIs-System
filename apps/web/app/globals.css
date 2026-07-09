@@ -2428,6 +2428,10 @@ h3 {
   color: var(--color-text-muted);
 }
 
+/* Form-builder field toolbar ONLY — its .btn-ghost override below forces a
+   32px icon-only circle, which clips/overlaps real text labels like "rename"/
+   "delete". Anywhere those need a text-label action row (KPI admin page,
+   etc.), use .row-actions + .btn-text instead, not this class. */
 .builder-field-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2528,6 +2532,65 @@ h3 {
 .builder-field-actions .btn-ghost:hover {
   background: color-mix(in srgb, var(--pulse-purple) 10%, transparent);
   color: var(--pulse-purple);
+}
+
+/* Text-label action row (rename/deactivate/delete, etc.) — M3 "text button"
+   treatment: no border/fill at rest, just label-large type + a state-layer
+   on hover/focus/pressed. Lower visual weight than the pill-shaped .btn-ghost
+   (an outlined button), appropriate for dense, repeated per-row actions. */
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: var(--md-sys-typescale-label-large-size);
+  line-height: var(--md-sys-typescale-label-large-line-height);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  font-weight: var(--md-sys-typescale-label-large-weight);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--md-sys-shape-corner-full);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+
+.btn-text:hover {
+  background: color-mix(in srgb, var(--color-primary) var(--md-sys-state-hover-opacity), transparent);
+}
+
+.btn-text:focus-visible {
+  background: color-mix(in srgb, var(--color-primary) var(--md-sys-state-focus-opacity), transparent);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn-text:active {
+  background: color-mix(in srgb, var(--color-primary) var(--md-sys-state-pressed-opacity), transparent);
+}
+
+/* Destructive actions (the "delete" step before its own confirm) get the
+   error role instead of primary — same text-button mechanics. */
+.btn-text-danger {
+  color: var(--color-danger);
+}
+
+.btn-text-danger:hover {
+  background: color-mix(in srgb, var(--color-danger) var(--md-sys-state-hover-opacity), transparent);
+}
+
+.btn-text-danger:focus-visible {
+  background: color-mix(in srgb, var(--color-danger) var(--md-sys-state-focus-opacity), transparent);
+  outline-color: var(--color-danger);
+}
+
+.btn-text-danger:active {
+  background: color-mix(in srgb, var(--color-danger) var(--md-sys-state-pressed-opacity), transparent);
 }
 
 .field-required-toggle {
