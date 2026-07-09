@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { AuthenticatedUser } from '@pulse/contracts';
 import { logout } from '../lib/api-client';
@@ -30,6 +30,7 @@ export function PortalShell({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
   // close the mobile menu on route changes / navigation clicks
@@ -43,6 +44,7 @@ export function PortalShell({
   }
 
   const visibleItems = NAV_ITEMS.filter((item) => !item.permission || can(user, item.permission));
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <div className="portal">
@@ -53,7 +55,12 @@ export function PortalShell({
           </Link>
           <nav className="portal-nav-desktop" aria-label="main navigation">
             {visibleItems.map((item) => (
-              <Link key={item.href} href={item.href}>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={isActive(item.href) ? 'portal-nav-active' : undefined}
+                aria-current={isActive(item.href) ? 'page' : undefined}
+              >
                 {item.label}
               </Link>
             ))}
@@ -86,7 +93,13 @@ export function PortalShell({
         data-surface="purple"
       >
         {visibleItems.map((item) => (
-          <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={() => setMenuOpen(false)}
+            className={isActive(item.href) ? 'portal-nav-active' : undefined}
+            aria-current={isActive(item.href) ? 'page' : undefined}
+          >
             {item.label}
           </Link>
         ))}

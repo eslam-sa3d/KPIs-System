@@ -67,7 +67,7 @@ h3 {
   font-weight: var(--md-sys-typescale-label-large-weight);
   padding: var(--space-3) var(--space-8);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--md-sys-shape-corner-full);
   cursor: pointer;
   text-decoration: none;
   transition: background var(--transition-fast);
@@ -96,8 +96,10 @@ h3 {
   letter-spacing: var(--md-sys-typescale-label-large-tracking);
   font-weight: var(--md-sys-typescale-label-large-weight);
   padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  /* M3 outlined buttons use the stronger `outline` role, not the decorative
+     `outline-variant` most borders in this app use (--color-border). */
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-full);
   cursor: pointer;
   transition: border-color var(--transition-fast), background var(--transition-fast);
 }
@@ -155,16 +157,21 @@ h3 {
   margin-top: var(--space-2);
 }
 
+/* M3 outlined text field: a visible border at rest, thickening to 2px in the
+   primary color on focus (rather than a filled background + underline —
+   the better fit for this app's existing always-bordered input convention). */
 .login-card input {
   font: inherit;
   padding: var(--space-3);
-  border: 1px solid var(--pulse-silver-light);
+  border: 1px solid var(--md-sys-color-outline);
   border-radius: var(--radius-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .login-card input:focus-visible {
-  outline: 2px solid var(--pulse-purple);
-  outline-offset: 1px;
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+  outline: none;
 }
 
 .login-card .btn-primary {
@@ -249,8 +256,8 @@ h3 {
   color: var(--color-text);
   text-decoration: none;
   font-weight: var(--font-weight-medium);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--md-sys-shape-corner-full);
   transition: background var(--transition-fast);
 }
 
@@ -270,6 +277,17 @@ h3 {
 
 .portal-nav-desktop a:active {
   background: color-mix(in srgb, var(--color-text) 10%, var(--color-bg));
+}
+
+/* M3 nav active-indicator: a persistent pill, stronger than the transient
+   hover/focus overlays above, so the current section reads at a glance. */
+.portal-nav-active {
+  background: color-mix(in srgb, var(--color-text) 16%, var(--color-bg));
+  font-weight: var(--font-weight-bold);
+}
+
+.portal-nav-active:hover {
+  background: color-mix(in srgb, var(--color-text) 20%, var(--color-bg));
 }
 
 .portal-user-desktop,
@@ -348,7 +366,9 @@ h3 {
   flex-direction: column;
   max-height: 0;
   overflow: hidden;
-  background: var(--pulse-purple-dark);
+  /* contextual, not hardcoded — resolves through [data-surface='purple'] the
+     same way .portal-nav-desktop does */
+  background: var(--color-bg);
   transition: max-height 0.25s ease;
 }
 
@@ -360,11 +380,23 @@ h3 {
   display: flex;
   align-items: center;
   min-height: 44px;
-  color: var(--pulse-air);
+  color: var(--color-text);
   text-decoration: none;
   font-weight: var(--font-weight-medium);
   padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid color-mix(in srgb, var(--pulse-air) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
+  transition: background var(--transition-fast);
+}
+
+.portal-nav-mobile a:hover,
+.portal-nav-mobile a:focus-visible {
+  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), var(--color-bg));
+}
+
+.portal-nav-mobile a.portal-nav-active {
+  background: color-mix(in srgb, var(--color-text) 16%, var(--color-bg));
+  font-weight: var(--font-weight-bold);
+  border-left: 3px solid var(--color-text);
 }
 
 .portal-nav-mobile-footer {
@@ -411,19 +443,25 @@ h3 {
    brand palette used everywhere else — no separate theme, no light/dark
    toggle, just this page's own richer layout on brand colors.
    ══════════════════════════════════════════════════════════════════ */
+/* Folds the dashboard's own local token layer into the shared M3 roles rather
+   than independently redeclaring raw --pulse-* hexes — it now rides the same
+   light/dark M3 scheme as the rest of the app instead of being a frozen
+   parallel system. --green/--amber/--red/--purple/--blue stay as literal
+   pulse chart colors (unchanged) — this is the app's accessibility-validated
+   categorical series, not something M3's tonal roles have an opinion about. */
 .p-dashboard {
   --bg: var(--color-bg);
-  --surface: var(--pulse-air);
-  --card: var(--pulse-air);
-  --card-hover: var(--pulse-silver-light);
+  --surface: var(--color-surface);
+  --card: var(--md-sys-color-surface-container);
+  --card-hover: color-mix(in srgb, var(--text) var(--md-sys-state-hover-opacity), var(--card));
   --border: var(--color-border);
-  --border-strong: var(--pulse-silver);
+  --border-strong: var(--md-sys-color-outline);
   --text: var(--color-text);
-  --text-2: var(--pulse-onyx);
+  --text-2: var(--color-text);
   --text-3: var(--color-text-muted);
-  --accent: var(--pulse-purple);
-  --accent-glow: color-mix(in srgb, var(--pulse-purple) 12%, transparent);
-  --accent-light: var(--pulse-purple-dark);
+  --accent: var(--color-primary);
+  --accent-glow: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  --accent-light: var(--md-sys-color-primary-fixed-dim);
   --green: var(--pulse-chart-oasis);
   --green-bg: color-mix(in srgb, var(--pulse-chart-oasis) 12%, transparent);
   --amber: var(--pulse-chart-sunset);
@@ -828,7 +866,7 @@ h3 {
 .p-action-btn {
   font-size: 11px;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--dash-radius);
   border: 1px solid var(--border);
   background: none;
   color: var(--text-3);
@@ -918,7 +956,7 @@ h3 {
   font-size: 15px;
   font-weight: 700;
   margin-bottom: 10px;
-  color: var(--pulse-air);
+  color: var(--color-on-primary);
   background: var(--accent);
 }
 
@@ -1238,10 +1276,21 @@ h3 {
   width: 100%;
   font: inherit;
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--md-sys-color-outline);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.builder input:not([type='checkbox']):not([type='radio']):focus-visible,
+.builder select:focus-visible,
+.fill-form input:not([type='checkbox']):not([type='radio']):focus-visible,
+.fill-form select:focus-visible,
+.fill-form textarea:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+  outline: none;
 }
 
 .page-title-row input {
@@ -2020,10 +2069,18 @@ h3 {
 .inline-form select {
   font: inherit;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--md-sys-color-outline);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.inline-form input:focus-visible,
+.inline-form select:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+  outline: none;
 }
 
 .perm-grid {
@@ -2051,13 +2108,15 @@ h3 {
   gap: var(--space-1);
 }
 
+/* M3 assist-chip pattern: primary-container/on-primary-container roles,
+   not a hand-picked opacity over the raw brand hex. */
 .perm-chip {
   font-size: var(--md-sys-typescale-label-small-size);
   line-height: var(--md-sys-typescale-label-small-line-height);
   letter-spacing: var(--md-sys-typescale-label-small-tracking);
-  background: color-mix(in srgb, var(--pulse-purple) 8%, white);
-  color: var(--pulse-purple-dark);
-  border-radius: var(--radius-sm);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border-radius: var(--md-sys-shape-corner-small);
   padding: 1px var(--space-2);
 }
 
@@ -2963,8 +3022,9 @@ h3 {
 
 .response-modal-card {
   background: var(--color-surface);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-lg);
+  /* modals float above a scrim — M3 elevation level3, not a card's level1 */
+  box-shadow: var(--shadow-modal);
   max-width: 640px;
   width: 100%;
   max-height: 85vh;
