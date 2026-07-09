@@ -24,10 +24,10 @@
     "argon2": "^0.41.1",
     "cookie-parser": "^1.4.7",
     "helmet": "^8.0.0",
+    "exceljs": "^4.4.0",
     "ioredis": "^5.4.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "xlsx": "^0.18.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {

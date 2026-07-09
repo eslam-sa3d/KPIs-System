@@ -10,7 +10,7 @@ import {
   buildPaginationMeta,
 } from '@pulse/contracts';
 import { ZodError } from 'zod';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { AppError } from '../../common/app-error';
 import { paged } from '../../common/envelope.interceptor';
 import { PrismaService } from '../../infra/prisma.service';
@@ -291,10 +291,12 @@ export class SubmissionsService {
   /** Same data as exportCsv, as an .xlsx workbook (audited separately). */
   async exportXlsx(formSlug: string, actorId: string): Promise<Buffer> {
     const { header, rows } = await this.buildExportTable(formSlug, actorId, 'submissions.exported_xlsx');
-    const sheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, 'Responses');
-    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Responses');
+    sheet.addRow(header);
+    for (const row of rows) sheet.addRow(row);
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
   }
 
   private async buildExportTable(
