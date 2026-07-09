@@ -894,6 +894,18 @@ export default function NewFormPage() {
               onChange={(e) => updateField(index, { helpText: e.target.value })}
               placeholder="shown under the question"
             />
+            {keyedFields.slice(0, index).length > 0 && (
+              <p className="muted" style={{ fontSize: 11, margin: '2px 0 8px' }}>
+                pipe an earlier answer into the label or help text with{' '}
+                {keyedFields
+                  .slice(0, index)
+                  .map((f) => (
+                    <code key={f.key} style={{ marginRight: 4 }}>
+                      {`{{${f.key}}}`}
+                    </code>
+                  ))}
+              </p>
+            )}
 
             <label htmlFor={`field-type-${index}`}>field type</label>
             <select

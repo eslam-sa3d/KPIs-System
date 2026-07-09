@@ -53,6 +53,15 @@ const fieldKey = z
 
 export const CONDITION_OPERATORS = ['equals', 'not_equals', 'gt', 'lt', 'contains'] as const;
 
+/** Answer piping: `{{field_key}}` inside a label/helpText is replaced at fill
+ *  time with that field's current answer (SurveyMonkey-style merge tags). */
+export const PIPE_TAG_PATTERN = /\{\{([a-z][a-z0-9_]*)\}\}/g;
+
+function pipeReferences(text: string | undefined): string[] {
+  if (!text) return [];
+  return [...text.matchAll(PIPE_TAG_PATTERN)].map((m) => m[1]!);
+}
+
 const conditionValue = z.union([z.string(), z.number(), z.boolean()]);
 
 /** Conditional visibility: `operator` defaults to equality for back-compat. */
@@ -270,6 +279,17 @@ export const formDefinitionSchema = z
           path: ['fields', index, 'visibleWhen', 'fieldKey'],
           message: `visibleWhen references unknown field "${field.visibleWhen.fieldKey}"`,
         });
+      }
+      for (const [prop, text] of [['label', field.label], ['helpText', field.helpText]] as const) {
+        for (const pipedKey of pipeReferences(text)) {
+          if (!form.fields.some((f) => f.key === pipedKey)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['fields', index, prop],
+              message: `{{${pipedKey}}} references an unknown field key`,
+            });
+          }
+        }
       }
     });
 

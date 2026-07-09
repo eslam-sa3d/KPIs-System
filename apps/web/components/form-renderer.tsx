@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useMemo, useState } from 'react';
-import { resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
+import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
 import { ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
 
@@ -41,6 +41,18 @@ export const isVisible = (field: FormField, answers: SubmissionAnswers) => {
       return actual === rule.equals;
   }
 };
+
+/** Answer piping: replaces every {{field_key}} in a label/helpText with that
+ *  field's current in-progress answer — blank until answered, never the raw tag. */
+export function applyPiping(text: string, answers: SubmissionAnswers): string {
+  return text.replace(PIPE_TAG_PATTERN, (_match, key: string) => {
+    const value = answers[key];
+    if (value === undefined || value === null || value === '') return '';
+    if (Array.isArray(value)) return value.join(', ');
+    if (typeof value === 'object') return ''; // compound answers (likert/contact_info) aren't piped
+    return String(value);
+  });
+}
 
 /** Exported for reuse by ResponseDetailModal's edit mode — same input for filling and correcting. */
 export function FieldInput({
@@ -592,11 +604,13 @@ export function FormRenderer({
             const visibleFields = (hasSections ? pageFields : orderedFields).filter((field) => isVisible(field, answers));
             let questionNumber = 0;
             return visibleFields.map((field) => {
+              const label = applyPiping(field.label, answers);
+              const helpText = field.helpText ? applyPiping(field.helpText, answers) : undefined;
               if (field.type === 'section_header') {
                 return (
                   <div key={field.key} className="question-card section-header-card">
-                    <h2 className="section-header-title">{field.label}</h2>
-                    {field.helpText && <p className="muted">{field.helpText}</p>}
+                    <h2 className="section-header-title">{label}</h2>
+                    {helpText && <p className="muted">{helpText}</p>}
                   </div>
                 );
               }
@@ -605,10 +619,10 @@ export function FormRenderer({
                 <div key={field.key} className="question-card">
                   {field.media && <FieldMedia media={field.media} />}
                   <label htmlFor={`f-${field.key}`} className="question-title" id={`f-${field.key}-label`}>
-                    <span className="question-number">{questionNumber}.</span> {field.label}
+                    <span className="question-number">{questionNumber}.</span> {label}
                     {field.required && <span aria-hidden="true" className="question-required"> *</span>}
                   </label>
-                  {field.helpText && <p className="muted">{field.helpText}</p>}
+                  {helpText && <p className="muted">{helpText}</p>}
                   <FieldInput field={field} value={answers[field.key]} uploadPath={uploadPath}
                     onChange={(value) => setAnswers((a) => ({ ...a, [field.key]: value }))} />
                 </div>

@@ -650,4 +650,23 @@ describe('formDefinitionSchema (builder-side validation)', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts a {{field_key}} piping reference to an earlier field', () => {
+    const result = formDefinitionSchema.safeParse({
+      title: 'piped form',
+      fields: [
+        { key: 'name', label: 'Your name', type: 'short_text' },
+        { key: 'greeting', label: 'Nice to meet you, {{name}}!', type: 'boolean' },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a {{field_key}} piping reference to an unknown field', () => {
+    const result = formDefinitionSchema.safeParse({
+      title: 'bad piped form',
+      fields: [{ key: 'greeting', label: 'Nice to meet you, {{ghost}}!', type: 'boolean' }],
+    });
+    expect(result.success).toBe(false);
+  });
 });
