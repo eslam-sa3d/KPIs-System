@@ -1,9 +1,8 @@
 /**
- * KPI raw score (0–5 evaluation scale) → status band. Every KPI in this
- * system is scored 0–5 directly (matches the QA evaluation forms this
- * dashboard is built around) — status is banded from that raw score, not
- * from target-attainment ratio. Attainment (actual ÷ target) is still
- * computed separately (see attainmentOf) and shown as its own metric.
+ * Evaluation Area raw score (0–5 scale) → status band. Every score in this
+ * system is a direct 0–5 rating (matching the QA evaluation forms this
+ * dashboard is built around) — no target/attainment concept: a KPI is just
+ * a named container for Evaluation Areas, each scored per person per period.
  */
 export type StatusKey = 'outstanding' | 'meets' | 'improve' | 'below' | 'pending';
 
@@ -23,24 +22,7 @@ export const STATUS_ICON: Record<StatusKey, string> = {
   pending: '…',
 };
 
-export interface KpiLike {
-  target: string | number | null;
-  direction: 'higher_is_better' | 'lower_is_better';
-  entries: Array<{ value: string | number }>;
-}
-
-/** attainment = actual / target, direction-aware — 1.0 means exactly on target.
- *  A separate metric from status (see statusOf) — shown on its own, not banded. */
-export function attainmentOf(kpi: KpiLike): number | null {
-  const latest = kpi.entries[0];
-  if (!latest || kpi.target === null) return null;
-  const value = Number(latest.value);
-  const target = Number(kpi.target);
-  if (!Number.isFinite(value) || !Number.isFinite(target) || target === 0) return null;
-  return kpi.direction === 'higher_is_better' ? value / target : target / value;
-}
-
-/** Bands a KPI's latest raw value (0–5 scale) into a status. Boundaries are
+/** Bands a raw value (0–5 scale) into a status. Boundaries are
  *  exclusive on the low end / inclusive on the high end, except the bottom
  *  tier which catches everything at or below 2. */
 export function statusOf(value: number | null): StatusKey {

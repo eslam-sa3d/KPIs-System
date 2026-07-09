@@ -1,21 +1,13 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useEffect } from 'react';
 import { PortalShell } from '../../components/portal-shell';
 import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
 import { api, downloadCsv } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
-import type { RawKpi } from '../../lib/parse-kpi-workbook';
-import {
-  STATUS_ICON,
-  STATUS_LABEL,
-  STATUS_ORDER,
-  StatusKey,
-  attainmentOf,
-  statusOf,
-} from '../../lib/kpi-status';
+import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusOf } from '../../lib/kpi-status';
 
 // Lazy-loaded: recharts only ships once the dashboard actually renders a chart.
 const KpiDistributionChart = dynamic(() => import('../../components/kpi-distribution-chart'), {
@@ -23,133 +15,92 @@ const KpiDistributionChart = dynamic(() => import('../../components/kpi-distribu
   loading: () => <p className="muted">loading chart…</p>,
 });
 
-interface ComputedKpi extends RawKpi {
-  attainment: number | null;
-  status: StatusKey;
+interface RawEntry {
+  value: string | number;
+  periodStart: string;
+  periodEnd: string;
+  note: string | null;
+  person: { id: string; displayName: string };
+}
+
+interface RawEvaluationArea {
+  id: string;
+  name: string;
+  cadence: string;
+  isActive: boolean;
+  entries: RawEntry[];
+}
+
+interface RawKpi {
+  id: string;
+  name: string;
+  isActive: boolean;
+  evaluationAreas: RawEvaluationArea[];
+}
+
+interface ComputedKpi {
+  id: string;
+  name: string;
+  isActive: boolean;
+  areas: RawEvaluationArea[];
+  /** average of each area's single most recent entry, blended across whoever was evaluated */
   latestValue: number | null;
+  status: StatusKey;
+  lastUpdated: string | null;
 }
 
-type SortKey = 'code' | 'name' | 'cadence' | 'latestValue' | 'status' | 'updated';
+type SortKey = 'name' | 'latestValue' | 'status' | 'updated';
 
-const CADENCE_LABEL: Record<string, string> = { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly' };
+const CADENCE_LABEL: Record<string, string> = {
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  yearly: 'Yearly',
+};
 
-// persisted across reloads until the user imports a different file or resets —
-// stored as raw parsed rows (not the computed/derived fields) so it stays
-// correct even if the status/attainment logic changes later
-const UPLOAD_STORAGE_KEY = 'pulse:dashboard:uploaded-kpis';
-
-interface StoredUpload {
-  filename: string;
-  rawKpis: RawKpi[];
-  issues: string[];
-}
-
-function loadStoredUpload(): StoredUpload | null {
-  try {
-    const raw = window.localStorage.getItem(UPLOAD_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as StoredUpload) : null;
-  } catch {
-    return null;
-  }
+/** Entries arrive ordered periodStart desc (see KpisService.listMine) — [0] is the latest. */
+function latestEntryOf(area: RawEvaluationArea): RawEntry | null {
+  return area.entries[0] ?? null;
 }
 
 function computeKpi(kpi: RawKpi): ComputedKpi {
-  const latest = kpi.entries[0];
-  const latestValue = latest ? Number(latest.value) : null;
+  const latestByArea = kpi.evaluationAreas.map(latestEntryOf).filter((e): e is RawEntry => e !== null);
+  const values = latestByArea.map((e) => Number(e.value));
+  const latestValue = values.length > 0 ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100 : null;
+  const lastUpdated = latestByArea.map((e) => e.periodEnd).sort().at(-1) ?? null;
   return {
-    ...kpi,
-    attainment: attainmentOf(kpi),
-    status: statusOf(latestValue),
+    id: kpi.id,
+    name: kpi.name,
+    isActive: kpi.isActive,
+    areas: kpi.evaluationAreas,
     latestValue,
+    status: statusOf(latestValue),
+    lastUpdated,
   };
 }
 
 export default function DashboardPage() {
   const user = useSession();
-  const [liveKpis, setLiveKpis] = useState<ComputedKpi[] | null>(null);
-  const [uploaded, setUploaded] = useState<{ filename: string; kpis: ComputedKpi[]; issues: string[] } | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [parsing, setParsing] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [kpis, setKpis] = useState<ComputedKpi[] | null>(null);
   const [level, setLevel] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'latestValue', dir: -1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const kpis = uploaded ? uploaded.kpis : liveKpis;
-
   useEffect(() => {
-    if (user) void api<RawKpi[]>('/v1/kpis/my').then((raw) => setLiveKpis(raw.map(computeKpi)));
+    if (user) void api<RawKpi[]>('/v1/kpis/my').then((raw) => setKpis(raw.map(computeKpi)));
   }, [user]);
 
-  // restore a previously-uploaded sheet on reload — stays active until the
-  // user imports a different file or resets, independent of the live API data
-  useEffect(() => {
-    const stored = loadStoredUpload();
-    if (stored) {
-      setUploaded({ filename: stored.filename, kpis: stored.rawKpis.map(computeKpi), issues: stored.issues });
-    }
-  }, []);
-
-  async function handleFile(file: File) {
-    if (!/\.xlsx?$/i.test(file.name)) {
-      setUploadError('please choose an .xlsx or .xls file');
-      return;
-    }
-    setUploadError(null);
-    setParsing(true);
-    try {
-      // lazy-loaded: the xlsx parsing engine only ships once someone actually imports a file
-      const { parseKpiWorkbook } = await import('../../lib/parse-kpi-workbook');
-      const { kpis: parsedKpis, issues } = await parseKpiWorkbook(file);
-      if (parsedKpis.length === 0) {
-        setUploadError(
-          issues[0] ?? 'no usable rows found — check that the sheet has Code, Name, and Value columns',
-        );
-        return;
-      }
-      window.localStorage.setItem(
-        UPLOAD_STORAGE_KEY,
-        JSON.stringify({ filename: file.name, rawKpis: parsedKpis, issues }),
-      );
-      setUploaded({ filename: file.name, kpis: parsedKpis.map(computeKpi), issues });
-      setLevel('all');
-      setStatusFilter('all');
-      setShowImportModal(false);
-    } catch {
-      setUploadError('could not read this file — is it a valid .xlsx spreadsheet?');
-    } finally {
-      setParsing(false);
-    }
-  }
-
-  function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = ''; // allow re-selecting the same file after fixing it
-    if (file) void handleFile(file);
-  }
-
-  function onDropFile(event: React.DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setDragOver(false);
-    const file = event.dataTransfer.files?.[0];
-    if (file) void handleFile(file);
-  }
-
-  function onUseLiveData() {
-    window.localStorage.removeItem(UPLOAD_STORAGE_KEY);
-    setUploaded(null);
-    setUploadError(null);
-    setLevel('all');
-    setStatusFilter('all');
-    setShowImportModal(false);
-  }
+  // cadence now lives on each Evaluation Area (a KPI can span several) — "level" filters
+  // to KPIs that have at least one area on that cadence, rather than a single KPI-wide value
+  const levels = useMemo(() => {
+    if (!kpis) return [];
+    return [...new Set(kpis.flatMap((k) => k.areas.map((a) => a.cadence)))].sort();
+  }, [kpis]);
 
   const levelData = useMemo(() => {
     if (!kpis) return [];
-    return level === 'all' ? kpis : kpis.filter((k) => k.cadence === level);
+    return level === 'all' ? kpis : kpis.filter((k) => k.areas.some((a) => a.cadence === level));
   }, [kpis, level]);
 
   const stats = useMemo(() => {
@@ -163,19 +114,12 @@ export default function DashboardPage() {
     data = [...data].sort((a, b) => {
       const dir = sort.dir;
       switch (sort.key) {
-        case 'code':
-          return a.code.localeCompare(b.code) * dir;
         case 'name':
           return a.name.localeCompare(b.name) * dir;
-        case 'cadence':
-          return a.cadence.localeCompare(b.cadence) * dir;
         case 'status':
           return STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) * dir;
-        case 'updated': {
-          const au = a.entries[0]?.periodEnd ?? '';
-          const bu = b.entries[0]?.periodEnd ?? '';
-          return au.localeCompare(bu) * dir;
-        }
+        case 'updated':
+          return (a.lastUpdated ?? '').localeCompare(b.lastUpdated ?? '') * dir;
         case 'latestValue':
         default: {
           const av = a.latestValue;
@@ -190,54 +134,76 @@ export default function DashboardPage() {
     return data;
   }, [levelData, statusFilter, sort]);
 
-  const levels = useMemo(() => {
-    if (!kpis) return [];
-    return [...new Set(kpis.map((k) => k.cadence))].sort();
-  }, [kpis]);
+  // "KPI status by cadence": groups EVALUATION AREAS (not KPIs — a KPI can span
+  // several cadences) by their own cadence, stacking each area's latest status.
+  const areaStatuses = useMemo(
+    () =>
+      levelData.flatMap((k) =>
+        k.areas.map((a) => {
+          const latest = latestEntryOf(a);
+          return { cadence: a.cadence, status: statusOf(latest ? Number(latest.value) : null) };
+        }),
+      ),
+    [levelData],
+  );
 
   const distributionData = useMemo(() => {
     const groups = level === 'all' ? levels : [level];
     return groups.map((g) => {
-      const inGroup = (kpis ?? []).filter((k) => k.cadence === g);
+      const inGroup = areaStatuses.filter((a) => a.cadence === g);
       return {
         level: CADENCE_LABEL[g] ?? g,
-        outstanding: inGroup.filter((k) => k.status === 'outstanding').length,
-        meets: inGroup.filter((k) => k.status === 'meets').length,
-        improve: inGroup.filter((k) => k.status === 'improve').length,
-        below: inGroup.filter((k) => k.status === 'below').length,
+        outstanding: inGroup.filter((a) => a.status === 'outstanding').length,
+        meets: inGroup.filter((a) => a.status === 'meets').length,
+        improve: inGroup.filter((a) => a.status === 'improve').length,
+        below: inGroup.filter((a) => a.status === 'below').length,
       };
     });
-  }, [kpis, level, levels]);
+  }, [areaStatuses, level, levels]);
 
-  const hasDistributionData = distributionData.some(
-    (g) => g.outstanding + g.meets + g.improve + g.below > 0,
-  );
+  const hasDistributionData = distributionData.some((g) => g.outstanding + g.meets + g.improve + g.below > 0);
 
-  const areaBars = useMemo(
-    () =>
-      [...levelData]
-        .filter((k) => k.attainment !== null)
-        .sort((a, b) => (b.attainment ?? 0) - (a.attainment ?? 0))
-        .slice(0, 8),
-    [levelData],
-  );
+  // "KPI by Person": each distinct evaluatee's own average latest score → status,
+  // stacked into the same 4-tier bars as the cadence chart above (same component,
+  // just grouped by person instead of cadence).
+  const byPersonData = useMemo(() => {
+    const byPerson = new Map<string, { name: string; values: number[] }>();
+    for (const kpi of levelData) {
+      for (const area of kpi.areas) {
+        const latest = latestEntryOf(area);
+        if (!latest) continue;
+        const entry = byPerson.get(latest.person.id) ?? { name: latest.person.displayName, values: [] };
+        entry.values.push(Number(latest.value));
+        byPerson.set(latest.person.id, entry);
+      }
+    }
+    return [...byPerson.values()].map(({ name, values }) => {
+      const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      const status = statusOf(avg);
+      return {
+        level: name,
+        outstanding: status === 'outstanding' ? 1 : 0,
+        meets: status === 'meets' ? 1 : 0,
+        improve: status === 'improve' ? 1 : 0,
+        below: status === 'below' ? 1 : 0,
+      };
+    });
+  }, [levelData]);
+
+  const hasByPersonData = byPersonData.length > 0;
 
   function sortBy(key: SortKey) {
     setSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
   }
 
   function onExportCsv() {
-    const header = ['code', 'name', 'cadence', 'unit', 'latest', 'target', 'attainment_pct', 'status', 'last_period'];
+    const header = ['name', 'evaluation_areas', 'latest', 'status', 'last_updated'];
     const rows = tableData.map((k) => [
-      k.code,
       k.name,
-      k.cadence,
-      k.unit,
+      String(k.areas.length),
       k.latestValue ?? '',
-      k.target ?? '',
-      k.attainment !== null ? Math.round(k.attainment * 100) : '',
       STATUS_LABEL[k.status],
-      k.entries[0]?.periodEnd ?? '',
+      k.lastUpdated ?? '',
     ]);
     downloadCsv('kpi-dashboard-export.csv', [header, ...rows]);
   }
@@ -246,20 +212,19 @@ export default function DashboardPage() {
   const drawerKpi: DrawerKpi | null = selected
     ? {
         id: selected.id,
-        code: selected.code,
         name: selected.name,
-        unit: selected.unit,
-        cadence: CADENCE_LABEL[selected.cadence] ?? selected.cadence,
-        target: selected.target !== null ? Number(selected.target) : null,
-        latestValue: selected.latestValue,
-        attainment: selected.attainment,
         status: selected.status,
-        periods: [...selected.entries]
-          .reverse()
-          .map((e) => ({
+        areas: selected.areas.map((a) => ({
+          id: a.id,
+          name: a.name,
+          cadence: CADENCE_LABEL[a.cadence] ?? a.cadence,
+          latestValue: latestEntryOf(a) ? Number(latestEntryOf(a)!.value) : null,
+          entries: [...a.entries].reverse().map((e) => ({
             label: new Date(e.periodStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
             value: Number(e.value),
+            personName: e.person.displayName,
           })),
+        })),
       }
     : null;
 
@@ -276,101 +241,11 @@ export default function DashboardPage() {
             </p>
           </div>
           <span className="builder-field-actions">
-            <button className="p-theme-toggle" onClick={() => setShowImportModal(true)}>
-              {uploaded ? `📄 ${uploaded.filename}` : 'Import spreadsheet'}
-            </button>
             <button className="p-theme-toggle" onClick={onExportCsv}>
               Export CSV
             </button>
           </span>
         </div>
-
-        {showImportModal && (
-          <div className="response-modal-backdrop" onClick={() => setShowImportModal(false)}>
-            <div
-              className="response-modal-card"
-              role="dialog"
-              aria-modal="true"
-              aria-label="import spreadsheet"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="response-modal-header">
-                <h2>Import spreadsheet</h2>
-                <button className="btn-ghost" onClick={() => setShowImportModal(false)} aria-label="close">
-                  close
-                </button>
-              </div>
-              <div className="response-modal-body">
-                {uploaded && (
-                  <div className="import-status-card">
-                    <span className="import-status-icon">📄</span>
-                    <span className="import-status-text">
-                      <strong>{uploaded.filename}</strong>
-                      <span className="muted">
-                        {uploaded.kpis.length} KPI{uploaded.kpis.length === 1 ? '' : 's'} imported
-                        {uploaded.issues.length > 0 &&
-                          ` · ${uploaded.issues.length} row${uploaded.issues.length === 1 ? '' : 's'} skipped`}
-                      </span>
-                    </span>
-                    <button className="btn-ghost import-reset-btn" onClick={onUseLiveData}>
-                      reset
-                    </button>
-                  </div>
-                )}
-
-                {uploaded && uploaded.issues.length > 0 && (
-                  <ul className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-                    {uploaded.issues.slice(0, 5).map((issue, i) => (
-                      <li key={i}>{issue}</li>
-                    ))}
-                    {uploaded.issues.length > 5 && <li>…and {uploaded.issues.length - 5} more</li>}
-                  </ul>
-                )}
-
-                <p className="muted" style={{ fontSize: 12, margin: uploaded ? '18px 0 8px' : '0 0 8px' }}>
-                  {uploaded ? 'replace it with a different spreadsheet' : 'no spreadsheet imported — showing live KPI data'}
-                </p>
-
-                <div
-                  className={`import-dropzone${dragOver ? ' import-dropzone-active' : ''}${parsing ? ' import-dropzone-busy' : ''}`}
-                  onClick={() => !parsing && fileInputRef.current?.click()}
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={onDropFile}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="upload a spreadsheet"
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
-                >
-                  <input
-                    id="dashboard-import-file"
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={onFileSelected}
-                    disabled={parsing}
-                    style={{ display: 'none' }}
-                  />
-                  {parsing ? (
-                    <span>reading file…</span>
-                  ) : (
-                    <>
-                      <span className="import-dropzone-icon">⬆</span>
-                      <span><strong>click to browse</strong> or drag a spreadsheet here</span>
-                      <span className="muted" style={{ fontSize: 12 }}>.xlsx or .xls</span>
-                    </>
-                  )}
-                </div>
-
-                {uploadError && (
-                  <p role="alert" className="form-error" style={{ marginTop: 12 }}>
-                    {uploadError}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {kpis && kpis.length > 0 && (
           <div className="p-filter-pills" style={{ marginBottom: 20 }}>
@@ -379,7 +254,7 @@ export default function DashboardPage() {
             </button>
             {levels.map((l) => (
               <button key={l} className={`p-fpill${level === l ? ' active' : ''}`} onClick={() => setLevel(l)}>
-                {CADENCE_LABEL[l] ?? l} ({kpis.filter((k) => k.cadence === l).length})
+                {CADENCE_LABEL[l] ?? l} ({kpis.filter((k) => k.areas.some((a) => a.cadence === l)).length})
               </button>
             ))}
           </div>
@@ -389,12 +264,8 @@ export default function DashboardPage() {
           <p className="muted">loading…</p>
         ) : kpis.length === 0 ? (
           <div className="empty-state">
-            <h2>no KPIs {uploaded ? 'in this file' : 'assigned yet'}</h2>
-            <p className="muted">
-              {uploaded
-                ? 'the uploaded spreadsheet had no usable rows — check it has Code, Name, and Value columns.'
-                : 'an admin can map KPIs to your role or department under KPI settings, or import a spreadsheet above.'}
-            </p>
+            <h2>no KPIs assigned yet</h2>
+            <p className="muted">an admin can map KPIs to your role or department under KPI settings.</p>
           </div>
         ) : (
           <>
@@ -438,25 +309,15 @@ export default function DashboardPage() {
               </div>
 
               <div className="p-card">
-                <div className="p-card-title">KPI attainment — click a bar</div>
-                {areaBars.length === 0 ? (
-                  <p className="muted" style={{ fontSize: 12 }}>no scored KPIs in this view yet.</p>
+                <div className="p-card-title">KPI by Person</div>
+                {hasByPersonData ? (
+                  <KpiDistributionChart
+                    data={byPersonData}
+                    textColor="var(--text-3)"
+                    gridColor="var(--border)"
+                  />
                 ) : (
-                  areaBars.map((k) => (
-                    <button key={k.id} className="p-bar-row" onClick={() => setSelectedId(k.id)} title={`open ${k.name}`}>
-                      <span className="p-bar-label">{k.name}</span>
-                      <span className="p-bar-track">
-                        <span
-                          className="p-bar-fill"
-                          style={{
-                            width: `${Math.min(100, Math.round((k.attainment ?? 0) * 100))}%`,
-                            background: `var(--${k.status === 'outstanding' ? 'purple' : k.status === 'meets' ? 'green' : k.status === 'improve' ? 'amber' : 'red'})`,
-                          }}
-                        />
-                      </span>
-                      <span className="p-bar-score">{Math.round((k.attainment ?? 0) * 100)}%</span>
-                    </button>
-                  ))
+                  <p className="muted" style={{ fontSize: 12 }}>no scored KPIs in this view yet.</p>
                 )}
               </div>
             </div>
@@ -482,8 +343,7 @@ export default function DashboardPage() {
                 <thead>
                   <tr>
                     <th className="p-th-sortable" onClick={() => sortBy('name')}>name</th>
-                    <th>title</th>
-                    <th className="p-th-sortable" onClick={() => sortBy('cadence')}>cadence</th>
+                    <th>areas</th>
                     <th className="p-th-sortable" onClick={() => sortBy('latestValue')}>latest</th>
                     <th>status</th>
                     <th className="p-th-sortable" onClick={() => sortBy('updated')}>last updated</th>
@@ -493,7 +353,7 @@ export default function DashboardPage() {
                 <tbody>
                   {tableData.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="muted" style={{ textAlign: 'center' }}>
+                      <td colSpan={6} className="muted" style={{ textAlign: 'center' }}>
                         no KPIs match this filter.
                       </td>
                     </tr>
@@ -501,8 +361,7 @@ export default function DashboardPage() {
                     tableData.map((k) => (
                       <tr key={k.id} onClick={() => setSelectedId(k.id)} style={{ cursor: 'pointer' }}>
                         <td style={{ fontWeight: 500 }}>{k.name}</td>
-                        <td className="muted">{k.title ?? '—'}</td>
-                        <td className="muted">{CADENCE_LABEL[k.cadence] ?? k.cadence}</td>
+                        <td className="muted">{k.areas.length}</td>
                         <td>
                           <span className={`p-score-ring p-status-${k.status}`}>
                             {k.latestValue !== null ? k.latestValue.toLocaleString() : '—'}
@@ -512,7 +371,7 @@ export default function DashboardPage() {
                           <span className={`p-pill p-status-${k.status}`}>{STATUS_LABEL[k.status]}</span>
                         </td>
                         <td className="muted" style={{ fontFamily: 'var(--mono)' }}>
-                          {k.entries[0] ? new Date(k.entries[0].periodEnd).toLocaleDateString() : '—'}
+                          {k.lastUpdated ? new Date(k.lastUpdated).toLocaleDateString() : '—'}
                         </td>
                         <td>
                           <button
