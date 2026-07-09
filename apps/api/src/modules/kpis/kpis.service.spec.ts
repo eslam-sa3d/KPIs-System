@@ -8,6 +8,7 @@ function makePrismaStub() {
     kpiAssignment: { findFirst: vi.fn(), create: vi.fn() },
     rolePermission: { findMany: vi.fn() },
     evaluationArea: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    subCriteria: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     evaluationAreaEntry: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
@@ -47,6 +48,14 @@ describe('KpisService', () => {
       expect(prisma.auditLog.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ actorId, action: 'kpi.created', entityId: 'kpi-1' }),
       });
+    });
+
+    it('passes weight straight through to Prisma when provided', async () => {
+      prisma.kpi.create.mockResolvedValue({ ...activeKpi, weight: 25 });
+
+      await service.createKpi({ name: 'QA Lead Evaluation', weight: 25 }, actorId);
+
+      expect(prisma.kpi.create).toHaveBeenCalledWith({ data: { name: 'QA Lead Evaluation', weight: 25 } });
     });
   });
 
@@ -159,6 +168,78 @@ describe('KpisService', () => {
         code: 'CONFLICT',
       });
       expect(prisma.evaluationArea.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createSubCriteria / updateSubCriteria / deleteSubCriteria', () => {
+    const activeSubCriteria = { id: 'sub-1', evaluationAreaId: 'area-1', name: 'Punctuality' };
+
+    it('creates a sub-criteria under an existing area and audit-logs it', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue(activeArea);
+      prisma.subCriteria.create.mockResolvedValue(activeSubCriteria);
+
+      await service.createSubCriteria('kpi-1', 'area-1', { name: 'Punctuality' }, actorId);
+
+      expect(prisma.evaluationArea.findFirst).toHaveBeenCalledWith({ where: { id: 'area-1', kpiId: 'kpi-1' } });
+      expect(prisma.subCriteria.create).toHaveBeenCalledWith({
+        data: { evaluationAreaId: 'area-1', name: 'Punctuality' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ actorId, action: 'sub_criteria.created', entityId: 'sub-1' }),
+      });
+    });
+
+    it('rejects creating a sub-criteria under an area that does not belong to the given KPI', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue(null);
+      await expect(
+        service.createSubCriteria('other-kpi', 'area-1', { name: 'x' }, actorId),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(prisma.subCriteria.create).not.toHaveBeenCalled();
+    });
+
+    it('updates a sub-criteria scoped to its area and KPI, and audit-logs it', async () => {
+      prisma.subCriteria.findFirst.mockResolvedValue(activeSubCriteria);
+      prisma.subCriteria.update.mockResolvedValue({ ...activeSubCriteria, name: 'Renamed' });
+
+      await service.updateSubCriteria('kpi-1', 'area-1', 'sub-1', { name: 'Renamed' }, actorId);
+
+      expect(prisma.subCriteria.findFirst).toHaveBeenCalledWith({
+        where: { id: 'sub-1', evaluationAreaId: 'area-1', evaluationArea: { kpiId: 'kpi-1' } },
+      });
+      expect(prisma.subCriteria.update).toHaveBeenCalledWith({
+        where: { id: 'sub-1' },
+        data: { name: 'Renamed' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ actorId, action: 'sub_criteria.updated', entityId: 'sub-1' }),
+      });
+    });
+
+    it('rejects updating a sub-criteria that does not belong to the given area/KPI', async () => {
+      prisma.subCriteria.findFirst.mockResolvedValue(null);
+      await expect(
+        service.updateSubCriteria('kpi-1', 'other-area', 'sub-1', { name: 'x' }, actorId),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(prisma.subCriteria.update).not.toHaveBeenCalled();
+    });
+
+    it('hard-deletes a sub-criteria with no guard, and audit-logs it', async () => {
+      prisma.subCriteria.findFirst.mockResolvedValue(activeSubCriteria);
+
+      await service.deleteSubCriteria('kpi-1', 'area-1', 'sub-1', actorId);
+
+      expect(prisma.subCriteria.delete).toHaveBeenCalledWith({ where: { id: 'sub-1' } });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ actorId, action: 'sub_criteria.deleted', entityId: 'sub-1' }),
+      });
+    });
+
+    it('rejects deleting an unknown sub-criteria', async () => {
+      prisma.subCriteria.findFirst.mockResolvedValue(null);
+      await expect(service.deleteSubCriteria('kpi-1', 'area-1', 'ghost', actorId)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(prisma.subCriteria.delete).not.toHaveBeenCalled();
     });
   });
 

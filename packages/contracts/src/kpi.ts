@@ -6,12 +6,16 @@ import { z } from 'zod';
 
 export const createKpiSchema = z.object({
   name: z.string().min(2).max(200),
+  /** Relative importance as a percentage (0-100) — informational only, not
+   *  required to sum to 100 across sibling KPIs. */
+  weight: z.number().min(0).max(100).optional(),
 });
 
 export type CreateKpiInput = z.infer<typeof createKpiSchema>;
 
 export const updateKpiSchema = z.object({
   name: z.string().min(2).max(200).optional(),
+  weight: z.number().min(0).max(100).optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -46,6 +50,20 @@ export const updateEvaluationAreaSchema = z.object({
 });
 
 export type UpdateEvaluationAreaInput = z.infer<typeof updateEvaluationAreaSchema>;
+
+/** A named leaf under an Evaluation Area — pure taxonomy, no scoring/cadence
+ *  of its own (see EvaluationArea's own doc comment for where those live). */
+export const createSubCriteriaSchema = z.object({
+  name: z.string().min(2).max(200),
+});
+
+export type CreateSubCriteriaInput = z.infer<typeof createSubCriteriaSchema>;
+
+export const updateSubCriteriaSchema = z.object({
+  name: z.string().min(2).max(200).optional(),
+});
+
+export type UpdateSubCriteriaInput = z.infer<typeof updateSubCriteriaSchema>;
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected ISO date (YYYY-MM-DD)');
 

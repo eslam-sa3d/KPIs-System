@@ -2,19 +2,23 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@
 import {
   CreateEvaluationAreaInput,
   CreateKpiInput,
+  CreateSubCriteriaInput,
   KpiAssignmentInput,
   PageQuery,
   RecordEvaluationAreaEntryInput,
   UpdateEvaluationAreaEntryInput,
   UpdateEvaluationAreaInput,
   UpdateKpiInput,
+  UpdateSubCriteriaInput,
   createEvaluationAreaSchema,
   createKpiSchema,
+  createSubCriteriaSchema,
   kpiAssignmentSchema,
   recordEvaluationAreaEntrySchema,
   updateEvaluationAreaEntrySchema,
   updateEvaluationAreaSchema,
   updateKpiSchema,
+  updateSubCriteriaSchema,
 } from '@pulse/contracts';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
@@ -96,6 +100,40 @@ export class KpisController {
   @RequirePermissions('kpis:manage')
   removeArea(@Param('kpiId') kpiId: string, @Param('areaId') areaId: string, @Req() req: AuthedRequest) {
     return this.kpis.deleteEvaluationArea(kpiId, areaId, req.user.id);
+  }
+
+  @Post(':kpiId/areas/:areaId/sub-criteria')
+  @RequirePermissions('kpis:write')
+  createSubCriteria(
+    @Param('kpiId') kpiId: string,
+    @Param('areaId') areaId: string,
+    @Body(new ZodValidationPipe(createSubCriteriaSchema)) input: CreateSubCriteriaInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpis.createSubCriteria(kpiId, areaId, input, req.user.id);
+  }
+
+  @Patch(':kpiId/areas/:areaId/sub-criteria/:subCriteriaId')
+  @RequirePermissions('kpis:write')
+  updateSubCriteria(
+    @Param('kpiId') kpiId: string,
+    @Param('areaId') areaId: string,
+    @Param('subCriteriaId') subCriteriaId: string,
+    @Body(new ZodValidationPipe(updateSubCriteriaSchema)) input: UpdateSubCriteriaInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpis.updateSubCriteria(kpiId, areaId, subCriteriaId, input, req.user.id);
+  }
+
+  @Delete(':kpiId/areas/:areaId/sub-criteria/:subCriteriaId')
+  @RequirePermissions('kpis:manage')
+  removeSubCriteria(
+    @Param('kpiId') kpiId: string,
+    @Param('areaId') areaId: string,
+    @Param('subCriteriaId') subCriteriaId: string,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpis.deleteSubCriteria(kpiId, areaId, subCriteriaId, req.user.id);
   }
 
   @Post(':kpiId/areas/:areaId/entries')

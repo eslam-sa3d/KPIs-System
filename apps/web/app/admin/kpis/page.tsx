@@ -5,16 +5,24 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
+interface SubCriteriaRow {
+  id: string;
+  name: string;
+}
+
 interface EvaluationAreaRow {
   id: string;
   name: string;
   cadence: string;
   isActive: boolean;
+  subCriteria: SubCriteriaRow[];
 }
 
 interface KpiRow {
   id: string;
   name: string;
+  /** Relative importance as a percentage (0-100) — informational only. */
+  weight: number | null;
   isActive: boolean;
   assignments: Array<{
     id: string;
@@ -43,6 +51,13 @@ interface UserOption {
 
 const CADENCES = ['weekly', 'monthly', 'quarterly', 'yearly'] as const;
 
+/** Empty string (untouched/cleared input) -> undefined, so JSON.stringify
+ *  omits the key entirely rather than sending weight: null or NaN. */
+function parseWeight(raw: FormDataEntryValue | null): number | undefined {
+  if (raw === null || raw === '') return undefined;
+  return Number(raw);
+}
+
 export default function KpisAdminPage() {
   const user = useSession();
   const [kpis, setKpis] = useState<KpiRow[] | null>(null);
@@ -54,6 +69,8 @@ export default function KpisAdminPage() {
   const [renamingKpiId, setRenamingKpiId] = useState<string | null>(null);
   const [confirmDeleteKpiId, setConfirmDeleteKpiId] = useState<string | null>(null);
   const [confirmDeleteAreaId, setConfirmDeleteAreaId] = useState<string | null>(null);
+  const [renamingSubCriteriaId, setRenamingSubCriteriaId] = useState<string | null>(null);
+  const [confirmDeleteSubCriteriaId, setConfirmDeleteSubCriteriaId] = useState<string | null>(null);
   // per-area "record a score" draft state — searching for the evaluatee by name/email
   const [personFilters, setPersonFilters] = useState<Record<string, string>>({});
   const [pickedPersonIds, setPickedPersonIds] = useState<Record<string, string>>({});
@@ -82,7 +99,13 @@ export default function KpisAdminPage() {
   function onCreateKpi(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    report(api('/v1/kpis', { method: 'POST', body: JSON.stringify({ name: form.get('name') }) }), 'KPI created');
+    report(
+      api('/v1/kpis', {
+        method: 'POST',
+        body: JSON.stringify({ name: form.get('name'), weight: parseWeight(form.get('weight')) }),
+      }),
+      'KPI created',
+    );
     (event.target as HTMLFormElement).reset();
   }
 
@@ -90,7 +113,10 @@ export default function KpisAdminPage() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     void report(
-      api(`/v1/kpis/${kpiId}`, { method: 'PATCH', body: JSON.stringify({ name: form.get('name') }) }),
+      api(`/v1/kpis/${kpiId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: form.get('name'), weight: parseWeight(form.get('weight')) }),
+      }),
       'KPI renamed',
     ).then(() => setRenamingKpiId(null));
   }
@@ -153,6 +179,43 @@ export default function KpisAdminPage() {
     );
   }
 
+  function onCreateSubCriteria(kpiId: string, areaId: string, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    report(
+      api(`/v1/kpis/${kpiId}/areas/${areaId}/sub-criteria`, {
+        method: 'POST',
+        body: JSON.stringify({ name: form.get('name') }),
+      }),
+      'sub-criteria added',
+    );
+    (event.target as HTMLFormElement).reset();
+  }
+
+  function onRenameSubCriteria(
+    kpiId: string,
+    areaId: string,
+    subCriteriaId: string,
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    void report(
+      api(`/v1/kpis/${kpiId}/areas/${areaId}/sub-criteria/${subCriteriaId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: form.get('name') }),
+      }),
+      'sub-criteria renamed',
+    ).then(() => setRenamingSubCriteriaId(null));
+  }
+
+  function onDeleteSubCriteria(kpiId: string, areaId: string, subCriteriaId: string) {
+    void report(
+      api(`/v1/kpis/${kpiId}/areas/${areaId}/sub-criteria/${subCriteriaId}`, { method: 'DELETE' }),
+      'sub-criteria deleted',
+    ).then(() => setConfirmDeleteSubCriteriaId(null));
+  }
+
   function onRecordScore(kpiId: string, areaId: string, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -207,6 +270,8 @@ export default function KpisAdminPage() {
           <h2>new KPI</h2>
           <label htmlFor="k-name">name</label>
           <input id="k-name" name="name" required minLength={2} placeholder="QA Lead Evaluation" />
+          <label htmlFor="k-weight">weight %</label>
+          <input id="k-weight" name="weight" type="number" min={0} max={100} step="0.5" placeholder="e.g. 25" />
           <button className="btn-primary" type="submit">
             create KPI
           </button>
@@ -225,6 +290,16 @@ export default function KpisAdminPage() {
             {renamingKpiId === kpi.id ? (
               <form className="inline-form" onSubmit={(e) => onRenameKpi(kpi.id, e)}>
                 <input name="name" defaultValue={kpi.name} required minLength={2} aria-label="KPI name" />
+                <input
+                  name="weight"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.5"
+                  defaultValue={kpi.weight ?? ''}
+                  aria-label={`${kpi.name} weight percent`}
+                  placeholder="weight %"
+                />
                 <button className="btn-ghost" type="submit">
                   save
                 </button>
@@ -235,7 +310,8 @@ export default function KpisAdminPage() {
             ) : (
               <div className="page-title-row">
                 <h2>
-                  {kpi.name} {!kpi.isActive && <span className="muted">(inactive)</span>}
+                  {kpi.name} {kpi.weight !== null && <span className="muted">· {kpi.weight}%</span>}{' '}
+                  {!kpi.isActive && <span className="muted">(inactive)</span>}
                 </h2>
                 {can(user, 'kpis:write') && (
                   <span className="builder-field-actions">
@@ -379,6 +455,87 @@ export default function KpisAdminPage() {
                       <input name="note" placeholder="note (optional)" aria-label={`${area.name} note`} />
                       <button className="btn-ghost" type="submit" disabled={!pickedPersonIds[area.id]}>
                         record score
+                      </button>
+                    </form>
+                  )}
+
+                  <label>sub-criteria</label>
+                  {area.subCriteria.length === 0 ? (
+                    <p className="muted" style={{ fontSize: 12 }}>
+                      no sub-criteria yet — add one below.
+                    </p>
+                  ) : (
+                    area.subCriteria.map((sub) => (
+                      <div key={sub.id} className="page-title-row">
+                        {renamingSubCriteriaId === sub.id ? (
+                          <form
+                            className="inline-form"
+                            onSubmit={(e) => onRenameSubCriteria(kpi.id, area.id, sub.id, e)}
+                          >
+                            <input name="name" defaultValue={sub.name} required minLength={2} aria-label="sub-criteria name" />
+                            <button className="btn-ghost" type="submit">
+                              save
+                            </button>
+                            <button type="button" className="btn-ghost" onClick={() => setRenamingSubCriteriaId(null)}>
+                              cancel
+                            </button>
+                          </form>
+                        ) : (
+                          <span>{sub.name}</span>
+                        )}
+                        {can(user, 'kpis:write') && renamingSubCriteriaId !== sub.id && (
+                          <span className="builder-field-actions">
+                            <button
+                              type="button"
+                              className="btn-ghost"
+                              onClick={() => setRenamingSubCriteriaId(sub.id)}
+                            >
+                              rename
+                            </button>
+                            {can(user, 'kpis:manage') &&
+                              (confirmDeleteSubCriteriaId === sub.id ? (
+                                <>
+                                  <span className="muted">delete permanently?</span>
+                                  <button
+                                    type="button"
+                                    className="btn-ghost"
+                                    onClick={() => onDeleteSubCriteria(kpi.id, area.id, sub.id)}
+                                  >
+                                    confirm delete
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-ghost"
+                                    onClick={() => setConfirmDeleteSubCriteriaId(null)}
+                                  >
+                                    cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn-ghost"
+                                  onClick={() => setConfirmDeleteSubCriteriaId(sub.id)}
+                                >
+                                  delete
+                                </button>
+                              ))}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                  {can(user, 'kpis:write') && (
+                    <form className="inline-form" onSubmit={(e) => onCreateSubCriteria(kpi.id, area.id, e)}>
+                      <input
+                        name="name"
+                        required
+                        minLength={2}
+                        placeholder="new sub-criteria name"
+                        aria-label={`new sub-criteria under ${area.name}`}
+                      />
+                      <button className="btn-ghost" type="submit">
+                        add sub-criteria
                       </button>
                     </form>
                   )}

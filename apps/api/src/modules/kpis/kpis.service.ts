@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   CreateEvaluationAreaInput,
   CreateKpiInput,
+  CreateSubCriteriaInput,
   KpiAssignmentInput,
   PAGE_DEFAULTS,
   PageQuery,
@@ -9,6 +10,7 @@ import {
   UpdateEvaluationAreaEntryInput,
   UpdateEvaluationAreaInput,
   UpdateKpiInput,
+  UpdateSubCriteriaInput,
   buildPaginationMeta,
 } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
@@ -126,7 +128,10 @@ export class KpisService {
         take: pageSize,
         include: {
           assignments: true,
-          evaluationAreas: { orderBy: { name: 'asc' } },
+          evaluationAreas: {
+            orderBy: { name: 'asc' },
+            include: { subCriteria: { orderBy: { name: 'asc' } } },
+          },
         },
       }),
     ]);
@@ -179,6 +184,7 @@ export class KpisService {
               take: RECENT_ENTRIES_TAKE,
               include: { person: { select: { id: true, displayName: true } } },
             },
+            subCriteria: { orderBy: { name: 'asc' } },
           },
         },
       },
@@ -233,6 +239,76 @@ export class KpisService {
         entity: 'EvaluationArea',
         entityId: areaId,
         detail: { name: area.name },
+      },
+    });
+    return null;
+  }
+
+  async createSubCriteria(
+    kpiId: string,
+    areaId: string,
+    input: CreateSubCriteriaInput,
+    actorId: string,
+  ) {
+    const area = await this.prisma.evaluationArea.findFirst({ where: { id: areaId, kpiId } });
+    if (!area) throw AppError.notFound('Evaluation area', areaId);
+
+    const subCriteria = await this.prisma.subCriteria.create({
+      data: { evaluationAreaId: areaId, ...input },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'sub_criteria.created',
+        entity: 'SubCriteria',
+        entityId: subCriteria.id,
+        detail: input,
+      },
+    });
+    return subCriteria;
+  }
+
+  async updateSubCriteria(
+    kpiId: string,
+    areaId: string,
+    subCriteriaId: string,
+    input: UpdateSubCriteriaInput,
+    actorId: string,
+  ) {
+    const subCriteria = await this.prisma.subCriteria.findFirst({
+      where: { id: subCriteriaId, evaluationAreaId: areaId, evaluationArea: { kpiId } },
+    });
+    if (!subCriteria) throw AppError.notFound('Sub-criteria', subCriteriaId);
+
+    const updated = await this.prisma.subCriteria.update({ where: { id: subCriteriaId }, data: input });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'sub_criteria.updated',
+        entity: 'SubCriteria',
+        entityId: subCriteriaId,
+        detail: input,
+      },
+    });
+    return updated;
+  }
+
+  /** Plain hard delete — unlike deleteKpi/deleteEvaluationArea, there's no
+   *  scored history recorded against a Sub-Criteria to protect, so no guard. */
+  async deleteSubCriteria(kpiId: string, areaId: string, subCriteriaId: string, actorId: string) {
+    const subCriteria = await this.prisma.subCriteria.findFirst({
+      where: { id: subCriteriaId, evaluationAreaId: areaId, evaluationArea: { kpiId } },
+    });
+    if (!subCriteria) throw AppError.notFound('Sub-criteria', subCriteriaId);
+
+    await this.prisma.subCriteria.delete({ where: { id: subCriteriaId } });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'sub_criteria.deleted',
+        entity: 'SubCriteria',
+        entityId: subCriteriaId,
+        detail: { name: subCriteria.name },
       },
     });
     return null;

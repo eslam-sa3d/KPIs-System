@@ -115,6 +115,10 @@ model Session {
 model Kpi {
   id        String   @id @default(uuid())
   name      String
+  /// Relative importance of this KPI as a percentage (0-100). Purely
+  /// informational at this layer — nothing currently rolls scores up
+  /// through it; not required to sum to 100 across sibling KPIs.
+  weight    Decimal? @db.Decimal(5, 2)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -155,8 +159,24 @@ model EvaluationArea {
 
   entries      EvaluationAreaEntry[]
   formMappings FormKpiMapping[]
+  subCriteria  SubCriteria[]
 
   @@index([kpiId])
+}
+
+/// A named leaf under an Evaluation Area — pure taxonomy, no scoring/cadence
+/// of its own (those stay at the EvaluationArea level; see FormKpiMapping and
+/// EvaluationAreaEntry). Deleting one is a plain hard delete: unlike Kpi/
+/// EvaluationArea, there's no recorded history under it to protect.
+model SubCriteria {
+  id               String         @id @default(uuid())
+  evaluationAreaId String
+  evaluationArea   EvaluationArea @relation(fields: [evaluationAreaId], references: [id], onDelete: Cascade)
+  name             String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([evaluationAreaId])
 }
 
 /// Evaluation Area facts — a 0-5 score recorded against a specific evaluatee
