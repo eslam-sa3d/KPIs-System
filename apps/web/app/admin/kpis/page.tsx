@@ -27,12 +27,6 @@ interface KpiRow {
   evaluationAreas: EvaluationAreaRow[];
 }
 
-interface UserOption {
-  id: string;
-  email: string;
-  displayName: string;
-}
-
 // Evaluation Areas are created with this fixed cadence — the field still
 // exists server-side (it drives the Forms→KPI bridge's period calculation)
 // but isn't exposed as a user choice on this page.
@@ -48,7 +42,6 @@ function parseWeight(raw: FormDataEntryValue | null): number | undefined {
 export default function KpisAdminPage() {
   const user = useSession();
   const [kpis, setKpis] = useState<KpiRow[] | null>(null);
-  const [people, setPeople] = useState<UserOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [renamingKpiId, setRenamingKpiId] = useState<string | null>(null);
@@ -56,16 +49,12 @@ export default function KpisAdminPage() {
   const [confirmDeleteAreaId, setConfirmDeleteAreaId] = useState<string | null>(null);
   const [renamingSubCriteriaId, setRenamingSubCriteriaId] = useState<string | null>(null);
   const [confirmDeleteSubCriteriaId, setConfirmDeleteSubCriteriaId] = useState<string | null>(null);
-  // per-area "record a score" draft state — searching for the evaluatee by name/email
-  const [personFilters, setPersonFilters] = useState<Record<string, string>>({});
-  const [pickedPersonIds, setPickedPersonIds] = useState<Record<string, string>>({});
 
   const reload = useCallback(() => api<KpiRow[]>('/v1/kpis?pageSize=100').then(setKpis), []);
 
   useEffect(() => {
     if (!user) return;
     void reload();
-    void api<UserOption[]>('/v1/users?pageSize=200').then(setPeople);
   }, [user, reload]);
 
   function report(promise: Promise<unknown>, successNote: string) {
@@ -183,47 +172,10 @@ export default function KpisAdminPage() {
     ).then(() => setConfirmDeleteSubCriteriaId(null));
   }
 
-  function onRecordScore(kpiId: string, areaId: string, event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const personId = pickedPersonIds[areaId];
-    if (!personId) {
-      setError('pick who this score is for');
-      return;
-    }
-    void report(
-      api(`/v1/kpis/${kpiId}/areas/${areaId}/entries`, {
-        method: 'POST',
-        body: JSON.stringify({
-          personId,
-          value: Number(form.get('value')),
-          periodStart: form.get('periodStart'),
-          periodEnd: form.get('periodEnd'),
-          note: form.get('note') || undefined,
-        }),
-      }),
-      'score recorded',
-    ).then(() => {
-      (event.target as HTMLFormElement).reset();
-      setPersonFilters((f) => ({ ...f, [areaId]: '' }));
-      setPickedPersonIds((p) => ({ ...p, [areaId]: '' }));
-    });
-  }
-
-  function candidatesFor(areaId: string) {
-    const filter = (personFilters[areaId] ?? '').toLowerCase();
-    if (!filter) return [];
-    return people.filter(
-      (p) => p.displayName.toLowerCase().includes(filter) || p.email.toLowerCase().includes(filter),
-    );
-  }
-
   return (
     <PortalShell user={user}>
       <h1>KPIs</h1>
-      <p className="portal-subtitle">
-        define KPIs, add evaluation areas under each, and record 0–5 scores per person
-      </p>
+      <p className="portal-subtitle">define KPIs, evaluation areas, and sub-criteria</p>
 
       {notice && <p className="form-notice">{notice}</p>}
       {error && (
@@ -359,57 +311,6 @@ export default function KpisAdminPage() {
                       </span>
                     )}
                   </div>
-
-                  {can(user, 'kpi_entries:write') && (
-                    <form className="inline-form" onSubmit={(e) => onRecordScore(kpi.id, area.id, e)}>
-                      <input
-                        value={personFilters[area.id] ?? ''}
-                        onChange={(e) => {
-                          setPersonFilters((f) => ({ ...f, [area.id]: e.target.value }));
-                          setPickedPersonIds((p) => ({ ...p, [area.id]: '' }));
-                        }}
-                        placeholder="search person by name or email"
-                        aria-label={`who this ${area.name} score is for`}
-                      />
-                      {personFilters[area.id] && !pickedPersonIds[area.id] && candidatesFor(area.id).length > 0 && (
-                        <select
-                          aria-label="matching people"
-                          size={Math.min(5, candidatesFor(area.id).length)}
-                          value=""
-                          onChange={(e) => {
-                            const picked = people.find((p) => p.id === e.target.value);
-                            setPickedPersonIds((p) => ({ ...p, [area.id]: e.target.value }));
-                            setPersonFilters((f) => ({ ...f, [area.id]: picked?.displayName ?? '' }));
-                          }}
-                        >
-                          <option value="" disabled>
-                            choose…
-                          </option>
-                          {candidatesFor(area.id).map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.displayName} ({p.email})
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      <input
-                        name="value"
-                        type="number"
-                        min={0}
-                        max={5}
-                        step="0.1"
-                        required
-                        placeholder="score 0-5"
-                        aria-label={`${area.name} score`}
-                      />
-                      <input name="periodStart" type="date" required aria-label={`${area.name} period start`} />
-                      <input name="periodEnd" type="date" required aria-label={`${area.name} period end`} />
-                      <input name="note" placeholder="note (optional)" aria-label={`${area.name} note`} />
-                      <button className="btn-ghost" type="submit" disabled={!pickedPersonIds[area.id]}>
-                        record score
-                      </button>
-                    </form>
-                  )}
 
                   <label>sub-criteria</label>
                   {area.subCriteria.length === 0 ? (
