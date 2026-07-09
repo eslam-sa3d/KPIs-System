@@ -1168,26 +1168,65 @@ h1, h2, h3 {
 }
 
 .field-drag-handle {
-  flex: 0 0 auto;
-  width: 24px;
-  height: 32px;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  height: 18px;
   border: none;
   background: transparent;
-  color: var(--color-text-muted);
-  font-size: 16px;
   cursor: grab;
-  letter-spacing: -1px;
-}
-
-.field-drag-handle:hover {
-  color: var(--pulse-purple);
+  margin-bottom: -4px;
 }
 
 .field-drag-handle:active {
   cursor: grabbing;
+}
+
+.field-drag-dots {
+  display: grid;
+  grid-template-columns: repeat(3, 3px);
+  grid-template-rows: repeat(2, 3px);
+  gap: 3px;
+}
+
+.field-drag-dots span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--color-border);
+  transition: background 200ms ease;
+}
+
+.field-drag-handle:hover .field-drag-dots span {
+  background: var(--pulse-purple);
+}
+
+.field-image-btn {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  margin-bottom: 1px;
+}
+
+.field-image-btn:hover {
+  border-color: var(--pulse-purple);
+  color: var(--pulse-purple);
+}
+
+.field-image-btn.is-on {
+  border-color: var(--pulse-purple);
+  background: color-mix(in srgb, var(--pulse-purple) 10%, var(--color-surface));
+  color: var(--pulse-purple);
 }
 
 .field-title-group {
@@ -1267,8 +1306,8 @@ h1, h2, h3 {
   gap: var(--space-2);
   width: 100%;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
-  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
   background: var(--color-surface);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
@@ -1305,7 +1344,7 @@ h1, h2, h3 {
   justify-content: center;
   width: 18px;
   font-size: 13px;
-  color: var(--pulse-purple);
+  color: var(--color-text-muted);
 }
 
 .field-type-menu {
@@ -1348,6 +1387,10 @@ h1, h2, h3 {
 .field-type-option.is-selected {
   color: var(--pulse-purple);
   font-weight: var(--font-weight-medium);
+}
+
+.field-type-option.is-selected .field-type-icon {
+  color: var(--pulse-purple);
 }
 
 .builder-required,
@@ -1430,6 +1473,20 @@ h1, h2, h3 {
 .builder-toolbar .btn-ghost.builder-toolbar-tt {
   font-size: 15px;
   font-weight: var(--font-weight-medium);
+}
+
+.toolbar-bars-icon {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 16px;
+}
+
+.toolbar-bars-icon span {
+  display: block;
+  height: 3px;
+  border-radius: 1px;
+  background: currentColor;
 }
 
 @media (max-width: 720px) {
@@ -1683,6 +1740,14 @@ h1, h2, h3 {
   color: var(--pulse-coral);
 }
 
+.option-row-add-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
 .option-row-add {
   display: flex;
   align-items: center;
@@ -1701,6 +1766,22 @@ h1, h2, h3 {
 
 .option-row-add .option-row-mark {
   border-style: dashed;
+}
+
+.option-row-other-link {
+  border: none;
+  background: transparent;
+  color: var(--pulse-purple);
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.option-row-other-label {
+  flex: 1 1 auto;
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .msform-add-field {
@@ -2139,7 +2220,7 @@ h1, h2, h3 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--color-border);
+  border: none;
   border-radius: 50%;
   cursor: pointer;
   color: var(--color-text-muted);
@@ -2154,7 +2235,6 @@ h1, h2, h3 {
 
 .field-kebab-summary:hover {
   background: color-mix(in srgb, var(--pulse-purple) 10%, transparent);
-  border-color: var(--pulse-purple);
   color: var(--pulse-purple);
 }
 
@@ -2204,6 +2284,7 @@ h1, h2, h3 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border: none;
   border-radius: 50%;
   font-size: var(--font-size-sm);
   line-height: 1;
@@ -2211,12 +2292,13 @@ h1, h2, h3 {
 
 .builder-field-actions .btn-ghost:hover {
   background: color-mix(in srgb, var(--pulse-purple) 10%, transparent);
-  border-color: var(--pulse-purple);
   color: var(--pulse-purple);
 }
 
 .field-required-toggle {
   font-size: var(--font-size-sm);
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--color-border);
 }
 
 /* ── toggle switch (required) ─────────────────────────────────── */

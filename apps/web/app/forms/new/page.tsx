@@ -993,25 +993,33 @@ export default function NewFormPage() {
               <span className="question-number">{index + 1}</span>
             </legend>
 
+            <button
+              type="button"
+              className="field-drag-handle"
+              draggable
+              title="drag to reorder"
+              aria-label="drag to reorder"
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                setDragFieldIndex(index);
+                setActiveFieldIndex(index);
+              }}
+              onDragEnd={() => {
+                setDragFieldIndex(null);
+                setDragOverFieldIndex(null);
+              }}
+            >
+              <span className="field-drag-dots">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </span>
+            </button>
+
             <div className="field-head-row">
-              <button
-                type="button"
-                className="field-drag-handle"
-                draggable
-                title="drag to reorder"
-                aria-label="drag to reorder"
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = 'move';
-                  setDragFieldIndex(index);
-                  setActiveFieldIndex(index);
-                }}
-                onDragEnd={() => {
-                  setDragFieldIndex(null);
-                  setDragOverFieldIndex(null);
-                }}
-              >
-                ⠿
-              </button>
               <div className="field-title-group">
                 <label htmlFor={`field-label-${index}`}>field label</label>
                 <input
@@ -1022,6 +1030,20 @@ export default function NewFormPage() {
                   placeholder="untitled question"
                 />
               </div>
+              {field.type !== 'section_header' && (
+                <button
+                  type="button"
+                  className={`field-image-btn${field.mediaType === 'image' ? ' is-on' : ''}`}
+                  title="add image"
+                  aria-label="add image to question"
+                  onClick={() => {
+                    setActiveFieldIndex(index);
+                    updateField(index, { mediaType: field.mediaType === 'image' ? 'none' : 'image' });
+                  }}
+                >
+                  🖼
+                </button>
+              )}
               <div className="field-type-group">
                 <label htmlFor={`field-type-${index}`}>field type</label>
                 <details className="field-type-dropdown">
@@ -1217,7 +1239,7 @@ export default function NewFormPage() {
                           list[optionIndex] = e.target.value;
                           updateField(index, { options: list.join(', ') });
                         }}
-                        placeholder={`option ${optionIndex + 1}`}
+                        placeholder={`Option ${optionIndex + 1}`}
                       />
                       <button
                         type="button"
@@ -1233,20 +1255,47 @@ export default function NewFormPage() {
                       </button>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    className="option-row-add"
-                    onClick={() => {
-                      const list = parseList(field.options);
-                      list.push(`option ${list.length + 1}`);
-                      updateField(index, { options: list.join(', ') });
-                    }}
-                  >
-                    <span
-                      className={`option-row-mark${field.type === 'multi_select' ? ' is-checkbox' : ''}`}
-                    />
-                    add option{field.type === 'select' && field.allowOther ? ' or add "other"' : ''}
-                  </button>
+                  {field.type === 'select' && field.allowOther && (
+                    <div className="option-row option-row-other">
+                      <span className="option-row-mark" />
+                      <span className="option-row-other-label">Other…</span>
+                      <button
+                        type="button"
+                        className="option-row-remove"
+                        title="remove &quot;other&quot;"
+                        aria-label="remove other"
+                        onClick={() => updateField(index, { allowOther: false })}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                  <div className="option-row-add-line">
+                    <button
+                      type="button"
+                      className="option-row-add"
+                      onClick={() => {
+                        const list = parseList(field.options);
+                        list.push(`Option ${list.length + 1}`);
+                        updateField(index, { options: list.join(', ') });
+                      }}
+                    >
+                      <span className={`option-row-mark${field.type === 'multi_select' ? ' is-checkbox' : ''}`} />
+                      add option
+                    </button>
+                    {field.type === 'select' && !field.allowOther && (
+                      <>
+                        {' '}or{' '}
+                        <button
+                          type="button"
+                          className="option-row-other-link"
+                          onClick={() => updateField(index, { allowOther: true })}
+                        >
+                          add &quot;Other&quot;
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <span className="builder-required">
                   <input
@@ -1291,15 +1340,6 @@ export default function NewFormPage() {
                   <option value="dropdown">dropdown</option>
                   <option value="radio">radio buttons</option>
                 </select>
-                <span className="builder-required">
-                  <input
-                    id={`field-other-${index}`}
-                    type="checkbox"
-                    checked={field.allowOther}
-                    onChange={(e) => updateField(index, { allowOther: e.target.checked })}
-                  />
-                  <label htmlFor={`field-other-${index}`}>allow "other" free-text answer</label>
-                </span>
               </>
             )}
 
@@ -1770,7 +1810,7 @@ export default function NewFormPage() {
             aria-label="add question"
             onClick={() => addField()}
           >
-            +
+            ⊕
           </button>
           <button
             type="button"
@@ -1818,7 +1858,10 @@ export default function NewFormPage() {
               addSection();
             }}
           >
-            ⏎
+            <span className="toolbar-bars-icon">
+              <span />
+              <span />
+            </span>
           </button>
         </aside>
         </div>
