@@ -65,10 +65,11 @@ export class FormsService {
     return result;
   }
 
-  /** All non-archived forms with their latest version's title, for the list view. */
+  /** Every form (including archived — this is the admin management list;
+   *  hiding archived forms here would make "unarchive" unreachable) with its
+   *  latest version's title. */
   async listForms() {
     const forms = await this.prisma.form.findMany({
-      where: { status: { not: 'archived' } },
       orderBy: { createdAt: 'desc' },
       include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
     });
@@ -236,6 +237,55 @@ export class FormsService {
       }),
     ]);
     return { folder };
+  }
+
+  /** Archive a form — hides it from the default list (listForms already
+   *  filters status !== 'archived') and closes the public/export links to
+   *  further use (getByPublicToken/getByExportToken already reject archived
+   *  forms), without touching its submission history. */
+  async archiveForm(formId: string, actorId: string) {
+    await this.getOwnedForm(formId, actorId);
+    await this.prisma.$transaction([
+      this.prisma.form.update({ where: { id: formId }, data: { status: 'archived' } }),
+      this.prisma.auditLog.create({
+        data: { actorId, action: 'form.archived', entity: 'Form', entityId: formId },
+      }),
+    ]);
+    return { status: 'archived' as const };
+  }
+
+  async unarchiveForm(formId: string, actorId: string) {
+    await this.getOwnedForm(formId, actorId);
+    await this.prisma.$transaction([
+      this.prisma.form.update({ where: { id: formId }, data: { status: 'published' } }),
+      this.prisma.auditLog.create({
+        data: { actorId, action: 'form.unarchived', entity: 'Form', entityId: formId },
+      }),
+    ]);
+    return { status: 'published' as const };
+  }
+
+  /** Hard delete — cascades to versions/submissions/assets/collaborators.
+   *  Blocked once any submission has ever been recorded, mirroring the KPI
+   *  module's delete guard: archive instead so response history can't be
+   *  silently destroyed. */
+  async deleteForm(formId: string, actorId: string) {
+    const form = await this.getOwnedForm(formId, actorId);
+    const submissionCount = await this.prisma.formSubmission.count({
+      where: { formVersion: { formId } },
+    });
+    if (submissionCount > 0) {
+      throw new AppError(
+        'CONFLICT',
+        `"${form.slug}" has ${submissionCount} submission(s) — archive it instead`,
+      );
+    }
+
+    await this.prisma.form.delete({ where: { id: formId } });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'form.deleted', entity: 'Form', entityId: formId, detail: { slug: form.slug } },
+    });
+    return null;
   }
 
   async listCollaborators(formId: string) {

@@ -111,11 +111,12 @@ export class KpisService {
       PAGE_DEFAULTS.maxPageSize,
     );
 
+    // Unlike listMine() (the respondent-facing dashboard, which should only
+    // ever show active KPIs), this powers the admin management page — the
+    // one place a deactivated KPI or Evaluation Area needs to still be
+    // visible, or its own "reactivate" action would be unreachable.
     const restricted = await this.isKpiReadScopeRestricted(userId);
-    const where = {
-      isActive: true,
-      ...(restricted ? await this.myAssignmentFilter(userId) : {}),
-    };
+    const where = { ...(restricted ? await this.myAssignmentFilter(userId) : {}) };
     const [totalItems, items] = await this.prisma.$transaction([
       this.prisma.kpi.count({ where }),
       this.prisma.kpi.findMany({
@@ -125,7 +126,7 @@ export class KpisService {
         take: pageSize,
         include: {
           assignments: true,
-          evaluationAreas: { where: { isActive: true }, orderBy: { name: 'asc' } },
+          evaluationAreas: { orderBy: { name: 'asc' } },
         },
       }),
     ]);

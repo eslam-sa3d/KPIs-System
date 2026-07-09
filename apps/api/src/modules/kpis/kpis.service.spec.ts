@@ -302,7 +302,7 @@ describe('KpisService', () => {
   });
 
   describe('list — RolePermission.scope enforcement', () => {
-    it('shows every active KPI when the caller holds an "all"-scoped kpis:read grant', async () => {
+    it('shows every KPI (active and inactive — this is the admin management view) when the caller holds an "all"-scoped kpis:read grant', async () => {
       prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'all' }]);
       prisma.kpi.count.mockResolvedValue(2);
       prisma.kpi.findMany.mockResolvedValue([]);
@@ -310,17 +310,17 @@ describe('KpisService', () => {
       await service.list({}, 'user-1');
 
       expect(prisma.user.findUnique).not.toHaveBeenCalled();
-      expect(prisma.kpi.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
+      expect(prisma.kpi.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
     });
 
-    it('shows every active KPI when the caller holds both an "all" and a narrower grant (union, not intersect)', async () => {
+    it('shows every KPI when the caller holds both an "all" and a narrower grant (union, not intersect)', async () => {
       prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'department' }, { scope: 'all' }]);
       prisma.kpi.count.mockResolvedValue(2);
       prisma.kpi.findMany.mockResolvedValue([]);
 
       await service.list({}, 'user-1');
 
-      expect(prisma.kpi.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
+      expect(prisma.kpi.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
     });
 
     it('filters to the caller own roles/department when every kpis:read grant is scoped narrower than "all"', async () => {
@@ -334,7 +334,6 @@ describe('KpisService', () => {
       expect(prisma.kpi.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            isActive: true,
             assignments: { some: { OR: [{ roleId: { in: ['role-1'] } }, { departmentId: 'dept-1' }] } },
           },
         }),

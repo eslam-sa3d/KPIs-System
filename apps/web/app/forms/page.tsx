@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { PortalShell } from '../../components/portal-shell';
+import { PortalShell, can } from '../../components/portal-shell';
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 
@@ -24,10 +24,37 @@ export default function FormsPage() {
   const [folderFilter, setFolderFilter] = useState('');
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [folderDraft, setFolderDraft] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const reload = () => api<FormListItem[]>('/v1/forms').then(setForms);
 
   useEffect(() => {
-    if (user) void api<FormListItem[]>('/v1/forms').then(setForms);
+    if (user) void reload();
   }, [user]);
+
+  async function onArchiveToggle(form: FormListItem) {
+    setError(null);
+    try {
+      await api(`/v1/forms/${form.id}/${form.status === 'archived' ? 'unarchive' : 'archive'}`, {
+        method: 'POST',
+      });
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Updating the form failed');
+    }
+  }
+
+  async function onDelete(formId: string) {
+    setError(null);
+    try {
+      await api(`/v1/forms/${formId}`, { method: 'DELETE' });
+      setConfirmDeleteId(null);
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Deleting the form failed');
+    }
+  }
 
   const folders = useMemo(
     () => Array.from(new Set((forms ?? []).map((f) => f.folder).filter((f): f is string => Boolean(f)))).sort(),
@@ -51,6 +78,11 @@ export default function FormsPage() {
         </Link>
       </div>
       <p className="portal-subtitle">collect data with custom forms, then aggregate and export it</p>
+      {error && (
+        <p role="alert" className="form-error">
+          {error}
+        </p>
+      )}
 
       {forms === null ? (
         <p className="muted">loading…</p>
@@ -90,6 +122,7 @@ export default function FormsPage() {
                 <th>version</th>
                 <th>public link</th>
                 <th>folder</th>
+                {can(user, 'forms:manage') && <th />}
               </tr>
             </thead>
             <tbody>
@@ -132,6 +165,30 @@ export default function FormsPage() {
                       </button>
                     )}
                   </td>
+                  {can(user, 'forms:manage') && (
+                    <td>
+                      <span className="builder-field-actions">
+                        <button type="button" className="btn-ghost" onClick={() => onArchiveToggle(form)}>
+                          {form.status === 'archived' ? 'unarchive' : 'archive'}
+                        </button>
+                        {confirmDeleteId === form.id ? (
+                          <>
+                            <span className="muted">delete permanently?</span>
+                            <button type="button" className="btn-ghost" onClick={() => onDelete(form.id)}>
+                              confirm delete
+                            </button>
+                            <button type="button" className="btn-ghost" onClick={() => setConfirmDeleteId(null)}>
+                              cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button type="button" className="btn-ghost" onClick={() => setConfirmDeleteId(form.id)}>
+                            delete
+                          </button>
+                        )}
+                      </span>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

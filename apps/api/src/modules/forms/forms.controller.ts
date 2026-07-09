@@ -173,6 +173,28 @@ export class FormsController {
     return this.forms.duplicate(formId, req.user.id);
   }
 
+  /** Hides the form from the default list and closes its public/export links
+   *  to further use, without touching submission history. */
+  @Post(':formId/archive')
+  @RequirePermissions('forms:manage')
+  archiveForm(@Param('formId') formId: string, @Req() req: AuthedRequest) {
+    return this.forms.archiveForm(formId, req.user.id);
+  }
+
+  @Post(':formId/unarchive')
+  @RequirePermissions('forms:manage')
+  unarchiveForm(@Param('formId') formId: string, @Req() req: AuthedRequest) {
+    return this.forms.unarchiveForm(formId, req.user.id);
+  }
+
+  /** Permanently removes the form. Blocked once it has any submissions —
+   *  archive it instead so response history can't be silently destroyed. */
+  @Delete(':formId')
+  @RequirePermissions('forms:manage')
+  deleteForm(@Param('formId') formId: string, @Req() req: AuthedRequest) {
+    return this.forms.deleteForm(formId, req.user.id);
+  }
+
   @Get(':slug')
   @RequirePermissions('forms:read')
   getForm(@Param('slug') slug: string) {
