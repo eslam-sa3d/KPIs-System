@@ -4,7 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import type { FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { PortalShell, can } from '../../../components/portal-shell';
-import { FormRenderer } from '../../../components/form-renderer';
+import { FormRenderer, SubmissionScore } from '../../../components/form-renderer';
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
 import { ShareLinkPanel } from '../../../components/share-link-panel';
 import { ResponseSummary, ResponseSummaryData } from '../../../components/response-summary';
@@ -24,6 +24,7 @@ interface SubmissionRow {
   createdAt: string;
   answers: SubmissionAnswers;
   submittedBy: { displayName: string; email: string } | null;
+  score?: SubmissionScore | null;
 }
 
 type Tab = 'form' | 'submissions' | 'summary' | 'settings';
@@ -61,7 +62,7 @@ function FormView() {
   }, [user, slug, tab]);
 
   async function onSubmit(answers: SubmissionAnswers) {
-    await api(`/v1/forms/${encodeURIComponent(slug)}/submissions`, {
+    return api<{ score?: SubmissionScore | null }>(`/v1/forms/${encodeURIComponent(slug)}/submissions`, {
       method: 'POST',
       body: JSON.stringify(answers),
     });

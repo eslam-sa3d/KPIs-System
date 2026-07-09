@@ -75,6 +75,9 @@ export const formFieldSchema = z.discriminatedUnion('type', [
   baseField.extend({
     type: z.literal('short_text'),
     maxLength: z.number().int().positive().max(500).default(200),
+    /** quiz mode: any case-insensitive match counts as correct */
+    correctAnswers: z.array(z.string().min(1).max(500)).optional(),
+    points: z.number().positive().optional(),
   }),
   baseField.extend({
     type: z.literal('long_text'),
@@ -85,6 +88,8 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     min: z.number().optional(),
     max: z.number().optional(),
     integerOnly: z.boolean().default(false),
+    correctValue: z.number().optional(),
+    points: z.number().positive().optional(),
   }),
   baseField.extend({ type: z.literal('date') }),
   baseField.extend({
@@ -96,14 +101,24 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     allowOther: z.boolean().default(false),
     /** randomize option order per respondent */
     shuffleOptions: z.boolean().default(false),
+    /** quiz mode: must match an option's value exactly */
+    correctValue: z.string().optional(),
+    points: z.number().positive().optional(),
   }),
   baseField.extend({
     type: z.literal('multi_select'),
     options: z.array(optionItem).min(1).max(200),
     maxSelections: z.number().int().positive().optional(),
     shuffleOptions: z.boolean().default(false),
+    /** quiz mode: the respondent's selections must equal this SET exactly (order-independent) */
+    correctValues: z.array(z.string()).optional(),
+    points: z.number().positive().optional(),
   }),
-  baseField.extend({ type: z.literal('boolean') }),
+  baseField.extend({
+    type: z.literal('boolean'),
+    correctValue: z.boolean().optional(),
+    points: z.number().positive().optional(),
+  }),
   baseField.extend({
     type: z.literal('rating'),
     scale: z.number().int().min(2).max(10).default(5),
@@ -147,6 +162,12 @@ export const formSettingsSchema = z.object({
   thankYouMessage: z.string().max(500).default('thank you!'),
   /** stop accepting responses once this many submissions exist */
   maxResponses: z.number().int().positive().optional(),
+  /** quiz mode: score submissions against each field's correctValue/points */
+  quizMode: z.boolean().default(false),
+  /** percent of total points required to "pass" — only meaningful with quizMode */
+  passThresholdPercent: z.number().min(0).max(100).optional(),
+  /** show the respondent their score/pass-fail on the thank-you screen */
+  showScoreToRespondent: z.boolean().default(true),
 });
 
 export type FormSettings = z.infer<typeof formSettingsSchema>;

@@ -201,6 +201,9 @@ model FormSubmission {
   respondentFingerprint String?
   /// fieldKey → answer. GIN-indexed for filtering (index added in raw migration).
   answers       Json
+  /// QuizScore JSON ({earnedPoints, totalPoints, percent, passed}), computed once at
+  /// submit time against the version's definition — null for non-quiz forms.
+  score         Json?
   createdAt     DateTime    @default(now())
 
   fileUploads   FormFileUpload[]

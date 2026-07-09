@@ -1308,6 +1308,20 @@ h1, h2, h3 {
   padding: var(--space-12);
 }
 
+.quiz-score {
+  font-size: var(--font-size-lg);
+}
+
+.quiz-passed {
+  color: var(--color-success);
+  font-weight: var(--font-weight-medium);
+}
+
+.quiz-failed {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-medium);
+}
+
 /* ── admin pages ───────────────────────────────────────────────── */
 .admin-card {
   padding: var(--space-6);

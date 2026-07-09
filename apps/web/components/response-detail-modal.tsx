@@ -3,12 +3,14 @@
 import { useEffect } from 'react';
 import type { FormDefinition, SubmissionAnswers } from '@pulse/contracts';
 import { downloadFile } from '../lib/api-client';
+import type { SubmissionScore } from './form-renderer';
 
 export interface DetailedSubmission {
   id: string;
   createdAt: string;
   answers: SubmissionAnswers;
   submittedBy: { displayName: string; email: string } | null;
+  score?: SubmissionScore | null;
 }
 
 function formatAnswer(value: SubmissionAnswers[string] | undefined): string {
@@ -69,6 +71,18 @@ export function ResponseDetailModal({
               {submission.submittedBy?.displayName ?? 'anonymous'} ·{' '}
               {new Date(submission.createdAt).toLocaleString()}
             </p>
+            {submission.score && submission.score.percent !== null && (
+              <p className="quiz-score" style={{ margin: '4px 0 0', fontSize: 'var(--font-size-md)' }}>
+                score: <strong>{submission.score.earnedPoints}</strong> / {submission.score.totalPoints} (
+                {submission.score.percent}%)
+                {submission.score.passed !== null && (
+                  <span className={submission.score.passed ? 'quiz-passed' : 'quiz-failed'}>
+                    {' '}
+                    — {submission.score.passed ? 'passed' : 'did not pass'}
+                  </span>
+                )}
+              </p>
+            )}
           </div>
           <button className="btn-ghost" onClick={onClose} aria-label="close">
             close

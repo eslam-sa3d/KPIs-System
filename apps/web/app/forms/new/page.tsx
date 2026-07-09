@@ -68,6 +68,14 @@ interface DraftField {
   visibleWhenFieldKey: string;
   visibleWhenOperator: ConditionOperator;
   visibleWhenValue: string;
+  /** quiz mode: 0/empty = not gradable. Meaning of correctValue depends on type:
+   *  select -> an option value; number -> parsed as a number; boolean -> 'true'/'false'. */
+  points: number;
+  correctValue: string;
+  /** multi_select: comma-separated set of option values that must all (and only) be selected */
+  correctValues: string;
+  /** short_text: comma-separated, case-insensitive any-of accepted answers */
+  correctAnswers: string;
 }
 
 const emptyField = (): DraftField => ({
@@ -93,6 +101,10 @@ const emptyField = (): DraftField => ({
   visibleWhenFieldKey: '',
   visibleWhenOperator: 'equals',
   visibleWhenValue: '',
+  points: 0,
+  correctValue: '',
+  correctValues: '',
+  correctAnswers: '',
 });
 
 const toKey = (label: string, index: number) => {
@@ -207,6 +219,7 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
   };
   const withImages = (values: string[]) =>
     values.map((o) => ({ value: o, label: o, ...(draft.optionImages[o] ? { imageAssetId: draft.optionImages[o] } : {}) }));
+  const quizPoints = draft.points > 0 ? { points: draft.points } : {};
   switch (draft.type) {
     case 'select': {
       const options = withImages(parseList(draft.options));
@@ -217,12 +230,45 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
         layout: draft.layout,
         allowOther: draft.allowOther,
         shuffleOptions: draft.shuffleOptions,
+        ...(draft.points > 0 && draft.correctValue ? { correctValue: draft.correctValue, ...quizPoints } : {}),
       };
     }
     case 'multi_select': {
       const options = withImages(parseList(draft.options));
-      return { ...base, type: draft.type, options, shuffleOptions: draft.shuffleOptions };
+      return {
+        ...base,
+        type: draft.type,
+        options,
+        shuffleOptions: draft.shuffleOptions,
+        ...(draft.points > 0 && draft.correctValues.trim()
+          ? { correctValues: parseList(draft.correctValues), ...quizPoints }
+          : {}),
+      };
     }
+    case 'boolean':
+      return {
+        ...base,
+        type: draft.type,
+        ...(draft.points > 0 && draft.correctValue
+          ? { correctValue: draft.correctValue === 'true', ...quizPoints }
+          : {}),
+      };
+    case 'short_text':
+      return {
+        ...base,
+        type: draft.type,
+        ...(draft.points > 0 && draft.correctAnswers.trim()
+          ? { correctAnswers: parseList(draft.correctAnswers), ...quizPoints }
+          : {}),
+      };
+    case 'number':
+      return {
+        ...base,
+        type: draft.type,
+        ...(draft.points > 0 && draft.correctValue !== ''
+          ? { correctValue: Number(draft.correctValue), ...quizPoints }
+          : {}),
+      };
     case 'ranking': {
       const options = withImages(parseList(draft.options));
       return { ...base, type: draft.type, options, shuffleOptions: draft.shuffleOptions };
@@ -500,6 +546,10 @@ export default function NewFormPage() {
           visibleWhenFieldKey: '',
           visibleWhenOperator: 'equals' as const,
           visibleWhenValue: '',
+          points: 0,
+          correctValue: '',
+          correctValues: '',
+          correctAnswers: '',
         })),
       ]);
       setImportIssues(issues);
@@ -934,6 +984,96 @@ export default function NewFormPage() {
                   <label htmlFor={`field-other-${index}`}>allow "other" free-text answer</label>
                 </span>
               </>
+            )}
+
+            {(field.type === 'select' ||
+              field.type === 'multi_select' ||
+              field.type === 'boolean' ||
+              field.type === 'short_text' ||
+              field.type === 'number') && (
+              <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
+                <span className="muted" style={{ fontSize: 12 }}>quiz: correct answer (optional)</span>
+
+                {field.type === 'select' && (
+                  <>
+                    <label htmlFor={`field-correct-${index}`}>correct option</label>
+                    <select
+                      id={`field-correct-${index}`}
+                      value={field.correctValue}
+                      onChange={(e) => updateField(index, { correctValue: e.target.value })}
+                    >
+                      <option value="">not graded</option>
+                      {parseList(field.options).map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+
+                {field.type === 'multi_select' && (
+                  <>
+                    <label htmlFor={`field-correct-${index}`}>correct options (comma-separated, exact set)</label>
+                    <input
+                      id={`field-correct-${index}`}
+                      value={field.correctValues}
+                      onChange={(e) => updateField(index, { correctValues: e.target.value })}
+                      placeholder="leave blank for not graded"
+                    />
+                  </>
+                )}
+
+                {field.type === 'boolean' && (
+                  <>
+                    <label htmlFor={`field-correct-${index}`}>correct answer</label>
+                    <select
+                      id={`field-correct-${index}`}
+                      value={field.correctValue}
+                      onChange={(e) => updateField(index, { correctValue: e.target.value })}
+                    >
+                      <option value="">not graded</option>
+                      <option value="true">yes</option>
+                      <option value="false">no</option>
+                    </select>
+                  </>
+                )}
+
+                {field.type === 'short_text' && (
+                  <>
+                    <label htmlFor={`field-correct-${index}`}>accepted answers (comma-separated, case-insensitive)</label>
+                    <input
+                      id={`field-correct-${index}`}
+                      value={field.correctAnswers}
+                      onChange={(e) => updateField(index, { correctAnswers: e.target.value })}
+                      placeholder="leave blank for not graded"
+                    />
+                  </>
+                )}
+
+                {field.type === 'number' && (
+                  <>
+                    <label htmlFor={`field-correct-${index}`}>correct value</label>
+                    <input
+                      id={`field-correct-${index}`}
+                      type="number"
+                      value={field.correctValue}
+                      onChange={(e) => updateField(index, { correctValue: e.target.value })}
+                      placeholder="leave blank for not graded"
+                    />
+                  </>
+                )}
+
+                <label htmlFor={`field-points-${index}`}>points</label>
+                <input
+                  id={`field-points-${index}`}
+                  type="number"
+                  min={0}
+                  value={field.points || ''}
+                  onChange={(e) => updateField(index, { points: e.target.value === '' ? 0 : Number(e.target.value) })}
+                  placeholder="0"
+                />
+              </div>
             )}
 
             {field.type === 'likert' && (

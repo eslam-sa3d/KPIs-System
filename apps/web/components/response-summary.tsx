@@ -54,6 +54,22 @@ export function ResponseSummary({ data }: { data: ResponseSummaryData }) {
         )}
       </div>
 
+      {data.quiz && (
+        <div className="admin-card summary-field-card">
+          <h3>quiz results</h3>
+          <p className="muted">
+            average score <strong>{data.quiz.averagePercent}%</strong>
+            {data.quiz.passRate !== undefined && (
+              <> · pass rate <strong>{Math.round(data.quiz.passRate * 100)}%</strong></>
+            )}
+          </p>
+          <BarBreakdown
+            counts={data.quiz.distribution}
+            total={Object.values(data.quiz.distribution).reduce((a, b) => a + b, 0)}
+          />
+        </div>
+      )}
+
       {data.fields.map((field) => (
         <div key={field.key} className="admin-card summary-field-card">
           <h3>{field.label}</h3>

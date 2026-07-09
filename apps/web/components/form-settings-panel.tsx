@@ -100,6 +100,44 @@ export function FormSettingsPanel({
         placeholder="no limit"
       />
 
+      <label className="check-item">
+        <input
+          type="checkbox"
+          checked={draft.quizMode}
+          onChange={(e) => setDraft((d) => ({ ...d, quizMode: e.target.checked }))}
+        />
+        quiz mode — score responses against each question's correct answer
+      </label>
+
+      {draft.quizMode && (
+        <>
+          <label htmlFor="fs-pass-threshold">pass threshold, % of points (optional)</label>
+          <input
+            id="fs-pass-threshold"
+            type="number"
+            min={0}
+            max={100}
+            value={draft.passThresholdPercent ?? ''}
+            onChange={(e) =>
+              setDraft((d) => ({
+                ...d,
+                passThresholdPercent: e.target.value === '' ? undefined : Number(e.target.value),
+              }))
+            }
+            placeholder="no threshold"
+          />
+
+          <label className="check-item">
+            <input
+              type="checkbox"
+              checked={draft.showScoreToRespondent}
+              onChange={(e) => setDraft((d) => ({ ...d, showScoreToRespondent: e.target.checked }))}
+            />
+            show the score to the respondent after they submit
+          </label>
+        </>
+      )}
+
       <label htmlFor="fs-thanks">thank-you message</label>
       <input
         id="fs-thanks"

@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { BrandIdentity, FormDefinition, FormSettings } from '@pulse/contracts';
-import { FormRenderer } from '../../components/form-renderer';
+import { FormRenderer, SubmissionScore } from '../../components/form-renderer';
 import { API_URL } from '../../lib/api-client';
 import { asset } from '../../lib/asset';
 
@@ -33,11 +33,15 @@ function PublicForm() {
   async function submit(answers: object) {
     const res = await fetch(`${API_URL}/api/v1/public/forms/${encodeURIComponent(token)}/submissions`, {
       method: 'POST',
+      // the anonymous respondent-fingerprint cookie (oneResponsePerUser) is only ever
+      // set/read if the browser is allowed to send/receive it on this request
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(answers),
     });
     const env = await res.json();
     if (!env?.success) throw new Error(env?.error?.message ?? 'Submission failed');
+    return env.data as { score?: SubmissionScore | null };
   }
 
   return (

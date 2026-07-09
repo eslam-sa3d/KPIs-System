@@ -11,11 +11,13 @@ import {
 } from '@pulse/contracts';
 import { ZodError } from 'zod';
 import ExcelJS from 'exceljs';
+import { Prisma } from '@prisma/client';
 import { AppError } from '../../common/app-error';
 import { paged } from '../../common/envelope.interceptor';
 import { PrismaService } from '../../infra/prisma.service';
 import { compileAnswerValidator } from './answer-validator';
 import { FormsService } from './forms.service';
+import { QuizScore, scoreSubmission } from './quiz-scoring';
 
 /**
  * Submission engine: validates answers against the form version's compiled
@@ -32,7 +34,7 @@ export class SubmissionsService {
   async submit(formSlug: string, rawAnswers: SubmissionAnswers, submittedById: string) {
     const { form, version, definition, settings } = await this.forms.getLatestVersion(formSlug);
     await this.enforceSettings(form.id, settings, submittedById, null);
-    return this.persist(form.id, version.id, definition, rawAnswers, submittedById, null);
+    return this.persist(form.id, version.id, definition, settings, rawAnswers, submittedById, null);
   }
 
   /** Anonymous submission via a public share link. `respondentFingerprint` is a random id the
@@ -40,7 +42,7 @@ export class SubmissionsService {
   async submitPublic(token: string, rawAnswers: SubmissionAnswers, respondentFingerprint: string | null) {
     const { form, version, definition, settings } = await this.forms.getByPublicToken(token);
     await this.enforceSettings(form.id, settings, null, respondentFingerprint);
-    return this.persist(form.id, version.id, definition, rawAnswers, null, respondentFingerprint);
+    return this.persist(form.id, version.id, definition, settings, rawAnswers, null, respondentFingerprint);
   }
 
   private async enforceSettings(
@@ -81,6 +83,7 @@ export class SubmissionsService {
     formId: string,
     formVersionId: string,
     definition: FormDefinition,
+    settings: FormSettings,
     rawAnswers: SubmissionAnswers,
     submittedById: string | null,
     respondentFingerprint: string | null,
@@ -114,8 +117,18 @@ export class SubmissionsService {
       }
     }
 
+    const score = settings.quizMode
+      ? scoreSubmission(definition, answers, settings.passThresholdPercent)
+      : null;
+
     const submission = await this.prisma.formSubmission.create({
-      data: { formVersionId, submittedById, respondentFingerprint, answers },
+      data: {
+        formVersionId,
+        submittedById,
+        respondentFingerprint,
+        answers,
+        score: score ? (score as unknown as Prisma.InputJsonValue) : undefined,
+      },
     });
     if (uploadIds.length) {
       await this.prisma.formFileUpload.updateMany({
@@ -162,7 +175,7 @@ export class SubmissionsService {
     const { version, definition } = await this.forms.getLatestVersion(formSlug);
     const submissions = await this.prisma.formSubmission.findMany({
       where: { formVersionId: version.id },
-      select: { answers: true, createdAt: true },
+      select: { answers: true, createdAt: true, score: true },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -250,11 +263,29 @@ export class SubmissionsService {
       }
     });
 
+    const scores = submissions
+      .map((s) => s.score as unknown as QuizScore | null | undefined)
+      .filter((s): s is QuizScore => s != null && s.percent !== null);
+    const quiz = scores.length
+      ? {
+          averagePercent: Math.round(scores.reduce((a, s) => a + s.percent!, 0) / scores.length),
+          ...(scores.every((s) => s.passed !== null)
+            ? { passRate: scores.filter((s) => s.passed).length / scores.length }
+            : {}),
+          distribution: scores.reduce<Record<string, number>>((dist, s) => {
+            const bucket = String(Math.round(s.percent! / 10) * 10);
+            dist[bucket] = (dist[bucket] ?? 0) + 1;
+            return dist;
+          }, {}),
+        }
+      : undefined;
+
     return {
       responses: submissions.length,
       firstResponseAt: submissions[0]?.createdAt.toISOString() ?? null,
       lastResponseAt: submissions[submissions.length - 1]?.createdAt.toISOString() ?? null,
       fields,
+      ...(quiz ? { quiz } : {}),
     };
   }
 

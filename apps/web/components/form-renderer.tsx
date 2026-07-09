@@ -266,6 +266,13 @@ function FieldInput({
   }
 }
 
+export interface SubmissionScore {
+  earnedPoints: number;
+  totalPoints: number;
+  percent: number | null;
+  passed: boolean | null;
+}
+
 /**
  * MS-Forms-style renderer shared by the portal fill tab and the public page.
  * Handles shuffle, closed/scheduled states, and the custom thank-you message.
@@ -278,7 +285,7 @@ export function FormRenderer({
 }: {
   definition: FormDefinition;
   settings: FormSettings;
-  onSubmit: (answers: SubmissionAnswers) => Promise<void>;
+  onSubmit: (answers: SubmissionAnswers) => Promise<{ score?: SubmissionScore | null } | void>;
   /** base path for file-field uploads, e.g. "/v1/forms/:slug/uploads" or "/v1/public/forms/:token/uploads" */
   uploadPath: string;
 }) {
@@ -286,6 +293,7 @@ export function FormRenderer({
   const [error, setError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submittedScore, setSubmittedScore] = useState<SubmissionScore | null>(null);
 
   const hasSections = Boolean(definition.sections && definition.sections.length > 0);
   const [currentSectionId, setCurrentSectionId] = useState<string | null>(
@@ -373,7 +381,8 @@ export function FormRenderer({
           );
         }),
       );
-      await onSubmit(visible);
+      const result = await onSubmit(visible);
+      setSubmittedScore(result?.score ?? null);
       setSubmitted(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Submission failed');
@@ -406,7 +415,25 @@ export function FormRenderer({
         <div className="question-card msform-thanks">
           <h2>{settings.thankYouMessage}</h2>
           <p className="muted">your response was recorded.</p>
-          <button className="btn-ghost" onClick={() => { setAnswers({}); setSubmitted(false); }}>
+          {settings.quizMode && settings.showScoreToRespondent && submittedScore && (
+            <p className="quiz-score">
+              {submittedScore.percent !== null ? (
+                <>
+                  score: <strong>{submittedScore.earnedPoints}</strong> / {submittedScore.totalPoints} (
+                  {submittedScore.percent}%)
+                  {submittedScore.passed !== null && (
+                    <span className={submittedScore.passed ? 'quiz-passed' : 'quiz-failed'}>
+                      {' '}
+                      — {submittedScore.passed ? 'passed' : 'did not pass'}
+                    </span>
+                  )}
+                </>
+              ) : (
+                'this quiz has no graded questions'
+              )}
+            </p>
+          )}
+          <button className="btn-ghost" onClick={() => { setAnswers({}); setSubmitted(false); setSubmittedScore(null); }}>
             submit another response
           </button>
         </div>

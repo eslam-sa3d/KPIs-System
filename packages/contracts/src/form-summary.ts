@@ -32,9 +32,19 @@ export interface FormFieldSummary {
   samples?: string[];
 }
 
+/** Present only for quiz-mode forms with at least one gradable response. */
+export interface QuizResponseSummary {
+  averagePercent: number;
+  /** fraction (0–1) of scored responses meeting the pass threshold — undefined if none was set */
+  passRate?: number;
+  /** score percent (rounded to the nearest 10) -> response count, for a simple distribution chart */
+  distribution: Record<string, number>;
+}
+
 export interface FormResponseSummary {
   responses: number;
   firstResponseAt: string | null;
   lastResponseAt: string | null;
   fields: FormFieldSummary[];
+  quiz?: QuizResponseSummary;
 }
