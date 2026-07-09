@@ -7,27 +7,53 @@ import { PortalShell } from '../../../components/portal-shell';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
-/** Field types creatable from the UI (file uploads come later). */
+/** Field types creatable from the UI (file uploads need object storage — later). */
 const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'short_text', label: 'short text' },
   { value: 'long_text', label: 'long text' },
   { value: 'number', label: 'number' },
   { value: 'date', label: 'date' },
   { value: 'boolean', label: 'yes / no' },
-  { value: 'rating', label: 'rating (1–5)' },
-  { value: 'select', label: 'dropdown' },
-  { value: 'multi_select', label: 'multi-select' },
+  { value: 'rating', label: 'rating (2–10)' },
+  { value: 'nps', label: 'net promoter score (0–10)' },
+  { value: 'select', label: 'choice (one answer)' },
+  { value: 'multi_select', label: 'choice (multiple answers)' },
+  { value: 'likert', label: 'likert matrix' },
+  { value: 'ranking', label: 'ranking' },
 ];
+
+const parseList = (raw: string) =>
+  raw.split(',').map((s) => s.trim()).filter(Boolean);
 
 interface DraftField {
   label: string;
+  helpText: string;
   type: FieldType;
   required: boolean;
-  /** comma-separated, for select/multi_select */
+  /** comma-separated: select/multi_select/ranking options, or likert statements */
   options: string;
+  layout: 'dropdown' | 'radio';
+  allowOther: boolean;
+  scale: number;
+  lowLabel: string;
+  highLabel: string;
+  /** comma-separated likert scale labels, e.g. "disagree,neutral,agree" */
+  likertScale: string;
 }
 
-const emptyField = (): DraftField => ({ label: '', type: 'short_text', required: false, options: '' });
+const emptyField = (): DraftField => ({
+  label: '',
+  helpText: '',
+  type: 'short_text',
+  required: false,
+  options: '',
+  layout: 'dropdown',
+  allowOther: false,
+  scale: 5,
+  lowLabel: '',
+  highLabel: '',
+  likertScale: 'disagree, neutral, agree',
+});
 
 const toKey = (label: string, index: number) => {
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -35,19 +61,45 @@ const toKey = (label: string, index: number) => {
 };
 
 function toDefinitionField(draft: DraftField, index: number) {
-  const base = { key: toKey(draft.label, index), label: draft.label, required: draft.required };
+  const base = {
+    key: toKey(draft.label, index),
+    label: draft.label,
+    required: draft.required,
+    ...(draft.helpText.trim() ? { helpText: draft.helpText.trim() } : {}),
+  };
   switch (draft.type) {
-    case 'select':
+    case 'select': {
+      const options = parseList(draft.options).map((o) => ({ value: o, label: o }));
+      return { ...base, type: draft.type, options, layout: draft.layout, allowOther: draft.allowOther };
+    }
     case 'multi_select': {
-      const options = draft.options
-        .split(',')
-        .map((option) => option.trim())
-        .filter(Boolean)
-        .map((option) => ({ value: option, label: option }));
+      const options = parseList(draft.options).map((o) => ({ value: o, label: o }));
       return { ...base, type: draft.type, options };
     }
+    case 'ranking': {
+      const options = parseList(draft.options).map((o) => ({ value: o, label: o }));
+      return { ...base, type: draft.type, options };
+    }
+    case 'likert': {
+      const statements = parseList(draft.options).map((o) => ({ value: o, label: o }));
+      const scale = parseList(draft.likertScale);
+      return { ...base, type: draft.type, statements, scale };
+    }
     case 'rating':
-      return { ...base, type: draft.type, scale: 5 };
+      return {
+        ...base,
+        type: draft.type,
+        scale: draft.scale,
+        ...(draft.lowLabel ? { lowLabel: draft.lowLabel } : {}),
+        ...(draft.highLabel ? { highLabel: draft.highLabel } : {}),
+      };
+    case 'nps':
+      return {
+        ...base,
+        type: draft.type,
+        ...(draft.lowLabel ? { lowLabel: draft.lowLabel } : {}),
+        ...(draft.highLabel ? { highLabel: draft.highLabel } : {}),
+      };
     default:
       return { ...base, type: draft.type };
   }
@@ -56,12 +108,31 @@ function toDefinitionField(draft: DraftField, index: number) {
 export default function NewFormPage() {
   const user = useSession();
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [fields, setFields] = useState<DraftField[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [published, setPublished] = useState<{ slug: string } | null>(null);
 
   function updateField(index: number, patch: Partial<DraftField>) {
     setFields((current) => current.map((f, i) => (i === index ? { ...f, ...patch } : f)));
+  }
+
+  function moveField(index: number, delta: number) {
+    setFields((current) => {
+      const target = index + delta;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target]!, next[index]!];
+      return next;
+    });
+  }
+
+  function duplicateField(index: number) {
+    setFields((current) => {
+      const next = [...current];
+      next.splice(index + 1, 0, { ...current[index]! });
+      return next;
+    });
   }
 
   async function onPublish() {
@@ -72,7 +143,11 @@ export default function NewFormPage() {
         method: 'POST',
         body: JSON.stringify({
           slug,
-          definition: { title, fields: fields.map(toDefinitionField) },
+          definition: {
+            title,
+            ...(description.trim() ? { description: description.trim() } : {}),
+            fields: fields.map(toDefinitionField),
+          },
         }),
       });
       setPublished({ slug: form.slug });
@@ -110,6 +185,14 @@ export default function NewFormPage() {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="untitled form"
           />
+          <label htmlFor="form-description" className="msform-desc-label">description (optional)</label>
+          <input
+            id="form-description"
+            className="msform-desc-input"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="tell respondents what this form is for"
+          />
           <p className="msform-required-hint">
             questions render exactly as respondents will see them
           </p>
@@ -129,6 +212,14 @@ export default function NewFormPage() {
               onChange={(e) => updateField(index, { label: e.target.value })}
             />
 
+            <label htmlFor={`field-help-${index}`}>help text (optional)</label>
+            <input
+              id={`field-help-${index}`}
+              value={field.helpText}
+              onChange={(e) => updateField(index, { helpText: e.target.value })}
+              placeholder="shown under the question"
+            />
+
             <label htmlFor={`field-type-${index}`}>field type</label>
             <select
               id={`field-type-${index}`}
@@ -142,7 +233,7 @@ export default function NewFormPage() {
               ))}
             </select>
 
-            {(field.type === 'select' || field.type === 'multi_select') && (
+            {(field.type === 'select' || field.type === 'multi_select' || field.type === 'ranking') && (
               <>
                 <label htmlFor={`field-options-${index}`}>options (comma-separated)</label>
                 <input
@@ -150,6 +241,81 @@ export default function NewFormPage() {
                   value={field.options}
                   onChange={(e) => updateField(index, { options: e.target.value })}
                   placeholder="red, amber, green"
+                />
+              </>
+            )}
+
+            {field.type === 'select' && (
+              <>
+                <label htmlFor={`field-layout-${index}`}>layout</label>
+                <select
+                  id={`field-layout-${index}`}
+                  value={field.layout}
+                  onChange={(e) => updateField(index, { layout: e.target.value as 'dropdown' | 'radio' })}
+                >
+                  <option value="dropdown">dropdown</option>
+                  <option value="radio">radio buttons</option>
+                </select>
+                <span className="builder-required">
+                  <input
+                    id={`field-other-${index}`}
+                    type="checkbox"
+                    checked={field.allowOther}
+                    onChange={(e) => updateField(index, { allowOther: e.target.checked })}
+                  />
+                  <label htmlFor={`field-other-${index}`}>allow "other" free-text answer</label>
+                </span>
+              </>
+            )}
+
+            {field.type === 'likert' && (
+              <>
+                <label htmlFor={`field-options-${index}`}>statements (comma-separated)</label>
+                <input
+                  id={`field-options-${index}`}
+                  value={field.options}
+                  onChange={(e) => updateField(index, { options: e.target.value })}
+                  placeholder="tooling quality, delivery pace"
+                />
+                <label htmlFor={`field-scale-${index}`}>scale labels (comma-separated)</label>
+                <input
+                  id={`field-scale-${index}`}
+                  value={field.likertScale}
+                  onChange={(e) => updateField(index, { likertScale: e.target.value })}
+                  placeholder="disagree, neutral, agree"
+                />
+              </>
+            )}
+
+            {field.type === 'rating' && (
+              <>
+                <label htmlFor={`field-scale-n-${index}`}>scale (2–10)</label>
+                <input
+                  id={`field-scale-n-${index}`}
+                  type="number"
+                  min={2}
+                  max={10}
+                  value={field.scale}
+                  onChange={(e) => updateField(index, { scale: Number(e.target.value) })}
+                />
+              </>
+            )}
+
+            {(field.type === 'rating' || field.type === 'nps') && (
+              <>
+                <label htmlFor={`field-low-${index}`}>low-end label (optional)</label>
+                <input
+                  id={`field-low-${index}`}
+                  value={field.lowLabel}
+                  onChange={(e) => updateField(index, { lowLabel: e.target.value })}
+                  placeholder="not likely"
+                />
+                <label htmlFor={`field-high-${index}`}>high-end label (optional)</label>
+                <input
+                  id={`field-high-${index}`}
+                  value={field.highLabel}
+                  onChange={(e) => updateField(index, { highLabel: e.target.value })}
+                  placeholder="extremely likely"
                 />
               </>
             )}
@@ -164,13 +330,26 @@ export default function NewFormPage() {
               <label htmlFor={`field-required-${index}`}>required</label>
             </span>
 
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => setFields((current) => current.filter((_, i) => i !== index))}
-            >
-              remove field
-            </button>
+            <div className="builder-field-actions">
+              <button type="button" className="btn-ghost" aria-label={`move question ${index + 1} up`}
+                disabled={index === 0} onClick={() => moveField(index, -1)}>
+                ↑ move up
+              </button>
+              <button type="button" className="btn-ghost" aria-label={`move question ${index + 1} down`}
+                disabled={index === fields.length - 1} onClick={() => moveField(index, 1)}>
+                ↓ move down
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => duplicateField(index)}>
+                duplicate
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setFields((current) => current.filter((_, i) => i !== index))}
+              >
+                remove field
+              </button>
+            </div>
           </fieldset>
         ))}
 

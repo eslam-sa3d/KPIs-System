@@ -13,7 +13,7 @@ import { DemoDataService } from './modules/settings/demo-data.service';
 import { SettingsController } from './modules/settings/settings.controller';
 import { DepartmentsController, UsersController } from './modules/users/users.controller';
 import { UsersService } from './modules/users/users.service';
-import { FormsController } from './modules/forms/forms.controller';
+import { FormsController, PublicFormsController } from './modules/forms/forms.controller';
 import { FormsService } from './modules/forms/forms.service';
 import { SubmissionsService } from './modules/forms/submissions.service';
 import { HealthController } from './modules/health/health.controller';
@@ -42,6 +42,7 @@ import { RolesController } from './modules/rbac/roles.controller';
     RolesController,
     KpisController,
     FormsController,
+    PublicFormsController,
     BrandingController,
     SettingsController,
   ],

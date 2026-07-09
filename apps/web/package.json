@@ -14,11 +14,13 @@
     "@pulse/contracts": "workspace:*",
     "@pulse/theme": "workspace:*",
     "next": "^15.1.3",
+    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.0"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19.0.2",
     "serve": "^14.2.4",
     "vitest": "^3.2.6"

@@ -4,9 +4,9 @@ import { z } from 'zod';
  * Form Builder contract — the schema-of-schemas.
  *
  * An admin-built form is data, not code: a versioned document of typed fields
- * with validation rules and optional conditional visibility. This Zod contract
+ * with validation rules and conditional visibility. This Zod contract
  * validates the *form definition itself*; the API additionally compiles each
- * definition into a runtime answer-validator (see apps/api forms module).
+ * definition into a runtime answer-validator.
  */
 
 export const FIELD_TYPES = [
@@ -18,6 +18,9 @@ export const FIELD_TYPES = [
   'multi_select',
   'boolean',
   'rating',
+  'nps',
+  'likert',
+  'ranking',
   'file',
 ] as const;
 
@@ -29,15 +32,23 @@ const fieldKey = z
   .max(64)
   .regex(/^[a-z][a-z0-9_]*$/, 'field keys must be snake_case identifiers');
 
+export const CONDITION_OPERATORS = ['equals', 'not_equals', 'gt', 'lt', 'contains'] as const;
+
+const conditionValue = z.union([z.string(), z.number(), z.boolean()]);
+
+/** Conditional visibility: `operator` defaults to equality for back-compat. */
+const visibleWhenSchema = z.object({
+  fieldKey,
+  operator: z.enum(CONDITION_OPERATORS).default('equals'),
+  equals: conditionValue,
+});
+
 const baseField = z.object({
   key: fieldKey,
   label: z.string().min(1).max(200),
   helpText: z.string().max(500).optional(),
   required: z.boolean().default(false),
-  /** Show this field only when another field matches a value. */
-  visibleWhen: z
-    .object({ fieldKey, equals: z.union([z.string(), z.number(), z.boolean()]) })
-    .optional(),
+  visibleWhen: visibleWhenSchema.optional(),
 });
 
 const optionItem = z.object({
@@ -64,6 +75,10 @@ export const formFieldSchema = z.discriminatedUnion('type', [
   baseField.extend({
     type: z.literal('select'),
     options: z.array(optionItem).min(1).max(200),
+    /** radio buttons (MS Forms default) or a dropdown */
+    layout: z.enum(['dropdown', 'radio']).default('dropdown'),
+    /** append a free-text "Other" option */
+    allowOther: z.boolean().default(false),
   }),
   baseField.extend({
     type: z.literal('multi_select'),
@@ -74,6 +89,25 @@ export const formFieldSchema = z.discriminatedUnion('type', [
   baseField.extend({
     type: z.literal('rating'),
     scale: z.number().int().min(2).max(10).default(5),
+    lowLabel: z.string().max(60).optional(),
+    highLabel: z.string().max(60).optional(),
+  }),
+  /** Net Promoter Score: fixed 0–10 */
+  baseField.extend({
+    type: z.literal('nps'),
+    lowLabel: z.string().max(60).default('not at all likely'),
+    highLabel: z.string().max(60).default('extremely likely'),
+  }),
+  /** Likert matrix: statements × a shared scale */
+  baseField.extend({
+    type: z.literal('likert'),
+    statements: z.array(optionItem).min(1).max(30),
+    scale: z.array(z.string().min(1).max(60)).min(2).max(7),
+  }),
+  /** Ranking: respondent orders every option */
+  baseField.extend({
+    type: z.literal('ranking'),
+    options: z.array(optionItem).min(2).max(20),
   }),
   baseField.extend({
     type: z.literal('file'),
@@ -81,6 +115,19 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     maxSizeMb: z.number().positive().max(25).default(10),
   }),
 ]);
+
+/** Per-form collection settings (MS-Forms parity). */
+export const formSettingsSchema = z.object({
+  acceptingResponses: z.boolean().default(true),
+  opensAt: z.string().datetime().optional(),
+  closesAt: z.string().datetime().optional(),
+  oneResponsePerUser: z.boolean().default(false),
+  shuffleQuestions: z.boolean().default(false),
+  thankYouMessage: z.string().max(500).default('thank you!'),
+});
+
+export type FormSettings = z.infer<typeof formSettingsSchema>;
+export const DEFAULT_FORM_SETTINGS: FormSettings = formSettingsSchema.parse({});
 
 export const formDefinitionSchema = z
   .object({
@@ -112,9 +159,17 @@ export const formDefinitionSchema = z
 export type FormField = z.infer<typeof formFieldSchema>;
 export type FormDefinition = z.infer<typeof formDefinitionSchema>;
 
-/** A submission is a map of fieldKey → answer; validated server-side per form version. */
+/** A submission maps fieldKey → answer. Likert answers are row→scale-index
+ *  records; rankings are ordered arrays of option values. */
 export const submissionAnswersSchema = z.record(
   fieldKey,
-  z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()]),
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.array(z.string()),
+    z.record(z.string(), z.number()),
+    z.null(),
+  ]),
 );
 export type SubmissionAnswers = z.infer<typeof submissionAnswersSchema>;

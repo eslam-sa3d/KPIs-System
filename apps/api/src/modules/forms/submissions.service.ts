@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { PAGE_DEFAULTS, PageQuery, SubmissionAnswers, buildPaginationMeta } from '@pulse/contracts';
+import {
+  FormDefinition,
+  FormSettings,
+  PAGE_DEFAULTS,
+  PageQuery,
+  SubmissionAnswers,
+  buildPaginationMeta,
+} from '@pulse/contracts';
 import { ZodError } from 'zod';
 import { AppError } from '../../common/app-error';
 import { paged } from '../../common/envelope.interceptor';
@@ -9,7 +16,8 @@ import { FormsService } from './forms.service';
 
 /**
  * Submission engine: validates answers against the form version's compiled
- * schema, persists them, and serves the aggregate list/export views.
+ * schema, enforces the form's collection settings, persists, and serves the
+ * list / summary / export views.
  */
 @Injectable()
 export class SubmissionsService {
@@ -19,8 +27,46 @@ export class SubmissionsService {
   ) {}
 
   async submit(formSlug: string, rawAnswers: SubmissionAnswers, submittedById: string) {
-    const { version, definition } = await this.forms.getLatestVersion(formSlug);
+    const { form, version, definition, settings } = await this.forms.getLatestVersion(formSlug);
+    await this.enforceSettings(form.id, settings, submittedById);
+    return this.persist(version.id, definition, rawAnswers, submittedById);
+  }
 
+  /** Anonymous submission via a public share link. */
+  async submitPublic(token: string, rawAnswers: SubmissionAnswers) {
+    const { form, version, definition, settings } = await this.forms.getByPublicToken(token);
+    await this.enforceSettings(form.id, settings, null);
+    return this.persist(version.id, definition, rawAnswers, null);
+  }
+
+  private async enforceSettings(
+    formId: string,
+    settings: FormSettings,
+    submittedById: string | null,
+  ) {
+    const closed = new AppError('CONFLICT', 'This form is not accepting responses');
+    if (!settings.acceptingResponses) throw closed;
+    const now = new Date();
+    if (settings.opensAt && now < new Date(settings.opensAt)) throw closed;
+    if (settings.closesAt && now > new Date(settings.closesAt)) throw closed;
+
+    if (settings.oneResponsePerUser && submittedById) {
+      const existing = await this.prisma.formSubmission.findFirst({
+        where: { submittedById, formVersion: { formId } },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new AppError('CONFLICT', 'You have already responded to this form');
+      }
+    }
+  }
+
+  private async persist(
+    formVersionId: string,
+    definition: FormDefinition,
+    rawAnswers: SubmissionAnswers,
+    submittedById: string | null,
+  ) {
     let answers: SubmissionAnswers;
     try {
       answers = compileAnswerValidator(definition).validate(rawAnswers);
@@ -32,9 +78,8 @@ export class SubmissionsService {
       }
       throw error;
     }
-
     return this.prisma.formSubmission.create({
-      data: { formVersionId: version.id, submittedById, answers },
+      data: { formVersionId, submittedById, answers },
     });
   }
 
@@ -42,8 +87,11 @@ export class SubmissionsService {
   async list(formSlug: string, query: PageQuery, filters: Record<string, string> = {}) {
     const { version } = await this.forms.getLatestVersion(formSlug);
 
-    const page = Math.max(query.page ?? PAGE_DEFAULTS.page, 1);
-    const pageSize = Math.min(query.pageSize ?? PAGE_DEFAULTS.pageSize, PAGE_DEFAULTS.maxPageSize);
+    const page = Math.max(Number(query.page ?? PAGE_DEFAULTS.page), 1);
+    const pageSize = Math.min(
+      Number(query.pageSize ?? PAGE_DEFAULTS.pageSize),
+      PAGE_DEFAULTS.maxPageSize,
+    );
 
     const where = {
       formVersionId: version.id,
@@ -64,6 +112,127 @@ export class SubmissionsService {
     ]);
 
     return paged(items, buildPaginationMeta(page, pageSize, totalItems));
+  }
+
+  /** MS-Forms-style per-question aggregates for the summary dashboard. */
+  async summary(formSlug: string) {
+    const { version, definition } = await this.forms.getLatestVersion(formSlug);
+    const submissions = await this.prisma.formSubmission.findMany({
+      where: { formVersionId: version.id },
+      select: { answers: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const fields = definition.fields.map((field) => {
+      const values = submissions
+        .map((s) => (s.answers as SubmissionAnswers)[field.key])
+        .filter((v) => v !== undefined && v !== null && v !== '');
+      const answered = values.length;
+      const base = { key: field.key, label: field.label, type: field.type, answered };
+
+      switch (field.type) {
+        case 'select': {
+          const counts: Record<string, number> = {};
+          for (const v of values as string[]) {
+            const key = v.startsWith('other:') ? 'other' : v;
+            counts[key] = (counts[key] ?? 0) + 1;
+          }
+          return { ...base, counts };
+        }
+        case 'multi_select': {
+          const counts: Record<string, number> = {};
+          for (const arr of values as string[][])
+            for (const v of arr) counts[v] = (counts[v] ?? 0) + 1;
+          return { ...base, counts };
+        }
+        case 'boolean': {
+          const yes = (values as boolean[]).filter(Boolean).length;
+          return { ...base, counts: { yes, no: answered - yes } };
+        }
+        case 'rating':
+        case 'nps': {
+          const nums = values as number[];
+          const counts: Record<string, number> = {};
+          for (const v of nums) counts[String(v)] = (counts[String(v)] ?? 0) + 1;
+          const average = answered ? nums.reduce((a, b) => a + b, 0) / answered : null;
+          if (field.type === 'nps' && answered) {
+            const promoters = nums.filter((v) => v >= 9).length;
+            const detractors = nums.filter((v) => v <= 6).length;
+            return {
+              ...base,
+              counts,
+              average,
+              npsScore: Math.round(((promoters - detractors) / answered) * 100),
+            };
+          }
+          return { ...base, counts, average };
+        }
+        case 'number': {
+          const nums = values as number[];
+          return {
+            ...base,
+            average: answered ? nums.reduce((a, b) => a + b, 0) / answered : null,
+            min: answered ? Math.min(...nums) : null,
+            max: answered ? Math.max(...nums) : null,
+          };
+        }
+        case 'likert': {
+          // statement → scale-index → count
+          const matrix: Record<string, Record<string, number>> = {};
+          for (const rec of values as Array<Record<string, number>>)
+            for (const [statement, idx] of Object.entries(rec)) {
+              matrix[statement] ??= {};
+              matrix[statement][String(idx)] = (matrix[statement][String(idx)] ?? 0) + 1;
+            }
+          return { ...base, matrix, scale: field.scale };
+        }
+        case 'ranking': {
+          // average position per option (1-based; lower = ranked higher)
+          const positions: Record<string, number[]> = {};
+          for (const order of values as string[][])
+            order.forEach((v, i) => (positions[v] ??= []).push(i + 1));
+          const averagePosition = Object.fromEntries(
+            Object.entries(positions).map(([v, arr]) => [
+              v,
+              arr.reduce((a, b) => a + b, 0) / arr.length,
+            ]),
+          );
+          return { ...base, averagePosition };
+        }
+        default: {
+          return { ...base, samples: (values as string[]).slice(-5).reverse() };
+        }
+      }
+    });
+
+    return {
+      responses: submissions.length,
+      firstResponseAt: submissions[0]?.createdAt ?? null,
+      lastResponseAt: submissions[submissions.length - 1]?.createdAt ?? null,
+      fields,
+    };
+  }
+
+  async deleteSubmission(formSlug: string, submissionId: string, actorId: string) {
+    const { version } = await this.forms.getLatestVersion(formSlug);
+    const submission = await this.prisma.formSubmission.findFirst({
+      where: { id: submissionId, formVersionId: version.id },
+    });
+    if (!submission) throw AppError.notFound('Submission', submissionId);
+
+    await this.prisma.$transaction([
+      this.prisma.formSubmission.delete({ where: { id: submissionId } }),
+      this.prisma.auditLog.create({
+        data: {
+          actorId,
+          action: 'submission.deleted',
+          entity: 'FormSubmission',
+          entityId: submissionId,
+          detail: { formSlug },
+        },
+      }),
+    ]);
+    return null;
   }
 
   /** CSV export of all submissions for the latest version (audited). */
@@ -91,7 +260,7 @@ export class SubmissionsService {
       const answers = s.answers as SubmissionAnswers;
       return [
         s.createdAt.toISOString(),
-        s.submittedBy.email,
+        s.submittedBy?.email ?? 'anonymous',
         ...keys.map((k) => serializeCsvCell(answers[k])),
       ];
     });
@@ -102,6 +271,7 @@ export class SubmissionsService {
 function serializeCsvCell(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (Array.isArray(value)) return value.join('; ');
+  if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }
 

@@ -5,9 +5,6 @@ import { z, ZodTypeAny } from 'zod';
  * Compiles an admin-built FormDefinition (stored JSONB) into a runtime Zod
  * validator for submissions. This is the trust boundary of the submission
  * engine: client-side validation is UX, THIS is security.
- *
- * Conditional fields: a field hidden by its `visibleWhen` rule is not
- * required and any provided answer for it is discarded.
  */
 export function compileAnswerValidator(definition: FormDefinition) {
   const fieldValidators = new Map<string, ZodTypeAny>(
@@ -21,10 +18,8 @@ export function compileAnswerValidator(definition: FormDefinition) {
       const cleaned: SubmissionAnswers = {};
 
       for (const field of definition.fields) {
-        const visible = isVisible(field, raw);
+        if (!isVisible(field, raw)) continue; // hidden answers are dropped, never stored
         const value = raw[field.key];
-
-        if (!visible) continue; // hidden answers are dropped, never stored
 
         if (value === undefined || value === null || value === '') {
           if (field.required) {
@@ -47,7 +42,6 @@ export function compileAnswerValidator(definition: FormDefinition) {
         }
       }
 
-      // Reject answers for keys that don't exist in this form version.
       for (const key of Object.keys(raw)) {
         if (!fieldValidators.has(key)) {
           issues.push({
@@ -64,9 +58,25 @@ export function compileAnswerValidator(definition: FormDefinition) {
   };
 }
 
-function isVisible(field: FormField, answers: SubmissionAnswers): boolean {
-  if (!field.visibleWhen) return true;
-  return answers[field.visibleWhen.fieldKey] === field.visibleWhen.equals;
+export function isVisible(field: FormField, answers: SubmissionAnswers): boolean {
+  const rule = field.visibleWhen;
+  if (!rule) return true;
+  const actual = answers[rule.fieldKey];
+  const expected = rule.equals;
+  switch (rule.operator ?? 'equals') {
+    case 'not_equals':
+      return actual !== expected;
+    case 'gt':
+      return typeof actual === 'number' && typeof expected === 'number' && actual > expected;
+    case 'lt':
+      return typeof actual === 'number' && typeof expected === 'number' && actual < expected;
+    case 'contains':
+      return Array.isArray(actual)
+        ? actual.includes(String(expected))
+        : typeof actual === 'string' && actual.includes(String(expected));
+    default:
+      return actual === expected;
+  }
 }
 
 function validatorFor(field: FormField): ZodTypeAny {
@@ -82,8 +92,13 @@ function validatorFor(field: FormField): ZodTypeAny {
     }
     case 'date':
       return z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected ISO date (YYYY-MM-DD)');
-    case 'select':
-      return z.enum(field.options.map((o) => o.value) as [string, ...string[]]);
+    case 'select': {
+      const known = z.enum(field.options.map((o) => o.value) as [string, ...string[]]);
+      // "Other" answers are stored as "other:<free text>"
+      return field.allowOther
+        ? z.union([known, z.string().startsWith('other:').max(260)])
+        : known;
+    }
     case 'multi_select': {
       const item = z.enum(field.options.map((o) => o.value) as [string, ...string[]]);
       let schema = z.array(item).min(1);
@@ -94,8 +109,27 @@ function validatorFor(field: FormField): ZodTypeAny {
       return z.boolean();
     case 'rating':
       return z.number().int().min(1).max(field.scale);
+    case 'nps':
+      return z.number().int().min(0).max(10);
+    case 'likert': {
+      // record of statement value → 0-based scale index, every statement answered
+      const keys = field.statements.map((s) => s.value);
+      return z
+        .record(z.enum(keys as [string, ...string[]]), z.number().int().min(0).max(field.scale.length - 1))
+        .refine((answers) => keys.every((k) => answers[k] !== undefined), {
+          message: 'every statement must be answered',
+        });
+    }
+    case 'ranking': {
+      const values = field.options.map((o) => o.value);
+      return z
+        .array(z.enum(values as [string, ...string[]]))
+        .length(values.length)
+        .refine((order) => new Set(order).size === order.length, {
+          message: 'ranking must order every option exactly once',
+        });
+    }
     case 'file':
-      // Files are uploaded separately; the answer is the stored object key.
       return z.string().min(1).max(500);
   }
 }

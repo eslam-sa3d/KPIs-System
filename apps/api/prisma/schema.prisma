@@ -159,6 +159,10 @@ model Form {
   id          String   @id @default(uuid())
   slug        String   @unique
   status      String   @default("draft") // "draft" | "published" | "archived"
+  /// FormSettings JSON: acceptingResponses, opensAt/closesAt, oneResponsePerUser…
+  settings    Json?
+  /// Non-null enables the anonymous public fill link (/f?token=…)
+  publicToken String?  @unique
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -186,8 +190,8 @@ model FormSubmission {
   id            String      @id @default(uuid())
   formVersionId String
   formVersion   FormVersion @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
-  submittedById String
-  submittedBy   User        @relation(fields: [submittedById], references: [id])
+  submittedById String?
+  submittedBy   User?       @relation(fields: [submittedById], references: [id])
   /// fieldKey → answer. GIN-indexed for filtering (index added in raw migration).
   answers       Json
   createdAt     DateTime    @default(now())

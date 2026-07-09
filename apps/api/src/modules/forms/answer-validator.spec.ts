@@ -101,6 +101,67 @@ describe('compileAnswerValidator', () => {
   });
 });
 
+describe('v2 field types', () => {
+  const v2 = compileAnswerValidator(
+    formDefinitionSchema.parse({
+      title: 'v2',
+      fields: [
+        { key: 'nps', label: 'How likely…', type: 'nps' },
+        {
+          key: 'mood',
+          label: 'Rate these',
+          type: 'likert',
+          statements: [
+            { value: 'tools', label: 'Tooling' },
+            { value: 'pace', label: 'Pace' },
+          ],
+          scale: ['disagree', 'neutral', 'agree'],
+        },
+        {
+          key: 'prio',
+          label: 'Rank priorities',
+          type: 'ranking',
+          options: [
+            { value: 'speed', label: 'Speed' },
+            { value: 'cost', label: 'Cost' },
+            { value: 'quality', label: 'Quality' },
+          ],
+        },
+        {
+          key: 'channel',
+          label: 'Channel',
+          type: 'select',
+          layout: 'radio',
+          allowOther: true,
+          options: [{ value: 'web', label: 'Web' }],
+        },
+      ],
+    }),
+  );
+
+  it('validates NPS 0–10 and rejects out-of-range', () => {
+    expect(v2.validate({ nps: 10 })).toEqual({ nps: 10 });
+    expect(() => v2.validate({ nps: 11 })).toThrow(ZodError);
+  });
+
+  it('requires every likert statement and bounds the scale index', () => {
+    expect(v2.validate({ mood: { tools: 2, pace: 0 } })).toEqual({ mood: { tools: 2, pace: 0 } });
+    expect(() => v2.validate({ mood: { tools: 2 } })).toThrow(ZodError);
+    expect(() => v2.validate({ mood: { tools: 3, pace: 0 } })).toThrow(ZodError);
+  });
+
+  it('accepts only complete permutations for ranking', () => {
+    expect(v2.validate({ prio: ['cost', 'speed', 'quality'] })).toBeTruthy();
+    expect(() => v2.validate({ prio: ['cost', 'cost', 'quality'] })).toThrow(ZodError);
+    expect(() => v2.validate({ prio: ['cost', 'speed'] })).toThrow(ZodError);
+  });
+
+  it('accepts "other:" free text only when allowed', () => {
+    expect(v2.validate({ channel: 'other: carrier pigeon' })).toBeTruthy();
+    expect(() => v2.validate({ channel: 'fax' })).toThrow(ZodError);
+  });
+});
+
 describe('formDefinitionSchema (builder-side validation)', () => {
   it('rejects duplicate field keys', () => {
     const result = formDefinitionSchema.safeParse({

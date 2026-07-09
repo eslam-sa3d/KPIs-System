@@ -1,10 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { FormDefinition, formDefinitionSchema } from '@pulse/contracts';
+import {
+  DEFAULT_FORM_SETTINGS,
+  FormDefinition,
+  FormSettings,
+  formDefinitionSchema,
+  formSettingsSchema,
+} from '@pulse/contracts';
+import { Prisma } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 
 /**
- * Form lifecycle: draft → published (immutable) → archived.
+ * Form lifecycle: draft → published (immutable versions) → archived.
  * Publishing an edit creates a NEW version so historical submissions keep
  * validating against the schema they were created with.
  */
@@ -22,32 +30,11 @@ export class FormsService {
       data: {
         slug,
         status: 'published',
+        settings: DEFAULT_FORM_SETTINGS,
         createdById,
         versions: { create: { version: 1, definition: parsed } },
       },
       include: { versions: true },
-    });
-  }
-
-  /** All non-archived forms with their latest version's title, for the list view. */
-  async listForms() {
-    const forms = await this.prisma.form.findMany({
-      where: { status: { not: 'archived' } },
-      orderBy: { createdAt: 'desc' },
-      include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
-    });
-    return forms.map((form) => {
-      const latest = form.versions[0];
-      const definition = latest?.definition as unknown as FormDefinition | undefined;
-      return {
-        id: form.id,
-        slug: form.slug,
-        status: form.status,
-        title: definition?.title ?? form.slug,
-        fieldCount: definition?.fields.length ?? 0,
-        version: latest?.version ?? 0,
-        createdAt: form.createdAt,
-      };
     });
   }
 
@@ -68,6 +55,30 @@ export class FormsService {
     ]);
   }
 
+  /** All non-archived forms with their latest version's title, for the list view. */
+  async listForms() {
+    const forms = await this.prisma.form.findMany({
+      where: { status: { not: 'archived' } },
+      orderBy: { createdAt: 'desc' },
+      include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+    });
+    return forms.map((form) => {
+      const latest = form.versions[0];
+      const definition = latest?.definition as unknown as FormDefinition | undefined;
+      return {
+        id: form.id,
+        slug: form.slug,
+        status: form.status,
+        title: definition?.title ?? form.slug,
+        fieldCount: definition?.fields.length ?? 0,
+        version: latest?.version ?? 0,
+        hasPublicLink: Boolean(form.publicToken),
+        settings: this.settingsOf(form.settings),
+        createdAt: form.createdAt,
+      };
+    });
+  }
+
   async getLatestVersion(formSlug: string) {
     const form = await this.prisma.form.findUnique({
       where: { slug: formSlug },
@@ -77,7 +88,104 @@ export class FormsService {
     if (!form || !version || form.status === 'archived') {
       throw AppError.notFound('Form', formSlug);
     }
-    return { form, version, definition: version.definition as unknown as FormDefinition };
+    return {
+      form,
+      version,
+      definition: version.definition as unknown as FormDefinition,
+      settings: this.settingsOf(form.settings),
+    };
+  }
+
+  async getByPublicToken(token: string) {
+    const form = await this.prisma.form.findUnique({
+      where: { publicToken: token },
+      include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+    });
+    const version = form?.versions[0];
+    if (!form || !version || form.status === 'archived') {
+      throw AppError.notFound('Form', 'public link');
+    }
+    return {
+      form,
+      version,
+      definition: version.definition as unknown as FormDefinition,
+      settings: this.settingsOf(form.settings),
+    };
+  }
+
+  async updateSettings(formId: string, raw: unknown, actorId: string): Promise<FormSettings> {
+    const result = formSettingsSchema.safeParse(raw);
+    if (!result.success) {
+      throw AppError.validation(
+        result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+      );
+    }
+    const form = await this.prisma.form.findUnique({ where: { id: formId } });
+    if (!form) throw AppError.notFound('Form', formId);
+
+    await this.prisma.$transaction([
+      this.prisma.form.update({ where: { id: formId }, data: { settings: result.data } }),
+      this.prisma.auditLog.create({
+        data: {
+          actorId,
+          action: 'form.settings_updated',
+          entity: 'Form',
+          entityId: formId,
+          detail: result.data,
+        },
+      }),
+    ]);
+    return result.data;
+  }
+
+  /** Enable/rotate or disable the anonymous public fill link. */
+  async setShareLink(formId: string, enabled: boolean, actorId: string) {
+    const form = await this.prisma.form.findUnique({ where: { id: formId } });
+    if (!form) throw AppError.notFound('Form', formId);
+
+    const publicToken = enabled ? randomBytes(24).toString('base64url') : null;
+    await this.prisma.$transaction([
+      this.prisma.form.update({ where: { id: formId }, data: { publicToken } }),
+      this.prisma.auditLog.create({
+        data: {
+          actorId,
+          action: enabled ? 'form.share_link_enabled' : 'form.share_link_disabled',
+          entity: 'Form',
+          entityId: formId,
+        },
+      }),
+    ]);
+    return { publicToken };
+  }
+
+  /** MS-Forms "copy form": new slug, same latest definition, fresh settings. */
+  async duplicate(formId: string, createdById: string) {
+    const source = await this.prisma.form.findUnique({
+      where: { id: formId },
+      include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+    });
+    if (!source?.versions[0]) throw AppError.notFound('Form', formId);
+
+    const definition = source.versions[0].definition as unknown as FormDefinition;
+    const copy = {
+      ...definition,
+      title: `${definition.title} (copy)`,
+    } as unknown as Prisma.InputJsonValue;
+
+    return this.prisma.form.create({
+      data: {
+        slug: `${source.slug.slice(0, 40)}-copy-${Date.now().toString(36)}`,
+        status: 'published',
+        settings: DEFAULT_FORM_SETTINGS,
+        createdById,
+        versions: { create: { version: 1, definition: copy } },
+      },
+    });
+  }
+
+  settingsOf(raw: Prisma.JsonValue | null): FormSettings {
+    const parsed = formSettingsSchema.safeParse(raw ?? {});
+    return parsed.success ? parsed.data : DEFAULT_FORM_SETTINGS;
   }
 
   private parseDefinition(definition: unknown): FormDefinition {

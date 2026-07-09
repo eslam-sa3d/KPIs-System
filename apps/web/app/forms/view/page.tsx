@@ -1,178 +1,80 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
-import { FormEvent, Suspense, useEffect, useState } from 'react';
-import type { FormDefinition, FormField, SubmissionAnswers } from '@pulse/contracts';
-import { PortalShell } from '../../../components/portal-shell';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import type { FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
+import { PortalShell, can } from '../../../components/portal-shell';
+import { FormRenderer } from '../../../components/form-renderer';
+import { FormSettingsPanel } from '../../../components/form-settings-panel';
+import { ShareLinkPanel } from '../../../components/share-link-panel';
+import { ResponseSummary, ResponseSummaryData } from '../../../components/response-summary';
 import { api, downloadFile } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
 interface FormDetail {
-  form: { id: string; slug: string; status: string };
+  form: { id: string; slug: string; status: string; publicToken: string | null };
   version: { id: string; version: number };
   definition: FormDefinition;
+  settings: FormSettings;
 }
 
 interface SubmissionRow {
   id: string;
   createdAt: string;
   answers: SubmissionAnswers;
-  submittedBy: { displayName: string; email: string };
+  submittedBy: { displayName: string; email: string } | null;
 }
 
-const isVisible = (field: FormField, answers: SubmissionAnswers) =>
-  !field.visibleWhen || answers[field.visibleWhen.fieldKey] === field.visibleWhen.equals;
-
-function FieldInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: FormField;
-  value: SubmissionAnswers[string] | undefined;
-  onChange: (value: SubmissionAnswers[string]) => void;
-}) {
-  const id = `f-${field.key}`;
-  switch (field.type) {
-    case 'long_text':
-      return (
-        <textarea
-          id={id}
-          rows={4}
-          value={(value as string) ?? ''}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-    case 'number':
-      return (
-        <input
-          id={id}
-          type="number"
-          value={(value as number | undefined) ?? ''}
-          onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
-        />
-      );
-    case 'date':
-      return (
-        <input
-          id={id}
-          type="date"
-          value={(value as string) ?? ''}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-    case 'boolean':
-      return (
-        <input
-          id={id}
-          type="checkbox"
-          checked={Boolean(value)}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-      );
-    case 'rating':
-      return (
-        <select
-          id={id}
-          value={(value as number | undefined) ?? ''}
-          onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
-        >
-          <option value="">—</option>
-          {Array.from({ length: field.scale }, (_, i) => i + 1).map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-      );
-    case 'select':
-      return (
-        <select id={id} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)}>
-          <option value="">—</option>
-          {field.options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      );
-    case 'multi_select': {
-      const selected = (value as string[] | undefined) ?? [];
-      return (
-        <span className="check-group" id={id}>
-          {field.options.map((o) => (
-            <label key={o.value} className="check-item">
-              <input
-                type="checkbox"
-                checked={selected.includes(o.value)}
-                onChange={(e) =>
-                  onChange(
-                    e.target.checked
-                      ? [...selected, o.value]
-                      : selected.filter((v) => v !== o.value),
-                  )
-                }
-              />
-              {o.label}
-            </label>
-          ))}
-        </span>
-      );
-    }
-    default:
-      // short_text, file (answer = stored object key)
-      return (
-        <input
-          id={id}
-          type="text"
-          value={(value as string) ?? ''}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-  }
-}
+type Tab = 'form' | 'submissions' | 'summary' | 'settings';
 
 function FormView() {
   const user = useSession();
+  const router = useRouter();
   const slug = useSearchParams().get('slug') ?? '';
   const [detail, setDetail] = useState<FormDetail | null>(null);
-  const [tab, setTab] = useState<'form' | 'submissions'>('form');
-  const [answers, setAnswers] = useState<SubmissionAnswers>({});
-  const [error, setError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [tab, setTab] = useState<Tab>('form');
   const [rows, setRows] = useState<SubmissionRow[] | null>(null);
+  const [summary, setSummary] = useState<ResponseSummaryData | null>(null);
   const [filter, setFilter] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const reloadDetail = useCallback(() => {
+    if (slug) void api<FormDetail>(`/v1/forms/${encodeURIComponent(slug)}`).then(setDetail);
+  }, [slug]);
 
   useEffect(() => {
-    if (user && slug) void api<FormDetail>(`/v1/forms/${encodeURIComponent(slug)}`).then(setDetail);
-  }, [user, slug]);
+    if (user) reloadDetail();
+  }, [user, reloadDetail]);
 
   useEffect(() => {
-    if (user && slug && tab === 'submissions') {
-      void api<SubmissionRow[]>(`/v1/forms/${encodeURIComponent(slug)}/submissions?pageSize=100`).then(
-        setRows,
-      );
+    if (!user || !slug) return;
+    if (tab === 'submissions') {
+      void api<SubmissionRow[]>(`/v1/forms/${encodeURIComponent(slug)}/submissions?pageSize=100`).then(setRows);
+    }
+    if (tab === 'summary') {
+      void api<ResponseSummaryData>(`/v1/forms/${encodeURIComponent(slug)}/submissions/summary`).then(setSummary);
     }
   }, [user, slug, tab]);
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
-    try {
-      const visible = Object.fromEntries(
-        Object.entries(answers).filter(([key, value]) => {
-          const field = detail?.definition.fields.find((f) => f.key === key);
-          return field && isVisible(field, answers) && value !== null && value !== '';
-        }),
-      );
-      await api(`/v1/forms/${encodeURIComponent(slug)}/submissions`, {
-        method: 'POST',
-        body: JSON.stringify(visible),
-      });
-      setSubmitted(true);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Submission failed');
-    }
+  async function onSubmit(answers: SubmissionAnswers) {
+    await api(`/v1/forms/${encodeURIComponent(slug)}/submissions`, {
+      method: 'POST',
+      body: JSON.stringify(answers),
+    });
+  }
+
+  async function onDelete(submissionId: string) {
+    if (!window.confirm('Delete this submission? This cannot be undone.')) return;
+    await api(`/v1/forms/${slug}/submissions/${submissionId}`, { method: 'DELETE' });
+    setRows((current) => (current ? current.filter((r) => r.id !== submissionId) : current));
+    setNotice('submission deleted');
+    setTimeout(() => setNotice(null), 3000);
+  }
+
+  async function onDuplicate() {
+    if (!detail) return;
+    const copy = await api<{ slug: string }>(`/v1/forms/${detail.form.id}/duplicate`, { method: 'POST' });
+    router.push(`/forms/view/?slug=${encodeURIComponent(copy.slug)}`);
   }
 
   if (!detail) {
@@ -183,91 +85,53 @@ function FormView() {
     );
   }
 
-  const { definition } = detail;
+  const { definition, settings, form } = detail;
   const filteredRows = (rows ?? []).filter((row) => {
     if (!filter) return true;
     const haystack = [
-      row.submittedBy.displayName,
-      row.submittedBy.email,
-      ...Object.values(row.answers).map((v) => (Array.isArray(v) ? v.join(' ') : String(v ?? ''))),
+      row.submittedBy?.displayName ?? 'anonymous',
+      row.submittedBy?.email ?? '',
+      ...Object.values(row.answers).map((v) =>
+        typeof v === 'object' ? JSON.stringify(v) : String(v ?? ''),
+      ),
     ]
       .join(' ')
       .toLowerCase();
     return haystack.includes(filter.toLowerCase());
   });
 
+  const canManage = can(user, 'forms:write');
+  const canModerate = can(user, 'form_submissions:manage');
+
   return (
     <PortalShell user={user}>
-      <div role="tablist" className="tabs" aria-label="form views">
-        <button role="tab" aria-selected={tab === 'form'} onClick={() => setTab('form')}>
-          form
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'submissions'}
-          onClick={() => setTab('submissions')}
-        >
-          submissions
-        </button>
-      </div>
-
-      {tab === 'form' ? (
-        <div className="msform">
-          {/* MS-Forms-style banner card */}
-          <header className="msform-banner">
-            <h1>{definition.title}</h1>
-            {definition.description && <p>{definition.description}</p>}
-            {!submitted && <p className="msform-required-hint">* required</p>}
-          </header>
-
-          {submitted ? (
-            <div className="question-card msform-thanks">
-              <h2>thank you!</h2>
-              <p className="muted">your response was recorded.</p>
-              <button
-                className="btn-ghost"
-                onClick={() => {
-                  setAnswers({});
-                  setSubmitted(false);
-                }}
-              >
-                submit another response
-              </button>
-            </div>
-          ) : (
-            <form className="fill-form msform-body" onSubmit={onSubmit}>
-              {definition.fields.filter((field) => isVisible(field, answers)).map((field, index) => (
-                <div key={field.key} className="question-card">
-                  <label htmlFor={`f-${field.key}`} className="question-title">
-                    <span className="question-number">{index + 1}.</span> {field.label}
-                    {field.required && (
-                      <span aria-hidden="true" className="question-required">
-                        {' '}*
-                      </span>
-                    )}
-                  </label>
-                  {field.helpText && <p className="muted">{field.helpText}</p>}
-                  <FieldInput
-                    field={field}
-                    value={answers[field.key]}
-                    onChange={(value) => setAnswers((a) => ({ ...a, [field.key]: value }))}
-                  />
-                </div>
-              ))}
-              {error && (
-                <p role="alert" className="form-error">
-                  {error}
-                </p>
-              )}
-              <div>
-                <button className="btn-primary" type="submit">
-                  submit
-                </button>
-              </div>
-            </form>
+      <div className="page-title-row">
+        <div role="tablist" className="tabs" aria-label="form views">
+          <button role="tab" aria-selected={tab === 'form'} onClick={() => setTab('form')}>
+            form
+          </button>
+          <button role="tab" aria-selected={tab === 'submissions'} onClick={() => setTab('submissions')}>
+            submissions
+          </button>
+          <button role="tab" aria-selected={tab === 'summary'} onClick={() => setTab('summary')}>
+            summary
+          </button>
+          {canManage && (
+            <button role="tab" aria-selected={tab === 'settings'} onClick={() => setTab('settings')}>
+              settings
+            </button>
           )}
         </div>
-      ) : (
+        {canManage && (
+          <button className="btn-ghost" onClick={onDuplicate}>
+            duplicate form
+          </button>
+        )}
+      </div>
+
+      {tab === 'form' && <FormRenderer definition={definition} settings={settings} onSubmit={onSubmit} />}
+
+      {tab === 'submissions' && (
         <section role="tabpanel" aria-label="submissions">
           <div className="page-title-row">
             <input
@@ -283,6 +147,7 @@ function FormView() {
               export CSV
             </button>
           </div>
+          {notice && <p className="form-notice">{notice}</p>}
           {rows === null ? (
             <p className="muted">loading…</p>
           ) : filteredRows.length === 0 ? (
@@ -296,26 +161,55 @@ function FormView() {
                   {definition.fields.map((f) => (
                     <th key={f.key}>{f.label}</th>
                   ))}
+                  {canModerate && <th />}
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.map((row) => (
                   <tr key={row.id}>
                     <td>{new Date(row.createdAt).toLocaleString()}</td>
-                    <td>{row.submittedBy.displayName}</td>
+                    <td>{row.submittedBy?.displayName ?? 'anonymous'}</td>
                     {definition.fields.map((f) => {
                       const value = row.answers[f.key];
                       return (
                         <td key={f.key}>
-                          {Array.isArray(value) ? value.join(', ') : String(value ?? '—')}
+                          {Array.isArray(value)
+                            ? value.join(', ')
+                            : typeof value === 'object' && value !== null
+                              ? JSON.stringify(value)
+                              : String(value ?? '—')}
                         </td>
                       );
                     })}
+                    {canModerate && (
+                      <td>
+                        <button className="btn-ghost" onClick={() => onDelete(row.id)}>
+                          delete
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+        </section>
+      )}
+
+      {tab === 'summary' && (
+        <section role="tabpanel" aria-label="response summary">
+          {summary === null ? <p className="muted">loading…</p> : <ResponseSummary data={summary} />}
+        </section>
+      )}
+
+      {tab === 'settings' && canManage && (
+        <section role="tabpanel" aria-label="form settings">
+          <FormSettingsPanel
+            formId={form.id}
+            settings={settings}
+            onSaved={(next) => setDetail((d) => (d ? { ...d, settings: next } : d))}
+          />
+          <ShareLinkPanel formId={form.id} publicToken={form.publicToken} />
         </section>
       )}
     </PortalShell>

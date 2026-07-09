@@ -13,6 +13,8 @@ interface FormListItem {
   title: string;
   fieldCount: number;
   version: number;
+  hasPublicLink: boolean;
+  settings: { acceptingResponses: boolean };
 }
 
 export default function FormsPage() {
@@ -46,8 +48,10 @@ export default function FormsPage() {
             <tr>
               <th>title</th>
               <th>status</th>
+              <th>responses</th>
               <th>fields</th>
               <th>version</th>
+              <th>public link</th>
             </tr>
           </thead>
           <tbody>
@@ -59,8 +63,10 @@ export default function FormsPage() {
                   </Link>
                 </td>
                 <td>{form.status}</td>
+                <td>{form.settings.acceptingResponses ? 'open' : 'closed'}</td>
                 <td>{form.fieldCount}</td>
                 <td>v{form.version}</td>
+                <td>{form.hasPublicLink ? 'shared' : '—'}</td>
               </tr>
             ))}
           </tbody>
