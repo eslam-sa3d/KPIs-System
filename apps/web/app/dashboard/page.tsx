@@ -71,6 +71,7 @@ export default function DashboardPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [level, setLevel] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
@@ -92,11 +93,11 @@ export default function DashboardPage() {
     }
   }, []);
 
-  async function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = ''; // allow re-selecting the same file after fixing it
-    if (!file) return;
-
+  async function handleFile(file: File) {
+    if (!/\.xlsx?$/i.test(file.name)) {
+      setUploadError('please choose an .xlsx or .xls file');
+      return;
+    }
     setUploadError(null);
     setParsing(true);
     try {
@@ -122,6 +123,19 @@ export default function DashboardPage() {
     } finally {
       setParsing(false);
     }
+  }
+
+  function onFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // allow re-selecting the same file after fixing it
+    if (file) void handleFile(file);
+  }
+
+  function onDropFile(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragOver(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void handleFile(file);
   }
 
   function onUseLiveData() {
@@ -288,43 +302,69 @@ export default function DashboardPage() {
                 </button>
               </div>
               <div className="response-modal-body">
-                {uploaded ? (
-                  <>
-                    <p>
-                      Currently showing data from <strong>{uploaded.filename}</strong> ({uploaded.kpis.length} KPI
-                      {uploaded.kpis.length === 1 ? '' : 's'}).
-                    </p>
-                    {uploaded.issues.length > 0 && (
-                      <ul className="muted" style={{ fontSize: 12, marginTop: 0 }}>
-                        {uploaded.issues.slice(0, 5).map((issue, i) => (
-                          <li key={i}>{issue}</li>
-                        ))}
-                        {uploaded.issues.length > 5 && <li>…and {uploaded.issues.length - 5} more</li>}
-                      </ul>
-                    )}
-                    <button className="btn-ghost" onClick={onUseLiveData}>
-                      reset to live data
+                {uploaded && (
+                  <div className="import-status-card">
+                    <span className="import-status-icon">📄</span>
+                    <span className="import-status-text">
+                      <strong>{uploaded.filename}</strong>
+                      <span className="muted">
+                        {uploaded.kpis.length} KPI{uploaded.kpis.length === 1 ? '' : 's'} imported
+                        {uploaded.issues.length > 0 &&
+                          ` · ${uploaded.issues.length} row${uploaded.issues.length === 1 ? '' : 's'} skipped`}
+                      </span>
+                    </span>
+                    <button className="btn-ghost import-reset-btn" onClick={onUseLiveData}>
+                      reset
                     </button>
-                    <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
-                  </>
-                ) : (
-                  <p className="muted">no spreadsheet imported — showing live KPI data.</p>
+                  </div>
                 )}
-                <label htmlFor="dashboard-import-file" style={{ display: 'block', marginTop: uploaded ? 0 : 4 }}>
-                  {uploaded ? 'replace with a new spreadsheet' : 'choose a spreadsheet (.xlsx)'}
-                </label>
-                <input
-                  id="dashboard-import-file"
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx,.xls"
-                  onChange={onFileSelected}
-                  disabled={parsing}
-                  style={{ marginTop: 8 }}
-                />
-                {parsing && <p className="muted">reading file…</p>}
+
+                {uploaded && uploaded.issues.length > 0 && (
+                  <ul className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+                    {uploaded.issues.slice(0, 5).map((issue, i) => (
+                      <li key={i}>{issue}</li>
+                    ))}
+                    {uploaded.issues.length > 5 && <li>…and {uploaded.issues.length - 5} more</li>}
+                  </ul>
+                )}
+
+                <p className="muted" style={{ fontSize: 12, margin: uploaded ? '18px 0 8px' : '0 0 8px' }}>
+                  {uploaded ? 'replace it with a different spreadsheet' : 'no spreadsheet imported — showing live KPI data'}
+                </p>
+
+                <div
+                  className={`import-dropzone${dragOver ? ' import-dropzone-active' : ''}${parsing ? ' import-dropzone-busy' : ''}`}
+                  onClick={() => !parsing && fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={onDropFile}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="upload a spreadsheet"
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
+                >
+                  <input
+                    id="dashboard-import-file"
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={onFileSelected}
+                    disabled={parsing}
+                    style={{ display: 'none' }}
+                  />
+                  {parsing ? (
+                    <span>reading file…</span>
+                  ) : (
+                    <>
+                      <span className="import-dropzone-icon">⬆</span>
+                      <span><strong>click to browse</strong> or drag a spreadsheet here</span>
+                      <span className="muted" style={{ fontSize: 12 }}>.xlsx or .xls</span>
+                    </>
+                  )}
+                </div>
+
                 {uploadError && (
-                  <p role="alert" className="form-error">
+                  <p role="alert" className="form-error" style={{ marginTop: 12 }}>
                     {uploadError}
                   </p>
                 )}
