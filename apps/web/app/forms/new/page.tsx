@@ -64,9 +64,11 @@ interface DraftSection {
   id: string;
   title: string;
   fieldKeys: string[];
-  /** the "choice" field this page branches on, or '' for no per-answer branching */
+  /** the choice/rating/likert field this page branches on, or '' for no per-answer branching */
   branchFieldKey: string;
-  /** option value -> target page id / "end"; unset entries fall through to defaultGoTo */
+  /** only used when branchFieldKey names a likert field: which statement drives the branch */
+  branchStatement: string;
+  /** option value (or stringified rating score / likert scale index) -> target page id / "end" */
   cases: Record<string, string>;
   /** unconditional/fallback target page id or "end"; '' = continue to the next page normally */
   defaultGoTo: string;
@@ -77,6 +79,7 @@ const emptySection = (index: number): DraftSection => ({
   title: '',
   fieldKeys: [],
   branchFieldKey: '',
+  branchStatement: '',
   cases: {},
   defaultGoTo: '',
 });
@@ -141,6 +144,8 @@ export default function NewFormPage() {
     label: f.label.trim() || `question ${i + 1}`,
     type: f.type,
     options: parseList(f.options),
+    scale: f.scale,
+    likertScale: parseList(f.likertScale),
   }));
   const unassignedFieldKeys = keyedFields
     .filter((f) => !sections.some((s) => s.fieldKeys.includes(f.key)))
@@ -214,6 +219,7 @@ export default function NewFormPage() {
           ? {
               branching: {
                 ...(s.branchFieldKey ? { onFieldKey: s.branchFieldKey } : {}),
+                ...(s.branchStatement ? { onStatement: s.branchStatement } : {}),
                 cases,
                 ...(s.defaultGoTo ? { defaultGoTo: s.defaultGoTo } : {}),
               },
@@ -481,9 +487,20 @@ export default function NewFormPage() {
               {sections.map((section, index) => {
                 const laterSections = sections.slice(index + 1);
                 const triggerCandidates = keyedFields.filter(
-                  (f) => f.type === 'select' && section.fieldKeys.includes(f.key),
+                  (f) =>
+                    (f.type === 'select' || f.type === 'rating' || f.type === 'likert') &&
+                    section.fieldKeys.includes(f.key),
                 );
                 const trigger = triggerCandidates.find((f) => f.key === section.branchFieldKey);
+                // for select: option values; for likert: its statement values (parsed into .options too)
+                const caseKeys =
+                  trigger?.type === 'rating'
+                    ? Array.from({ length: trigger.scale }, (_, i) => String(i + 1))
+                    : trigger?.type === 'likert'
+                      ? trigger.likertScale.map((_, i) => String(i))
+                      : (trigger?.options ?? []);
+                const caseLabelOf = (key: string) =>
+                  trigger?.type === 'likert' ? (trigger.likertScale[Number(key)] ?? key) : key;
 
                 return (
                   <fieldset key={section.id} className="question-card" style={{ marginBottom: 12 }}>
@@ -519,25 +536,45 @@ export default function NewFormPage() {
                         <select
                           id={`section-trigger-${index}`}
                           value={section.branchFieldKey}
-                          onChange={(e) => updateSection(index, { branchFieldKey: e.target.value, cases: {} })}
+                          onChange={(e) =>
+                            updateSection(index, { branchFieldKey: e.target.value, branchStatement: '', cases: {} })
+                          }
                         >
                           <option value="">no per-answer branching</option>
                           {triggerCandidates.map((f) => (
                             <option key={f.key} value={f.key}>
-                              {f.label}
+                              {f.label} ({f.type})
                             </option>
                           ))}
                         </select>
 
-                        {trigger &&
-                          trigger.options.map((opt) => (
-                            <div key={opt}>
-                              <label htmlFor={`section-case-${index}-${opt}`}>if "{opt}" go to</label>
+                        {trigger?.type === 'likert' && (
+                          <>
+                            <label htmlFor={`section-statement-${index}`}>which statement drives the branch</label>
+                            <select
+                              id={`section-statement-${index}`}
+                              value={section.branchStatement}
+                              onChange={(e) => updateSection(index, { branchStatement: e.target.value, cases: {} })}
+                            >
+                              <option value="">choose a statement</option>
+                              {trigger.options.map((st) => (
+                                <option key={st} value={st}>
+                                  {st}
+                                </option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+
+                        {trigger && (trigger.type !== 'likert' || section.branchStatement) &&
+                          caseKeys.map((key) => (
+                            <div key={key}>
+                              <label htmlFor={`section-case-${index}-${key}`}>if "{caseLabelOf(key)}" go to</label>
                               <select
-                                id={`section-case-${index}-${opt}`}
-                                value={section.cases[opt] ?? ''}
+                                id={`section-case-${index}-${key}`}
+                                value={section.cases[key] ?? ''}
                                 onChange={(e) =>
-                                  updateSection(index, { cases: { ...section.cases, [opt]: e.target.value } })
+                                  updateSection(index, { cases: { ...section.cases, [key]: e.target.value } })
                                 }
                               >
                                 <option value="">continue normally</option>

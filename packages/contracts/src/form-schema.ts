@@ -215,11 +215,11 @@ function validateSections(
           message: `branching references unknown field "${rule.onFieldKey}"`,
         });
       } else {
-        if (trigger.type !== 'select') {
+        if (trigger.type !== 'select' && trigger.type !== 'rating' && trigger.type !== 'likert') {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
-            message: `branching can only key off a "select" field (got "${trigger.type}")`,
+            message: `branching can only key off a "select", "rating", or "likert" field (got "${trigger.type}")`,
           });
         }
         if (!section.fieldKeys.includes(rule.onFieldKey)) {
@@ -227,6 +227,27 @@ function validateSections(
             code: z.ZodIssueCode.custom,
             path: ['sections', sectionIndex, 'branching', 'onFieldKey'],
             message: `branching field "${rule.onFieldKey}" must belong to section "${section.id}"`,
+          });
+        }
+        if (trigger.type === 'likert') {
+          if (!rule.onStatement) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['sections', sectionIndex, 'branching', 'onStatement'],
+              message: 'onStatement is required when branching keys off a "likert" field',
+            });
+          } else if (!trigger.statements.some((s) => s.value === rule.onStatement)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['sections', sectionIndex, 'branching', 'onStatement'],
+              message: `"${rule.onStatement}" is not a statement on likert field "${rule.onFieldKey}"`,
+            });
+          }
+        } else if (rule.onStatement) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['sections', sectionIndex, 'branching', 'onStatement'],
+            message: 'onStatement is only valid when branching keys off a "likert" field',
           });
         }
       }

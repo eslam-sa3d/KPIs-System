@@ -10,6 +10,7 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
   const [qr, setQr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
 
   const url = token && typeof window !== 'undefined'
     ? `${window.location.origin}${window.location.pathname.replace(/forms\/.*/, '')}f/?t=${token}`
@@ -42,6 +43,17 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const embedSnippet = url
+    ? `<iframe src="${url}" width="640" height="480" frameborder="0" title="pulse form">Loading…</iframe>`
+    : null;
+
+  async function copyEmbed() {
+    if (!embedSnippet) return;
+    await navigator.clipboard.writeText(embedSnippet);
+    setEmbedCopied(true);
+    setTimeout(() => setEmbedCopied(false), 2000);
+  }
+
   return (
     <div className="admin-card share-panel">
       <h2>public share link</h2>
@@ -61,6 +73,16 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
             <button className="btn-ghost" onClick={copy}>{copied ? 'copied!' : 'copy'}</button>
           </div>
           {qr && <img src={qr} alt="QR code for the public form link" width={140} height={140} />}
+
+          {embedSnippet && (
+            <div className="share-link-row" style={{ marginTop: 12 }}>
+              <code className="share-link-url">{embedSnippet}</code>
+              <button className="btn-ghost" onClick={copyEmbed}>
+                {embedCopied ? 'copied!' : 'copy embed code'}
+              </button>
+            </div>
+          )}
+
           <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
             <button className="btn-ghost" onClick={() => toggle(true)} disabled={busy}>
               rotate link

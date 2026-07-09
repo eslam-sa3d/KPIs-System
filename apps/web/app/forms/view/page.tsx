@@ -8,6 +8,7 @@ import { FormRenderer } from '../../../components/form-renderer';
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
 import { ShareLinkPanel } from '../../../components/share-link-panel';
 import { ResponseSummary, ResponseSummaryData } from '../../../components/response-summary';
+import { ResponseDetailModal } from '../../../components/response-detail-modal';
 import { api, downloadFile } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -37,6 +38,7 @@ function FormView() {
   const [summary, setSummary] = useState<ResponseSummaryData | null>(null);
   const [filter, setFilter] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   const reloadDetail = useCallback(() => {
     if (slug) void api<FormDetail>(`/v1/forms/${encodeURIComponent(slug)}`).then(setDetail);
@@ -161,7 +163,7 @@ function FormView() {
                   {definition.fields.map((f) => (
                     <th key={f.key}>{f.label}</th>
                   ))}
-                  {canModerate && <th />}
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -181,18 +183,44 @@ function FormView() {
                         </td>
                       );
                     })}
-                    {canModerate && (
-                      <td>
-                        <button className="btn-ghost" onClick={() => onDelete(row.id)}>
-                          delete
+                    <td>
+                      <span className="builder-field-actions">
+                        <button className="btn-ghost" onClick={() => setSelectedRowId(row.id)}>
+                          view
                         </button>
-                      </td>
-                    )}
+                        {canModerate && (
+                          <button className="btn-ghost" onClick={() => onDelete(row.id)}>
+                            delete
+                          </button>
+                        )}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+
+          {(() => {
+            const selectedIndex = filteredRows.findIndex((r) => r.id === selectedRowId);
+            if (selectedIndex === -1) return null;
+            const selected = filteredRows[selectedIndex]!;
+            return (
+              <ResponseDetailModal
+                definition={definition}
+                submission={selected}
+                index={selectedIndex}
+                total={filteredRows.length}
+                onClose={() => setSelectedRowId(null)}
+                onPrev={selectedIndex > 0 ? () => setSelectedRowId(filteredRows[selectedIndex - 1]!.id) : null}
+                onNext={
+                  selectedIndex < filteredRows.length - 1
+                    ? () => setSelectedRowId(filteredRows[selectedIndex + 1]!.id)
+                    : null
+                }
+              />
+            );
+          })()}
         </section>
       )}
 

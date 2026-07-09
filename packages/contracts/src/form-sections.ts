@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { FormDefinition, SubmissionAnswers } from './form-schema';
+import type { FormDefinition, FormField, SubmissionAnswers } from './form-schema';
 
 /**
  * Page/section branching (MS-Forms parity): a form can be split into ordered
@@ -20,9 +20,24 @@ const sectionId = z
 
 export const sectionBranchRuleSchema = z
   .object({
-    /** required when `cases` is non-empty: must reference a `select` field belonging to this same section */
+    /**
+     * Required when `cases` is non-empty: must reference a `select`,
+     * `rating`, or `likert` field belonging to this same section.
+     */
     onFieldKey: z.string().min(1).max(64).optional(),
-    /** answer value → target section id, or "end" to submit immediately */
+    /**
+     * Required (and only meaningful) when `onFieldKey` names a `likert`
+     * field — a likert answer is one index per statement, so branching
+     * needs to know WHICH statement's answer drives the jump.
+     */
+    onStatement: z.string().min(1).max(64).optional(),
+    /**
+     * Answer value → target section id, or "end" to submit immediately.
+     * `equals` is always compared as a string: a `select` case matches the
+     * option value verbatim; a `rating` case matches the stringified score
+     * (e.g. "4"); a `likert` case matches the stringified 0-based scale
+     * index of the chosen statement (e.g. "0" for the first scale label).
+     */
     cases: z
       .array(
         z.object({
@@ -62,6 +77,31 @@ export const formSectionSchema = z.object({
 export type FormSection = z.infer<typeof formSectionSchema>;
 
 /**
+ * Reduces a branch trigger field's raw answer to the single string a
+ * case's `equals` compares against. `select` answers are already strings;
+ * `rating` and `likert` are numeric/matrix and need a type-aware reduction
+ * (see `sectionBranchRuleSchema` field comments for the exact encoding).
+ */
+function extractTriggerAnswer(
+  rule: SectionBranchRule,
+  fieldByKey: Map<string, FormField>,
+  answers: SubmissionAnswers,
+): string | undefined {
+  if (!rule.onFieldKey) return undefined;
+  const field = fieldByKey.get(rule.onFieldKey);
+  const raw = answers[rule.onFieldKey];
+  if (!field || raw === undefined || raw === null) return undefined;
+
+  if (field.type === 'likert') {
+    if (!rule.onStatement) return undefined;
+    const index = (raw as Record<string, number>)[rule.onStatement];
+    return index === undefined ? undefined : String(index);
+  }
+  if (field.type === 'rating') return String(raw);
+  return typeof raw === 'string' ? raw : undefined;
+}
+
+/**
  * Walks a form's sections from the first one, following branching rules and
  * the respondent's ANSWERED values, until it reaches `end` or runs out of
  * sections. Deterministic and side-effect-free — the same (definition,
@@ -87,6 +127,7 @@ export function resolveSectionPath(
     };
   }
 
+  const fieldByKey = new Map(definition.fields.map((f) => [f.key, f]));
   const byId = new Map(sections.map((s) => [s.id, s]));
   const visitedSectionIds: string[] = [];
   const reachableFieldKeys = new Set<string>();
@@ -103,7 +144,7 @@ export function resolveSectionPath(
     let nextId: string | undefined;
 
     if (rule) {
-      const answer = rule.onFieldKey ? answers[rule.onFieldKey] : undefined;
+      const answer = extractTriggerAnswer(rule, fieldByKey, answers);
       const matched = rule.cases.find((c) => c.equals === answer);
       nextId = matched?.goTo ?? rule.defaultGoTo;
     }

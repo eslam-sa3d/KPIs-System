@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FormDefinition, formDefinitionSchema } from '@pulse/contracts';
+import { END_OF_FORM, FormDefinition, formDefinitionSchema } from '@pulse/contracts';
 import { ZodError } from 'zod';
 import { compileAnswerValidator } from './answer-validator';
 
@@ -220,6 +220,93 @@ describe('section branching', () => {
     expect(() => validator.validate({ segment: 'smb', name: 'Bo' })).toThrow(ZodError);
     const cleaned = validator.validate({ segment: 'smb', budget: 200, name: 'Bo' });
     expect(cleaned).toEqual({ segment: 'smb', budget: 200, name: 'Bo' });
+  });
+});
+
+describe('section branching off a rating field', () => {
+  const definition: FormDefinition = formDefinitionSchema.parse({
+    title: 'satisfaction follow-up',
+    fields: [
+      { key: 'happiness', label: 'How happy are you?', type: 'rating', scale: 5 },
+      { key: 'praise', label: 'What did we do well?', type: 'short_text', required: true },
+      { key: 'complaint', label: 'What went wrong?', type: 'short_text', required: true },
+    ],
+    sections: [
+      {
+        id: 'intro',
+        fieldKeys: ['happiness'],
+        branching: {
+          onFieldKey: 'happiness',
+          cases: [
+            { equals: '5', goTo: 'happy_path' },
+            { equals: '4', goTo: 'happy_path' },
+          ],
+          defaultGoTo: 'unhappy_path',
+        },
+      },
+      // each branch is terminal here (no shared trailing page) — an explicit
+      // defaultGoTo of "end" is what keeps it from falling through into its sibling
+      { id: 'happy_path', fieldKeys: ['praise'], branching: { defaultGoTo: END_OF_FORM } },
+      { id: 'unhappy_path', fieldKeys: ['complaint'], branching: { defaultGoTo: END_OF_FORM } },
+    ],
+  });
+  const validator = compileAnswerValidator(definition);
+
+  it('routes a high score to the happy path and requires only its field', () => {
+    const cleaned = validator.validate({ happiness: 5, praise: 'fast support' });
+    expect(cleaned).toEqual({ happiness: 5, praise: 'fast support' });
+  });
+
+  it('falls back to the default target for a low score, requiring the OTHER field', () => {
+    expect(() => validator.validate({ happiness: 2, praise: 'n/a' })).toThrow(ZodError);
+    const cleaned = validator.validate({ happiness: 2, complaint: 'slow response' });
+    expect(cleaned).toEqual({ happiness: 2, complaint: 'slow response' });
+  });
+});
+
+describe('section branching off a likert statement', () => {
+  const definition: FormDefinition = formDefinitionSchema.parse({
+    title: 'sprint retro',
+    fields: [
+      {
+        key: 'mood',
+        label: 'Rate these',
+        type: 'likert',
+        statements: [
+          { value: 'pace', label: 'Pace' },
+          { value: 'tools', label: 'Tooling' },
+        ],
+        scale: ['disagree', 'neutral', 'agree'],
+      },
+      { key: 'pace_detail', label: 'Tell us about the pace', type: 'short_text', required: true },
+    ],
+    sections: [
+      {
+        id: 'intro',
+        fieldKeys: ['mood'],
+        branching: {
+          onFieldKey: 'mood',
+          onStatement: 'pace',
+          cases: [{ equals: '0', goTo: 'pace_followup' }], // index 0 = "disagree"
+          defaultGoTo: END_OF_FORM,
+        },
+      },
+      { id: 'pace_followup', fieldKeys: ['pace_detail'] },
+    ],
+  });
+  const validator = compileAnswerValidator(definition);
+
+  it('branches on the named statement\'s scale index, ignoring other statements', () => {
+    const cleaned = validator.validate({
+      mood: { pace: 0, tools: 2 },
+      pace_detail: 'sprint felt rushed',
+    });
+    expect(cleaned).toEqual({ mood: { pace: 0, tools: 2 }, pace_detail: 'sprint felt rushed' });
+  });
+
+  it('skips the follow-up section (and its required field) when the statement does not match', () => {
+    const cleaned = validator.validate({ mood: { pace: 2, tools: 0 } });
+    expect(cleaned).not.toHaveProperty('pace_detail');
   });
 });
 
