@@ -1095,9 +1095,9 @@ h1, h2, h3 {
   font-weight: var(--font-weight-medium);
 }
 
-.builder input,
+.builder input:not([type='checkbox']):not([type='radio']),
 .builder select,
-.fill-form input:not([type='checkbox']),
+.fill-form input:not([type='checkbox']):not([type='radio']),
 .fill-form select,
 .fill-form textarea {
   width: 100%;
@@ -1859,6 +1859,8 @@ h1, h2, h3 {
 
 .public-fill-header {
   padding: var(--space-4);
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 @media (min-width: 640px) {
