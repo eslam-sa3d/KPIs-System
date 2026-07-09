@@ -1348,6 +1348,14 @@ h3 {
   transition: border-left-color 200ms ease, box-shadow 200ms ease;
 }
 
+/* One step up the M3 surface-container tone ladder from its parent .admin-card
+   — reinforces "this is nested inside that" independent of the border, which
+   reads as barely-there at a glance. KPI page only; the form builder's own
+   .builder-field usage is unaffected. */
+.builder-field.kpi-area {
+  background: var(--md-sys-color-surface-container);
+}
+
 .builder-field:hover,
 .builder-field:focus-within,
 .builder-field.is-active {
@@ -2543,6 +2551,45 @@ h3 {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
+}
+
+/* M3 list-item row: a bounded, padded, hover-responsive row so a name +
+   far-right actions read as one item even when the row is short relative to
+   its container — the empty space between them belongs to the row, not to
+   nothing. Used for a KPI's own Evaluation Area header and each
+   Sub-Criteria row. */
+.hierarchy-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.hierarchy-row:hover {
+  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
+}
+
+/* Sub-Criteria: indented with a rule tying it visually to its parent
+   Evaluation Area, reinforcing the nesting depth a bare row can't convey. */
+.hierarchy-row-child {
+  margin-left: var(--space-4);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-border);
+}
+
+.hierarchy-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  margin-right: var(--space-2);
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .btn-text {

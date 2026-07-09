@@ -39,6 +39,10 @@ function parseWeight(raw: FormDataEntryValue | null): number | undefined {
   return Number(raw);
 }
 
+function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 export default function KpisAdminPage() {
   const user = useSession();
   const [kpis, setKpis] = useState<KpiRow[] | null>(null);
@@ -46,6 +50,7 @@ export default function KpisAdminPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [renamingKpiId, setRenamingKpiId] = useState<string | null>(null);
   const [confirmDeleteKpiId, setConfirmDeleteKpiId] = useState<string | null>(null);
+  const [renamingAreaId, setRenamingAreaId] = useState<string | null>(null);
   const [confirmDeleteAreaId, setConfirmDeleteAreaId] = useState<string | null>(null);
   const [renamingSubCriteriaId, setRenamingSubCriteriaId] = useState<string | null>(null);
   const [confirmDeleteSubCriteriaId, setConfirmDeleteSubCriteriaId] = useState<string | null>(null);
@@ -117,6 +122,18 @@ export default function KpisAdminPage() {
       'evaluation area added',
     );
     (event.target as HTMLFormElement).reset();
+  }
+
+  function onRenameArea(kpiId: string, areaId: string, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    void report(
+      api(`/v1/kpis/${kpiId}/areas/${areaId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: form.get('name') }),
+      }),
+      'evaluation area renamed',
+    ).then(() => setRenamingAreaId(null));
   }
 
   function onToggleAreaActive(kpiId: string, area: EvaluationAreaRow) {
@@ -264,7 +281,7 @@ export default function KpisAdminPage() {
                 )}
               </div>
             )}
-            <p className="muted">{kpi.evaluationAreas.length} evaluation area(s)</p>
+            <p className="muted">{pluralize(kpi.evaluationAreas.length, 'evaluation area')}</p>
 
             <label>evaluation areas</label>
             {kpi.evaluationAreas.length === 0 ? (
@@ -273,44 +290,62 @@ export default function KpisAdminPage() {
               </p>
             ) : (
               kpi.evaluationAreas.map((area) => (
-                <div key={area.id} className="builder-field">
-                  <div className="page-title-row">
-                    <strong>
-                      {area.name}
-                      {!area.isActive && <span className="muted"> (inactive)</span>}
-                    </strong>
-                    {can(user, 'kpis:write') && (
-                      <span className="row-actions">
-                        <button type="button" className="btn-text" onClick={() => onToggleAreaActive(kpi.id, area)}>
-                          {area.isActive ? 'deactivate' : 'reactivate'}
-                        </button>
-                        {can(user, 'kpis:manage') &&
-                          (confirmDeleteAreaId === area.id ? (
-                            <>
-                              <span className="muted">delete permanently?</span>
+                <div key={area.id} className="builder-field kpi-area">
+                  {renamingAreaId === area.id ? (
+                    <form className="inline-form" onSubmit={(e) => onRenameArea(kpi.id, area.id, e)}>
+                      <input name="name" defaultValue={area.name} required minLength={2} aria-label="evaluation area name" />
+                      <button className="btn-ghost" type="submit">
+                        save
+                      </button>
+                      <button type="button" className="btn-ghost" onClick={() => setRenamingAreaId(null)}>
+                        cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="hierarchy-row">
+                      <strong>
+                        {area.name}
+                        {!area.isActive && <span className="muted"> (inactive)</span>}
+                        {area.subCriteria.length > 0 && (
+                          <span className="muted"> · {pluralize(area.subCriteria.length, 'sub-criteria', 'sub-criteria')}</span>
+                        )}
+                      </strong>
+                      {can(user, 'kpis:write') && (
+                        <span className="row-actions">
+                          <button type="button" className="btn-text" onClick={() => setRenamingAreaId(area.id)}>
+                            rename
+                          </button>
+                          <button type="button" className="btn-text" onClick={() => onToggleAreaActive(kpi.id, area)}>
+                            {area.isActive ? 'deactivate' : 'reactivate'}
+                          </button>
+                          {can(user, 'kpis:manage') &&
+                            (confirmDeleteAreaId === area.id ? (
+                              <>
+                                <span className="muted">delete permanently?</span>
+                                <button
+                                  type="button"
+                                  className="btn-text btn-text-danger"
+                                  onClick={() => onDeleteArea(kpi.id, area.id)}
+                                >
+                                  confirm delete
+                                </button>
+                                <button type="button" className="btn-text" onClick={() => setConfirmDeleteAreaId(null)}>
+                                  cancel
+                                </button>
+                              </>
+                            ) : (
                               <button
                                 type="button"
                                 className="btn-text btn-text-danger"
-                                onClick={() => onDeleteArea(kpi.id, area.id)}
+                                onClick={() => setConfirmDeleteAreaId(area.id)}
                               >
-                                confirm delete
+                                delete
                               </button>
-                              <button type="button" className="btn-text" onClick={() => setConfirmDeleteAreaId(null)}>
-                                cancel
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              className="btn-text btn-text-danger"
-                              onClick={() => setConfirmDeleteAreaId(area.id)}
-                            >
-                              delete
-                            </button>
-                          ))}
-                      </span>
-                    )}
-                  </div>
+                            ))}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   <label>sub-criteria</label>
                   {area.subCriteria.length === 0 ? (
@@ -319,7 +354,7 @@ export default function KpisAdminPage() {
                     </p>
                   ) : (
                     area.subCriteria.map((sub) => (
-                      <div key={sub.id} className="page-title-row">
+                      <div key={sub.id} className="hierarchy-row hierarchy-row-child">
                         {renamingSubCriteriaId === sub.id ? (
                           <form
                             className="inline-form"
@@ -334,7 +369,10 @@ export default function KpisAdminPage() {
                             </button>
                           </form>
                         ) : (
-                          <span>{sub.name}</span>
+                          <span>
+                            <span className="hierarchy-dot" aria-hidden="true" />
+                            {sub.name}
+                          </span>
                         )}
                         {can(user, 'kpis:write') && renamingSubCriteriaId !== sub.id && (
                           <span className="row-actions">
