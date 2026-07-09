@@ -26,7 +26,8 @@ model User {
   roles        UserRole[]
   sessions     Session[]
   submissions  FormSubmission[]
-  kpiEntries   KpiEntry[]
+  evaluatedEntries EvaluationAreaEntry[] @relation("EvaluationAreaEntryPerson")
+  recordedEntries  EvaluationAreaEntry[] @relation("EvaluationAreaEntryEvaluator")
   auditEvents  AuditLog[]
   fileUploads  FormFileUpload[]
   formAssets   FormAsset[]
@@ -105,23 +106,18 @@ model Session {
 
 // ─────────────────────────── KPI Definition & Mapping ──────────────────────────
 
+/// A named container for Evaluation Areas — no longer a flat metric itself
+/// (no unit/target/direction/cadence: status comes from each area's raw
+/// 0-5 score, not target-attainment; see EvaluationAreaEntry).
 model Kpi {
-  id          String  @id @default(uuid())
-  code        String  @unique // e.g. "DEL-VEL-01"
-  name        String
-  description String?
-  unit        String  // "%", "days", "count", "SAR" …
-  direction   String  // "higher_is_better" | "lower_is_better"
-  target      Decimal?
-  cadence     String  // "weekly" | "monthly" | "quarterly"
-  /// Flexible metadata: thresholds, formula notes, data source hints.
-  metadata    Json?
-  isActive    Boolean @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String  @id @default(uuid())
+  name      String
+  isActive  Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  assignments KpiAssignment[]
-  entries     KpiEntry[]
+  evaluationAreas EvaluationArea[]
+  assignments     KpiAssignment[]
 }
 
 /// Dynamic mapping of a KPI to a role, department, or delivery stream.
@@ -140,21 +136,44 @@ model KpiAssignment {
   @@index([departmentId])
 }
 
-/// KPI facts — the time series behind dashboards.
-model KpiEntry {
-  id          String   @id @default(uuid())
-  kpiId       String
-  kpi         Kpi      @relation(fields: [kpiId], references: [id], onDelete: Cascade)
-  value       Decimal
-  periodStart DateTime
-  periodEnd   DateTime
-  enteredById String
-  enteredBy   User     @relation(fields: [enteredById], references: [id])
-  note        String?
-  createdAt   DateTime @default(now())
+/// A named sub-category under a KPI (e.g. "Leadership & People Management",
+/// matching the QA evaluation surveys this system is modeled on). Carries
+/// its own cadence — different areas under the same KPI can be scored on
+/// different rhythms.
+model EvaluationArea {
+  id        String  @id @default(uuid())
+  kpiId     String
+  kpi       Kpi     @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  name      String
+  cadence   String  // "weekly" | "monthly" | "quarterly" | "yearly"
+  isActive  Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([kpiId, periodStart, periodEnd])
-  @@index([kpiId, periodStart])
+  entries EvaluationAreaEntry[]
+
+  @@index([kpiId])
+}
+
+/// Evaluation Area facts — a 0-5 score recorded against a specific evaluatee
+/// (`person`) for a period, by a specific evaluator (`enteredBy`).
+model EvaluationAreaEntry {
+  id               String   @id @default(uuid())
+  evaluationAreaId String
+  evaluationArea   EvaluationArea @relation(fields: [evaluationAreaId], references: [id], onDelete: Cascade)
+  personId         String
+  person           User     @relation("EvaluationAreaEntryPerson", fields: [personId], references: [id])
+  value            Decimal  // 0-5
+  periodStart      DateTime
+  periodEnd        DateTime
+  enteredById      String
+  enteredBy        User     @relation("EvaluationAreaEntryEvaluator", fields: [enteredById], references: [id])
+  note             String?
+  createdAt        DateTime @default(now())
+
+  @@unique([evaluationAreaId, personId, periodStart, periodEnd])
+  @@index([evaluationAreaId, periodStart])
+  @@index([personId])
 }
 
 // ─────────────────────────── Schema-driven Form Builder ────────────────────────

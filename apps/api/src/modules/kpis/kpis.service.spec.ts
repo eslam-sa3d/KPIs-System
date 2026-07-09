@@ -1,28 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { recordKpiEntrySchema } from '@pulse/contracts';
+import { recordEvaluationAreaEntrySchema } from '@pulse/contracts';
 import { KpisService } from './kpis.service';
 
 function makePrismaStub() {
   return {
-    kpi: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), count: vi.fn() },
+    kpi: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
     kpiAssignment: { findFirst: vi.fn(), create: vi.fn() },
-    kpiEntry: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    evaluationArea: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    evaluationAreaEntry: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
     user: { findUnique: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   };
 }
 
-const activeKpi = {
-  id: 'kpi-1',
-  code: 'DEL-VEL-01',
-  name: 'Sprint velocity',
-  unit: 'points',
-  direction: 'higher_is_better',
-  target: 40,
-  cadence: 'weekly',
-  isActive: true,
-};
+const activeKpi = { id: 'kpi-1', name: 'QA Lead Evaluation', isActive: true };
+const activeArea = { id: 'area-1', kpiId: 'kpi-1', name: 'Leadership', cadence: 'quarterly', isActive: true };
+const evaluatee = { id: 'user-2', displayName: 'Evaluatee', email: 'evaluatee@pulse.local' };
 
 describe('KpisService', () => {
   let prisma: ReturnType<typeof makePrismaStub>;
@@ -34,47 +28,132 @@ describe('KpisService', () => {
     service = new KpisService(prisma as never);
   });
 
-  describe('recordEntry', () => {
-    const input = { value: 42, periodStart: '2026-07-01', periodEnd: '2026-07-07' };
-
-    it('records an entry for an active KPI', async () => {
+  describe('updateKpi', () => {
+    it('updates an existing KPI', async () => {
       prisma.kpi.findUnique.mockResolvedValue(activeKpi);
-      prisma.kpiEntry.findUnique.mockResolvedValue(null);
-      prisma.kpiEntry.create.mockResolvedValue({ id: 'entry-1' });
+      prisma.kpi.update.mockResolvedValue({ ...activeKpi, name: 'Renamed' });
 
-      await service.recordEntry('kpi-1', input, 'user-1');
+      await service.updateKpi('kpi-1', { name: 'Renamed' });
 
-      expect(prisma.kpiEntry.create).toHaveBeenCalledWith({
+      expect(prisma.kpi.update).toHaveBeenCalledWith({ where: { id: 'kpi-1' }, data: { name: 'Renamed' } });
+    });
+
+    it('rejects an unknown KPI', async () => {
+      prisma.kpi.findUnique.mockResolvedValue(null);
+      await expect(service.updateKpi('ghost', { name: 'x' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(prisma.kpi.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteKpi', () => {
+    it('hard-deletes an existing KPI (cascades to areas/entries/assignments)', async () => {
+      prisma.kpi.findUnique.mockResolvedValue(activeKpi);
+      await service.deleteKpi('kpi-1');
+      expect(prisma.kpi.delete).toHaveBeenCalledWith({ where: { id: 'kpi-1' } });
+    });
+
+    it('rejects an unknown KPI', async () => {
+      prisma.kpi.findUnique.mockResolvedValue(null);
+      await expect(service.deleteKpi('ghost')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(prisma.kpi.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createEvaluationArea / updateEvaluationArea / deleteEvaluationArea', () => {
+    it('creates an area under an existing KPI', async () => {
+      prisma.kpi.findUnique.mockResolvedValue(activeKpi);
+      prisma.evaluationArea.create.mockResolvedValue(activeArea);
+
+      await service.createEvaluationArea('kpi-1', { name: 'Leadership', cadence: 'quarterly' });
+
+      expect(prisma.evaluationArea.create).toHaveBeenCalledWith({
+        data: { kpiId: 'kpi-1', name: 'Leadership', cadence: 'quarterly' },
+      });
+    });
+
+    it('rejects creating an area under an unknown KPI', async () => {
+      prisma.kpi.findUnique.mockResolvedValue(null);
+      await expect(
+        service.createEvaluationArea('ghost', { name: 'x', cadence: 'weekly' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('updates an area scoped to its KPI', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue(activeArea);
+      await service.updateEvaluationArea('kpi-1', 'area-1', { isActive: false });
+      expect(prisma.evaluationArea.findFirst).toHaveBeenCalledWith({ where: { id: 'area-1', kpiId: 'kpi-1' } });
+      expect(prisma.evaluationArea.update).toHaveBeenCalledWith({
+        where: { id: 'area-1' },
+        data: { isActive: false },
+      });
+    });
+
+    it('rejects updating an area that does not belong to the given KPI', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue(null);
+      await expect(
+        service.updateEvaluationArea('other-kpi', 'area-1', { name: 'x' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('hard-deletes an area (cascades to its entries)', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue(activeArea);
+      await service.deleteEvaluationArea('kpi-1', 'area-1');
+      expect(prisma.evaluationArea.delete).toHaveBeenCalledWith({ where: { id: 'area-1' } });
+    });
+  });
+
+  describe('recordEntry', () => {
+    const input = { personId: 'user-2', value: 4, periodStart: '2026-07-01', periodEnd: '2026-09-30' };
+
+    it('records an entry for an active area and known person', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue(activeArea);
+      prisma.user.findUnique.mockResolvedValue(evaluatee);
+      prisma.evaluationAreaEntry.findUnique.mockResolvedValue(null);
+      prisma.evaluationAreaEntry.create.mockResolvedValue({ id: 'entry-1' });
+
+      await service.recordEntry('kpi-1', 'area-1', input, 'evaluator-1');
+
+      expect(prisma.evaluationAreaEntry.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          kpiId: 'kpi-1',
-          value: 42,
-          enteredById: 'user-1',
+          evaluationAreaId: 'area-1',
+          personId: 'user-2',
+          value: 4,
+          enteredById: 'evaluator-1',
           periodStart: new Date('2026-07-01'),
-          periodEnd: new Date('2026-07-07'),
+          periodEnd: new Date('2026-09-30'),
         }),
       });
     });
 
-    it('rejects duplicate periods with CONFLICT', async () => {
-      prisma.kpi.findUnique.mockResolvedValue(activeKpi);
-      prisma.kpiEntry.findUnique.mockResolvedValue({ id: 'existing' });
+    it('rejects duplicate (area, person, period) entries with CONFLICT', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue(activeArea);
+      prisma.user.findUnique.mockResolvedValue(evaluatee);
+      prisma.evaluationAreaEntry.findUnique.mockResolvedValue({ id: 'existing' });
 
-      await expect(service.recordEntry('kpi-1', input, 'user-1')).rejects.toMatchObject({
+      await expect(service.recordEntry('kpi-1', 'area-1', input, 'evaluator-1')).rejects.toMatchObject({
         code: 'CONFLICT',
       });
-      expect(prisma.kpiEntry.create).not.toHaveBeenCalled();
+      expect(prisma.evaluationAreaEntry.create).not.toHaveBeenCalled();
     });
 
-    it('rejects entries for inactive KPIs', async () => {
-      prisma.kpi.findUnique.mockResolvedValue({ ...activeKpi, isActive: false });
-      await expect(service.recordEntry('kpi-1', input, 'user-1')).rejects.toMatchObject({
+    it('rejects entries for an inactive area', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue({ ...activeArea, isActive: false });
+      await expect(service.recordEntry('kpi-1', 'area-1', input, 'evaluator-1')).rejects.toMatchObject({
         code: 'CONFLICT',
       });
     });
 
-    it('rejects unknown KPIs', async () => {
-      prisma.kpi.findUnique.mockResolvedValue(null);
-      await expect(service.recordEntry('ghost', input, 'user-1')).rejects.toMatchObject({
+    it('rejects an unknown area', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue(null);
+      await expect(service.recordEntry('kpi-1', 'ghost', input, 'evaluator-1')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+    });
+
+    it('rejects an unknown person', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue(activeArea);
+      prisma.user.findUnique.mockResolvedValue(null);
+      await expect(service.recordEntry('kpi-1', 'area-1', input, 'evaluator-1')).rejects.toMatchObject({
         code: 'NOT_FOUND',
       });
     });
@@ -139,15 +218,36 @@ describe('KpisService', () => {
       const where = prisma.kpi.findMany.mock.calls[0]![0].where;
       expect(where.assignments.some.OR).toEqual([{ roleId: { in: [] } }]);
     });
+
+    it("includes each KPI's evaluation areas and their recent entries with the evaluatee's name", async () => {
+      prisma.user.findUnique.mockResolvedValue({ departmentId: null, roles: [] });
+      prisma.kpi.findMany.mockResolvedValue([]);
+
+      await service.listMine('user-1');
+
+      const include = prisma.kpi.findMany.mock.calls[0]![0].include;
+      expect(include.evaluationAreas.include.entries.include.person.select).toEqual({ id: true, displayName: true });
+    });
   });
 });
 
-describe('recordKpiEntrySchema', () => {
+describe('recordEvaluationAreaEntrySchema', () => {
   it('rejects inverted periods', () => {
-    const result = recordKpiEntrySchema.safeParse({
-      value: 10,
+    const result = recordEvaluationAreaEntrySchema.safeParse({
+      personId: '4dd4a6f6-1d2b-4c8a-9d0e-000000000001',
+      value: 4,
       periodStart: '2026-07-07',
       periodEnd: '2026-07-01',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a value outside the 0-5 range', () => {
+    const result = recordEvaluationAreaEntrySchema.safeParse({
+      personId: '4dd4a6f6-1d2b-4c8a-9d0e-000000000001',
+      value: 5.5,
+      periodStart: '2026-07-01',
+      periodEnd: '2026-07-07',
     });
     expect(result.success).toBe(false);
   });

@@ -7,12 +7,13 @@ import { PasswordHasher } from '../auth/password-hasher';
  * Demo/sandbox data for test-driving every feature: dashboards, forms,
  * users, roles, and KPIs. Every record is tagged by a naming marker so
  * removal is surgical:
- *   users  → *@pulse.demo        roles/departments → "Demo …"
- *   KPIs   → code DEMO-*         forms             → slug demo-*
+ *   users → *@pulse.demo   roles/departments → "Demo …"
+ *   KPIs  → name "Demo: …"   forms           → slug demo-*
  */
 
 export const DEMO_PASSWORD = 'DemoPass!2026';
 const DEMO_EMAIL_DOMAIN = '@pulse.demo';
+const DEMO_KPI_PREFIX = 'Demo: ';
 
 const DEMO_USERS = [
   { email: `demo.analyst${DEMO_EMAIL_DOMAIN}`, displayName: 'Demo Analyst', dept: 'Demo Delivery' },
@@ -20,11 +21,24 @@ const DEMO_USERS = [
   { email: `demo.ops${DEMO_EMAIL_DOMAIN}`, displayName: 'Demo Ops Manager', dept: 'Demo Operations' },
 ];
 
+/** Each KPI is just a name; its Evaluation Areas carry the actual 0-5 scoring,
+ *  mirroring the QA evaluation surveys this system is modeled on. */
 const DEMO_KPIS = [
-  { code: 'DEMO-VEL-01', name: 'sprint velocity', unit: 'points', direction: 'higher_is_better', target: 40, cadence: 'weekly' },
-  { code: 'DEMO-SAT-02', name: 'customer satisfaction', unit: '%', direction: 'higher_is_better', target: 85, cadence: 'monthly' },
-  { code: 'DEMO-LEAD-03', name: 'lead time', unit: 'days', direction: 'lower_is_better', target: 5, cadence: 'weekly' },
-  { code: 'DEMO-UPT-04', name: 'platform uptime', unit: '%', direction: 'higher_is_better', target: 99.5, cadence: 'monthly' },
+  {
+    name: `${DEMO_KPI_PREFIX}QA Lead Evaluation`,
+    areas: [
+      { name: 'Leadership & People Management', cadence: 'quarterly' },
+      { name: 'Project & Delivery Management', cadence: 'quarterly' },
+      { name: 'Quality Assurance Leadership', cadence: 'quarterly' },
+    ],
+  },
+  {
+    name: `${DEMO_KPI_PREFIX}Delivery Performance`,
+    areas: [
+      { name: 'Sprint Velocity', cadence: 'weekly' },
+      { name: 'Customer Satisfaction', cadence: 'monthly' },
+    ],
+  },
 ] as const;
 
 const DEMO_FORM_DEFINITION = {
@@ -70,7 +84,7 @@ export class DemoDataService {
   async status() {
     const [users, kpis, forms, roles, departments, submissions] = await this.prisma.$transaction([
       this.prisma.user.count({ where: { email: { endsWith: DEMO_EMAIL_DOMAIN } } }),
-      this.prisma.kpi.count({ where: { code: { startsWith: 'DEMO-' } } }),
+      this.prisma.kpi.count({ where: { name: { startsWith: DEMO_KPI_PREFIX } } }),
       this.prisma.form.count({ where: { slug: { startsWith: 'demo-' } } }),
       this.prisma.role.count({ where: { name: { startsWith: 'Demo ' } } }),
       this.prisma.department.count({ where: { name: { startsWith: 'Demo ' } } }),
@@ -141,10 +155,9 @@ export class DemoDataService {
     // KPIs mapped to the demo role, demo departments, AND the admin role so
     // the admin's own dashboard lights up immediately
     const adminRole = await this.prisma.role.findUnique({ where: { name: 'admin' } });
+    const stepDaysByCadence: Record<string, number> = { weekly: 7, monthly: 30, quarterly: 90, yearly: 365 };
     for (const [index, spec] of DEMO_KPIS.entries()) {
-      const kpi = await this.prisma.kpi.create({
-        data: { ...spec, metadata: { seededBy: 'demo-data' } },
-      });
+      const kpi = await this.prisma.kpi.create({ data: { name: spec.name } });
       await this.prisma.kpiAssignment.createMany({
         data: [
           { kpiId: kpi.id, roleId: role.id },
@@ -157,28 +170,32 @@ export class DemoDataService {
         ],
       });
 
-      // 12 periods of history trending around the target
-      const stepDays = spec.cadence === 'weekly' ? 7 : 30;
-      const drift = spec.direction === 'higher_is_better' ? 1 : -1;
-      for (let period = 0; period < 12; period++) {
-        const end = new Date(Date.now() - period * stepDays * 24 * 60 * 60 * 1000);
-        const start = new Date(end.getTime() - stepDays * 24 * 60 * 60 * 1000);
-        const progress = (11 - period) / 11; // older → newer improves toward target
-        const jitter = (Math.random() - 0.5) * 0.12 * spec.target;
-        const value = Math.max(
-          0,
-          Math.round((spec.target * (1 - drift * 0.15 * (1 - progress)) + jitter) * 100) / 100,
-        );
-        await this.prisma.kpiEntry.create({
-          data: {
-            kpiId: kpi.id,
-            value,
-            periodStart: start,
-            periodEnd: end,
-            enteredById: userIds[period % userIds.length]!,
-            note: period === 0 ? 'latest demo period' : null,
-          },
+      // each Evaluation Area gets 12 periods of history for one demo evaluatee,
+      // trending upward toward "outstanding" so the status bands are all visible
+      for (const [areaIndex, areaSpec] of spec.areas.entries()) {
+        const area = await this.prisma.evaluationArea.create({
+          data: { kpiId: kpi.id, name: areaSpec.name, cadence: areaSpec.cadence },
         });
+        const stepDays = stepDaysByCadence[areaSpec.cadence] ?? 30;
+        const personId = userIds[(index + areaIndex) % userIds.length]!;
+        for (let period = 0; period < 12; period++) {
+          const end = new Date(Date.now() - period * stepDays * 24 * 60 * 60 * 1000);
+          const start = new Date(end.getTime() - stepDays * 24 * 60 * 60 * 1000);
+          const progress = (11 - period) / 11; // older → newer trends upward
+          const jitter = (Math.random() - 0.5) * 0.4;
+          const value = Math.min(5, Math.max(0, Math.round((2.5 + progress * 2 + jitter) * 10) / 10));
+          await this.prisma.evaluationAreaEntry.create({
+            data: {
+              evaluationAreaId: area.id,
+              personId,
+              value,
+              periodStart: start,
+              periodEnd: end,
+              enteredById: userIds[(period + 1) % userIds.length]!,
+              note: period === 0 ? 'latest demo period' : null,
+            },
+          });
+        }
       }
     }
 
@@ -229,15 +246,16 @@ export class DemoDataService {
       },
     });
     await this.prisma.form.deleteMany({ where: { slug: { startsWith: 'demo-' } } });
-    await this.prisma.kpiEntry.deleteMany({
+    await this.prisma.evaluationAreaEntry.deleteMany({
       where: {
         OR: [
-          { kpi: { code: { startsWith: 'DEMO-' } } },
+          { evaluationArea: { kpi: { name: { startsWith: DEMO_KPI_PREFIX } } } },
+          { person: { email: { endsWith: DEMO_EMAIL_DOMAIN } } },
           { enteredBy: { email: { endsWith: DEMO_EMAIL_DOMAIN } } },
         ],
       },
     });
-    await this.prisma.kpi.deleteMany({ where: { code: { startsWith: 'DEMO-' } } });
+    await this.prisma.kpi.deleteMany({ where: { name: { startsWith: DEMO_KPI_PREFIX } } });
     await this.prisma.user.deleteMany({ where: { email: { endsWith: DEMO_EMAIL_DOMAIN } } });
     await this.prisma.role.deleteMany({ where: { name: { startsWith: 'Demo ' }, isSystem: false } });
     // detach any real users an admin may have moved into a demo department
