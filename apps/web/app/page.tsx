@@ -82,10 +82,6 @@ export default function LandingPage() {
         <div className="landing-hero-bg" aria-hidden="true" />
         <div className="landing-hero-inner">
           <div className="landing-hero-copy">
-            <span className="landing-tag-pill">
-              <span className="landing-tag-dot" aria-hidden="true" />
-              GDC · Digital Excellence
-            </span>
             <h1 className="landing-hero-heading">
               GDC
               <br />
@@ -164,9 +160,6 @@ export default function LandingPage() {
             Our Pulse. <span className="landing-hero-accent">Our People.</span> Our Purpose.
           </h2>
           <p className="landing-tagline">Together, we build quality that drives impact.</p>
-          <Link href="/login" className="btn-primary">
-            get started
-          </Link>
         </div>
       </section>
 

@@ -1144,6 +1144,33 @@ h3 {
   border-radius: var(--radius-lg);
 }
 
+.empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-4);
+}
+
+/* compact variant for a nested empty-state line (e.g. "no sub-criteria yet") */
+.empty-state-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  color: var(--color-text-muted);
+  font-size: var(--md-sys-typescale-body-small-size);
+}
+
+.empty-state-inline svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
 .sparkline {
   width: 100%;
   height: 36px;
@@ -2243,35 +2270,6 @@ h3 {
   padding-bottom: var(--space-16);
 }
 
-.landing-tag-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  align-self: flex-start;
-  border-radius: var(--md-sys-shape-corner-full);
-  padding: var(--space-1) var(--space-4);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: var(--md-sys-typescale-label-medium-size);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
-}
-
-.landing-tag-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--pulse-coral);
-  animation: landing-pulse 1.8s ease-in-out infinite;
-}
-
-@keyframes landing-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
 .landing-hero-heading {
   color: var(--pulse-air);
   font-size: clamp(3rem, 8vw, 5.5rem);
@@ -2336,8 +2334,7 @@ h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-hero-illustration,
-  .landing-tag-dot { animation: none; }
+  .landing-hero-illustration { animation: none; }
 }
 
 .landing-pipeline {
@@ -2367,10 +2364,10 @@ h3 {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-5);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.05);
+  padding: var(--space-2) var(--space-6);
+  border-radius: var(--md-sys-shape-corner-full);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--pulse-air);
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-sm);
@@ -2755,6 +2752,214 @@ h3 {
   margin-right: var(--space-2);
   vertical-align: middle;
   flex-shrink: 0;
+}
+
+/* ── KPI page: icon badges, weight ring, page stats, collapsible add
+   triggers, loading skeleton — the "premium" pass over what was a bare
+   CRUD scaffold. ───────────────────────────────────────────────────── */
+
+.hierarchy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--md-sys-color-primary-container);
+  color: var(--color-primary);
+}
+
+.hierarchy-icon-lg {
+  width: 40px;
+  height: 40px;
+}
+
+.hierarchy-icon-sm {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--color-text-muted);
+}
+
+.hierarchy-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Weight ring: a conic-gradient dial, same visual language as the mini-dial
+   pattern already established for scoring UI elsewhere — read the number
+   at a glance instead of parsing "· 30%" out of a run of muted text. */
+.weight-ring {
+  --ring-pct: 0%;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: conic-gradient(var(--color-primary) var(--ring-pct), var(--color-border) 0);
+}
+
+.weight-ring::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--color-surface);
+}
+
+.weight-ring-value {
+  position: relative;
+  z-index: 1;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+}
+
+/* Page-level overview strip */
+.kpi-page-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
+}
+
+.kpi-stat-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-width: 120px;
+}
+
+.kpi-stat-chip strong {
+  font-size: var(--md-sys-typescale-title-large-size);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  line-height: 1.1;
+}
+
+.kpi-stat-chip span {
+  font-size: var(--md-sys-typescale-label-medium-size);
+  color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kpi-stat-chip.kpi-stat-warning {
+  background: var(--md-sys-color-error-container);
+  border-color: transparent;
+}
+
+.kpi-stat-chip.kpi-stat-warning strong,
+.kpi-stat-chip.kpi-stat-warning span {
+  color: var(--md-sys-color-on-error-container);
+}
+
+/* Search */
+.kpi-search {
+  position: relative;
+  max-width: 320px;
+  margin-bottom: var(--space-6);
+}
+
+.kpi-search svg {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.kpi-search input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-3) * 2 + 16px);
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.kpi-search input:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+  outline: none;
+}
+
+/* Collapsible "add" trigger — replaces a permanently-open bare form with a
+   single low-emphasis action; clicking it reveals the same inline-form
+   that used to sit exposed at all times. */
+.add-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  margin-top: var(--space-2);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--md-sys-typescale-label-large-size);
+  font-weight: var(--md-sys-typescale-label-large-weight);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+
+.add-trigger:hover,
+.add-trigger:focus-visible {
+  border-color: var(--color-primary);
+  border-style: solid;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) var(--md-sys-state-hover-opacity), transparent);
+}
+
+.add-trigger:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Loading skeleton */
+.skeleton-card {
+  padding: var(--space-6);
+  margin: var(--space-4) 0 var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--md-sys-color-surface-container-high) 25%,
+    var(--md-sys-color-surface-container-highest) 50%,
+    var(--md-sys-color-surface-container-high) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-line + .skeleton-line {
+  margin-top: var(--space-3);
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line { animation: none; }
 }
 
 .btn-text {

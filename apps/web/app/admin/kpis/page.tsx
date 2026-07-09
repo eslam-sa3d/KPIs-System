@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FolderPlus, Layers, ListPlus, Plus, Search, Target } from 'lucide-react';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -43,17 +44,48 @@ function pluralize(count: number, singular: string, plural = `${singular}s`): st
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+/** M3-style conic-gradient dial showing a 0-100 weight at a glance instead
+ *  of burying it in a run of muted text. */
+function WeightRing({ value }: { value: number }) {
+  return (
+    <span
+      className="weight-ring"
+      style={{ '--ring-pct': `${Math.min(100, Math.max(0, value))}%` } as React.CSSProperties}
+      role="img"
+      aria-label={`weight ${value}%`}
+    >
+      <span className="weight-ring-value" aria-hidden="true">
+        {value}
+      </span>
+    </span>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="skeleton-card" aria-hidden="true">
+      <div className="skeleton-line" style={{ width: '40%' }} />
+      <div className="skeleton-line" style={{ width: '25%' }} />
+      <div className="skeleton-line" style={{ width: '60%' }} />
+    </div>
+  );
+}
+
 export default function KpisAdminPage() {
   const user = useSession();
   const [kpis, setKpis] = useState<KpiRow[] | null>(null);
+  const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [creatingKpi, setCreatingKpi] = useState(false);
   const [renamingKpiId, setRenamingKpiId] = useState<string | null>(null);
   const [confirmDeleteKpiId, setConfirmDeleteKpiId] = useState<string | null>(null);
   const [renamingAreaId, setRenamingAreaId] = useState<string | null>(null);
   const [confirmDeleteAreaId, setConfirmDeleteAreaId] = useState<string | null>(null);
+  const [addingAreaForKpiId, setAddingAreaForKpiId] = useState<string | null>(null);
   const [renamingSubCriteriaId, setRenamingSubCriteriaId] = useState<string | null>(null);
   const [confirmDeleteSubCriteriaId, setConfirmDeleteSubCriteriaId] = useState<string | null>(null);
+  const [addingSubCriteriaForAreaId, setAddingSubCriteriaForAreaId] = useState<string | null>(null);
 
   const reload = useCallback(() => api<KpiRow[]>('/v1/kpis?pageSize=100').then(setKpis), []);
 
@@ -189,6 +221,28 @@ export default function KpisAdminPage() {
     ).then(() => setConfirmDeleteSubCriteriaId(null));
   }
 
+  const filteredKpis = useMemo(() => {
+    if (!kpis) return null;
+    const q = search.trim().toLowerCase();
+    if (!q) return kpis;
+    return kpis.filter((kpi) => kpi.name.toLowerCase().includes(q));
+  }, [kpis, search]);
+
+  const stats = useMemo(() => {
+    if (!kpis) return null;
+    const areas = kpis.flatMap((k) => k.evaluationAreas);
+    const subCriteria = areas.flatMap((a) => a.subCriteria);
+    const weighted = kpis.filter((k) => k.weight !== null);
+    const totalWeight = weighted.reduce((sum, k) => sum + (k.weight ?? 0), 0);
+    return {
+      kpiCount: kpis.length,
+      areaCount: areas.length,
+      subCriteriaCount: subCriteria.length,
+      totalWeight,
+      hasWeights: weighted.length > 0,
+    };
+  }, [kpis]);
+
   return (
     <PortalShell user={user}>
       <h1>KPIs</h1>
@@ -201,27 +255,88 @@ export default function KpisAdminPage() {
         </p>
       )}
 
-      {can(user, 'kpis:write') && (
-        <form className="builder admin-card" onSubmit={onCreateKpi}>
-          <h2>new KPI</h2>
-          <label htmlFor="k-name">name</label>
-          <input id="k-name" name="name" required minLength={2} placeholder="QA Lead Evaluation" />
-          <label htmlFor="k-weight">weight %</label>
-          <input id="k-weight" name="weight" type="number" min={0} max={100} step="0.5" placeholder="e.g. 25" />
-          <button className="btn-primary" type="submit">
-            create KPI
+      {stats && stats.kpiCount > 0 && (
+        <div className="kpi-page-stats">
+          <div className="kpi-stat-chip">
+            <strong>{stats.kpiCount}</strong>
+            <span>{pluralize(stats.kpiCount, 'kpi').replace(/^\d+\s/, '')}</span>
+          </div>
+          <div className="kpi-stat-chip">
+            <strong>{stats.areaCount}</strong>
+            <span>evaluation areas</span>
+          </div>
+          <div className="kpi-stat-chip">
+            <strong>{stats.subCriteriaCount}</strong>
+            <span>sub-criteria</span>
+          </div>
+          {stats.hasWeights && (
+            <div className={`kpi-stat-chip${stats.totalWeight !== 100 ? ' kpi-stat-warning' : ''}`}>
+              <strong>{stats.totalWeight}%</strong>
+              <span>{stats.totalWeight === 100 ? 'weight allocated' : 'weight — not 100%'}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {can(user, 'kpis:write') &&
+        (creatingKpi ? (
+          <form className="builder admin-card" onSubmit={(e) => onCreateKpi(e)}>
+            <h2>new KPI</h2>
+            <label htmlFor="k-name">name</label>
+            <input id="k-name" name="name" required minLength={2} placeholder="QA Lead Evaluation" autoFocus />
+            <label htmlFor="k-weight">weight %</label>
+            <input id="k-weight" name="weight" type="number" min={0} max={100} step="0.5" placeholder="e.g. 25" />
+            <div className="page-title-row" style={{ marginTop: 'var(--space-2)' }}>
+              <button className="btn-primary" type="submit">
+                create KPI
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => setCreatingKpi(false)}>
+                close
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button type="button" className="add-trigger" onClick={() => setCreatingKpi(true)}>
+            <Plus size={16} aria-hidden="true" />
+            new KPI
           </button>
-        </form>
+        ))}
+
+      {kpis && kpis.length > 0 && (
+        <div className="kpi-search">
+          <Search size={16} aria-hidden="true" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="search KPIs by name…"
+            aria-label="search KPIs"
+          />
+        </div>
       )}
 
       {kpis === null ? (
-        <p className="muted">loading…</p>
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
       ) : kpis.length === 0 ? (
         <div className="empty-state">
+          <span className="empty-state-icon">
+            <Target size={22} aria-hidden="true" />
+          </span>
           <h2>no KPIs defined yet</h2>
+          <p className="muted">create your first KPI above to start building out evaluation areas.</p>
+        </div>
+      ) : filteredKpis && filteredKpis.length === 0 ? (
+        <div className="empty-state">
+          <span className="empty-state-icon">
+            <Search size={22} aria-hidden="true" />
+          </span>
+          <h2>no KPIs match &quot;{search}&quot;</h2>
         </div>
       ) : (
-        kpis.map((kpi) => (
+        filteredKpis?.map((kpi) => (
           <article key={kpi.id} className="admin-card">
             {renamingKpiId === kpi.id ? (
               <form className="inline-form" onSubmit={(e) => onRenameKpi(kpi.id, e)}>
@@ -245,10 +360,18 @@ export default function KpisAdminPage() {
               </form>
             ) : (
               <div className="page-title-row">
-                <h2>
-                  {kpi.name} {kpi.weight !== null && <span className="muted">· {kpi.weight}%</span>}{' '}
-                  {!kpi.isActive && <span className="muted">(inactive)</span>}
-                </h2>
+                <div className="hierarchy-title-row">
+                  {kpi.weight !== null ? (
+                    <WeightRing value={kpi.weight} />
+                  ) : (
+                    <span className="hierarchy-icon hierarchy-icon-lg">
+                      <Target size={20} aria-hidden="true" />
+                    </span>
+                  )}
+                  <h2>
+                    {kpi.name} {!kpi.isActive && <span className="muted">(inactive)</span>}
+                  </h2>
+                </div>
                 {can(user, 'kpis:write') && (
                   <span className="row-actions">
                     <button type="button" className="btn-text" onClick={() => setRenamingKpiId(kpi.id)}>
@@ -285,8 +408,9 @@ export default function KpisAdminPage() {
 
             <label>evaluation areas</label>
             {kpi.evaluationAreas.length === 0 ? (
-              <p className="muted" style={{ fontSize: 12 }}>
-                no evaluation areas yet — add one below.
+              <p className="empty-state-inline">
+                <Layers size={14} aria-hidden="true" />
+                no evaluation areas yet
               </p>
             ) : (
               kpi.evaluationAreas.map((area) => (
@@ -303,13 +427,18 @@ export default function KpisAdminPage() {
                     </form>
                   ) : (
                     <div className="hierarchy-row">
-                      <strong>
-                        {area.name}
-                        {!area.isActive && <span className="muted"> (inactive)</span>}
-                        {area.subCriteria.length > 0 && (
-                          <span className="muted"> · {pluralize(area.subCriteria.length, 'sub-criteria', 'sub-criteria')}</span>
-                        )}
-                      </strong>
+                      <div className="hierarchy-title-row">
+                        <span className="hierarchy-icon hierarchy-icon-sm">
+                          <Layers size={15} aria-hidden="true" />
+                        </span>
+                        <strong>
+                          {area.name}
+                          {!area.isActive && <span className="muted"> (inactive)</span>}
+                          {area.subCriteria.length > 0 && (
+                            <span className="muted"> · {pluralize(area.subCriteria.length, 'sub-criteria', 'sub-criteria')}</span>
+                          )}
+                        </strong>
+                      </div>
                       {can(user, 'kpis:write') && (
                         <span className="row-actions">
                           <button type="button" className="btn-text" onClick={() => setRenamingAreaId(area.id)}>
@@ -349,8 +478,9 @@ export default function KpisAdminPage() {
 
                   <label>sub-criteria</label>
                   {area.subCriteria.length === 0 ? (
-                    <p className="muted" style={{ fontSize: 12 }}>
-                      no sub-criteria yet — add one below.
+                    <p className="empty-state-inline">
+                      <ListPlus size={14} aria-hidden="true" />
+                      no sub-criteria yet
                     </p>
                   ) : (
                     area.subCriteria.map((sub) => (
@@ -416,32 +546,51 @@ export default function KpisAdminPage() {
                       </div>
                     ))
                   )}
-                  {can(user, 'kpis:write') && (
-                    <form className="inline-form" onSubmit={(e) => onCreateSubCriteria(kpi.id, area.id, e)}>
-                      <input
-                        name="name"
-                        required
-                        minLength={2}
-                        placeholder="new sub-criteria name"
-                        aria-label={`new sub-criteria under ${area.name}`}
-                      />
-                      <button className="btn-ghost" type="submit">
+                  {can(user, 'kpis:write') &&
+                    (addingSubCriteriaForAreaId === area.id ? (
+                      <form className="inline-form" onSubmit={(e) => onCreateSubCriteria(kpi.id, area.id, e)}>
+                        <input
+                          name="name"
+                          required
+                          minLength={2}
+                          placeholder="new sub-criteria name"
+                          aria-label={`new sub-criteria under ${area.name}`}
+                          autoFocus
+                        />
+                        <button className="btn-ghost" type="submit">
+                          add
+                        </button>
+                        <button type="button" className="btn-ghost" onClick={() => setAddingSubCriteriaForAreaId(null)}>
+                          close
+                        </button>
+                      </form>
+                    ) : (
+                      <button type="button" className="add-trigger" onClick={() => setAddingSubCriteriaForAreaId(area.id)}>
+                        <Plus size={14} aria-hidden="true" />
                         add sub-criteria
                       </button>
-                    </form>
-                  )}
+                    ))}
                 </div>
               ))
             )}
 
-            {can(user, 'kpis:write') && (
-              <form className="inline-form" onSubmit={(e) => onCreateArea(kpi.id, e)}>
-                <input name="name" required minLength={2} placeholder="new area name" aria-label="new area name" />
-                <button className="btn-ghost" type="submit">
-                  add area
+            {can(user, 'kpis:write') &&
+              (addingAreaForKpiId === kpi.id ? (
+                <form className="inline-form" onSubmit={(e) => onCreateArea(kpi.id, e)}>
+                  <input name="name" required minLength={2} placeholder="new area name" aria-label="new area name" autoFocus />
+                  <button className="btn-ghost" type="submit">
+                    add
+                  </button>
+                  <button type="button" className="btn-ghost" onClick={() => setAddingAreaForKpiId(null)}>
+                    close
+                  </button>
+                </form>
+              ) : (
+                <button type="button" className="add-trigger" onClick={() => setAddingAreaForKpiId(kpi.id)}>
+                  <FolderPlus size={16} aria-hidden="true" />
+                  add evaluation area
                 </button>
-              </form>
-            )}
+              ))}
           </article>
         ))
       )}

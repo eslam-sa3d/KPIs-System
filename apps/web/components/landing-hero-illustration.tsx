@@ -155,7 +155,7 @@ export function LandingHeroIllustration() {
             fill="none"
             transform="rotate(-90 447 289)"
           />
-          <text x="447" y="293" textAnchor="middle" fill={purple} fontSize="11" fontWeight="700" style={{ fontFamily: '"stc forward", Arial, sans-serif' }}>
+          <text x="447" y="293" textAnchor="middle" fill={purple} fontSize="11" fontWeight="700" style={{ fontFamily: 'var(--font-family-base)' }}>
             95%
           </text>
           <rect x="432" y="332" width="30" height="3" rx="1.5" fill={cardBdr} />
