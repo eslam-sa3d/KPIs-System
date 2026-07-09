@@ -22,6 +22,9 @@ export function ShareLinkPanel({
   const [xToken, setXToken] = useState(exportToken);
   const [xBusy, setXBusy] = useState(false);
   const [xCopied, setXCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDisable, setConfirmDisable] = useState(false);
+  const [confirmDisableExport, setConfirmDisableExport] = useState(false);
   const exportUrl = xToken ? `${API_URL}/api/v1/public/forms/export/${xToken}` : null;
 
   const url = token && typeof window !== 'undefined'
@@ -37,12 +40,16 @@ export function ShareLinkPanel({
 
   async function toggle(enabled: boolean) {
     setBusy(true);
+    setError(null);
     try {
       const result = await api<{ publicToken: string | null }>(`/v1/forms/${formId}/share-link`, {
         method: 'POST',
         body: JSON.stringify({ enabled }),
       });
       setToken(result.publicToken);
+      setConfirmDisable(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'the request failed');
     } finally {
       setBusy(false);
     }
@@ -68,12 +75,16 @@ export function ShareLinkPanel({
 
   async function toggleExportLink(enabled: boolean) {
     setXBusy(true);
+    setError(null);
     try {
       const result = await api<{ exportToken: string | null }>(`/v1/forms/${formId}/export-link`, {
         method: 'POST',
         body: JSON.stringify({ enabled }),
       });
       setXToken(result.exportToken);
+      setConfirmDisableExport(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'the request failed');
     } finally {
       setXBusy(false);
     }
@@ -93,6 +104,11 @@ export function ShareLinkPanel({
         anyone with this link can submit a response without signing in — like a Microsoft Forms
         share link. Disabling it (or rotating) invalidates the previous link immediately.
       </p>
+      {error && (
+        <p role="alert" className="form-error">
+          {error}
+        </p>
+      )}
 
       {!token ? (
         <button className="btn-primary" onClick={() => toggle(true)} disabled={busy}>
@@ -119,9 +135,21 @@ export function ShareLinkPanel({
             <button className="btn-ghost" onClick={() => toggle(true)} disabled={busy}>
               rotate link
             </button>
-            <button className="btn-ghost" onClick={() => toggle(false)} disabled={busy}>
-              disable
-            </button>
+            {confirmDisable ? (
+              <>
+                <span className="muted">disable the public link?</span>
+                <button className="btn-ghost" onClick={() => toggle(false)} disabled={busy}>
+                  confirm disable
+                </button>
+                <button className="btn-ghost" onClick={() => setConfirmDisable(false)}>
+                  cancel
+                </button>
+              </>
+            ) : (
+              <button className="btn-ghost" onClick={() => setConfirmDisable(true)} disabled={busy}>
+                disable
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -146,9 +174,21 @@ export function ShareLinkPanel({
             <button className="btn-ghost" onClick={() => toggleExportLink(true)} disabled={xBusy}>
               rotate link
             </button>
-            <button className="btn-ghost" onClick={() => toggleExportLink(false)} disabled={xBusy}>
-              disable
-            </button>
+            {confirmDisableExport ? (
+              <>
+                <span className="muted">disable the live export link?</span>
+                <button className="btn-ghost" onClick={() => toggleExportLink(false)} disabled={xBusy}>
+                  confirm disable
+                </button>
+                <button className="btn-ghost" onClick={() => setConfirmDisableExport(false)}>
+                  cancel
+                </button>
+              </>
+            ) : (
+              <button className="btn-ghost" onClick={() => setConfirmDisableExport(true)} disabled={xBusy}>
+                disable
+              </button>
+            )}
           </div>
         </div>
       )}

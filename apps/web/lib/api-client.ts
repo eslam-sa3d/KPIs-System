@@ -26,15 +26,23 @@ export class ApiRequestError extends Error {
 }
 
 async function rawRequest<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T>> {
-  const response = await fetch(`${API_URL}/api${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...init.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/api${path}`, {
+      ...init,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...init.headers,
+      },
+    });
+  } catch {
+    // fetch() itself rejects on network failure (offline, DNS, CORS) — not an
+    // HTTP response, so there's no envelope to unwrap. Surface it the same way
+    // every call site already handles a failed request.
+    throw new ApiRequestError('NETWORK_ERROR', "couldn't reach the server — check your connection", 0);
+  }
   return (await response.json()) as ApiEnvelope<T>;
 }
 

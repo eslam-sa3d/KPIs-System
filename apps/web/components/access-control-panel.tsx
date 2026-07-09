@@ -29,12 +29,14 @@ export function AccessControlPanel({
   onRestrictedChange: (next: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [collaborators, setCollaborators] = useState<CollaboratorRow[] | null>(null);
   const [users, setUsers] = useState<UserOption[] | null>(null);
   const [filter, setFilter] = useState('');
   const [pickUserId, setPickUserId] = useState('');
   const [pickCanManage, setPickCanManage] = useState(false);
   const [pickCanViewResponses, setPickCanViewResponses] = useState(false);
+  const [confirmRemoveUserId, setConfirmRemoveUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!restricted) return;
@@ -44,12 +46,15 @@ export function AccessControlPanel({
 
   async function toggleRestricted(next: boolean) {
     setBusy(true);
+    setError(null);
     try {
       await api(`/v1/forms/${formId}/restricted`, {
         method: 'POST',
         body: JSON.stringify({ restricted: next }),
       });
       onRestrictedChange(next);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'the request failed');
     } finally {
       setBusy(false);
     }
@@ -58,6 +63,7 @@ export function AccessControlPanel({
   async function invite() {
     if (!pickUserId) return;
     setBusy(true);
+    setError(null);
     try {
       await api(`/v1/forms/${formId}/collaborators`, {
         method: 'POST',
@@ -67,6 +73,8 @@ export function AccessControlPanel({
       setPickUserId('');
       setPickCanManage(false);
       setPickCanViewResponses(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'the request failed');
     } finally {
       setBusy(false);
     }
@@ -74,9 +82,13 @@ export function AccessControlPanel({
 
   async function remove(userId: string) {
     setBusy(true);
+    setError(null);
     try {
       await api(`/v1/forms/${formId}/collaborators/${userId}`, { method: 'DELETE' });
       setCollaborators((current) => current?.filter((c) => c.userId !== userId) ?? null);
+      setConfirmRemoveUserId(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'the request failed');
     } finally {
       setBusy(false);
     }
@@ -97,6 +109,11 @@ export function AccessControlPanel({
         by default, anyone signed in with the "view forms" permission can open this form. restricting it
         limits that to specific people — the public share link above is unaffected either way.
       </p>
+      {error && (
+        <p role="alert" className="form-error">
+          {error}
+        </p>
+      )}
 
       <label className="check-item">
         <input
@@ -170,9 +187,26 @@ export function AccessControlPanel({
                 <li key={c.id}>
                   {c.user.displayName} ({c.user.email}){' '}
                   {c.canManage ? '· co-owner' : c.canViewResponses ? '· can view responses' : ''}{' '}
-                  <button type="button" className="btn-ghost" disabled={busy} onClick={() => remove(c.userId)}>
-                    remove
-                  </button>
+                  {confirmRemoveUserId === c.userId ? (
+                    <>
+                      <span className="muted">remove access?</span>{' '}
+                      <button type="button" className="btn-ghost" disabled={busy} onClick={() => remove(c.userId)}>
+                        confirm remove
+                      </button>{' '}
+                      <button type="button" className="btn-ghost" onClick={() => setConfirmRemoveUserId(null)}>
+                        cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={busy}
+                      onClick={() => setConfirmRemoveUserId(c.userId)}
+                    >
+                      remove
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

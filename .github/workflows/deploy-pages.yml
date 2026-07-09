@@ -1,7 +1,13 @@
 name: Deploy to GitHub Pages
 
+# Gated on the CI/CD workflow's own success (which includes the Dependency
+# Audit job) rather than triggering on every push directly — a red CI run on
+# main no longer publishes a deploy. workflow_dispatch remains for a manual
+# re-publish (e.g. re-running after fixing an unrelated flaky check).
 on:
-  push:
+  workflow_run:
+    workflows: ["CI/CD"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -16,8 +22,13 @@ jobs:
   deploy:
     name: Build & publish static export
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Pin to the exact commit CI validated, not whatever main HEAD is by
+          # the time this job starts — avoids deploying a newer, unvalidated push.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.event.workflow_run.head_sha }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

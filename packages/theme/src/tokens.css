@@ -30,7 +30,11 @@
   --color-bg: var(--pulse-air);
   --color-surface: var(--pulse-air);
   --color-text: var(--pulse-onyx);
-  --color-text-muted: var(--pulse-silver);
+  /* Not var(--pulse-silver) — that Pantone-referenced brand token is ≈2.9:1
+     against white, below WCAG AA's 4.5:1 for text. This is a separate,
+     text-only darkening of the same hue, kept independent so --pulse-silver
+     itself stays true to the brand guideline for non-text uses (icons, etc). */
+  --color-text-muted: #5b6570;
   --color-border: var(--pulse-silver-light);
   --color-primary: var(--pulse-purple);
   --color-primary-hover: var(--pulse-purple-dark);

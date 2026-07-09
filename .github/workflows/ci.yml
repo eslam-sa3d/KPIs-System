@@ -151,7 +151,8 @@ jobs:
           name: playwright-report
           path: playwright-report
 
-  # ── Stage 5: security audit (non-blocking advisory) ───────────────────────
+  # ── Stage 5: security audit — a failure here fails this workflow, which
+  # gates deploy-pages.yml (workflow_run, only fires on success) ────────────
   security:
     name: Dependency Audit
     runs-on: ubuntu-latest
@@ -166,6 +167,8 @@ jobs:
       - run: pnpm audit --audit-level high
 
   # Frontend deployment: .github/workflows/deploy-pages.yml publishes the web
-  # app's static export to GitHub Pages on every push to main.
+  # app's static export to GitHub Pages once this workflow succeeds on main
+  # (workflow_run-gated, so a failing job here — including Dependency Audit —
+  # blocks the deploy).
   # The API needs a Node host (Render/Fly/Railway/ECS…) — add its deploy job
   # here once a platform is chosen, gated on [e2e, security].
