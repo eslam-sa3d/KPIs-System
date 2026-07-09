@@ -21,6 +21,7 @@ import { memoryStorage } from 'multer';
 import { Public } from '../auth/public.decorator';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
+import { AssetsService } from './assets.service';
 import { FileUploadsService } from './file-uploads.service';
 import { FormsService } from './forms.service';
 import { SubmissionsService } from './submissions.service';
@@ -31,6 +32,9 @@ type AuthedRequest = { user: { id: string } };
 // the per-question maxSizeMb cap is enforced in FileUploadsService, this is
 // just a generous outer ceiling so an oversized body never reaches it
 const UPLOAD_INTERCEPTOR = FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+// design assets are capped tighter (5MB, enforced again in AssetsService) —
+// this is just the outer multer ceiling, same pattern as UPLOAD_INTERCEPTOR
+const ASSET_INTERCEPTOR = FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 @Controller('v1/forms')
 export class FormsController {
@@ -38,6 +42,7 @@ export class FormsController {
     private readonly forms: FormsService,
     private readonly submissions: SubmissionsService,
     private readonly uploads: FileUploadsService,
+    private readonly assets: AssetsService,
   ) {}
 
   @Get()
@@ -137,6 +142,29 @@ export class FormsController {
   @RequirePermissions('form_submissions:manage')
   deleteAllSubmissions(@Param('slug') slug: string, @Req() req: AuthedRequest) {
     return this.submissions.deleteAllSubmissions(slug, req.user.id);
+  }
+
+  @Post(':formId/assets')
+  @RequirePermissions('forms:write')
+  @UseInterceptors(ASSET_INTERCEPTOR)
+  uploadAsset(
+    @Param('formId') formId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.assets.upload(formId, file, req.user.id);
+  }
+
+  /** Design assets (option images, question/page media, theme background & logo) — always public, never sensitive. */
+  @Public()
+  @Get(':formId/assets/:assetId')
+  async downloadAsset(
+    @Param('formId') formId: string,
+    @Param('assetId') assetId: string,
+    @Res() res: Response,
+  ) {
+    const asset = await this.assets.getForDownload(formId, assetId);
+    res.type(asset.mimeType).send(Buffer.from(asset.data));
   }
 
   @Post(':slug/uploads/:fieldKey')

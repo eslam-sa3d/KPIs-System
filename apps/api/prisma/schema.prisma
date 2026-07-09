@@ -29,6 +29,7 @@ model User {
   kpiEntries   KpiEntry[]
   auditEvents  AuditLog[]
   fileUploads  FormFileUpload[]
+  formAssets   FormAsset[]
 
   @@index([departmentId])
 }
@@ -170,6 +171,7 @@ model Form {
 
   versions    FormVersion[]
   fileUploads FormFileUpload[]
+  assets      FormAsset[]
 }
 
 /// Immutable versions: editing a published form creates a new version, so old
@@ -227,6 +229,25 @@ model FormFileUpload {
 
   @@index([formId])
   @@index([submissionId])
+}
+
+/// Builder-uploaded design assets (option images, question/page media, theme
+/// background & logo) — distinct from FormFileUpload, which holds RESPONDENT
+/// answers. Same DB-blob tradeoff, served publicly since they're decorative,
+/// not sensitive (see AssetsController).
+model FormAsset {
+  id           String   @id @default(uuid())
+  formId       String
+  form         Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  data         Bytes
+  createdById  String?
+  createdBy    User?    @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([formId])
 }
 
 // ─────────────────────────── Governance ────────────────────────────────────────

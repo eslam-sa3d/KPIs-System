@@ -14,6 +14,7 @@ import { SettingsController } from './modules/settings/settings.controller';
 import { DepartmentsController, UsersController } from './modules/users/users.controller';
 import { UsersService } from './modules/users/users.service';
 import { FormsController, PublicFormsController } from './modules/forms/forms.controller';
+import { AssetsService } from './modules/forms/assets.service';
 import { FileUploadsService } from './modules/forms/file-uploads.service';
 import { FormsService } from './modules/forms/forms.service';
 import { SubmissionsService } from './modules/forms/submissions.service';
@@ -58,6 +59,7 @@ import { RolesController } from './modules/rbac/roles.controller';
     FormsService,
     SubmissionsService,
     FileUploadsService,
+    AssetsService,
     DemoDataService,
     // Guard chain runs in registration order:
     { provide: APP_GUARD, useClass: ThrottlerGuard }, // 1. rate limit
