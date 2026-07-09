@@ -13,46 +13,46 @@ datasource db {
 // ─────────────────────────── Identity & Dynamic RBAC ───────────────────────────
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
+  id           String      @id @default(uuid())
+  email        String      @unique
   passwordHash String
   displayName  String
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
-  roles        UserRole[]
-  sessions     Session[]
-  submissions  FormSubmission[]
-  evaluatedEntries EvaluationAreaEntry[] @relation("EvaluationAreaEntryPerson")
-  recordedEntries  EvaluationAreaEntry[] @relation("EvaluationAreaEntryEvaluator")
-  auditEvents  AuditLog[]
-  fileUploads  FormFileUpload[]
-  formAssets   FormAsset[]
-  formCollaborations FormCollaborator[] @relation("FormCollaboratorUser")
-  formCollaboratorInvites FormCollaborator[] @relation("FormCollaboratorAddedBy")
+  roles                   UserRole[]
+  sessions                Session[]
+  submissions             FormSubmission[]
+  evaluatedEntries        EvaluationAreaEntry[] @relation("EvaluationAreaEntryPerson")
+  recordedEntries         EvaluationAreaEntry[] @relation("EvaluationAreaEntryEvaluator")
+  auditEvents             AuditLog[]
+  fileUploads             FormFileUpload[]
+  formAssets              FormAsset[]
+  formCollaborations      FormCollaborator[]    @relation("FormCollaboratorUser")
+  formCollaboratorInvites FormCollaborator[]    @relation("FormCollaboratorAddedBy")
 
   @@index([departmentId])
 }
 
 model Department {
-  id     String @id @default(uuid())
-  name   String @unique
-  users  User[]
+  id      String          @id @default(uuid())
+  name    String          @unique
+  users   User[]
   kpiMaps KpiAssignment[]
 }
 
 /// Dynamic roles: created by admins at runtime, never hard-coded.
 model Role {
-  id          String  @id @default(uuid())
-  name        String  @unique
+  id          String   @id @default(uuid())
+  name        String   @unique
   description String?
-  isSystem    Boolean @default(false) // seed roles (e.g. "admin") are protected from deletion
+  isSystem    Boolean  @default(false) // seed roles (e.g. "admin") are protected from deletion
   /// deactivating a role stops it granting permissions to its members without
   /// deleting it — same pattern as User.isActive and Kpi/EvaluationArea.isActive
-  isActive    Boolean @default(true)
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
 
   permissions RolePermission[]
@@ -86,23 +86,23 @@ model RolePermission {
 model UserRole {
   userId String
   roleId String
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
 }
 
 /// Rotating refresh-token sessions (revocable server-side).
 model Session {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  refreshTokenHash String   @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique
   userAgent        String?
   ip               String?
   expiresAt        DateTime
   revokedAt        DateTime?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime  @default(now())
 
   @@index([userId])
 }
@@ -113,9 +113,9 @@ model Session {
 /// (no unit/target/direction/cadence: status comes from each area's raw
 /// 0-5 score, not target-attainment; see EvaluationAreaEntry).
 model Kpi {
-  id        String  @id @default(uuid())
+  id        String   @id @default(uuid())
   name      String
-  isActive  Boolean @default(true)
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -125,11 +125,11 @@ model Kpi {
 
 /// Dynamic mapping of a KPI to a role, department, or delivery stream.
 model KpiAssignment {
-  id             String  @id @default(uuid())
+  id             String      @id @default(uuid())
   kpiId          String
-  kpi            Kpi     @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  kpi            Kpi         @relation(fields: [kpiId], references: [id], onDelete: Cascade)
   roleId         String?
-  role           Role?   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role           Role?       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   departmentId   String?
   department     Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   deliveryStream String? // free-form stream tag, e.g. "digital-channels"
@@ -144,16 +144,17 @@ model KpiAssignment {
 /// its own cadence — different areas under the same KPI can be scored on
 /// different rhythms.
 model EvaluationArea {
-  id        String  @id @default(uuid())
+  id        String   @id @default(uuid())
   kpiId     String
-  kpi       Kpi     @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  kpi       Kpi      @relation(fields: [kpiId], references: [id], onDelete: Cascade)
   name      String
-  cadence   String  // "weekly" | "monthly" | "quarterly" | "yearly"
-  isActive  Boolean @default(true)
+  cadence   String // "weekly" | "monthly" | "quarterly" | "yearly"
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  entries EvaluationAreaEntry[]
+  entries      EvaluationAreaEntry[]
+  formMappings FormKpiMapping[]
 
   @@index([kpiId])
 }
@@ -161,18 +162,18 @@ model EvaluationArea {
 /// Evaluation Area facts — a 0-5 score recorded against a specific evaluatee
 /// (`person`) for a period, by a specific evaluator (`enteredBy`).
 model EvaluationAreaEntry {
-  id               String   @id @default(uuid())
+  id               String         @id @default(uuid())
   evaluationAreaId String
   evaluationArea   EvaluationArea @relation(fields: [evaluationAreaId], references: [id], onDelete: Cascade)
   personId         String
-  person           User     @relation("EvaluationAreaEntryPerson", fields: [personId], references: [id])
-  value            Decimal  // 0-5
+  person           User           @relation("EvaluationAreaEntryPerson", fields: [personId], references: [id])
+  value            Decimal // 0-5
   periodStart      DateTime
   periodEnd        DateTime
   enteredById      String
-  enteredBy        User     @relation("EvaluationAreaEntryEvaluator", fields: [enteredById], references: [id])
+  enteredBy        User           @relation("EvaluationAreaEntryEvaluator", fields: [enteredById], references: [id])
   note             String?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime       @default(now())
 
   @@unique([evaluationAreaId, personId, periodStart, periodEnd])
   @@index([evaluationAreaId, periodStart])
@@ -205,27 +206,46 @@ model Form {
   fileUploads   FormFileUpload[]
   assets        FormAsset[]
   collaborators FormCollaborator[]
+  kpiMappings   FormKpiMapping[]
 }
 
 /// A specific person granted access to one restricted form, bypassing the
 /// org-wide forms:read/forms:write RBAC requirement for that form only.
 model FormCollaborator {
-  id          String   @id @default(uuid())
-  formId      String
-  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User     @relation("FormCollaboratorUser", fields: [userId], references: [id], onDelete: Cascade)
+  id               String   @id @default(uuid())
+  formId           String
+  form             Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation("FormCollaboratorUser", fields: [userId], references: [id], onDelete: Cascade)
   /// false = can view/fill only; true = co-owner (can also edit/publish/manage this form)
-  canManage   Boolean  @default(false)
+  canManage        Boolean  @default(false)
   /// Tier between fill-only and co-owner: can see this form's responses/summary/exports
   /// without editing the form itself. Implied by canManage — checked independently.
-  canViewResponses Boolean @default(false)
-  addedById   String?
-  addedBy     User?    @relation("FormCollaboratorAddedBy", fields: [addedById], references: [id])
-  createdAt   DateTime @default(now())
+  canViewResponses Boolean  @default(false)
+  addedById        String?
+  addedBy          User?    @relation("FormCollaboratorAddedBy", fields: [addedById], references: [id])
+  createdAt        DateTime @default(now())
 
   @@unique([formId, userId])
   @@index([userId])
+}
+
+/// Bridges Forms and KPIs: on every submission to `formId`, the answer at
+/// `evaluateeFieldKey` (a 'person' field — the evaluatee) and the answer at
+/// `scoreFieldKey` (a rating/nps/slider field, normalized to 0-5) are upserted
+/// as an EvaluationAreaEntry against `evaluationAreaId`. See SubmissionsService.
+model FormKpiMapping {
+  id                String         @id @default(uuid())
+  formId            String
+  form              Form           @relation(fields: [formId], references: [id], onDelete: Cascade)
+  evaluationAreaId  String
+  evaluationArea    EvaluationArea @relation(fields: [evaluationAreaId], references: [id], onDelete: Cascade)
+  evaluateeFieldKey String
+  scoreFieldKey     String
+  createdAt         DateTime       @default(now())
+
+  @@unique([formId, evaluationAreaId])
+  @@index([evaluationAreaId])
 }
 
 /// Immutable versions: editing a published form creates a new version, so old
@@ -245,25 +265,25 @@ model FormVersion {
 }
 
 model FormSubmission {
-  id                   String      @id @default(uuid())
-  formVersionId        String
-  formVersion          FormVersion @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
-  submittedById        String?
-  submittedBy          User?       @relation(fields: [submittedById], references: [id])
+  id                    String      @id @default(uuid())
+  formVersionId         String
+  formVersion           FormVersion @relation(fields: [formVersionId], references: [id], onDelete: Cascade)
+  submittedById         String?
+  submittedBy           User?       @relation(fields: [submittedById], references: [id])
   /// Random id from a cookie set on first visit — the only "identity" an anonymous
   /// public-link respondent has, used to enforce oneResponsePerUser without an account.
   respondentFingerprint String?
   /// fieldKey → answer. GIN-indexed for filtering (index added in raw migration).
-  answers       Json
+  answers               Json
   /// QuizScore JSON ({earnedPoints, totalPoints, percent, passed}), computed once at
   /// submit time against the version's definition — null for non-quiz forms.
-  score         Json?
+  score                 Json?
   /// Set at submit time only when the form's `allowRespondentEdit` setting is on —
   /// lets the respondent revise this submission via PATCH .../submissions/:editToken.
-  editToken     String?     @unique
-  createdAt     DateTime    @default(now())
+  editToken             String?     @unique
+  createdAt             DateTime    @default(now())
 
-  fileUploads   FormFileUpload[]
+  fileUploads FormFileUpload[]
 
   @@index([formVersionId, createdAt])
   @@index([submittedById])
@@ -303,16 +323,16 @@ model FormFileUpload {
 /// Same DB-blob tradeoff, served publicly since they're decorative, not
 /// sensitive (see AssetsService).
 model FormAsset {
-  id           String   @id @default(uuid())
-  formId       String?
-  form         Form?    @relation(fields: [formId], references: [id], onDelete: Cascade)
-  filename     String
-  mimeType     String
-  sizeBytes    Int
-  data         Bytes
-  createdById  String?
-  createdBy    User?    @relation(fields: [createdById], references: [id])
-  createdAt    DateTime @default(now())
+  id          String   @id @default(uuid())
+  formId      String?
+  form        Form?    @relation(fields: [formId], references: [id], onDelete: Cascade)
+  filename    String
+  mimeType    String
+  sizeBytes   Int
+  data        Bytes
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
 
   @@index([formId])
 }
@@ -323,7 +343,7 @@ model AuditLog {
   id        String   @id @default(uuid())
   actorId   String?
   actor     User?    @relation(fields: [actorId], references: [id])
-  action    String   // "role.created", "role.permissions.updated", "submissions.exported" …
+  action    String // "role.created", "role.permissions.updated", "submissions.exported" …
   entity    String
   entityId  String?
   detail    Json?

@@ -41,6 +41,11 @@ export const FIELD_TYPES = [
   'contact_info',
   /** click a named region on an image; answer is that region's value */
   'hot_spot',
+  /** live search-and-select of a real user; answer is that User's id. Powers
+   *  the Forms→KPI bridge: a form can map this field (the evaluatee) plus a
+   *  rating/nps/slider field (the score) to a KPI Evaluation Area — see
+   *  FormKpiMapping. */
+  'person',
 ] as const;
 
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -226,6 +231,12 @@ export const formFieldSchema = z.discriminatedUnion('type', [
       .min(1)
       .max(20),
   }),
+  /** Live search-and-select of a real user — the answer is a User id, not
+   *  free text. No extra config needed beyond the base field (label/help/
+   *  required); resolving it against the users table happens at submission
+   *  time, the same trust-boundary split as 'file' (structural shape here,
+   *  referential integrity in the service layer). */
+  baseField.extend({ type: z.literal('person') }),
 ]);
 
 /** Per-form collection settings (MS-Forms parity). */

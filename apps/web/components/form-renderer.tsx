@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type FormTheme, type SubmissionAnswers } from '@pulse/contracts';
-import { ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
+import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
 
 /** Google Forms' three-way font choice, mapped to system stacks — no new font files/CDN loads. */
@@ -11,6 +11,12 @@ const FONT_STACKS: Record<NonNullable<FormTheme['fontFamily']>, string | undefin
   serif: 'Georgia, "Times New Roman", Times, serif',
   casual: 'ui-rounded, "Segoe UI Rounded", "Trebuchet MS", sans-serif',
 };
+
+interface UserOption {
+  id: string;
+  email: string;
+  displayName: string;
+}
 
 function FieldMedia({ media }: { media: Media }) {
   if (media.type === 'image' && media.assetId) {
@@ -82,6 +88,24 @@ export function FieldInput({
   // multi-file (maxFiles>1): filenames for ids uploaded THIS session — reloading an
   // in-progress answer only shows ids, so older attachments fall back to a generic label
   const [attachedNames, setAttachedNames] = useState<Record<string, string>>({});
+  // 'person' fields (the KPI-bridge evaluatee picker): live user search — fetched once per
+  // field instance, not per-field-type-branch, to keep this a top-level hook (rules-of-hooks).
+  const [userOptions, setUserOptions] = useState<UserOption[] | null>(null);
+  const [personFilter, setPersonFilter] = useState('');
+  useEffect(() => {
+    if (field.type !== 'person') return;
+    let cancelled = false;
+    api<UserOption[]>('/v1/users?pageSize=200')
+      .then((users) => {
+        if (!cancelled) setUserOptions(users);
+      })
+      .catch(() => {
+        if (!cancelled) setUserOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [field.type]);
 
   switch (field.type) {
     case 'long_text':
@@ -417,6 +441,61 @@ export function FieldInput({
             />
           ))}
         </div>
+      );
+    }
+    case 'person': {
+      const current = value as string | undefined;
+      const selectedUser = userOptions?.find((u) => u.id === current);
+      const candidates = (userOptions ?? []).filter(
+        (u) =>
+          u.displayName.toLowerCase().includes(personFilter.toLowerCase()) ||
+          u.email.toLowerCase().includes(personFilter.toLowerCase()),
+      );
+      return (
+        <span id={id}>
+          {selectedUser ? (
+            <span className="check-item">
+              {selectedUser.displayName} ({selectedUser.email}){' '}
+              <button type="button" className="btn-ghost" onClick={() => onChange('')}>
+                change
+              </button>
+            </span>
+          ) : (
+            <>
+              <input
+                type="text"
+                aria-label={`${field.label} search`}
+                placeholder={userOptions === null ? 'loading…' : 'search by name or email'}
+                value={personFilter}
+                disabled={userOptions === null}
+                onChange={(e) => setPersonFilter(e.target.value)}
+              />
+              {personFilter && candidates.length > 0 && (
+                <select
+                  aria-label={`${field.label} matches`}
+                  size={Math.min(5, candidates.length)}
+                  value=""
+                  onChange={(e) => {
+                    onChange(e.target.value);
+                    setPersonFilter('');
+                  }}
+                >
+                  <option value="" disabled>
+                    choose…
+                  </option>
+                  {candidates.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.displayName} ({u.email})
+                    </option>
+                  ))}
+                </select>
+              )}
+              {personFilter && candidates.length === 0 && userOptions !== null && (
+                <p className="muted">no matches</p>
+              )}
+            </>
+          )}
+        </span>
       );
     }
     default:

@@ -36,6 +36,7 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'slider', label: 'slider' },
   { value: 'contact_info', label: 'contact info (name / email / phone)' },
   { value: 'hot_spot', label: 'hot spot (click a region on an image)' },
+  { value: 'person', label: 'person (search & select a user — for KPI scoring)' },
 ];
 
 const FIELD_TYPE_ICON: Record<FieldType, string> = {
@@ -55,6 +56,7 @@ const FIELD_TYPE_ICON: Record<FieldType, string> = {
   slider: '🎚',
   contact_info: '👤',
   hot_spot: '⌖',
+  person: '🧑',
 };
 
 const parseList = (raw: string) =>

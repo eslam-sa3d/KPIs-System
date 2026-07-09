@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   FormDefinition,
+  FormField,
   FormFieldSummary,
   FormResponseSummary,
   FormSettings,
@@ -89,6 +90,7 @@ export class SubmissionsService {
         data: { submissionId: submission.id },
       });
     }
+    await this.applyKpiMappings(form.id, definition, answers, existing.submittedById, submission.id);
     return submission;
   }
 
@@ -217,7 +219,92 @@ export class SubmissionsService {
         data: { submissionId: submission.id },
       });
     }
+    await this.applyKpiMappings(formId, definition, answers, submittedById, submission.id);
     return submission;
+  }
+
+  /**
+   * The Forms→KPI bridge: for every FormKpiMapping on this form, resolves the
+   * evaluatee (the answer at evaluateeFieldKey), normalizes the answer at
+   * scoreFieldKey to 0-5, and upserts an EvaluationAreaEntry for the period
+   * containing this submission — so editing a submission updates the same
+   * period's entry rather than creating a duplicate.
+   *
+   * `enteredById` is the submission's own submitter — it's null for anonymous
+   * public submissions, and a mapping is skipped entirely in that case since
+   * EvaluationAreaEntry.enteredById can't be null (evaluation surveys feeding
+   * a KPI are expected to be filled by an authenticated evaluator).
+   *
+   * Never throws: a bad/misconfigured mapping shouldn't fail the submission
+   * itself, which is the primary thing the caller is waiting on.
+   */
+  private async applyKpiMappings(
+    formId: string,
+    definition: FormDefinition,
+    answers: SubmissionAnswers,
+    enteredById: string | null,
+    submissionId: string,
+  ): Promise<void> {
+    if (!enteredById) return;
+
+    const mappings = await this.prisma.formKpiMapping.findMany({
+      where: { formId },
+      include: { evaluationArea: true },
+    });
+    if (!mappings.length) return;
+
+    const fieldsByKey = new Map(definition.fields.map((f) => [f.key, f]));
+    const now = new Date();
+
+    for (const mapping of mappings) {
+      try {
+        if (!mapping.evaluationArea.isActive) continue;
+
+        const evaluateeId = answers[mapping.evaluateeFieldKey];
+        if (typeof evaluateeId !== 'string') continue;
+        const rawScore = answers[mapping.scoreFieldKey];
+        if (typeof rawScore !== 'number') continue;
+
+        const scoreField = fieldsByKey.get(mapping.scoreFieldKey);
+        if (!scoreField) continue;
+        const value = normalizeScore(scoreField, rawScore);
+        if (value === null) continue;
+
+        const evaluatee = await this.prisma.user.findUnique({ where: { id: evaluateeId } });
+        if (!evaluatee || !evaluatee.isActive) continue;
+
+        const { periodStart, periodEnd } = computePeriod(mapping.evaluationArea.cadence, now);
+
+        await this.prisma.evaluationAreaEntry.upsert({
+          where: {
+            evaluationAreaId_personId_periodStart_periodEnd: {
+              evaluationAreaId: mapping.evaluationAreaId,
+              personId: evaluateeId,
+              periodStart,
+              periodEnd,
+            },
+          },
+          create: {
+            evaluationAreaId: mapping.evaluationAreaId,
+            personId: evaluateeId,
+            value,
+            periodStart,
+            periodEnd,
+            enteredById,
+            note: `via form submission ${submissionId}`,
+          },
+          update: {
+            value,
+            enteredById,
+            note: `via form submission ${submissionId}`,
+          },
+        });
+      } catch (cause) {
+        this.logger.warn(
+          `form-kpi mapping ${mapping.id} failed for submission ${submissionId}: ${cause instanceof Error ? cause.message : cause}`,
+        );
+      }
+    }
   }
 
   /** Fire-and-forget: never awaited by callers, never blocks or fails the submission it fires
@@ -263,6 +350,7 @@ export class SubmissionsService {
         data: { submissionId },
       });
     }
+    await this.applyKpiMappings(form.id, definition, answers, existing.submittedById, submissionId);
     return submission;
   }
 
@@ -549,6 +637,66 @@ export class SubmissionsService {
       ];
     });
     return { header, rows };
+  }
+}
+
+/** Normalizes a raw rating/nps/slider answer to a 0-5 KPI score using that
+ *  field's own configured range. Returns null for any other field type or a
+ *  degenerate (zero-width) range — the caller skips the mapping in that case. */
+function normalizeScore(field: FormField, raw: number): number | null {
+  switch (field.type) {
+    case 'rating': {
+      if (field.scale <= 1) return null;
+      return clamp(((raw - 1) / (field.scale - 1)) * 5, 0, 5);
+    }
+    case 'nps':
+      return clamp((raw / 10) * 5, 0, 5);
+    case 'slider': {
+      const range = field.max - field.min;
+      if (range <= 0) return null;
+      return clamp(((raw - field.min) / range) * 5, 0, 5);
+    }
+    default:
+      return null;
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+/** Calendar-boundary period containing `at`, in UTC, for the given Evaluation Area cadence. */
+function computePeriod(cadence: string, at: Date): { periodStart: Date; periodEnd: Date } {
+  const y = at.getUTCFullYear();
+  const m = at.getUTCMonth();
+  const d = at.getUTCDate();
+  switch (cadence) {
+    case 'weekly': {
+      const dayOfWeek = at.getUTCDay(); // 0=Sun..6=Sat
+      const daysSinceMonday = (dayOfWeek + 6) % 7;
+      return {
+        periodStart: new Date(Date.UTC(y, m, d - daysSinceMonday)),
+        periodEnd: new Date(Date.UTC(y, m, d - daysSinceMonday + 6, 23, 59, 59, 999)),
+      };
+    }
+    case 'monthly':
+      return {
+        periodStart: new Date(Date.UTC(y, m, 1)),
+        periodEnd: new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)),
+      };
+    case 'quarterly': {
+      const quarterStartMonth = Math.floor(m / 3) * 3;
+      return {
+        periodStart: new Date(Date.UTC(y, quarterStartMonth, 1)),
+        periodEnd: new Date(Date.UTC(y, quarterStartMonth + 3, 0, 23, 59, 59, 999)),
+      };
+    }
+    case 'yearly':
+    default:
+      return {
+        periodStart: new Date(Date.UTC(y, 0, 1)),
+        periodEnd: new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999)),
+      };
   }
 }
 

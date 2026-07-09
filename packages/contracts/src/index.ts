@@ -1,5 +1,6 @@
 export * from './auth';
 export * from './envelope';
+export * from './form-kpi-mapping';
 export * from './form-media';
 export * from './form-schema';
 export * from './form-sections';
