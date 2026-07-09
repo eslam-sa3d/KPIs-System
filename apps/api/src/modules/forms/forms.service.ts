@@ -207,11 +207,7 @@ export class FormsService {
   }
 }
 
-/**
- * Every FormAsset id referenced anywhere in a definition — field/option
- * media and page media today; theme (phase 6) extends this as those
- * fields land on the schema.
- */
+/** Every FormAsset id referenced anywhere in a definition — field/option media, page media, theme. */
 function extractAssetIds(definition: FormDefinition): string[] {
   const ids = new Set<string>();
   for (const field of definition.fields) {
@@ -222,5 +218,7 @@ function extractAssetIds(definition: FormDefinition): string[] {
   for (const section of definition.sections ?? []) {
     if (section.media?.assetId) ids.add(section.media.assetId);
   }
+  if (definition.theme?.backgroundAssetId) ids.add(definition.theme.backgroundAssetId);
+  if (definition.theme?.logoAssetId) ids.add(definition.theme.logoAssetId);
   return [...ids];
 }

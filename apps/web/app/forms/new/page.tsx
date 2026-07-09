@@ -3,6 +3,16 @@
 import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { BRANCH_TRIGGER_TYPES, CONDITION_OPERATORS, END_OF_FORM, type FieldType } from '@pulse/contracts';
+import { palette } from '@pulse/theme';
+
+const THEME_SWATCHES = [
+  palette.primary.purple,
+  palette.primary.coral,
+  palette.secondary.moonLight,
+  palette.tertiary.sea,
+  palette.tertiary.oasis,
+  palette.tertiary.sunset,
+];
 
 type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 import { PortalShell } from '../../../components/portal-shell';
@@ -258,6 +268,9 @@ export default function NewFormPage() {
   const [importing, setImporting] = useState(false);
   const [importIssues, setImportIssues] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [themeAccentColor, setThemeAccentColor] = useState('');
+  const [themeBackgroundAssetId, setThemeBackgroundAssetId] = useState('');
+  const [themeLogoAssetId, setThemeLogoAssetId] = useState('');
 
   const keyedFields = fields.map((f, i) => ({
     key: toKey(f.label, i),
@@ -530,6 +543,24 @@ export default function NewFormPage() {
     }
   }
 
+  async function onUploadThemeBackground(file: File) {
+    try {
+      const uploaded = await uploadAsset<{ id: string }>(file);
+      setThemeBackgroundAssetId(uploaded.id);
+    } catch {
+      setError('image upload failed');
+    }
+  }
+
+  async function onUploadThemeLogo(file: File) {
+    try {
+      const uploaded = await uploadAsset<{ id: string }>(file);
+      setThemeLogoAssetId(uploaded.id);
+    } catch {
+      setError('image upload failed');
+    }
+  }
+
   async function onUploadSectionMedia(index: number, file: File) {
     try {
       const uploaded = await uploadAsset<{ id: string }>(file);
@@ -582,6 +613,15 @@ export default function NewFormPage() {
     });
   }
 
+  function buildThemePayload() {
+    if (!themeAccentColor && !themeBackgroundAssetId && !themeLogoAssetId) return undefined;
+    return {
+      ...(themeAccentColor ? { accentColor: themeAccentColor } : {}),
+      ...(themeBackgroundAssetId ? { backgroundAssetId: themeBackgroundAssetId } : {}),
+      ...(themeLogoAssetId ? { logoAssetId: themeLogoAssetId } : {}),
+    };
+  }
+
   async function onPublish() {
     setError(null);
     try {
@@ -595,6 +635,7 @@ export default function NewFormPage() {
             ...(description.trim() ? { description: description.trim() } : {}),
             fields: fields.map((f, i) => toDefinitionField(f, i, keyedFields)),
             ...(buildSectionsPayload() ? { sections: buildSectionsPayload() } : {}),
+            ...(buildThemePayload() ? { theme: buildThemePayload() } : {}),
           },
         }),
       });
@@ -1294,6 +1335,60 @@ export default function NewFormPage() {
               </button>
             </>
           )}
+        </div>
+
+        <div className="admin-card" style={{ marginTop: 24, marginBottom: 16 }}>
+          <label>look &amp; feel (optional)</label>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            accent color for the banner, buttons, and selected answers — falls back to the pulse brand purple.
+          </p>
+          <div className="page-title-row" style={{ marginTop: 8 }}>
+            {THEME_SWATCHES.map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-label={`use accent color ${color}`}
+                onClick={() => setThemeAccentColor(color)}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
+                  background: color,
+                  border: themeAccentColor === color ? '2px solid var(--color-text)' : '1px solid var(--color-border)',
+                  cursor: 'pointer',
+                }}
+              />
+            ))}
+            <input
+              type="color"
+              aria-label="custom accent color"
+              value={themeAccentColor || '#4f008c'}
+              onChange={(e) => setThemeAccentColor(e.target.value)}
+            />
+            {themeAccentColor && (
+              <button type="button" className="btn-ghost" onClick={() => setThemeAccentColor('')}>
+                reset to default
+              </button>
+            )}
+          </div>
+
+          <label htmlFor="theme-logo">logo (optional)</label>
+          <input
+            id="theme-logo"
+            type="file"
+            accept="image/*"
+            onChange={(e) => e.target.files?.[0] && onUploadThemeLogo(e.target.files[0])}
+          />
+          {themeLogoAssetId && <img src={assetUrl(themeLogoAssetId)} alt="" className="option-image" />}
+
+          <label htmlFor="theme-background">banner background image (optional)</label>
+          <input
+            id="theme-background"
+            type="file"
+            accept="image/*"
+            onChange={(e) => e.target.files?.[0] && onUploadThemeBackground(e.target.files[0])}
+          />
+          {themeBackgroundAssetId && <img src={assetUrl(themeBackgroundAssetId)} alt="" className="option-image" />}
         </div>
 
         <div className="page-title-row">

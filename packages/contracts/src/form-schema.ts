@@ -152,6 +152,17 @@ export const formSettingsSchema = z.object({
 export type FormSettings = z.infer<typeof formSettingsSchema>;
 export const DEFAULT_FORM_SETTINGS: FormSettings = formSettingsSchema.parse({});
 
+/** Per-form look and feel — lives on the definition (not settings) so
+ *  duplicating a form carries its branding, matching how the rest of the
+ *  definition is treated. */
+export const formThemeSchema = z.object({
+  accentColor: z.string().regex(/^#[0-9a-f]{6}$/i, 'expected a hex color like #4f008c').optional(),
+  backgroundAssetId: z.string().uuid().optional(),
+  logoAssetId: z.string().uuid().optional(),
+});
+
+export type FormTheme = z.infer<typeof formThemeSchema>;
+
 export const formDefinitionSchema = z
   .object({
     title: z.string().min(1).max(200),
@@ -159,6 +170,7 @@ export const formDefinitionSchema = z
     fields: z.array(formFieldSchema).min(1).max(100),
     /** optional multi-page layout with forward-only branching between pages */
     sections: z.array(formSectionSchema).min(1).max(50).optional(),
+    theme: formThemeSchema.optional(),
   })
   .superRefine((form, ctx) => {
     const keys = new Set<string>();

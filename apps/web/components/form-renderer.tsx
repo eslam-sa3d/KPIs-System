@@ -380,9 +380,14 @@ export function FormRenderer({
     }
   }
 
+  const theme = definition.theme;
+  const accentStyle = theme?.accentColor ? ({ '--msform-accent': theme.accentColor } as React.CSSProperties) : undefined;
+  const bannerStyle = theme?.backgroundAssetId ? { backgroundImage: `url(${assetUrl(theme.backgroundAssetId)})` } : undefined;
+
   return (
-    <div className="msform">
-      <header className="msform-banner">
+    <div className="msform" style={accentStyle}>
+      <header className={`msform-banner${theme?.backgroundAssetId ? ' msform-banner-image' : ''}`} style={bannerStyle}>
+        {theme?.logoAssetId && <img src={assetUrl(theme.logoAssetId)} alt="" className="msform-logo" />}
         <h1>{definition.title}</h1>
         {definition.description && <p>{definition.description}</p>}
         {!submitted && !closed && !notYetOpen && <p className="msform-required-hint">* required</p>}

@@ -1146,11 +1146,30 @@ h1, h2, h3 {
 }
 
 .msform-banner {
-  background: linear-gradient(135deg, var(--pulse-purple) 0%, var(--pulse-purple-light) 100%);
+  /* --msform-accent is set inline per-form (FormRenderer) from FormDefinition.theme;
+     falls back to the fixed brand gradient when a form has no custom theme. */
+  background: linear-gradient(
+    135deg,
+    var(--msform-accent, var(--pulse-purple)) 0%,
+    color-mix(in srgb, var(--msform-accent, var(--pulse-purple)) 55%, white) 100%
+  );
   color: var(--pulse-air);
   border-radius: var(--radius-lg);
   padding: var(--space-8);
   box-shadow: var(--shadow-card);
+  background-size: cover;
+  background-position: center;
+}
+
+.msform-banner-image {
+  background-blend-mode: multiply;
+}
+
+.msform-logo {
+  display: block;
+  max-height: 40px;
+  width: auto;
+  margin-bottom: var(--space-3);
 }
 
 .msform-banner h1 {
@@ -1677,6 +1696,25 @@ h1, h2, h3 {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: var(--color-on-primary);
+}
+
+/* ── per-form theming: overrides scoped to .msform, never leaks to the rest of the portal ── */
+.msform .btn-primary {
+  background: var(--msform-accent, var(--color-primary));
+}
+
+.msform .btn-primary:hover {
+  background: color-mix(in srgb, var(--msform-accent, var(--color-primary)) 85%, black);
+}
+
+.msform .scale-pill-active {
+  background: var(--msform-accent, var(--color-primary));
+  border-color: var(--msform-accent, var(--color-primary));
+}
+
+.msform input[type='radio'],
+.msform input[type='checkbox'] {
+  accent-color: var(--msform-accent, var(--color-primary));
 }
 
 /* ── likert matrix ─────────────────────────────────────────────────── */
