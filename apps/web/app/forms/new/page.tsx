@@ -895,6 +895,8 @@ export default function NewFormPage() {
           </div>
         )}
 
+        <div className="builder-fields-row">
+        <div className="builder-fields-col">
         {fields.map((field, index) => (
           <fieldset key={index} className="builder-field question-card">
             <legend className="field-legend">
@@ -1550,6 +1552,68 @@ export default function NewFormPage() {
         >
           + add field
         </button>
+        </div>
+
+        <aside className="builder-toolbar" aria-label="add to form">
+          <button
+            type="button"
+            className="btn-ghost"
+            title="add question"
+            aria-label="add question"
+            onClick={() => setFields((current) => [...current, emptyField()])}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            title="import questions from a file"
+            aria-label="import questions from a file"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            📥
+          </button>
+          <button
+            type="button"
+            className="btn-ghost builder-toolbar-tt"
+            title="add title and description"
+            aria-label="add title and description"
+            onClick={() => setFields((current) => [...current, { ...emptyField(), type: 'section_header' }])}
+          >
+            Tt
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            title="add image question"
+            aria-label="add image question"
+            onClick={() => setFields((current) => [...current, { ...emptyField(), mediaType: 'image' }])}
+          >
+            🖼
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            title="add video question"
+            aria-label="add video question"
+            onClick={() => setFields((current) => [...current, { ...emptyField(), mediaType: 'video' }])}
+          >
+            🎬
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            title="add a new page"
+            aria-label="add a new page"
+            onClick={() => {
+              setSectionsEnabled(true);
+              addSection();
+            }}
+          >
+            ⏎
+          </button>
+        </aside>
+        </div>
 
         <div className="admin-card" style={{ marginTop: 24, marginBottom: 16 }}>
           <span className="builder-required">
