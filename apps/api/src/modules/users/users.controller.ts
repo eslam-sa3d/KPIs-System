@@ -1,12 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   CreateDepartmentInput,
   CreateUserInput,
   PageQuery,
   SetUserStatusInput,
+  UpdateDepartmentInput,
   createDepartmentSchema,
   createUserSchema,
   setUserStatusSchema,
+  updateDepartmentSchema,
 } from '@pulse/contracts';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
@@ -61,5 +63,21 @@ export class DepartmentsController {
     @Req() req: AuthedRequest,
   ) {
     return this.users.createDepartment(input, req.user.id);
+  }
+
+  @Patch(':departmentId')
+  @RequirePermissions('departments:manage')
+  rename(
+    @Param('departmentId') departmentId: string,
+    @Body(new ZodValidationPipe(updateDepartmentSchema)) input: UpdateDepartmentInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.users.renameDepartment(departmentId, input, req.user.id);
+  }
+
+  @Delete(':departmentId')
+  @RequirePermissions('departments:manage')
+  remove(@Param('departmentId') departmentId: string, @Req() req: AuthedRequest) {
+    return this.users.deleteDepartment(departmentId, req.user.id);
   }
 }

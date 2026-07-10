@@ -93,4 +93,55 @@ describe('auth flow', () => {
     const afterLogout = await api().post('/api/v1/auth/refresh').set('Cookie', cookie);
     expect(afterLogout.status).toBe(401);
   });
+
+  describe('change-password', () => {
+    it('requires authentication', async () => {
+      const res = await api()
+        .post('/api/v1/auth/change-password')
+        .send({ currentPassword: ADMIN.password, newPassword: 'irrelevant123' });
+      expect(res.status).toBe(401);
+    });
+
+    // Doesn't exercise the success path here — it would rotate the seeded
+    // admin's real password out from under every other test in the suite.
+    // The full happy path (rehash + session revocation + audit log) is
+    // covered against injected doubles in auth.service.spec.ts.
+    it('rejects the wrong current password without touching anything', async () => {
+      const login = await api().post('/api/v1/auth/login').send(ADMIN);
+      const res = await api()
+        .post('/api/v1/auth/change-password')
+        .set('Authorization', `Bearer ${login.body.data.accessToken}`)
+        .send({ currentPassword: 'definitely-wrong', newPassword: 'irrelevant123' });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('UNAUTHENTICATED');
+
+      // the admin can still log in with their real password afterward
+      const stillWorks = await api().post('/api/v1/auth/login').send(ADMIN);
+      expect(stillWorks.status).toBe(200);
+    });
+  });
+
+  describe('forgot-password / reset-password', () => {
+    it('always returns success, whether or not the email matches an account (no enumeration)', async () => {
+      const known = await api().post('/api/v1/auth/forgot-password').send({ email: ADMIN.email });
+      const unknown = await api()
+        .post('/api/v1/auth/forgot-password')
+        .send({ email: 'nobody-here@pulse.local' });
+
+      expect(known.status).toBe(200);
+      expect(known.body).toMatchObject({ success: true });
+      expect(unknown.status).toBe(200);
+      expect(unknown.body).toMatchObject({ success: true });
+    });
+
+    it('rejects an unknown/invalid reset token', async () => {
+      const res = await api()
+        .post('/api/v1/auth/reset-password')
+        .send({ token: 'not-a-real-token', newPassword: 'irrelevant123' });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('UNAUTHENTICATED');
+    });
+  });
 });

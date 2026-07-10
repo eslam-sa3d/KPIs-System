@@ -2,10 +2,14 @@ import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common'
 import { Throttle } from '@nestjs/throttler';
 import {
   ChangePasswordInput,
+  ForgotPasswordInput,
   LoginInput,
+  ResetPasswordInput,
   TokenGrant,
   changePasswordSchema,
+  forgotPasswordSchema,
   loginSchema,
+  resetPasswordSchema,
 } from '@pulse/contracts';
 import type { Request, Response } from 'express';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
@@ -91,6 +95,22 @@ export class AuthController {
     @Req() req: Request & { user: { id: string } },
   ) {
     return this.auth.changePassword(req.user.id, input.currentPassword, input.newPassword);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } }) // tighter than login — this sends email
+  forgotPassword(@Body(new ZodValidationPipe(forgotPasswordSchema)) input: ForgotPasswordInput) {
+    return this.auth.forgotPassword(input.email);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  resetPassword(@Body(new ZodValidationPipe(resetPasswordSchema)) input: ResetPasswordInput) {
+    return this.auth.resetPassword(input.token, input.newPassword);
   }
 
   private attachRefreshCookie(res: Response, { grant, refreshToken }: GrantWithRefresh): TokenGrant {

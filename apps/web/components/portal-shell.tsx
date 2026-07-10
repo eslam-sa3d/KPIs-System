@@ -70,7 +70,9 @@ export function PortalShell({
 
         <div className="portal-header-actions">
           <ThemeToggle />
-          <span className="portal-user portal-user-desktop">{user?.displayName}</span>
+          <Link href="/account" className="portal-user portal-user-desktop">
+            {user?.displayName}
+          </Link>
           <Button variant="ghost" size="sm" className="portal-signout-desktop" onClick={onSignOut}>
             sign out
           </Button>
@@ -106,7 +108,11 @@ export function PortalShell({
           </Link>
         ))}
         <div className="portal-nav-mobile-footer">
-          {user && <span className="portal-user">{user.displayName}</span>}
+          {user && (
+            <Link href="/account" className="portal-user" onClick={() => setMenuOpen(false)}>
+              {user.displayName}
+            </Link>
+          )}
           <Button variant="ghost" size="sm" onClick={onSignOut}>
             sign out
           </Button>

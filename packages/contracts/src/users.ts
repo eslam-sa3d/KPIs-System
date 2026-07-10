@@ -16,6 +16,9 @@ export type SetUserStatusInput = z.infer<typeof setUserStatusSchema>;
 export const createDepartmentSchema = z.object({ name: z.string().min(2).max(120) });
 export type CreateDepartmentInput = z.infer<typeof createDepartmentSchema>;
 
+export const updateDepartmentSchema = z.object({ name: z.string().min(2).max(120) });
+export type UpdateDepartmentInput = z.infer<typeof updateDepartmentSchema>;
+
 /** Customizable company identity shown on the landing page and portal chrome. */
 export const brandIdentitySchema = z.object({
   companyName: z.string().min(1).max(120),

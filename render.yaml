@@ -7,7 +7,14 @@
 #
 # After the first deploy:
 #   - set CORS_ORIGINS on pulse-api to the pulse-web URL
+#   - set WEB_URL on pulse-api to the same pulse-web URL (used to build the
+#     link inside password-reset emails)
 #   - set NEXT_PUBLIC_API_URL on pulse-web to the pulse-api URL
+#   - set MAILERSEND_API_KEY on pulse-api to a MailerSend API key, and
+#     optionally MAIL_FROM_EMAIL/MAIL_FROM_NAME (the sender identity — must be
+#     a domain verified in MailerSend) — without a key, "forgot password"
+#     emails are logged instead of sent, so the app still runs, it just can't
+#     deliver a real reset link
 #   - run `pnpm db:seed` once from the pulse-api shell to create the admin
 
 services:
@@ -52,6 +59,14 @@ services:
         value: none
       - key: CORS_ORIGINS
         sync: false # set to the pulse-web URL after first deploy
+      - key: WEB_URL
+        sync: false # set to the pulse-web URL after first deploy
+      - key: MAILERSEND_API_KEY
+        sync: false # set to a MailerSend API key to enable real password-reset emails
+      - key: MAIL_FROM_EMAIL
+        sync: false # optional — must be a domain verified in MailerSend
+      - key: MAIL_FROM_NAME
+        sync: false # optional — defaults to "pulse"
 
   - type: web
     name: pulse-web

@@ -14,6 +14,19 @@ export const changePasswordSchema = z.object({
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email().max(254),
+});
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8).max(128),
+});
+
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
 /** Payload embedded in the (short-lived) access JWT. */
 export interface AccessTokenClaims {
   sub: string; // user id

@@ -10,7 +10,7 @@ function makePrismaStub() {
   return {
     tx,
     user: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn(), update: vi.fn() },
-    department: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    department: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     session: { updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(async (arg: unknown) =>
@@ -80,6 +80,71 @@ describe('UsersService', () => {
     prisma.user.findUnique.mockResolvedValue({ id: 'admin-1' });
     await expect(service.setStatus('admin-1', false, 'admin-1')).rejects.toMatchObject({
       code: 'CONFLICT',
+    });
+  });
+
+  describe('renameDepartment', () => {
+    it('renames and audits when the new name is free', async () => {
+      prisma.department.findUnique
+        .mockResolvedValueOnce({ id: 'dept-1', name: 'Old Name' }) // existence check
+        .mockResolvedValueOnce(null); // uniqueness check
+
+      await service.renameDepartment('dept-1', { name: 'New Name' }, 'admin-1');
+
+      expect(prisma.department.update).toHaveBeenCalledWith({
+        where: { id: 'dept-1' },
+        data: { name: 'New Name' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ action: 'department.renamed', entityId: 'dept-1' }),
+      });
+    });
+
+    it('rejects an unknown department with NOT_FOUND', async () => {
+      prisma.department.findUnique.mockResolvedValueOnce(null);
+      await expect(service.renameDepartment('ghost', { name: 'X' }, 'admin-1')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+    });
+
+    it('rejects a name collision with another department, but allows renaming to its own current name', async () => {
+      prisma.department.findUnique
+        .mockResolvedValueOnce({ id: 'dept-1', name: 'Old Name' })
+        .mockResolvedValueOnce({ id: 'dept-2', name: 'Taken' });
+
+      await expect(service.renameDepartment('dept-1', { name: 'Taken' }, 'admin-1')).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+      expect(prisma.department.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteDepartment', () => {
+    it('deletes and audits when no user is assigned', async () => {
+      prisma.department.findUnique.mockResolvedValue({ id: 'dept-1', name: 'Empty Dept' });
+      prisma.user.count.mockResolvedValue(0);
+
+      await service.deleteDepartment('dept-1', 'admin-1');
+
+      expect(prisma.department.delete).toHaveBeenCalledWith({ where: { id: 'dept-1' } });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ action: 'department.deleted', entityId: 'dept-1' }),
+      });
+    });
+
+    it('refuses to delete a department that still has members', async () => {
+      prisma.department.findUnique.mockResolvedValue({ id: 'dept-1', name: 'Staffed Dept' });
+      prisma.user.count.mockResolvedValue(3);
+
+      await expect(service.deleteDepartment('dept-1', 'admin-1')).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(prisma.department.delete).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown department with NOT_FOUND', async () => {
+      prisma.department.findUnique.mockResolvedValue(null);
+      await expect(service.deleteDepartment('ghost', 'admin-1')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
     });
   });
 });

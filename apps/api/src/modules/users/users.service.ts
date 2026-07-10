@@ -4,6 +4,7 @@ import {
   CreateUserInput,
   PAGE_DEFAULTS,
   PageQuery,
+  UpdateDepartmentInput,
   buildPaginationMeta,
 } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
@@ -124,5 +125,44 @@ export class UsersService {
       data: { actorId, action: 'department.created', entity: 'Department', entityId: department.id },
     });
     return department;
+  }
+
+  async renameDepartment(departmentId: string, input: UpdateDepartmentInput, actorId: string) {
+    const department = await this.prisma.department.findUnique({ where: { id: departmentId } });
+    if (!department) throw AppError.notFound('Department', departmentId);
+    const existing = await this.prisma.department.findUnique({ where: { name: input.name } });
+    if (existing && existing.id !== departmentId) {
+      throw new AppError('CONFLICT', `Department "${input.name}" already exists`);
+    }
+    const updated = await this.prisma.department.update({
+      where: { id: departmentId },
+      data: { name: input.name },
+    });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'department.renamed', entity: 'Department', entityId: departmentId },
+    });
+    return updated;
+  }
+
+  /** Blocked while any user is still assigned — same "fix it first" pattern as
+   *  KPI deletion, rather than silently orphaning people's department. KPI
+   *  visibility assignments pointing at this department cascade-delete at the
+   *  DB level (KpiAssignment.department is onDelete: Cascade), which is safe
+   *  to do silently since it's just a "who sees this KPI" mapping, not data. */
+  async deleteDepartment(departmentId: string, actorId: string) {
+    const department = await this.prisma.department.findUnique({ where: { id: departmentId } });
+    if (!department) throw AppError.notFound('Department', departmentId);
+    const memberCount = await this.prisma.user.count({ where: { departmentId } });
+    if (memberCount > 0) {
+      throw new AppError(
+        'CONFLICT',
+        `"${department.name}" still has ${memberCount} member${memberCount === 1 ? '' : 's'} — move them to another department first`,
+      );
+    }
+    await this.prisma.department.delete({ where: { id: departmentId } });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'department.deleted', entity: 'Department', entityId: departmentId },
+    });
+    return null;
   }
 }

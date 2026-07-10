@@ -1,17 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AccessTokenClaims, AuthenticatedUser, TokenGrant } from '@pulse/contracts';
 import { createHash, randomBytes } from 'node:crypto';
 import { AppError } from '../../common/app-error';
+import { MailerService } from '../../infra/mailer.service';
 import { PrismaService } from '../../infra/prisma.service';
 import { RbacService } from '../rbac/rbac.service';
 import { PasswordHasher } from './password-hasher';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 const REFRESH_TOKEN_TTL_DAYS = 30;
+const RESET_TOKEN_TTL_MINUTES = 60;
 
-/** Refresh tokens are opaque 384-bit secrets; only their SHA-256 lands in the DB. */
-const hashRefreshToken = (raw: string) => createHash('sha256').update(raw).digest('hex');
+/** Refresh/reset tokens are opaque 384-bit secrets; only their SHA-256 lands in the DB. */
+const hashToken = (raw: string) => createHash('sha256').update(raw).digest('hex');
 
 export interface SessionContext {
   userAgent?: string;
@@ -37,11 +39,14 @@ export interface GrantWithRefresh {
  */
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly hasher: PasswordHasher,
     private readonly rbac: RbacService,
+    private readonly mailer: MailerService,
   ) {}
 
   async login(email: string, password: string, context: SessionContext): Promise<GrantWithRefresh> {
@@ -62,7 +67,7 @@ export class AuthService {
     if (!rawRefreshToken) throw invalid;
 
     const session = await this.prisma.session.findUnique({
-      where: { refreshTokenHash: hashRefreshToken(rawRefreshToken) },
+      where: { refreshTokenHash: hashToken(rawRefreshToken) },
       include: {
         user: { include: { roles: { include: { role: { select: { name: true } } } } } },
       },
@@ -100,7 +105,7 @@ export class AuthService {
   async logout(rawRefreshToken: string | undefined): Promise<void> {
     if (!rawRefreshToken) return;
     await this.prisma.session.updateMany({
-      where: { refreshTokenHash: hashRefreshToken(rawRefreshToken), revokedAt: null },
+      where: { refreshTokenHash: hashToken(rawRefreshToken), revokedAt: null },
       data: { revokedAt: new Date() },
     });
   }
@@ -137,6 +142,68 @@ export class AuthService {
     return null;
   }
 
+  /** Always resolves the same way regardless of whether the email matches a
+   *  real, active account — same no-enumeration principle as login(). */
+  async forgotPassword(email: string): Promise<null> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (user && user.isActive) {
+      const rawToken = randomBytes(48).toString('base64url');
+      await this.prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: hashToken(rawToken),
+          expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000),
+        },
+      });
+      const resetUrl = `${process.env.WEB_URL ?? 'http://localhost:3000'}/reset-password?token=${rawToken}`;
+      await this.mailer.send(
+        user.email,
+        'reset your pulse password',
+        `<p>hi ${user.displayName},</p>` +
+          `<p>someone requested a password reset for your pulse account. if this was you, ` +
+          `click the link below — it expires in ${RESET_TOKEN_TTL_MINUTES} minutes.</p>` +
+          `<p><a href="${resetUrl}">${resetUrl}</a></p>` +
+          `<p>if you didn't request this, you can safely ignore this email.</p>`,
+      );
+    } else {
+      this.logger.log(`forgot-password requested for unknown/inactive email — no email sent`);
+    }
+    return null;
+  }
+
+  async resetPassword(rawToken: string, newPassword: string): Promise<null> {
+    const invalid = new AppError('UNAUTHENTICATED', 'This reset link is invalid or has expired');
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: hashToken(rawToken) },
+    });
+    if (!record || record.usedAt || record.expiresAt < new Date()) throw invalid;
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { passwordHash: await this.hasher.hash(newPassword) },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+      // resetting the password revokes every session, same as changePassword
+      this.prisma.session.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          actorId: record.userId,
+          action: 'user.password_reset',
+          entity: 'User',
+          entityId: record.userId,
+        },
+      }),
+    ]);
+    return null;
+  }
+
   private async issueGrant(
     user: AuthenticatedUser,
     context: SessionContext,
@@ -150,7 +217,7 @@ export class AuthService {
     await this.prisma.session.create({
       data: {
         userId: user.id,
-        refreshTokenHash: hashRefreshToken(refreshToken),
+        refreshTokenHash: hashToken(refreshToken),
         userAgent: context.userAgent,
         ip: context.ip,
         expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000),

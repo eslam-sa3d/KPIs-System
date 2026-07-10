@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -46,6 +47,9 @@ export default function LoginPage() {
           minLength={8}
           required
         />
+        <Link href="/forgot-password" className="login-forgot-link">
+          forgot password?
+        </Link>
 
         {error && (
           <Alert variant="destructive">

@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import type { AuthenticatedUser } from '@pulse/contracts';
-import { Building2 } from 'lucide-react';
+import { Building2, Pencil } from 'lucide-react';
 import { can } from './portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -17,11 +17,15 @@ interface DepartmentRow {
   name: string;
 }
 
-/** List and create departments — the settings "departments" tab. */
+/** List, create, rename, and delete departments — the settings "departments" tab. */
 export function DepartmentsManager({ user }: { user: AuthenticatedUser | null }) {
   const [departments, setDepartments] = useState<DepartmentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const canManage = can(user, 'departments:manage');
 
   const reload = useCallback(() => api<DepartmentRow[]>('/v1/departments').then(setDepartments), []);
 
@@ -44,9 +48,36 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
     }
   }
 
+  async function onRename(departmentId: string, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    const form = new FormData(event.currentTarget);
+    try {
+      await api(`/v1/departments/${departmentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: form.get('name') }),
+      });
+      setRenamingId(null);
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Renaming the department failed');
+    }
+  }
+
+  async function onDelete(departmentId: string) {
+    setError(null);
+    try {
+      await api(`/v1/departments/${departmentId}`, { method: 'DELETE' });
+      setConfirmDeleteId(null);
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Deleting the department failed');
+    }
+  }
+
   return (
     <>
-      {can(user, 'departments:manage') && (
+      {canManage && (
         <Card>
           <CardContent className="pt-6">
             <form className="inline-form" onSubmit={onCreate}>
@@ -82,12 +113,70 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
           <TableHeader>
             <TableRow>
               <TableHead>name</TableHead>
+              {canManage && <TableHead />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {departments.map((d) => (
               <TableRow key={d.id}>
-                <TableCell>{d.name}</TableCell>
+                <TableCell>
+                  {renamingId === d.id ? (
+                    <form className="inline-form" onSubmit={(e) => onRename(d.id, e)}>
+                      <Input name="name" defaultValue={d.name} required minLength={2} autoFocus />
+                      <Button type="submit" variant="ghost" size="sm">
+                        save
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingId(null)}>
+                        cancel
+                      </Button>
+                    </form>
+                  ) : (
+                    d.name
+                  )}
+                </TableCell>
+                {canManage && (
+                  <TableCell>
+                    {renamingId !== d.id && (
+                      <span className="row-actions">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`rename ${d.name}`}
+                          onClick={() => setRenamingId(d.id)}
+                        >
+                          <Pencil size={14} aria-hidden="true" />
+                        </Button>
+                        {confirmDeleteId === d.id ? (
+                          <>
+                            <span className="muted">delete?</span>
+                            <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(d.id)}>
+                              confirm
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setConfirmDeleteId(null)}
+                            >
+                              cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setConfirmDeleteId(d.id)}
+                          >
+                            delete
+                          </Button>
+                        )}
+                      </span>
+                    )}
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

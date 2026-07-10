@@ -92,4 +92,31 @@ describe('API contract (envelope + auth + RBAC)', () => {
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
     expect(res.body.error.details[0].path).toContain('score');
   });
+
+  it('creates, renames, and deletes a department end to end', async () => {
+    const token = await loginAsAdmin();
+    const name = `it-dept-${Date.now()}`;
+    const auth = () => api().set('Authorization', `Bearer ${token}`);
+
+    const created = await auth().post('/api/v1/departments').send({ name });
+    expect(created.status).toBe(201);
+    const id = created.body.data.id as string;
+
+    const renamed = await auth().patch(`/api/v1/departments/${id}`).send({ name: `${name}-renamed` });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.data.name).toBe(`${name}-renamed`);
+
+    const listed = await auth().get('/api/v1/departments');
+    expect(listed.body.data).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id, name: `${name}-renamed` })]),
+    );
+
+    const deleted = await auth().delete(`/api/v1/departments/${id}`);
+    expect(deleted.status).toBe(200);
+
+    const afterDelete = await auth().get('/api/v1/departments');
+    expect(afterDelete.body.data).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id })]),
+    );
+  });
 });

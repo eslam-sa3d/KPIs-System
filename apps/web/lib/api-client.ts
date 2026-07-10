@@ -106,6 +106,27 @@ export async function logout(): Promise<void> {
   currentUser = null;
 }
 
+/** Changing your own password revokes every other session server-side —
+ *  callers should log out and send the user back to /login afterward. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await api<null>('/v1/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+/** Always resolves — the backend never reveals whether the email matched an account. */
+export async function forgotPassword(email: string): Promise<void> {
+  await api<null>('/v1/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await api<null>('/v1/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword }),
+  });
+}
+
 /** Multipart file upload (question attachments) — bypasses the JSON envelope's Content-Type. */
 export async function uploadFile<T>(path: string, file: File): Promise<T> {
   const body = new FormData();

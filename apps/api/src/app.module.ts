@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { MailerService } from './infra/mailer.service';
 import { PrismaService } from './infra/prisma.service';
 import { RedisService } from './infra/redis.service';
 import { AuthController } from './modules/auth/auth.controller';
@@ -57,6 +58,7 @@ import { RolesController } from './modules/rbac/roles.controller';
   providers: [
     PrismaService,
     RedisService,
+    MailerService,
     PasswordHasher,
     AuthService,
     UsersService,
