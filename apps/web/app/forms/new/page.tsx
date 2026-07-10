@@ -7,7 +7,6 @@ import {
   BRANCH_TRIGGER_TYPES,
   CONDITION_OPERATORS,
   END_OF_FORM,
-  SCORE_FIELD_TYPES,
   type FieldType,
   type FormDefinition,
   type FormField,
@@ -880,7 +879,14 @@ function NewFormPage() {
     }
 
     const evaluateeFieldKey = resolveEvaluateeFieldKey(field);
-    if (!evaluateeFieldKey) return; // the inline picker already guards this
+    if (!evaluateeFieldKey) {
+      setError(
+        personFields.length === 0
+          ? 'add a "person" field to this form first — a KPI link needs one to know who this score is about'
+          : 'choose which person field this question scores (above) first',
+      );
+      return;
+    }
 
     try {
       if (field.kpiMappingId) {
@@ -1963,49 +1969,34 @@ function NewFormPage() {
             {canLinkKpis && (
               <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
                 <span className="muted" style={{ fontSize: 12 }}>link to KPI (optional)</span>
-                {!(SCORE_FIELD_TYPES as readonly string[]).includes(field.type) ? (
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    only rating, NPS, and opinion-scale questions can score a KPI — this question&apos;s type
-                    doesn&apos;t produce a number to link.
-                  </p>
-                ) : personFields.length === 0 ? (
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    add a &quot;person&quot; field to this form first — a KPI link needs one to know who this
-                    score is about.
-                  </p>
-                ) : (
+                {personFields.length > 1 && (
                   <>
-                    {personFields.length > 1 && (
-                      <>
-                        <label htmlFor={`field-evaluatee-${index}`}>who this scores (evaluatee field)</label>
-                        <Select
-                          value={field.evaluateeFieldKey || undefined}
-                          onValueChange={(v) => updateField(index, { evaluateeFieldKey: v })}
-                        >
-                          <SelectTrigger id={`field-evaluatee-${index}`}>
-                            <SelectValue placeholder="choose a person field…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {personFields.map((p) => (
-                              <SelectItem key={p.key} value={p.key}>
-                                {p.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </>
-                    )}
-                    <label htmlFor={`field-kpi-${index}`}>KPI</label>
-                    <KpiLinkCombobox
-                      kpis={kpis}
-                      kpiId={field.kpiId}
-                      evaluationAreaId={field.evaluationAreaId}
-                      onSelect={(kpiId, evaluationAreaId) => void onLinkFieldToKpi(index, kpiId, evaluationAreaId)}
-                      onClear={() => void onUnlinkFieldFromKpi(index)}
-                      disabled={personFields.length > 1 && !field.evaluateeFieldKey}
-                    />
+                    <label htmlFor={`field-evaluatee-${index}`}>who this scores (evaluatee field)</label>
+                    <Select
+                      value={field.evaluateeFieldKey || undefined}
+                      onValueChange={(v) => updateField(index, { evaluateeFieldKey: v })}
+                    >
+                      <SelectTrigger id={`field-evaluatee-${index}`}>
+                        <SelectValue placeholder="choose a person field…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {personFields.map((p) => (
+                          <SelectItem key={p.key} value={p.key}>
+                            {p.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </>
                 )}
+                <label htmlFor={`field-kpi-${index}`}>KPI</label>
+                <KpiLinkCombobox
+                  kpis={kpis}
+                  kpiId={field.kpiId}
+                  evaluationAreaId={field.evaluationAreaId}
+                  onSelect={(kpiId, evaluationAreaId) => void onLinkFieldToKpi(index, kpiId, evaluationAreaId)}
+                  onClear={() => void onUnlinkFieldFromKpi(index)}
+                />
               </div>
             )}
 
