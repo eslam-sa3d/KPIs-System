@@ -2764,44 +2764,43 @@ h3 {
   margin: var(--space-4) 0 var(--space-6);
 }
 
+/* Same flat spacing/color language as the dashboard's own .p-card widgets
+   (--card/--border/--dash-radius-lg, no shadow, no accent border) so the
+   stat-tile row reads as the same design system, not a second one. */
 .insight-card {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  min-height: 104px;
-  padding: var(--space-5) var(--space-6) var(--space-5) var(--space-12);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-top: 4px solid var(--color-primary);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--dash-radius-lg);
   font: inherit;
   text-align: left;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .insight-card .hierarchy-icon-sm {
-  width: 52px;
-  height: 52px;
-  border-radius: var(--radius-lg);
+  width: 44px;
+  height: 44px;
+  border-radius: var(--dash-radius-lg);
   background: var(--md-sys-color-primary-container);
   color: var(--color-primary);
   flex-shrink: 0;
 }
 
 .insight-card .hierarchy-icon-sm svg {
-  width: 24px;
-  height: 24px;
+  width: 21px;
+  height: 21px;
 }
 
 .insight-card .weight-ring-sm {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
 }
 
 .insight-card .weight-ring-sm .weight-ring-value {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .insight-card-body {
@@ -2812,24 +2811,23 @@ h3 {
 }
 
 .insight-card strong {
-  font-size: var(--md-sys-typescale-headline-large-size, var(--md-sys-typescale-headline-small-size));
+  font-size: var(--md-sys-typescale-headline-small-size, var(--md-sys-typescale-title-large-size));
   font-weight: var(--font-weight-bold);
   color: var(--color-primary);
   line-height: 1.1;
 }
 
 .insight-card span {
-  font-size: var(--md-sys-typescale-label-large-size, var(--md-sys-typescale-label-medium-size));
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--color-text-muted);
-  letter-spacing: 0.04em;
+  font-size: var(--p-card-title-size, 12px);
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .insight-card.is-warning {
   background: var(--md-sys-color-error-container);
   border-color: transparent;
-  border-top-color: var(--md-sys-color-error);
 }
 
 .insight-card.is-warning strong,
@@ -2848,7 +2846,6 @@ h3 {
 .insight-card.is-alert {
   background: var(--md-sys-color-error-container);
   border-color: transparent;
-  border-top-color: var(--md-sys-color-error);
   cursor: pointer;
 }
 
@@ -2860,13 +2857,6 @@ h3 {
 .insight-card.is-alert .hierarchy-icon-sm {
   background: var(--color-surface);
   color: var(--md-sys-color-error);
-}
-
-.insight-card:hover,
-.insight-card.is-alert:hover,
-.insight-card.is-alert:focus-visible {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-card-hover, var(--shadow-card));
 }
 
 .insight-card.is-alert:focus-visible {
