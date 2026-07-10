@@ -17,7 +17,7 @@ function makePrismaStub() {
       update: vi.fn(),
       delete: vi.fn(),
     },
-    user: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn(), findMany: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn((ops: Array<Promise<unknown>>) => Promise.all(ops)),
   };
@@ -586,6 +586,69 @@ describe('KpisService', () => {
       const [kpi] = await service.listMine('user-1');
 
       expect(kpi!.evaluationAreas[0]!.entries[0]!.enteredById).toBe('evaluator-1');
+    });
+  });
+
+  describe('getCoverage', () => {
+    const coveredUser = { id: 'user-1', displayName: 'Covered User', email: 'covered@pulse.local', departmentId: null, roles: [{ roleId: 'role-1' }] };
+    const uncoveredUser = { id: 'user-2', displayName: 'Uncovered User', email: 'uncovered@pulse.local', departmentId: null, roles: [] };
+    const coveringKpi = {
+      assignments: [{ roleId: 'role-1', departmentId: null }],
+      evaluationAreas: [{ id: 'area-1' }],
+    };
+
+    it('sorts a user whose roles/department match no active KPI assignment into noKpi', async () => {
+      prisma.user.findMany.mockResolvedValue([uncoveredUser]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
+
+      const result = await service.getCoverage();
+
+      expect(result.noKpi).toEqual([{ id: 'user-2', displayName: 'Uncovered User', email: 'uncovered@pulse.local' }]);
+      expect(result.pending).toEqual([]);
+    });
+
+    it('sorts a covered user with no recorded entries into pending', async () => {
+      prisma.user.findMany.mockResolvedValue([coveredUser]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
+
+      const result = await service.getCoverage();
+
+      expect(result.pending).toEqual([{ id: 'user-1', displayName: 'Covered User', email: 'covered@pulse.local' }]);
+      expect(result.noKpi).toEqual([]);
+    });
+
+    it('excludes a covered user who has ever been scored, regardless of which KPI/period', async () => {
+      prisma.user.findMany.mockResolvedValue([coveredUser]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([{ personId: 'user-1' }]);
+
+      const result = await service.getCoverage();
+
+      expect(result.pending).toEqual([]);
+      expect(result.noKpi).toEqual([]);
+    });
+
+    it('treats a KPI assignment with no active evaluation areas as not covering anyone', async () => {
+      prisma.user.findMany.mockResolvedValue([coveredUser]);
+      prisma.kpi.findMany.mockResolvedValue([{ ...coveringKpi, evaluationAreas: [] }]);
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
+
+      const result = await service.getCoverage();
+
+      expect(result.noKpi).toEqual([{ id: 'user-1', displayName: 'Covered User', email: 'covered@pulse.local' }]);
+    });
+
+    it('returns totalActiveUsers as the count of active users queried', async () => {
+      prisma.user.findMany.mockResolvedValue([coveredUser, uncoveredUser]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
+
+      const result = await service.getCoverage();
+
+      expect(result.totalActiveUsers).toBe(2);
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
     });
   });
 });

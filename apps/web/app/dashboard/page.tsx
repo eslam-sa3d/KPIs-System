@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
 import { useEffect } from 'react';
-import { PortalShell } from '../../components/portal-shell';
+import { PortalShell, can } from '../../components/portal-shell';
 import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -60,6 +60,18 @@ interface ComputedKpi {
   latestValue: number | null;
   status: StatusKey;
   lastUpdated: string | null;
+}
+
+interface CoverageRow {
+  id: string;
+  displayName: string;
+  email: string;
+}
+
+interface Coverage {
+  totalActiveUsers: number;
+  noKpi: CoverageRow[];
+  pending: CoverageRow[];
 }
 
 type SortKey = 'name' | 'latestValue' | 'status' | 'updated';
@@ -139,10 +151,17 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'latestValue', dir: -1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [coverage, setCoverage] = useState<Coverage | null>(null);
+  const canSeeCoverage = can(user, 'kpis:manage');
 
   useEffect(() => {
     if (user) void api<RawKpi[]>('/v1/kpis/my').then((raw) => setKpis(raw.map(computeKpi)));
   }, [user]);
+
+  // org-wide "who has no KPI" / "who's never been scored" — admin-only, powers the team-coverage cards below
+  useEffect(() => {
+    if (user && canSeeCoverage) void api<Coverage>('/v1/kpis/coverage').then(setCoverage);
+  }, [user, canSeeCoverage]);
 
   // cadence now lives on each Evaluation Area (a KPI can span several) — "level" filters
   // to KPIs that have at least one area on that cadence, rather than a single KPI-wide value
@@ -394,6 +413,50 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+
+            {canSeeCoverage && coverage && (
+              <div className="p-charts-row" style={{ marginBottom: 16 }}>
+                <div className="p-card">
+                  <div className="p-card-title">Pending evaluation</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+                    <span className="p-score-ring p-status-pending" style={{ width: 64, height: 44, fontSize: 15 }}>
+                      {coverage.pending.length}
+                    </span>
+                    <span className="muted" style={{ fontSize: 11 }}>
+                      team members with a KPI mapped who haven&apos;t been scored yet, out of {coverage.totalActiveUsers}
+                    </span>
+                  </div>
+                  {coverage.pending.length > 0 && (
+                    <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
+                      {coverage.pending.slice(0, 8).map((u) => (
+                        <li key={u.id}>{u.displayName}</li>
+                      ))}
+                      {coverage.pending.length > 8 && <li>…and {coverage.pending.length - 8} more</li>}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="p-card">
+                  <div className="p-card-title">No KPI assigned</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+                    <span className="p-score-ring p-status-below" style={{ width: 64, height: 44, fontSize: 15 }}>
+                      {coverage.noKpi.length}
+                    </span>
+                    <span className="muted" style={{ fontSize: 11 }}>
+                      team members whose role or department has no KPI mapped to it yet
+                    </span>
+                  </div>
+                  {coverage.noKpi.length > 0 && (
+                    <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
+                      {coverage.noKpi.slice(0, 8).map((u) => (
+                        <li key={u.id}>{u.displayName}</li>
+                      ))}
+                      {coverage.noKpi.length > 8 && <li>…and {coverage.noKpi.length - 8} more</li>}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="p-charts-row">
               <div className="p-card">

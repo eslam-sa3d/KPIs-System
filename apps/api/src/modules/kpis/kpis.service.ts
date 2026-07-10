@@ -267,6 +267,52 @@ export class KpisService {
     }));
   }
 
+  /**
+   * Org-wide team coverage for the dashboard's admin view: every active user
+   * sorted into "no KPI assigned" (their roles/department match no active
+   * KPI's assignments — the same matching myAssignmentFilter uses for a
+   * single caller, just run for everyone at once) or "pending evaluation"
+   * (covered by at least one active KPI, but has never once been scored as
+   * an evaluatee — a person-wide check, not scoped to a specific KPI/period,
+   * since the ask is simply "has anyone ever evaluated this person").
+   */
+  async getCoverage() {
+    const [users, kpis, scoredPersonRows] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { isActive: true },
+        select: { id: true, displayName: true, email: true, departmentId: true, roles: { select: { roleId: true } } },
+        orderBy: { displayName: 'asc' },
+      }),
+      this.prisma.kpi.findMany({
+        where: { isActive: true },
+        select: {
+          assignments: { select: { roleId: true, departmentId: true } },
+          evaluationAreas: { where: { isActive: true }, select: { id: true } },
+        },
+      }),
+      this.prisma.evaluationAreaEntry.findMany({ distinct: ['personId'], select: { personId: true } }),
+    ]);
+    const scoredPersonIds = new Set(scoredPersonRows.map((e) => e.personId));
+
+    const noKpi: Array<{ id: string; displayName: string; email: string }> = [];
+    const pending: Array<{ id: string; displayName: string; email: string }> = [];
+    for (const user of users) {
+      const roleIds = new Set(user.roles.map((r) => r.roleId));
+      const covered = kpis.some(
+        (kpi) =>
+          kpi.evaluationAreas.length > 0 &&
+          kpi.assignments.some(
+            (a) => (a.roleId && roleIds.has(a.roleId)) || (a.departmentId && a.departmentId === user.departmentId),
+          ),
+      );
+      const row = { id: user.id, displayName: user.displayName, email: user.email };
+      if (!covered) noKpi.push(row);
+      else if (!scoredPersonIds.has(user.id)) pending.push(row);
+    }
+
+    return { totalActiveUsers: users.length, noKpi, pending };
+  }
+
   async createEvaluationArea(kpiId: string, input: CreateEvaluationAreaInput, actorId: string) {
     const kpi = await this.prisma.kpi.findUnique({ where: { id: kpiId } });
     if (!kpi) throw AppError.notFound('KPI', kpiId);
