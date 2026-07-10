@@ -322,7 +322,7 @@ export default function KpisAdminPage() {
                 <input name="name" required minLength={2} placeholder="QA Lead Evaluation" aria-label="KPI name" autoFocus />
                 <input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
                 <button className="btn-primary" type="submit">
-                  create KPI
+                  create
                 </button>
                 <button type="button" className="btn-ghost" onClick={() => setCreatingKpi(false)}>
                   close

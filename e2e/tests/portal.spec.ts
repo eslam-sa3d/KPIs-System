@@ -10,9 +10,9 @@ test.describe('branded landing page', () => {
     await page.goto('/');
     // header + footer both carry the logo — assert the first
     await expect(page.getByAltText('pulse by solutions').first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'elevating what matters' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /digital apps/i })).toBeVisible();
 
-    await page.getByRole('link', { name: 'enter the portal' }).click();
+    await page.getByRole('link', { name: 'sign in' }).click();
     await expect(page).toHaveURL(/\/login/);
   });
 });
@@ -77,14 +77,15 @@ test.describe('form builder → submission → list (happy path)', () => {
   });
 });
 
-test.describe('KPI module (create → evaluation area → score → dashboard)', () => {
-  test('admin creates a KPI, adds an evaluation area, records a score, sees it on the dashboard', async ({
+test.describe('KPI module (create → evaluation area → score via a mapped form → dashboard)', () => {
+  test('admin creates a KPI + area, maps a form to it, and a submission scores it on the dashboard', async ({
     page,
   }, testInfo) => {
     // unique per browser-project run — parallel projects share one database
     const suffix = `${testInfo.project.name} ${Date.now()}`;
     const kpiName = `e2e KPI ${suffix}`;
     const areaName = `e2e area ${suffix}`;
+    const formTitle = `e2e scoring form ${suffix}`;
 
     await page.goto('/login');
     await page.getByLabel('email').fill(ADMIN.email);
@@ -92,43 +93,62 @@ test.describe('KPI module (create → evaluation area → score → dashboard)',
     await page.getByRole('button', { name: 'sign in' }).click();
     await expect(page).toHaveURL(/\/dashboard/);
 
-    // create the KPI — the admin/kpis page lists every existing KPI with
-    // identically-named "add area"/"record score" controls per card, so
-    // every interaction past this point is scoped to just this KPI's own
-    // <article> to stay correct regardless of what else is already seeded.
+    // create the KPI — it auto-selects into the detail pane once created
     await page.goto('/admin/kpis');
-    await page.getByLabel('name', { exact: true }).fill(kpiName);
-    await page.getByRole('button', { name: 'create KPI' }).click();
-
-    const kpiCard = page
-      .locator('article')
-      .filter({ has: page.getByRole('heading', { name: kpiName, exact: true }) });
-    await expect(kpiCard).toBeVisible();
-
-    // map it to the admin's own role — /v1/kpis/my (what the dashboard reads)
-    // only returns KPIs assigned to one of the caller's roles/department, so
-    // an unmapped KPI would never appear there regardless of scoring
-    await kpiCard.getByLabel(`map ${kpiName} to role`).selectOption({ label: 'admin' });
-    await kpiCard.getByRole('button', { name: 'map' }).click();
+    await page.getByRole('button', { name: 'new KPI' }).click();
+    await page.getByLabel('KPI name').fill(kpiName);
+    await page.getByLabel('KPI name').press('Enter');
+    await expect(page.getByRole('heading', { name: kpiName, exact: true })).toBeVisible();
 
     // add an evaluation area under it
-    await kpiCard.getByLabel('new area name').fill(areaName);
-    await kpiCard.getByRole('button', { name: 'add area' }).click();
-    await expect(kpiCard.getByText(areaName)).toBeVisible();
+    await page.getByRole('button', { name: 'add evaluation area' }).click();
+    await page.getByLabel('new area name').fill(areaName);
+    await page.getByLabel('new area name').press('Enter');
+    await expect(page.getByText(areaName)).toBeVisible();
 
-    // record a 0-5 score for the admin's own account (a real, always-present user)
-    await kpiCard.getByLabel(`who this ${areaName} score is for`).fill(ADMIN.email.split('@')[0]!);
-    await kpiCard.getByLabel('matching people').selectOption({ index: 1 });
-    const periodStart = new Date();
-    const periodEnd = new Date(periodStart.getTime() + 24 * 60 * 60 * 1000); // periodEnd must be after periodStart
-    await kpiCard.getByLabel(`${areaName} score`).fill('4.5');
-    await kpiCard.getByLabel(`${areaName} period start`).fill(periodStart.toISOString().slice(0, 10));
-    await kpiCard.getByLabel(`${areaName} period end`).fill(periodEnd.toISOString().slice(0, 10));
-    await kpiCard.getByRole('button', { name: 'record score' }).click();
-    await expect(page.locator('.form-error')).toHaveCount(0);
+    // build a form with a "person" field (the evaluatee) and a "rating"
+    // field (the score) — the Forms→KPI bridge scores an Evaluation Area
+    // from these two fields on every submission, there's no direct
+    // record-a-score control on the KPI page itself any more.
+    await page.goto('/forms/new');
+    await page.getByLabel('form title').fill(formTitle);
 
-    // the dashboard's "KPI by Person" chart and table both derive from this
-    // same recorded entry — the table row is the more stable thing to assert on
+    await page.getByRole('button', { name: 'add field' }).click();
+    const whoField = page.locator('.builder-field').nth(0);
+    await whoField.getByLabel('field label').fill('Who');
+    await whoField.locator('.field-type-summary').click();
+    await page.getByRole('option', { name: 'person' }).click();
+
+    await page.getByRole('button', { name: 'add field' }).click();
+    const scoreField = page.locator('.builder-field').nth(1);
+    await scoreField.getByLabel('field label').fill('Score');
+    await scoreField.locator('.field-type-summary').click();
+    await page.getByRole('option', { name: 'rating' }).click();
+
+    await page.getByRole('button', { name: 'publish' }).click();
+    await expect(page.getByText(/published/i)).toBeVisible();
+    await page.getByRole('link', { name: 'open form' }).click();
+
+    // map "Who"/"Score" to the evaluation area we just created
+    await page.getByRole('tab', { name: 'settings' }).click();
+    await page.getByLabel('add a mapping').selectOption({ label: kpiName });
+    await page.getByLabel('evaluation area').selectOption({ label: areaName });
+    await page.getByLabel('evaluatee field').selectOption({ label: 'Who' });
+    await page.getByLabel('score field').selectOption({ label: 'Score' });
+    await page.getByRole('button', { name: 'add mapping' }).click();
+    await expect(page.getByText(/no KPI mapping yet/i)).toHaveCount(0);
+
+    // submit the form for the admin's own account (a real, always-present user)
+    await page.getByRole('tab', { name: 'form' }).click();
+    await page.getByLabel('Who search').fill(ADMIN.email.split('@')[0]!);
+    await page.getByLabel('Who matches').selectOption({ index: 1 });
+    await page.getByLabel('Score').getByRole('radio', { name: '4', exact: true }).click();
+    await page.getByRole('button', { name: 'submit' }).click();
+    await expect(page.getByText(/thank you/i)).toBeVisible();
+
+    // the dashboard's "KPI by Person" chart and table both derive from the
+    // EvaluationAreaEntry that submission just upserted — the table row is
+    // the more stable thing to assert on
     await page.goto('/dashboard');
     await expect(page.getByRole('cell', { name: kpiName })).toBeVisible();
   });
