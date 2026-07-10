@@ -7,22 +7,11 @@ import {
   BRANCH_TRIGGER_TYPES,
   CONDITION_OPERATORS,
   END_OF_FORM,
-  FORM_FONT_FAMILIES,
   type FieldType,
   type FormDefinition,
   type FormField,
   type FormSection,
 } from '@pulse/contracts';
-import { palette } from '@pulse/theme';
-
-const THEME_SWATCHES = [
-  palette.primary.purple,
-  palette.primary.coral,
-  palette.secondary.moonLight,
-  palette.tertiary.sea,
-  palette.tertiary.oasis,
-  palette.tertiary.sunset,
-];
 
 type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 import { PortalShell } from '../../../components/portal-shell';
@@ -616,15 +605,11 @@ function NewFormPage() {
   const [importing, setImporting] = useState(false);
   const [importIssues, setImportIssues] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [themeAccentColor, setThemeAccentColor] = useState('');
-  const [themeBackgroundAssetId, setThemeBackgroundAssetId] = useState('');
-  const [themeLogoAssetId, setThemeLogoAssetId] = useState('');
   // Set once the existing form has loaded — id/slug drive the publishNewVersion
   // call instead of createForm; null means "creating a new form" (or, while
   // editSlug is set but the fetch hasn't resolved yet, "still loading").
   const [editingForm, setEditingForm] = useState<{ id: string; slug: string } | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(Boolean(editSlug));
-  const [themeFontFamily, setThemeFontFamily] = useState<'' | (typeof FORM_FONT_FAMILIES)[number]>('');
 
   useEffect(() => {
     if (!editSlug) return;
@@ -643,10 +628,6 @@ function NewFormPage() {
           setSectionsEnabled(true);
           setSections(definition.sections.map(fromDefinitionSection));
         }
-        setThemeAccentColor(definition.theme?.accentColor ?? '');
-        setThemeBackgroundAssetId(definition.theme?.backgroundAssetId ?? '');
-        setThemeLogoAssetId(definition.theme?.logoAssetId ?? '');
-        setThemeFontFamily(definition.theme?.fontFamily ?? '');
       })
       .catch((cause) => {
         if (!cancelled) setError(cause instanceof Error ? cause.message : 'could not load this form');
@@ -982,24 +963,6 @@ function NewFormPage() {
     }
   }
 
-  async function onUploadThemeBackground(file: File) {
-    try {
-      const uploaded = await uploadAsset<{ id: string }>(file);
-      setThemeBackgroundAssetId(uploaded.id);
-    } catch {
-      setError('image upload failed');
-    }
-  }
-
-  async function onUploadThemeLogo(file: File) {
-    try {
-      const uploaded = await uploadAsset<{ id: string }>(file);
-      setThemeLogoAssetId(uploaded.id);
-    } catch {
-      setError('image upload failed');
-    }
-  }
-
   async function onUploadSectionMedia(index: number, file: File) {
     try {
       const uploaded = await uploadAsset<{ id: string }>(file);
@@ -1052,16 +1015,6 @@ function NewFormPage() {
     });
   }
 
-  function buildThemePayload() {
-    if (!themeAccentColor && !themeBackgroundAssetId && !themeLogoAssetId && !themeFontFamily) return undefined;
-    return {
-      ...(themeAccentColor ? { accentColor: themeAccentColor } : {}),
-      ...(themeBackgroundAssetId ? { backgroundAssetId: themeBackgroundAssetId } : {}),
-      ...(themeLogoAssetId ? { logoAssetId: themeLogoAssetId } : {}),
-      ...(themeFontFamily ? { fontFamily: themeFontFamily } : {}),
-    };
-  }
-
   async function onPublish() {
     setError(null);
     const definition = {
@@ -1069,7 +1022,6 @@ function NewFormPage() {
       ...(description.trim() ? { description: description.trim() } : {}),
       fields: fields.map((f, i) => toDefinitionField(f, i, keyedFields)),
       ...(buildSectionsPayload() ? { sections: buildSectionsPayload() } : {}),
-      ...(buildThemePayload() ? { theme: buildThemePayload() } : {}),
     };
     try {
       if (editingForm) {
@@ -2397,78 +2349,6 @@ function NewFormPage() {
               </Button>
             </>
           )}
-        </div>
-
-        <div className="admin-card" style={{ marginTop: 24, marginBottom: 16 }}>
-          <label>look &amp; feel (optional)</label>
-          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            accent color for the banner, buttons, and selected answers — falls back to the pulse brand purple.
-          </p>
-          <div className="page-title-row" style={{ marginTop: 8 }}>
-            {THEME_SWATCHES.map((color) => (
-              <button
-                key={color}
-                type="button"
-                aria-label={`use accent color ${color}`}
-                onClick={() => setThemeAccentColor(color)}
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: '50%',
-                  background: color,
-                  border: themeAccentColor === color ? '2px solid var(--color-text)' : '1px solid var(--color-border)',
-                  cursor: 'pointer',
-                }}
-              />
-            ))}
-            <Input
-              type="color"
-              aria-label="custom accent color"
-              value={themeAccentColor || '#4f008c'}
-              onChange={(e) => setThemeAccentColor(e.target.value)}
-            />
-            {themeAccentColor && (
-              <Button type="button" variant="ghost" onClick={() => setThemeAccentColor('')}>
-                reset to default
-              </Button>
-            )}
-          </div>
-
-          <label htmlFor="theme-font">font (optional)</label>
-          <Select
-            value={themeFontFamily || '__none__'}
-            onValueChange={(v) => setThemeFontFamily((v === '__none__' ? '' : v) as typeof themeFontFamily)}
-          >
-            <SelectTrigger id="theme-font">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">default (app font)</SelectItem>
-              {FORM_FONT_FAMILIES.filter((f) => f !== 'default').map((f) => (
-                <SelectItem key={f} value={f}>
-                  {f}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <label htmlFor="theme-logo">logo (optional)</label>
-          <Input
-            id="theme-logo"
-            type="file"
-            accept="image/*"
-            onChange={(e) => e.target.files?.[0] && onUploadThemeLogo(e.target.files[0])}
-          />
-          {themeLogoAssetId && <img src={assetUrl(themeLogoAssetId)} alt="" className="option-image" />}
-
-          <label htmlFor="theme-background">banner background image (optional)</label>
-          <Input
-            id="theme-background"
-            type="file"
-            accept="image/*"
-            onChange={(e) => e.target.files?.[0] && onUploadThemeBackground(e.target.files[0])}
-          />
-          {themeBackgroundAssetId && <img src={assetUrl(themeBackgroundAssetId)} alt="" className="option-image" />}
         </div>
 
         <div className="page-title-row">
