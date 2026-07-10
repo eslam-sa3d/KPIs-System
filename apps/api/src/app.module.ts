@@ -19,7 +19,6 @@ import { FormsController, PublicFormsController } from './modules/forms/forms.co
 import { AssetsService } from './modules/forms/assets.service';
 import { FileUploadsService } from './modules/forms/file-uploads.service';
 import { FormAccessGuard } from './modules/forms/form-access.guard';
-import { FormKpiMappingsService } from './modules/forms/form-kpi-mappings.service';
 import { FormsService } from './modules/forms/forms.service';
 import { SubmissionsService } from './modules/forms/submissions.service';
 import { TurnstileService } from './modules/forms/turnstile.service';
@@ -65,7 +64,6 @@ import { RolesController } from './modules/rbac/roles.controller';
     RbacService,
     KpisService,
     FormsService,
-    FormKpiMappingsService,
     SubmissionsService,
     TurnstileService,
     FileUploadsService,

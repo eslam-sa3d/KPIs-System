@@ -41,6 +41,11 @@ export interface AuthenticatedUser {
   /** Effective permission keys (`resource:action`), union across roles —
    *  the UI uses these to gate navigation and controls. */
   permissions: string[];
+  /** True when this user must change their password before doing anything
+   *  else — set on account creation, cleared on the next successful
+   *  change/reset. The UI blocks the portal behind a change-password prompt
+   *  while this is true. */
+  mustChangePassword: boolean;
 }
 
 /** Body of POST /auth/login and /auth/refresh. The refresh token itself

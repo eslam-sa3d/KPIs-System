@@ -208,7 +208,7 @@ describe('AuthService', () => {
       expect(hasherStub.verify).toHaveBeenCalledWith(activeUser.passwordHash, 'correct-password');
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
-        data: { passwordHash: 'hashed:new-password' },
+        data: { passwordHash: 'hashed:new-password', mustChangePassword: false },
       });
       expect(prisma.session.updateMany).toHaveBeenCalledWith({
         where: { userId: 'user-1', revokedAt: null },
@@ -272,7 +272,7 @@ describe('AuthService', () => {
 
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
-        data: { passwordHash: 'hashed:new-password' },
+        data: { passwordHash: 'hashed:new-password', mustChangePassword: false },
       });
       expect(prisma.passwordResetToken.update).toHaveBeenCalledWith({
         where: { id: 'reset-1' },

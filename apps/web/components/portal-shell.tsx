@@ -8,6 +8,8 @@ import type { AuthenticatedUser } from '@pulse/contracts';
 import { logout } from '../lib/api-client';
 import { asset } from '../lib/asset';
 import { Button } from '@/components/ui/button';
+import { ChangePasswordForm } from './change-password-form';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ThemeToggle } from './theme-toggle';
 
 const NAV_ITEMS: Array<{ href: string; label: string; permission?: string }> = [
@@ -120,6 +122,24 @@ export function PortalShell({
       </nav>
 
       <main className="portal-main">{children}</main>
+
+      {user?.mustChangePassword && (
+        <Dialog open modal>
+          <DialogContent
+            showCloseButton={false}
+            onEscapeKeyDown={(event) => event.preventDefault()}
+            onInteractOutside={(event) => event.preventDefault()}
+          >
+            <DialogHeader>
+              <DialogTitle>set a new password</DialogTitle>
+              <DialogDescription>
+                your account was created with a temporary password. choose a new one to continue.
+              </DialogDescription>
+            </DialogHeader>
+            <ChangePasswordForm />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
