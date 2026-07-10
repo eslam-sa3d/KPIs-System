@@ -7,6 +7,7 @@ import {
   BRANCH_TRIGGER_TYPES,
   CONDITION_OPERATORS,
   END_OF_FORM,
+  SCORE_FIELD_TYPES,
   type FieldType,
   type FormDefinition,
   type FormField,
@@ -1959,10 +1960,15 @@ function NewFormPage() {
               </>
             )}
 
-            {(field.type === 'rating' || field.type === 'nps' || field.type === 'slider') && canLinkKpis && (
+            {canLinkKpis && (
               <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
                 <span className="muted" style={{ fontSize: 12 }}>link to KPI (optional)</span>
-                {personFields.length === 0 ? (
+                {!(SCORE_FIELD_TYPES as readonly string[]).includes(field.type) ? (
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    only rating, NPS, and opinion-scale questions can score a KPI — this question&apos;s type
+                    doesn&apos;t produce a number to link.
+                  </p>
+                ) : personFields.length === 0 ? (
                   <p className="muted" style={{ fontSize: 12 }}>
                     add a &quot;person&quot; field to this form first — a KPI link needs one to know who this
                     score is about.
