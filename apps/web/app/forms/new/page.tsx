@@ -1229,14 +1229,12 @@ function NewFormPage() {
     <PortalShell user={user}>
       <div className="msform">
         <header className="msform-banner msform-banner-edit">
-          {editingForm && (
-            <div className="msform-edit-badge">
-              <Link href={`/forms/view?slug=${encodeURIComponent(editingForm.slug)}`}>
-                ← back to form
-              </Link>
-              <span>editing an existing form — publishing saves a new version</span>
-            </div>
-          )}
+          <div className="msform-edit-badge">
+            <Link href={editingForm ? `/forms/view?slug=${encodeURIComponent(editingForm.slug)}` : '/forms'}>
+              ← back to {editingForm ? 'form' : 'forms'}
+            </Link>
+            {editingForm && <span>editing an existing form — publishing saves a new version</span>}
+          </div>
           <label htmlFor="form-title">form title</label>
           <Input
             id="form-title"
