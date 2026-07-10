@@ -2772,13 +2772,14 @@ h3 {
 .insight-card {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-3);
   padding: var(--space-5);
   border: none;
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--ic, var(--pulse-moon-light)) 12%, transparent);
   font: inherit;
-  text-align: left;
+  text-align: center;
   transition: transform var(--transition-fast);
 }
 
@@ -2815,6 +2816,7 @@ button.insight-card:focus-visible {
 .insight-card-body {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 4px;
   min-width: 0;
 }
