@@ -96,25 +96,28 @@ describe('API contract (envelope + auth + RBAC)', () => {
   it('creates, renames, and deletes a department end to end', async () => {
     const token = await loginAsAdmin();
     const name = `it-dept-${Date.now()}`;
-    const auth = () => api().set('Authorization', `Bearer ${token}`);
+    const authHeader = { Authorization: `Bearer ${token}` };
 
-    const created = await auth().post('/api/v1/departments').send({ name });
+    const created = await api().post('/api/v1/departments').set(authHeader).send({ name });
     expect(created.status).toBe(201);
     const id = created.body.data.id as string;
 
-    const renamed = await auth().patch(`/api/v1/departments/${id}`).send({ name: `${name}-renamed` });
+    const renamed = await api()
+      .patch(`/api/v1/departments/${id}`)
+      .set(authHeader)
+      .send({ name: `${name}-renamed` });
     expect(renamed.status).toBe(200);
     expect(renamed.body.data.name).toBe(`${name}-renamed`);
 
-    const listed = await auth().get('/api/v1/departments');
+    const listed = await api().get('/api/v1/departments').set(authHeader);
     expect(listed.body.data).toEqual(
       expect.arrayContaining([expect.objectContaining({ id, name: `${name}-renamed` })]),
     );
 
-    const deleted = await auth().delete(`/api/v1/departments/${id}`);
+    const deleted = await api().delete(`/api/v1/departments/${id}`).set(authHeader);
     expect(deleted.status).toBe(200);
 
-    const afterDelete = await auth().get('/api/v1/departments');
+    const afterDelete = await api().get('/api/v1/departments').set(authHeader);
     expect(afterDelete.body.data).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id })]),
     );
