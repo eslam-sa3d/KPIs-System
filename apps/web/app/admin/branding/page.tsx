@@ -6,6 +6,7 @@ import { PortalShell } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -54,13 +55,13 @@ export default function BrandingAdminPage() {
           <CardContent className="pt-6">
             <form className="builder" onSubmit={onSave}>
               <label htmlFor="b-name">company name</label>
-              <input id="b-name" name="companyName" defaultValue={identity.companyName} required />
+              <Input id="b-name" name="companyName" defaultValue={identity.companyName} required />
               <label htmlFor="b-headline">landing headline</label>
-              <input id="b-headline" name="headline" defaultValue={identity.headline ?? ''} />
+              <Input id="b-headline" name="headline" defaultValue={identity.headline ?? ''} />
               <label htmlFor="b-tagline">tagline</label>
-              <input id="b-tagline" name="tagline" defaultValue={identity.tagline ?? ''} />
+              <Input id="b-tagline" name="tagline" defaultValue={identity.tagline ?? ''} />
               <label htmlFor="b-logo">logo URL (optional — defaults to the pulse logo)</label>
-              <input id="b-logo" name="logoUrl" defaultValue={identity.logoUrl ?? ''} />
+              <Input id="b-logo" name="logoUrl" defaultValue={identity.logoUrl ?? ''} />
               <Button type="submit">save identity</Button>
               <div className="space-y-2 mb-4">
                 {notice && (

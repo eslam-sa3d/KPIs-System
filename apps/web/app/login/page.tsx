@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { login } from '../../lib/api-client';
 import { asset } from '../../lib/asset';
 
@@ -34,10 +35,10 @@ export default function LoginPage() {
         <h1>welcome back</h1>
 
         <label htmlFor="email">email</label>
-        <input id="email" name="email" type="email" autoComplete="email" required />
+        <Input id="email" name="email" type="email" autoComplete="email" required />
 
         <label htmlFor="password">password</label>
-        <input
+        <Input
           id="password"
           name="password"
           type="password"

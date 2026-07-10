@@ -9,6 +9,7 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -218,7 +219,7 @@ function FormView() {
             </Alert>
           )}
           <div className="page-title-row">
-            <input
+            <Input
               aria-label="filter submissions"
               placeholder="filter…"
               value={filter}
@@ -228,7 +229,7 @@ function FormView() {
               <label htmlFor="submissions-date-from" className="muted" style={{ fontSize: 12 }}>
                 from
               </label>
-              <input
+              <Input
                 id="submissions-date-from"
                 type="date"
                 value={dateFrom}
@@ -237,7 +238,7 @@ function FormView() {
               <label htmlFor="submissions-date-to" className="muted" style={{ fontSize: 12 }}>
                 to
               </label>
-              <input id="submissions-date-to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              <Input id="submissions-date-to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </span>
             <Button
               variant="ghost"

@@ -5,6 +5,8 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../../lib/api-client';
@@ -121,9 +123,9 @@ export default function RolesAdminPage() {
             <form className="builder" onSubmit={onCreate}>
               <h2 className="text-lg font-semibold mb-2">new role</h2>
               <label htmlFor="r-name">role name</label>
-              <input id="r-name" name="name" required minLength={2} />
+              <Input id="r-name" name="name" required minLength={2} />
               <label htmlFor="r-desc">description</label>
-              <input id="r-desc" name="description" />
+              <Input id="r-desc" name="description" />
               <span className="field-label">permissions</span>
               <div className="perm-grid">
                 {catalog.resources.map((resource) => (
@@ -131,7 +133,7 @@ export default function RolesAdminPage() {
                     <legend>{resource.replace('_', ' ')}</legend>
                     {catalog.actions.map((action) => (
                       <label key={action} className="check-item">
-                        <input type="checkbox" name="permissions" value={`${resource}:${action}`} />
+                        <Checkbox name="permissions" value={`${resource}:${action}`} />
                         {action}
                       </label>
                     ))}
@@ -167,7 +169,7 @@ export default function RolesAdminPage() {
                 <TableCell>
                   {renamingRoleId === role.id ? (
                     <form className="inline-form" onSubmit={(e) => onRename(role.id, e)}>
-                      <input name="name" defaultValue={role.name} required minLength={2} autoFocus />
+                      <Input name="name" defaultValue={role.name} required minLength={2} autoFocus />
                       <Button type="submit" variant="ghost" size="sm">
                         save
                       </Button>

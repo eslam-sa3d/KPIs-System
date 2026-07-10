@@ -7,6 +7,7 @@ import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LoadingState } from '@/components/loading-state';
@@ -412,7 +413,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
             </SelectContent>
           </Select>
           <label className="check-item">
-            <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
+            <Checkbox checked={anonymous} onCheckedChange={(checked) => setAnonymous(checked === true)} />
             keep the evaluator anonymous
           </label>
           <Select
@@ -500,11 +501,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     </SelectContent>
                   </Select>
                   <label className="check-item">
-                    <input
-                      type="checkbox"
-                      checked={bulkAnonymous}
-                      onChange={(e) => setBulkAnonymous(e.target.checked)}
-                    />
+                    <Checkbox checked={bulkAnonymous} onCheckedChange={(checked) => setBulkAnonymous(checked === true)} />
                     keep evaluators anonymous
                   </label>
                   <Select
