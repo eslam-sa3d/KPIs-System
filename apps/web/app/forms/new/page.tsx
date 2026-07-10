@@ -15,6 +15,7 @@ import {
 
 type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 import { PortalShell, can } from '../../../components/portal-shell';
+import { KpiLinkCombobox } from '../../../components/kpi-link-combobox';
 import { LoadingState } from '../../../components/loading-state';
 import { api, assetUrl, uploadAsset } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -1991,52 +1992,14 @@ function NewFormPage() {
                       </>
                     )}
                     <label htmlFor={`field-kpi-${index}`}>KPI</label>
-                    <Select
-                      value={field.kpiId || '__none__'}
-                      onValueChange={(v) => {
-                        if (v === '__none__') {
-                          void onUnlinkFieldFromKpi(index);
-                          return;
-                        }
-                        updateField(index, { kpiId: v, evaluationAreaId: '' });
-                      }}
-                    >
-                      <SelectTrigger id={`field-kpi-${index}`}>
-                        <SelectValue placeholder="not linked" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">not linked</SelectItem>
-                        {kpis?.map((k) => (
-                          <SelectItem key={k.id} value={k.id}>
-                            {k.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {field.kpiId && (
-                      <>
-                        <label htmlFor={`field-kpi-area-${index}`}>evaluation area</label>
-                        <Select
-                          value={field.evaluationAreaId || undefined}
-                          onValueChange={(v) => void onLinkFieldToKpi(index, field.kpiId, v)}
-                          disabled={personFields.length > 1 && !field.evaluateeFieldKey}
-                        >
-                          <SelectTrigger id={`field-kpi-area-${index}`}>
-                            <SelectValue placeholder="choose an evaluation area…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {kpis
-                              ?.find((k) => k.id === field.kpiId)
-                              ?.evaluationAreas.filter((a) => a.isActive)
-                              .map((a) => (
-                                <SelectItem key={a.id} value={a.id}>
-                                  {a.name}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </>
-                    )}
+                    <KpiLinkCombobox
+                      kpis={kpis}
+                      kpiId={field.kpiId}
+                      evaluationAreaId={field.evaluationAreaId}
+                      onSelect={(kpiId, evaluationAreaId) => void onLinkFieldToKpi(index, kpiId, evaluationAreaId)}
+                      onClear={() => void onUnlinkFieldFromKpi(index)}
+                      disabled={personFields.length > 1 && !field.evaluateeFieldKey}
+                    />
                   </>
                 )}
               </div>
