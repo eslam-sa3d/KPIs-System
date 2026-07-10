@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { PortalShell, can } from '../../../components/portal-shell';
+import { Button } from '@/components/ui/button';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -160,9 +161,7 @@ export default function UsersAdminPage() {
               </span>
             </>
           )}
-          <button className="btn-primary" type="submit">
-            create user
-          </button>
+          <Button type="submit">create user</Button>
           {notice && <p className="form-notice">{notice}</p>}
           {error && (
             <p role="alert" className="form-error">
@@ -222,28 +221,28 @@ export default function UsersAdminPage() {
                     <td>
                       <span className="builder-field-actions">
                         {can(user, 'users:manage') && (
-                          <button className="btn-ghost" onClick={() => onToggleStatus(row)}>
+                          <Button variant="ghost" size="sm" onClick={() => onToggleStatus(row)}>
                             {row.isActive ? 'deactivate' : 'activate'}
-                          </button>
+                          </Button>
                         )}
                         {canEditRoles &&
                           (editingUserId === row.id ? (
                             <>
-                              <button
-                                className="btn-primary"
+                              <Button
+                                size="sm"
                                 disabled={savingRoles}
                                 onClick={() => onSaveRoles(row)}
                               >
                                 save roles
-                              </button>
-                              <button className="btn-ghost" disabled={savingRoles} onClick={onCancelEditRoles}>
+                              </Button>
+                              <Button variant="ghost" size="sm" disabled={savingRoles} onClick={onCancelEditRoles}>
                                 cancel
-                              </button>
+                              </Button>
                             </>
                           ) : (
-                            <button className="btn-ghost" onClick={() => onStartEditRoles(row)}>
+                            <Button variant="ghost" size="sm" onClick={() => onStartEditRoles(row)}>
                               change role
-                            </button>
+                            </Button>
                           ))}
                       </span>
                     </td>

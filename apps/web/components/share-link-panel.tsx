@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { API_URL, api } from '../lib/api-client';
+import { Button } from '@/components/ui/button';
 
 /** Public share link + QR (client-generated, no external network call). */
 export function ShareLinkPanel({
@@ -111,44 +112,44 @@ export function ShareLinkPanel({
       )}
 
       {!token ? (
-        <button className="btn-primary" onClick={() => toggle(true)} disabled={busy}>
+        <Button onClick={() => toggle(true)} disabled={busy}>
           {busy ? 'creating…' : 'create public link'}
-        </button>
+        </Button>
       ) : (
         <div className="share-panel-active">
           <div className="share-link-row">
             <code className="share-link-url">{url}</code>
-            <button className="btn-ghost" onClick={copy}>{copied ? 'copied!' : 'copy'}</button>
+            <Button variant="ghost" size="sm" onClick={copy}>{copied ? 'copied!' : 'copy'}</Button>
           </div>
           {qr && <img src={qr} alt="QR code for the public form link" width={140} height={140} />}
 
           {embedSnippet && (
             <div className="share-link-row" style={{ marginTop: 12 }}>
               <code className="share-link-url">{embedSnippet}</code>
-              <button className="btn-ghost" onClick={copyEmbed}>
+              <Button variant="ghost" size="sm" onClick={copyEmbed}>
                 {embedCopied ? 'copied!' : 'copy embed code'}
-              </button>
+              </Button>
             </div>
           )}
 
           <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
-            <button className="btn-ghost" onClick={() => toggle(true)} disabled={busy}>
+            <Button variant="ghost" size="sm" onClick={() => toggle(true)} disabled={busy}>
               rotate link
-            </button>
+            </Button>
             {confirmDisable ? (
               <>
                 <span className="muted">disable the public link?</span>
-                <button className="btn-ghost" onClick={() => toggle(false)} disabled={busy}>
+                <Button variant="ghost" size="sm" onClick={() => toggle(false)} disabled={busy}>
                   confirm disable
-                </button>
-                <button className="btn-ghost" onClick={() => setConfirmDisable(false)}>
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(false)}>
                   cancel
-                </button>
+                </Button>
               </>
             ) : (
-              <button className="btn-ghost" onClick={() => setConfirmDisable(true)} disabled={busy}>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(true)} disabled={busy}>
                 disable
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -161,33 +162,33 @@ export function ShareLinkPanel({
         itself is the access control, so treat it like a password.
       </p>
       {!xToken ? (
-        <button className="btn-primary" onClick={() => toggleExportLink(true)} disabled={xBusy}>
+        <Button onClick={() => toggleExportLink(true)} disabled={xBusy}>
           {xBusy ? 'creating…' : 'create live export link'}
-        </button>
+        </Button>
       ) : (
         <div className="share-panel-active">
           <div className="share-link-row">
             <code className="share-link-url">{exportUrl}</code>
-            <button className="btn-ghost" onClick={copyExportUrl}>{xCopied ? 'copied!' : 'copy'}</button>
+            <Button variant="ghost" size="sm" onClick={copyExportUrl}>{xCopied ? 'copied!' : 'copy'}</Button>
           </div>
           <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
-            <button className="btn-ghost" onClick={() => toggleExportLink(true)} disabled={xBusy}>
+            <Button variant="ghost" size="sm" onClick={() => toggleExportLink(true)} disabled={xBusy}>
               rotate link
-            </button>
+            </Button>
             {confirmDisableExport ? (
               <>
                 <span className="muted">disable the live export link?</span>
-                <button className="btn-ghost" onClick={() => toggleExportLink(false)} disabled={xBusy}>
+                <Button variant="ghost" size="sm" onClick={() => toggleExportLink(false)} disabled={xBusy}>
                   confirm disable
-                </button>
-                <button className="btn-ghost" onClick={() => setConfirmDisableExport(false)}>
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(false)}>
                   cancel
-                </button>
+                </Button>
               </>
             ) : (
-              <button className="btn-ghost" onClick={() => setConfirmDisableExport(true)} disabled={xBusy}>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(true)} disabled={xBusy}>
                 disable
-              </button>
+              </Button>
             )}
           </div>
         </div>

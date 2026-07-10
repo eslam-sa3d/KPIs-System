@@ -7,6 +7,7 @@ import { ClipboardList, Pencil } from 'lucide-react';
 import type { FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
+import { Button } from '@/components/ui/button';
 import { FormRenderer, SubmissionScore } from '../../../components/form-renderer';
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
 import { ShareLinkPanel } from '../../../components/share-link-panel';
@@ -169,13 +170,15 @@ function FormView() {
         </div>
         {canManage && (
           <span className="row-actions">
-            <Link href={`/forms/new?edit=${encodeURIComponent(slug)}`} className="btn-text">
-              <Pencil size={13} aria-hidden="true" />
-              edit form
-            </Link>
-            <button type="button" className="btn-text" onClick={onDuplicate}>
+            <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary">
+              <Link href={`/forms/new?edit=${encodeURIComponent(slug)}`}>
+                <Pencil size={13} aria-hidden="true" />
+                edit form
+              </Link>
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="text-primary hover:text-primary" onClick={onDuplicate}>
               duplicate form
-            </button>
+            </Button>
           </span>
         )}
       </div>
@@ -212,9 +215,9 @@ function FormView() {
           {fieldFilter && (
             <p className="form-notice">
               filtered by {fieldFilter.label}: <strong>{fieldFilter.value}</strong>{' '}
-              <button className="btn-ghost" onClick={() => setFieldFilter(null)}>
+              <Button variant="ghost" size="sm" onClick={() => setFieldFilter(null)}>
                 clear
-              </button>
+              </Button>
             </p>
           )}
           <div className="page-title-row">
@@ -239,46 +242,50 @@ function FormView() {
               </label>
               <input id="submissions-date-to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </span>
-            <button
-              className="btn-ghost"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export`, `${slug}.csv`)}
             >
               export CSV
-            </button>
-            <button
-              className="btn-ghost"
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.xlsx`, `${slug}.xlsx`)}
             >
               export xlsx
-            </button>
-            <button
-              className="btn-ghost"
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.pdf`, `${slug}-summary.pdf`)}
             >
               export PDF
-            </button>
-            <button
-              className="btn-ghost"
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.pptx`, `${slug}-summary.pptx`)}
             >
               export PPTX
-            </button>
+            </Button>
             {canModerate &&
               (rows?.length ?? 0) > 0 &&
               (confirmDeleteAll ? (
                 <>
                   <span className="muted">delete all {rows?.length ?? 0} responses?</span>
-                  <button className="btn-ghost" onClick={onDeleteAll}>
+                  <Button variant="ghost" size="sm" onClick={onDeleteAll}>
                     confirm delete all
-                  </button>
-                  <button className="btn-ghost" onClick={() => setConfirmDeleteAll(false)}>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteAll(false)}>
                     cancel
-                  </button>
+                  </Button>
                 </>
               ) : (
-                <button className="btn-ghost" onClick={() => setConfirmDeleteAll(true)}>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteAll(true)}>
                   delete all responses
-                </button>
+                </Button>
               ))}
           </div>
           {notice && <p className="form-notice">{notice}</p>}
@@ -308,22 +315,24 @@ function FormView() {
                       return (
                         <td key={f.key}>
                           {f.type === 'file' && typeof value === 'string' && value ? (
-                            <button
-                              className="btn-ghost"
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${value}`, f.label)}
                             >
                               download
-                            </button>
+                            </Button>
                           ) : f.type === 'file' && Array.isArray(value) && value.length > 0 ? (
                             <span className="builder-field-actions">
                               {value.map((uploadId, i) => (
-                                <button
+                                <Button
                                   key={uploadId}
-                                  className="btn-ghost"
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${uploadId}`, `${f.label}-${i + 1}`)}
                                 >
                                   {i + 1}
-                                </button>
+                                </Button>
                               ))}
                             </span>
                           ) : Array.isArray(value) ? (
@@ -338,23 +347,23 @@ function FormView() {
                     })}
                     <td>
                       <span className="row-actions">
-                        <button className="btn-text" onClick={() => setSelectedRowId(row.id)}>
+                        <Button variant="ghost" size="sm" className="text-primary hover:text-primary" onClick={() => setSelectedRowId(row.id)}>
                           view
-                        </button>
+                        </Button>
                         {canModerate &&
                           (confirmDeleteRowId === row.id ? (
                             <>
-                              <button className="btn-text btn-text-danger" onClick={() => onDelete(row.id)}>
+                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(row.id)}>
                                 confirm
-                              </button>
-                              <button className="btn-text" onClick={() => setConfirmDeleteRowId(null)}>
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-primary hover:text-primary" onClick={() => setConfirmDeleteRowId(null)}>
                                 cancel
-                              </button>
+                              </Button>
                             </>
                           ) : (
-                            <button className="btn-text btn-text-danger" onClick={() => setConfirmDeleteRowId(row.id)}>
+                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setConfirmDeleteRowId(row.id)}>
                               delete
-                            </button>
+                            </Button>
                           ))}
                       </span>
                     </td>

@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import type { AuthenticatedUser } from '@pulse/contracts';
 import { logout } from '../lib/api-client';
 import { asset } from '../lib/asset';
+import { Button } from '@/components/ui/button';
 import { ThemeToggle } from './theme-toggle';
 
 const NAV_ITEMS: Array<{ href: string; label: string; permission?: string }> = [
@@ -70,9 +71,9 @@ export function PortalShell({
         <div className="portal-header-actions">
           <ThemeToggle />
           <span className="portal-user portal-user-desktop">{user?.displayName}</span>
-          <button className="btn-ghost portal-signout-desktop" onClick={onSignOut}>
+          <Button variant="ghost" size="sm" className="portal-signout-desktop" onClick={onSignOut}>
             sign out
-          </button>
+          </Button>
           <button
             type="button"
             className="nav-toggle"
@@ -106,9 +107,9 @@ export function PortalShell({
         ))}
         <div className="portal-nav-mobile-footer">
           {user && <span className="portal-user">{user.displayName}</span>}
-          <button className="btn-ghost" onClick={onSignOut}>
+          <Button variant="ghost" size="sm" onClick={onSignOut}>
             sign out
-          </button>
+          </Button>
         </div>
       </nav>
 

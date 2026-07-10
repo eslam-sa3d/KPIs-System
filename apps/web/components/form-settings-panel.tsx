@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import type { FormSettings } from '@pulse/contracts';
 import { api } from '../lib/api-client';
+import { Button } from '@/components/ui/button';
 
 const toLocalInputValue = (iso?: string) => (iso ? iso.slice(0, 16) : '');
 const toIso = (local: string) => (local ? new Date(local).toISOString() : undefined);
@@ -151,24 +152,26 @@ export function FormSettingsPanel({
             }
             placeholder="limit"
           />
-          <button
+          <Button
             type="button"
-            className="btn-ghost"
+            variant="ghost"
+            size="sm"
             onClick={() => setDraft((d) => ({ ...d, quotas: d.quotas.filter((_, qi) => qi !== i) }))}
           >
             remove
-          </button>
+          </Button>
         </div>
       ))}
-      <button
+      <Button
         type="button"
-        className="btn-ghost"
+        variant="ghost"
+        size="sm"
         onClick={() =>
           setDraft((d) => ({ ...d, quotas: [...d.quotas, { fieldKey: '', equals: '', limit: 50 }] }))
         }
       >
         + add quota
-      </button>
+      </Button>
 
       <label className="check-item">
         <input
@@ -248,9 +251,9 @@ export function FormSettingsPanel({
         onChange={(e) => setDraft((d) => ({ ...d, thankYouMessage: e.target.value }))}
       />
 
-      <button className="btn-primary" type="submit" disabled={busy}>
+      <Button type="submit" disabled={busy}>
         {busy ? 'saving…' : 'save settings'}
-      </button>
+      </Button>
       {notice && <p className="form-notice">{notice}</p>}
       {error && (
         <p role="alert" className="form-error">

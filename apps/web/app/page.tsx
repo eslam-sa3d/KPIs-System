@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { BarChart3, ChevronRight, ClipboardList, Lightbulb, Search, Settings, Shield, Target, Users } from 'lucide-react';
 import type { BrandIdentity } from '@pulse/contracts';
 import { LandingHeroIllustration } from '../components/landing-hero-illustration';
+import { Button } from '@/components/ui/button';
 import { API_URL } from '../lib/api-client';
 import { asset } from '../lib/asset';
 
@@ -72,9 +73,9 @@ export default function LandingPage() {
     <main className="landing">
       <header className="landing-header" data-surface="purple">
         <Image src={logo} alt={identity.companyName} width={128} height={56} priority unoptimized />
-        <Link href="/login" className="btn-primary">
-          sign in
-        </Link>
+        <Button asChild>
+          <Link href="/login">sign in</Link>
+        </Button>
       </header>
 
       {/* ── hero ────────────────────────────────────────────────── */}

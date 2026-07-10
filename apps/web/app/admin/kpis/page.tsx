@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, EyeOff, FolderPlus, Layers, ListPlus, Pencil, Plus, Search, Target } from 'lucide-react';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiRequestError, api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -445,18 +446,21 @@ export default function KpisAdminPage() {
                 <input name="name" required minLength={2} placeholder="QA Lead Evaluation" aria-label="KPI name" autoFocus />
                 <input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
                 <AssignToField />
-                <button className="btn-primary" type="submit">
-                  create
-                </button>
-                <button type="button" className="btn-ghost" onClick={() => setCreatingKpi(false)}>
+                <Button type="submit">create</Button>
+                <Button type="button" variant="ghost" onClick={() => setCreatingKpi(false)}>
                   close
-                </button>
+                </Button>
               </form>
             ) : (
-              <button type="button" className="add-trigger" onClick={() => setCreatingKpi(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
+                onClick={() => setCreatingKpi(true)}
+              >
                 <Plus size={16} aria-hidden="true" />
                 new KPI
-              </button>
+              </Button>
             ))}
         </div>
       ) : (
@@ -534,18 +538,21 @@ export default function KpisAdminPage() {
                     <input name="name" required minLength={2} placeholder="new KPI name" aria-label="KPI name" autoFocus />
                     <input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
                     <AssignToField />
-                    <button className="btn-primary" type="submit">
-                      create
-                    </button>
-                    <button type="button" className="btn-ghost" onClick={() => setCreatingKpi(false)}>
+                    <Button type="submit">create</Button>
+                    <Button type="button" variant="ghost" onClick={() => setCreatingKpi(false)}>
                       close
-                    </button>
+                    </Button>
                   </form>
                 ) : (
-                  <button type="button" className="add-trigger" onClick={() => setCreatingKpi(true)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
+                    onClick={() => setCreatingKpi(true)}
+                  >
                     <Plus size={16} aria-hidden="true" />
                     new KPI
-                  </button>
+                  </Button>
                 ))}
 
               {filteredKpis && filteredKpis.length === 0 ? (
@@ -597,10 +604,16 @@ export default function KpisAdminPage() {
                 </div>
               ) : (
                 <article>
-                  <button type="button" className="btn-ghost kpi-back-to-list" onClick={() => setSelectedKpiId(null)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="kpi-back-to-list"
+                    onClick={() => setSelectedKpiId(null)}
+                  >
                     <ArrowLeft size={16} aria-hidden="true" />
                     back to KPIs
-                  </button>
+                  </Button>
 
                   {renamingKpiId === selectedKpi.id ? (
                     <form className="inline-form" onSubmit={(e) => onRenameKpi(selectedKpi.id, e)}>
@@ -615,12 +628,12 @@ export default function KpisAdminPage() {
                         aria-label={`${selectedKpi.name} weight percent`}
                         placeholder="weight %"
                       />
-                      <button className="btn-ghost" type="submit">
+                      <Button type="submit" variant="ghost">
                         save
-                      </button>
-                      <button type="button" className="btn-ghost" onClick={() => setRenamingKpiId(null)}>
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={() => setRenamingKpiId(null)}>
                         cancel
-                      </button>
+                      </Button>
                     </form>
                   ) : (
                     <div className="kpi-detail-header">
@@ -634,14 +647,15 @@ export default function KpisAdminPage() {
                         )}
                         <h2>{selectedKpi.name}</h2>
                         {canWrite && (
-                          <button
+                          <Button
                             type="button"
-                            className="icon-btn"
+                            variant="ghost"
+                            size="icon-sm"
                             aria-label={`rename ${selectedKpi.name}`}
                             onClick={() => setRenamingKpiId(selectedKpi.id)}
                           >
                             <Pencil size={15} aria-hidden="true" />
-                          </button>
+                          </Button>
                         )}
                       </div>
                       {canWrite && (
@@ -651,16 +665,24 @@ export default function KpisAdminPage() {
                             (confirmDeleteKpiId === selectedKpi.id ? (
                               <>
                                 <span className="muted">delete permanently?</span>
-                                <button
+                                <Button
                                   type="button"
-                                  className="btn-text btn-text-danger"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
                                   onClick={() => onDeleteKpi(selectedKpi.id)}
                                 >
                                   confirm delete
-                                </button>
-                                <button type="button" className="btn-text" onClick={() => setConfirmDeleteKpiId(null)}>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-primary hover:text-primary"
+                                  onClick={() => setConfirmDeleteKpiId(null)}
+                                >
                                   cancel
-                                </button>
+                                </Button>
                               </>
                             ) : forceDeleteKpiId === selectedKpi.id ? (
                               <>
@@ -668,25 +690,35 @@ export default function KpisAdminPage() {
                                   this KPI has recorded scores — force deleting destroys that history
                                   permanently and cannot be undone.
                                 </span>
-                                <button
+                                <Button
                                   type="button"
-                                  className="btn-text btn-text-danger"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
                                   onClick={() => onDeleteKpi(selectedKpi.id, true)}
                                 >
                                   force delete permanently
-                                </button>
-                                <button type="button" className="btn-text" onClick={() => setForceDeleteKpiId(null)}>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-primary hover:text-primary"
+                                  onClick={() => setForceDeleteKpiId(null)}
+                                >
                                   cancel
-                                </button>
+                                </Button>
                               </>
                             ) : (
-                              <button
+                              <Button
                                 type="button"
-                                className="btn-text btn-text-danger"
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
                                 onClick={() => setConfirmDeleteKpiId(selectedKpi.id)}
                               >
                                 delete
-                              </button>
+                              </Button>
                             ))}
                         </span>
                       )}
@@ -708,32 +740,35 @@ export default function KpisAdminPage() {
                             {canManage &&
                               (confirmUnassignId === a.id ? (
                                 <>
-                                  <button
+                                  <Button
                                     type="button"
-                                    className="icon-btn"
+                                    variant="ghost"
+                                    size="icon-xs"
                                     aria-label="confirm remove"
                                     onClick={() => onUnassignKpi(selectedKpi.id, a.id)}
                                   >
                                     ✓
-                                  </button>
-                                  <button
+                                  </Button>
+                                  <Button
                                     type="button"
-                                    className="icon-btn"
+                                    variant="ghost"
+                                    size="icon-xs"
                                     aria-label="cancel remove"
                                     onClick={() => setConfirmUnassignId(null)}
                                   >
                                     ✕
-                                  </button>
+                                  </Button>
                                 </>
                               ) : (
-                                <button
+                                <Button
                                   type="button"
-                                  className="icon-btn"
+                                  variant="ghost"
+                                  size="icon-xs"
                                   aria-label={`remove ${assignmentLabel(a)} assignment`}
                                   onClick={() => setConfirmUnassignId(a.id)}
                                 >
                                   ✕
-                                </button>
+                                </Button>
                               ))}
                           </Badge>
                         ))}
@@ -767,30 +802,35 @@ export default function KpisAdminPage() {
                               </optgroup>
                             )}
                           </select>
-                          <button
+                          <Button
                             type="button"
-                            className="btn-ghost"
+                            variant="ghost"
                             disabled={!assignTarget}
                             onClick={() => onAssignKpi(selectedKpi.id)}
                           >
                             assign
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
-                            className="btn-ghost"
+                            variant="ghost"
                             onClick={() => {
                               setAssigningKpiId(null);
                               setAssignTarget('');
                             }}
                           >
                             close
-                          </button>
+                          </Button>
                         </span>
                       ) : (
-                        <button type="button" className="add-trigger" onClick={() => setAssigningKpiId(selectedKpi.id)}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
+                          onClick={() => setAssigningKpiId(selectedKpi.id)}
+                        >
                           <Plus size={14} aria-hidden="true" />
                           assign to role or department
-                        </button>
+                        </Button>
                       ))}
                   </div>
 
@@ -805,12 +845,12 @@ export default function KpisAdminPage() {
                         {renamingAreaId === area.id ? (
                           <form className="inline-form" onSubmit={(e) => onRenameArea(selectedKpi.id, area.id, e)}>
                             <input name="name" defaultValue={area.name} required minLength={2} aria-label="evaluation area name" autoFocus />
-                            <button className="btn-ghost" type="submit">
+                            <Button type="submit" variant="ghost">
                               save
-                            </button>
-                            <button type="button" className="btn-ghost" onClick={() => setRenamingAreaId(null)}>
+                            </Button>
+                            <Button type="button" variant="ghost" onClick={() => setRenamingAreaId(null)}>
                               cancel
-                            </button>
+                            </Button>
                           </form>
                         ) : (
                           <div className="kpi-area-head hover-actions-row">
@@ -825,14 +865,15 @@ export default function KpisAdminPage() {
                             </div>
                             {canWrite && (
                               <span className="hover-actions">
-                                <button
+                                <Button
                                   type="button"
-                                  className="icon-btn"
+                                  variant="ghost"
+                                  size="icon-sm"
                                   aria-label={`rename ${area.name}`}
                                   onClick={() => setRenamingAreaId(area.id)}
                                 >
                                   <Pencil size={14} aria-hidden="true" />
-                                </button>
+                                </Button>
                                 <StatusPill
                                   isActive={area.isActive}
                                   onToggle={() => onToggleAreaActive(selectedKpi.id, area)}
@@ -842,25 +883,35 @@ export default function KpisAdminPage() {
                                   (confirmDeleteAreaId === area.id ? (
                                     <>
                                       <span className="muted">delete permanently?</span>
-                                      <button
+                                      <Button
                                         type="button"
-                                        className="btn-text btn-text-danger"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-destructive hover:text-destructive"
                                         onClick={() => onDeleteArea(selectedKpi.id, area.id)}
                                       >
                                         confirm delete
-                                      </button>
-                                      <button type="button" className="btn-text" onClick={() => setConfirmDeleteAreaId(null)}>
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-primary hover:text-primary"
+                                        onClick={() => setConfirmDeleteAreaId(null)}
+                                      >
                                         cancel
-                                      </button>
+                                      </Button>
                                     </>
                                   ) : (
-                                    <button
+                                    <Button
                                       type="button"
-                                      className="btn-text btn-text-danger"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive hover:text-destructive"
                                       onClick={() => setConfirmDeleteAreaId(area.id)}
                                     >
                                       delete
-                                    </button>
+                                    </Button>
                                   ))}
                               </span>
                             )}
@@ -882,12 +933,12 @@ export default function KpisAdminPage() {
                                 onSubmit={(e) => onRenameSubCriteria(selectedKpi.id, area.id, sub.id, e)}
                               >
                                 <input name="name" defaultValue={sub.name} required minLength={2} aria-label="sub-criteria name" autoFocus />
-                                <button className="btn-ghost" type="submit">
+                                <Button type="submit" variant="ghost">
                                   save
-                                </button>
-                                <button type="button" className="btn-ghost" onClick={() => setRenamingSubCriteriaId(null)}>
+                                </Button>
+                                <Button type="button" variant="ghost" onClick={() => setRenamingSubCriteriaId(null)}>
                                   cancel
-                                </button>
+                                </Button>
                               </form>
                             ) : (
                               <div key={sub.id} className="kpi-subcriteria-row hover-actions-row">
@@ -897,41 +948,48 @@ export default function KpisAdminPage() {
                                 </span>
                                 {canWrite && (
                                   <span className="hover-actions">
-                                    <button
+                                    <Button
                                       type="button"
-                                      className="icon-btn"
+                                      variant="ghost"
+                                      size="icon-sm"
                                       aria-label={`rename ${sub.name}`}
                                       onClick={() => setRenamingSubCriteriaId(sub.id)}
                                     >
                                       <Pencil size={13} aria-hidden="true" />
-                                    </button>
+                                    </Button>
                                     {canManage &&
                                       (confirmDeleteSubCriteriaId === sub.id ? (
                                         <>
                                           <span className="muted">delete?</span>
-                                          <button
+                                          <Button
                                             type="button"
-                                            className="btn-text btn-text-danger"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-destructive hover:text-destructive"
                                             onClick={() => onDeleteSubCriteria(selectedKpi.id, area.id, sub.id)}
                                           >
                                             confirm
-                                          </button>
-                                          <button
+                                          </Button>
+                                          <Button
                                             type="button"
-                                            className="btn-text"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-primary hover:text-primary"
                                             onClick={() => setConfirmDeleteSubCriteriaId(null)}
                                           >
                                             cancel
-                                          </button>
+                                          </Button>
                                         </>
                                       ) : (
-                                        <button
+                                        <Button
                                           type="button"
-                                          className="btn-text btn-text-danger"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="text-destructive hover:text-destructive"
                                           onClick={() => setConfirmDeleteSubCriteriaId(sub.id)}
                                         >
                                           delete
-                                        </button>
+                                        </Button>
                                       ))}
                                   </span>
                                 )}
@@ -949,22 +1007,27 @@ export default function KpisAdminPage() {
                                   aria-label={`new sub-criteria under ${area.name}`}
                                   autoFocus
                                 />
-                                <button className="btn-ghost" type="submit">
+                                <Button type="submit" variant="ghost">
                                   add
-                                </button>
-                                <button type="button" className="btn-ghost" onClick={() => setAddingSubCriteriaForAreaId(null)}>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() => setAddingSubCriteriaForAreaId(null)}
+                                >
                                   close
-                                </button>
+                                </Button>
                               </form>
                             ) : (
-                              <button
+                              <Button
                                 type="button"
-                                className="add-trigger"
+                                variant="outline"
+                                className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
                                 onClick={() => setAddingSubCriteriaForAreaId(area.id)}
                               >
                                 <Plus size={14} aria-hidden="true" />
                                 add sub-criteria
-                              </button>
+                              </Button>
                             ))}
                         </div>
                       </div>
@@ -975,18 +1038,23 @@ export default function KpisAdminPage() {
                     (addingAreaForKpiId === selectedKpi.id ? (
                       <form className="inline-form" onSubmit={(e) => onCreateArea(selectedKpi.id, e)}>
                         <input name="name" required minLength={2} placeholder="new area name" aria-label="new area name" autoFocus />
-                        <button className="btn-ghost" type="submit">
+                        <Button type="submit" variant="ghost">
                           add
-                        </button>
-                        <button type="button" className="btn-ghost" onClick={() => setAddingAreaForKpiId(null)}>
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={() => setAddingAreaForKpiId(null)}>
                           close
-                        </button>
+                        </Button>
                       </form>
                     ) : (
-                      <button type="button" className="add-trigger" onClick={() => setAddingAreaForKpiId(selectedKpi.id)}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
+                        onClick={() => setAddingAreaForKpiId(selectedKpi.id)}
+                      >
                         <FolderPlus size={16} aria-hidden="true" />
                         add evaluation area
-                      </button>
+                      </Button>
                     ))}
                 </article>
               )}

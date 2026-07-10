@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormDefinition, ReviewType } from '@pulse/contracts';
 import { REVIEW_TYPES } from '@pulse/contracts';
 import { api } from '../lib/api-client';
+import { Button } from '@/components/ui/button';
 
 interface EvaluationAreaOption {
   id: string;
@@ -291,34 +292,36 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                   {REVIEW_TYPE_LABEL[m.reviewType]}
                   {m.anonymous && ' · anonymous'} · evaluatee: {fieldLabel(m.evaluateeFieldKey)}, score:{' '}
                   {fieldLabel(m.scoreFieldKey)}{' '}
-                  <button
+                  <Button
                     type="button"
-                    className="btn-ghost"
+                    variant="ghost"
+                    size="sm"
                     disabled={backfillingId === m.id}
                     onClick={() => onBackfill(m.id, m.evaluationArea.name)}
                     title="score every existing submission against this mapping too"
                   >
                     {backfillingId === m.id ? 'scoring…' : 'backfill existing responses'}
-                  </button>{' '}
+                  </Button>{' '}
                   {confirmDeleteId === m.id ? (
                     <>
                       <span className="muted">remove this mapping?</span>{' '}
-                      <button type="button" className="btn-ghost" disabled={busy} onClick={() => onDelete(m.id)}>
+                      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onDelete(m.id)}>
                         confirm remove
-                      </button>{' '}
-                      <button type="button" className="btn-ghost" onClick={() => setConfirmDeleteId(null)}>
+                      </Button>{' '}
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
                         cancel
-                      </button>
+                      </Button>
                     </>
                   ) : (
-                    <button
+                    <Button
                       type="button"
-                      className="btn-ghost"
+                      variant="ghost"
+                      size="sm"
                       disabled={busy}
                       onClick={() => setConfirmDeleteId(m.id)}
                     >
                       remove
-                    </button>
+                    </Button>
                   )}
                 </li>
               ))}
@@ -413,14 +416,14 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               </option>
             ))}
           </select>
-          <button
+          <Button
             type="button"
-            className="btn-ghost"
+            variant="ghost"
             disabled={busy || !evaluationAreaId || !evaluateeFieldKey || !scoreFieldKey}
             onClick={onCreate}
           >
             add mapping
-          </button>
+          </Button>
 
           {unmappedScoreFields.length >= 2 && (
             <div className="kpi-bulk-mapping">
@@ -533,23 +536,28 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                   </table>
 
                   <div className="row-actions">
-                    <button
+                    <Button
                       type="button"
-                      className="btn-primary"
+                      size="sm"
                       disabled={busy || !bulkEvaluateeFieldKey || bulkMappedCount === 0}
                       onClick={onBulkCreate}
                     >
                       map {bulkMappedCount} question{bulkMappedCount === 1 ? '' : 's'}
-                    </button>
-                    <button type="button" className="btn-ghost" onClick={() => setBulkOpen(false)}>
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setBulkOpen(false)}>
                       close
-                    </button>
+                    </Button>
                   </div>
                 </>
               ) : (
-                <button type="button" className="add-trigger" onClick={openBulk}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
+                  onClick={openBulk}
+                >
                   bulk-map {unmappedScoreFields.length} remaining questions
-                </button>
+                </Button>
               )}
             </div>
           )}

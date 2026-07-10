@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import type { BrandIdentity } from '@pulse/contracts';
 import { PortalShell } from '../../../components/portal-shell';
+import { Button } from '@/components/ui/button';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -55,9 +56,7 @@ export default function BrandingAdminPage() {
           <input id="b-tagline" name="tagline" defaultValue={identity.tagline ?? ''} />
           <label htmlFor="b-logo">logo URL (optional — defaults to the pulse logo)</label>
           <input id="b-logo" name="logoUrl" defaultValue={identity.logoUrl ?? ''} />
-          <button className="btn-primary" type="submit">
-            save identity
-          </button>
+          <Button type="submit">save identity</Button>
           {notice && <p className="form-notice">{notice}</p>}
           {error && (
             <p role="alert" className="form-error">

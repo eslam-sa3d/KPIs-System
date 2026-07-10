@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api-client';
+import { Button } from '@/components/ui/button';
 
 interface UserOption {
   id: string;
@@ -172,9 +173,9 @@ export function AccessControlPanel({
               can view responses (without editing the form — implied by co-owner)
             </label>
           </span>
-          <button type="button" className="btn-ghost" disabled={!pickUserId || busy} onClick={invite}>
+          <Button type="button" variant="ghost" size="sm" disabled={!pickUserId || busy} onClick={invite}>
             invite
-          </button>
+          </Button>
 
           <label>people with access</label>
           {collaborators === null ? (
@@ -190,22 +191,23 @@ export function AccessControlPanel({
                   {confirmRemoveUserId === c.userId ? (
                     <>
                       <span className="muted">remove access?</span>{' '}
-                      <button type="button" className="btn-ghost" disabled={busy} onClick={() => remove(c.userId)}>
+                      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => remove(c.userId)}>
                         confirm remove
-                      </button>{' '}
-                      <button type="button" className="btn-ghost" onClick={() => setConfirmRemoveUserId(null)}>
+                      </Button>{' '}
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmRemoveUserId(null)}>
                         cancel
-                      </button>
+                      </Button>
                     </>
                   ) : (
-                    <button
+                    <Button
                       type="button"
-                      className="btn-ghost"
+                      variant="ghost"
+                      size="sm"
                       disabled={busy}
                       onClick={() => setConfirmRemoveUserId(c.userId)}
                     >
                       remove
-                    </button>
+                    </Button>
                   )}
                 </li>
               ))}

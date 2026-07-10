@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type FormTheme, type SubmissionAnswers } from '@pulse/contracts';
 import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
+import { Button } from '@/components/ui/button';
 
 /** Google Forms' three-way font choice, mapped to system stacks — no new font files/CDN loads. */
 const FONT_STACKS: Record<NonNullable<FormTheme['fontFamily']>, string | undefined> = {
@@ -272,8 +273,8 @@ export function FieldInput({
                 {labelOf(v)}
               </span>
               <span className="ranking-controls">
-                <button type="button" className="btn-ghost" aria-label={`move ${labelOf(v)} up`} onClick={() => move(i, -1)}>↑</button>
-                <button type="button" className="btn-ghost" aria-label={`move ${labelOf(v)} down`} onClick={() => move(i, 1)}>↓</button>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label={`move ${labelOf(v)} up`} onClick={() => move(i, -1)}>↑</Button>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label={`move ${labelOf(v)} down`} onClick={() => move(i, 1)}>↓</Button>
               </span>
             </li>
           ))}
@@ -352,13 +353,14 @@ export function FieldInput({
                 {ids.map((fileId) => (
                   <li key={fileId}>
                     {attachedNames[fileId] ?? 'file attached'}{' '}
-                    <button
+                    <Button
                       type="button"
-                      className="btn-ghost"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => onChange(ids.filter((v) => v !== fileId))}
                     >
                       remove
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
@@ -456,9 +458,9 @@ export function FieldInput({
           {selectedUser ? (
             <span className="check-item">
               {selectedUser.displayName} ({selectedUser.email}){' '}
-              <button type="button" className="btn-ghost" onClick={() => onChange('')}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => onChange('')}>
                 change
-              </button>
+              </Button>
             </span>
           ) : (
             <>
@@ -753,8 +755,8 @@ export function FormRenderer({
               <a href={editUrlFor(submittedEditToken)}>edit your response</a>
             </p>
           )}
-          <button
-            className="btn-ghost"
+          <Button
+            variant="ghost"
             onClick={() => {
               setAnswers({});
               setSubmitted(false);
@@ -763,7 +765,7 @@ export function FormRenderer({
             }}
           >
             submit another response
-          </button>
+          </Button>
         </div>
       ) : (
         <form className="fill-form msform-body" onSubmit={handleSubmit}>
@@ -814,16 +816,16 @@ export function FormRenderer({
           {(!hasSections || isLastPage) && captchaSlot}
           <div className="page-title-row">
             {hasSections && currentIndex > 0 && (
-              <button type="button" className="btn-ghost" onClick={onBack}>
+              <Button type="button" variant="ghost" onClick={onBack}>
                 ← back
-              </button>
+              </Button>
             )}
             {hasSections && !isLastPage ? (
-              <button type="button" className="btn-primary" onClick={onNext}>
+              <Button type="button" onClick={onNext}>
                 next →
-              </button>
+              </Button>
             ) : (
-              <button className="btn-primary" type="submit">submit</button>
+              <Button type="submit">submit</Button>
             )}
           </div>
         </form>

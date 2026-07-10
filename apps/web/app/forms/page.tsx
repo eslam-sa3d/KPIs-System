@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, FolderOpen, Pencil, Search, Share2 } from 'lucide-react';
 import { PortalShell, can } from '../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
@@ -97,9 +98,9 @@ export default function FormsPage() {
     <PortalShell user={user}>
       <div className="page-title-row">
         <h1>forms</h1>
-        <Link href="/forms/new" className="btn-primary">
-          new form
-        </Link>
+        <Button asChild>
+          <Link href="/forms/new">new form</Link>
+        </Button>
       </div>
       <p className="portal-subtitle">collect data with custom forms, then aggregate and export it</p>
       {error && (
@@ -246,61 +247,77 @@ export default function FormsPage() {
                             placeholder="no folder"
                             style={{ width: 120 }}
                           />
-                          <button type="button" className="btn-ghost" onClick={() => saveFolder(form.id)}>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => saveFolder(form.id)}>
                             save
-                          </button>
+                          </Button>
                         </span>
                       ) : (
-                        <button
+                        <Button
                           type="button"
-                          className="btn-text"
+                          variant="ghost"
+                          size="sm"
+                          className="text-primary hover:text-primary"
                           onClick={() => {
                             setEditingFolderId(form.id);
                             setFolderDraft(form.folder ?? '');
                           }}
                         >
                           {form.folder ?? 'move to folder'}
-                        </button>
+                        </Button>
                       )}
                     </td>
                     <td>
                       <span className="row-actions hover-actions">
                         {can(user, 'forms:write') && (
-                          <Link
-                            href={`/forms/new?edit=${encodeURIComponent(form.slug)}`}
-                            className="icon-btn"
-                            aria-label={`edit ${form.title}`}
-                          >
-                            <Pencil size={14} aria-hidden="true" />
-                          </Link>
+                          <Button asChild variant="ghost" size="icon-sm" aria-label={`edit ${form.title}`}>
+                            <Link href={`/forms/new?edit=${encodeURIComponent(form.slug)}`}>
+                              <Pencil size={14} aria-hidden="true" />
+                            </Link>
+                          </Button>
                         )}
                         {can(user, 'forms:manage') && (
                           <>
-                            <button type="button" className="btn-text" onClick={() => onArchiveToggle(form)}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-primary hover:text-primary"
+                              onClick={() => onArchiveToggle(form)}
+                            >
                               {form.status === 'archived' ? 'unarchive' : 'archive'}
-                            </button>
+                            </Button>
                             {confirmDeleteId === form.id ? (
                               <>
                                 <span className="muted">delete?</span>
-                                <button
+                                <Button
                                   type="button"
-                                  className="btn-text btn-text-danger"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
                                   onClick={() => onDelete(form.id)}
                                 >
                                   confirm
-                                </button>
-                                <button type="button" className="btn-text" onClick={() => setConfirmDeleteId(null)}>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-primary hover:text-primary"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                >
                                   cancel
-                                </button>
+                                </Button>
                               </>
                             ) : (
-                              <button
+                              <Button
                                 type="button"
-                                className="btn-text btn-text-danger"
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
                                 onClick={() => setConfirmDeleteId(form.id)}
                               >
                                 delete
-                              </button>
+                              </Button>
                             )}
                           </>
                         )}

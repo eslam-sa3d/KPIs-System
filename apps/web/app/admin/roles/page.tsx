@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { PortalShell, can } from '../../../components/portal-shell';
+import { Button } from '@/components/ui/button';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -131,9 +132,7 @@ export default function RolesAdminPage() {
               </fieldset>
             ))}
           </div>
-          <button className="btn-primary" type="submit">
-            create role
-          </button>
+          <Button type="submit">create role</Button>
         </form>
       )}
 
@@ -161,12 +160,12 @@ export default function RolesAdminPage() {
                   {renamingRoleId === role.id ? (
                     <form className="inline-form" onSubmit={(e) => onRename(role.id, e)}>
                       <input name="name" defaultValue={role.name} required minLength={2} autoFocus />
-                      <button type="submit" className="btn-ghost">
+                      <Button type="submit" variant="ghost" size="sm">
                         save
-                      </button>
-                      <button type="button" className="btn-ghost" onClick={() => setRenamingRoleId(null)}>
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingRoleId(null)}>
                         cancel
-                      </button>
+                      </Button>
                     </form>
                   ) : (
                     <>
@@ -191,34 +190,36 @@ export default function RolesAdminPage() {
                   <td>
                     {!role.isSystem && renamingRoleId !== role.id && (
                       <span className="builder-field-actions">
-                        <button type="button" className="btn-ghost" onClick={() => setRenamingRoleId(role.id)}>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingRoleId(role.id)}>
                           rename
-                        </button>
-                        <button type="button" className="btn-ghost" onClick={() => onToggleActive(role)}>
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => onToggleActive(role)}>
                           {role.isActive ? 'deactivate' : 'reactivate'}
-                        </button>
+                        </Button>
                         {confirmDeleteRoleId === role.id ? (
                           <>
                             <span className="muted">delete permanently?</span>
-                            <button type="button" className="btn-ghost" onClick={() => onDelete(role.id)}>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => onDelete(role.id)}>
                               confirm delete
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               type="button"
-                              className="btn-ghost"
+                              variant="ghost"
+                              size="sm"
                               onClick={() => setConfirmDeleteRoleId(null)}
                             >
                               cancel
-                            </button>
+                            </Button>
                           </>
                         ) : (
-                          <button
+                          <Button
                             type="button"
-                            className="btn-ghost"
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setConfirmDeleteRoleId(role.id)}
                           >
                             delete
-                          </button>
+                          </Button>
                         )}
                       </span>
                     )}

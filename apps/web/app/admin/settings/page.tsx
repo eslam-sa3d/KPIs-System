@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { PortalShell } from '../../../components/portal-shell';
+import { Button } from '@/components/ui/button';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -83,27 +84,26 @@ export default function SettingsPage() {
             </table>
 
             <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
-              <button
-                className="btn-primary"
+              <Button
                 disabled={busy || status.present}
                 onClick={() => run('POST', 'demo data created — check the dashboard and forms')}
               >
                 {busy ? 'working…' : 'add demo data'}
-              </button>
+              </Button>
               {confirmRemove ? (
                 <>
                   <span className="muted">remove all demo data? only demo-tagged records are deleted.</span>
-                  <button className="btn-ghost" disabled={busy} onClick={() => run('DELETE', 'demo data removed')}>
+                  <Button variant="ghost" disabled={busy} onClick={() => run('DELETE', 'demo data removed')}>
                     confirm remove
-                  </button>
-                  <button className="btn-ghost" onClick={() => setConfirmRemove(false)}>
+                  </Button>
+                  <Button variant="ghost" onClick={() => setConfirmRemove(false)}>
                     cancel
-                  </button>
+                  </Button>
                 </>
               ) : (
-                <button className="btn-ghost" disabled={busy || !status.present} onClick={() => setConfirmRemove(true)}>
+                <Button variant="ghost" disabled={busy || !status.present} onClick={() => setConfirmRemove(true)}>
                   remove demo data
-                </button>
+                </Button>
               )}
             </div>
 

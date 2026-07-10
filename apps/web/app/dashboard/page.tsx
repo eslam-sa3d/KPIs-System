@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { PortalShell } from '../../components/portal-shell';
 import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, downloadCsv } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
@@ -318,9 +319,9 @@ export default function DashboardPage() {
             </p>
           </div>
           <span className="builder-field-actions">
-            <button className="p-theme-toggle" onClick={onExportCsv}>
+            <Button variant="outline" size="sm" onClick={onExportCsv}>
               Export CSV
-            </button>
+            </Button>
           </span>
         </div>
 
@@ -515,15 +516,16 @@ export default function DashboardPage() {
                           {k.lastUpdated ? new Date(k.lastUpdated).toLocaleDateString() : '—'}
                         </td>
                         <td>
-                          <button
-                            className="p-action-btn"
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedId(k.id);
                             }}
                           >
                             View →
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))
@@ -534,9 +536,9 @@ export default function DashboardPage() {
                 <span className="p-tf-count">
                   showing {tableData.length} of {levelData.length} KPIs
                 </span>
-                <button className="btn-ghost" onClick={() => setStatusFilter('all')}>
+                <Button variant="ghost" size="sm" onClick={() => setStatusFilter('all')}>
                   clear filters
-                </button>
+                </Button>
               </div>
             </div>
           </>

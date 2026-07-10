@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { login } from '../../lib/api-client';
 import { asset } from '../../lib/asset';
 
@@ -50,9 +51,9 @@ export default function LoginPage() {
           </p>
         )}
 
-        <button className="btn-primary" type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending} className="w-full">
           {pending ? 'signing in…' : 'sign in'}
-        </button>
+        </Button>
       </form>
     </main>
   );
