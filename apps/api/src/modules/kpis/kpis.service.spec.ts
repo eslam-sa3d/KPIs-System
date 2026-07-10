@@ -6,7 +6,7 @@ function makePrismaStub() {
   return {
     kpi: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
     kpiAssignment: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
-    rolePermission: { findMany: vi.fn() },
+    rolePermission: { findMany: vi.fn(), findFirst: vi.fn(async (): Promise<{ roleId: string } | null> => null) },
     evaluationArea: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     subCriteria: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     evaluationAreaEntry: {
@@ -529,6 +529,63 @@ describe('KpisService', () => {
 
       const include = prisma.kpi.findMany.mock.calls[0]![0].include;
       expect(include.evaluationAreas.include.entries.include.person.select).toEqual({ id: true, displayName: true });
+    });
+
+    function kpiWithOneEntry(entryOverrides: Record<string, unknown>) {
+      return [
+        {
+          ...activeKpi,
+          evaluationAreas: [
+            {
+              ...activeArea,
+              entries: [
+                {
+                  id: 'entry-1',
+                  anonymous: true,
+                  enteredById: 'evaluator-1',
+                  enteredBy: { id: 'evaluator-1', displayName: 'Peer One' },
+                  ...entryOverrides,
+                },
+              ],
+              subCriteria: [],
+            },
+          ],
+        },
+      ];
+    }
+
+    it('withholds the evaluator on an anonymous entry from a caller without kpis:manage', async () => {
+      prisma.user.findUnique.mockResolvedValue({ departmentId: null, roles: [] });
+      prisma.kpi.findMany.mockResolvedValue(kpiWithOneEntry({}));
+      prisma.rolePermission.findFirst.mockResolvedValue(null);
+
+      const [kpi] = await service.listMine('user-1');
+
+      const entry = kpi!.evaluationAreas[0]!.entries[0]!;
+      expect(entry.enteredById).toBe('');
+      expect(entry.enteredBy).toEqual({ id: '', displayName: 'anonymous' });
+    });
+
+    it('reveals the evaluator on an anonymous entry to a caller with kpis:manage', async () => {
+      prisma.user.findUnique.mockResolvedValue({ departmentId: null, roles: [] });
+      prisma.kpi.findMany.mockResolvedValue(kpiWithOneEntry({}));
+      prisma.rolePermission.findFirst.mockResolvedValue({ roleId: 'role-1' });
+
+      const [kpi] = await service.listMine('user-1');
+
+      const entry = kpi!.evaluationAreas[0]!.entries[0]!;
+      expect(entry.enteredById).toBe('evaluator-1');
+      expect(entry.enteredBy.displayName).toBe('Peer One');
+    });
+
+    it('never withholds the evaluator on a non-anonymous entry', async () => {
+      prisma.user.findUnique.mockResolvedValue({ departmentId: null, roles: [] });
+      prisma.kpi.findMany.mockResolvedValue(kpiWithOneEntry({ anonymous: false }));
+      prisma.rolePermission.findFirst.mockResolvedValue(null);
+
+      const [kpi] = await service.listMine('user-1');
+
+      expect(kpi!.evaluationAreas[0]!.entries[0]!.enteredById).toBe('evaluator-1');
     });
   });
 });

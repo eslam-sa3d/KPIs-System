@@ -183,18 +183,58 @@ export default function KpisAdminPage() {
   function onCreateKpi(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const assignTo = (form.get('assignTo') as string) || '';
     const created = api<{ id: string }>('/v1/kpis', {
       method: 'POST',
       body: JSON.stringify({ name: form.get('name'), weight: parseWeight(form.get('weight')) }),
+    }).then(async (kpi) => {
+      if (assignTo) {
+        const [kind, id] = assignTo.split(':') as ['role' | 'dept', string];
+        await api(`/v1/kpis/${kpi.id}/assignments`, {
+          method: 'POST',
+          body: JSON.stringify(kind === 'role' ? { roleId: id } : { departmentId: id }),
+        });
+      }
+      return kpi;
     });
     // Select only after report()'s own reload() has landed the new KPI in
     // `kpis` — selecting first races the "clear a selection that no longer
     // exists" effect below, which sees the still-stale list and immediately
     // un-selects the KPI that was just created.
-    void report(created, 'KPI created').then(() =>
+    void report(created, assignTo ? 'KPI created and assigned' : 'KPI created').then(() =>
       created.then((kpi) => setSelectedKpiId(kpi.id)).catch(() => undefined),
     );
     (event.target as HTMLFormElement).reset();
+  }
+
+  /** Shared "visible to" picker for the KPI-creation forms — folds the
+   *  default role/department assignment into creation itself, instead of
+   *  leaving a brand-new KPI invisible on every dashboard until an admin
+   *  makes a separate follow-up trip to the assignment UI below. */
+  function AssignToField() {
+    return (
+      <select name="assignTo" aria-label="visible to (optional)" defaultValue="">
+        <option value="">visible to (optional)…</option>
+        {roles.length > 0 && (
+          <optgroup label="roles">
+            {roles.map((r) => (
+              <option key={r.id} value={`role:${r.id}`}>
+                {r.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {departments.length > 0 && (
+          <optgroup label="departments">
+            {departments.map((d) => (
+              <option key={d.id} value={`dept:${d.id}`}>
+                {d.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+    );
   }
 
   function onRenameKpi(kpiId: string, event: FormEvent<HTMLFormElement>) {
@@ -396,6 +436,7 @@ export default function KpisAdminPage() {
               <form className="inline-form" onSubmit={(e) => onCreateKpi(e)}>
                 <input name="name" required minLength={2} placeholder="QA Lead Evaluation" aria-label="KPI name" autoFocus />
                 <input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
+                <AssignToField />
                 <button className="btn-primary" type="submit">
                   create
                 </button>
@@ -484,6 +525,7 @@ export default function KpisAdminPage() {
                   <form className="inline-form" onSubmit={(e) => onCreateKpi(e)}>
                     <input name="name" required minLength={2} placeholder="new KPI name" aria-label="KPI name" autoFocus />
                     <input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
+                    <AssignToField />
                     <button className="btn-primary" type="submit">
                       create
                     </button>

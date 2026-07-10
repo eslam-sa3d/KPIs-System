@@ -45,6 +45,7 @@ export class FormKpiMappingsService {
         { path: 'scoreFieldKey', message: 'must reference a rating, nps, or slider field on this form' },
       ]);
     }
+    this.validateExtraFieldKeys(definition, input.contextFieldKey, input.commentFieldKey);
 
     const area = await this.prisma.evaluationArea.findUnique({ where: { id: input.evaluationAreaId } });
     if (!area) throw AppError.notFound('Evaluation area', input.evaluationAreaId);
@@ -62,12 +63,34 @@ export class FormKpiMappingsService {
         evaluationAreaId: input.evaluationAreaId,
         evaluateeFieldKey: input.evaluateeFieldKey,
         scoreFieldKey: input.scoreFieldKey,
+        reviewType: input.reviewType,
+        anonymous: input.anonymous,
+        contextFieldKey: input.contextFieldKey,
+        commentFieldKey: input.commentFieldKey,
       },
     });
     await this.prisma.auditLog.create({
       data: { actorId, action: 'form_kpi_mapping.created', entity: 'FormKpiMapping', entityId: mapping.id, detail: input },
     });
     return mapping;
+  }
+
+  /** contextFieldKey/commentFieldKey are optional and deliberately untyped
+   *  (any field type can supply free-text context) — the only real
+   *  requirement is that they exist on the form at all. */
+  private validateExtraFieldKeys(
+    definition: { fields: Array<{ key: string }> },
+    contextFieldKey: string | undefined,
+    commentFieldKey: string | undefined,
+  ) {
+    const errors: Array<{ path: string; message: string }> = [];
+    if (contextFieldKey && !definition.fields.some((f) => f.key === contextFieldKey)) {
+      errors.push({ path: 'contextFieldKey', message: 'must reference a field on this form' });
+    }
+    if (commentFieldKey && !definition.fields.some((f) => f.key === commentFieldKey)) {
+      errors.push({ path: 'commentFieldKey', message: 'must reference a field on this form' });
+    }
+    if (errors.length > 0) throw AppError.validation(errors);
   }
 
   /**
@@ -88,6 +111,7 @@ export class FormKpiMappingsService {
         { path: 'evaluateeFieldKey', message: 'must reference a "person" field on this form' },
       ]);
     }
+    this.validateExtraFieldKeys(definition, input.contextFieldKey, input.commentFieldKey);
 
     // Raw Prisma rows (createdAt: Date) — serialized to the wire-format
     // BulkCreateFormKpiMappingResult (createdAt: string) by Nest's response
@@ -130,6 +154,10 @@ export class FormKpiMappingsService {
           evaluationAreaId: row.evaluationAreaId,
           evaluateeFieldKey: input.evaluateeFieldKey,
           scoreFieldKey: row.scoreFieldKey,
+          reviewType: input.reviewType,
+          anonymous: input.anonymous,
+          contextFieldKey: input.contextFieldKey,
+          commentFieldKey: input.commentFieldKey,
         },
       });
       result.created.push(mapping);

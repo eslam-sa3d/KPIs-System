@@ -17,8 +17,27 @@ import { AppError } from '../../common/app-error';
 import { paged } from '../../common/envelope.interceptor';
 import { PrismaService } from '../../infra/prisma.service';
 
-/** How many recent entries per area feed the dashboard's trend/aggregate views. */
-const RECENT_ENTRIES_TAKE = 12;
+/** How many recent entries per area feed the dashboard's trend/aggregate views.
+ *  Multi-rater means several rows can now share one (person, period), so this
+ *  is sized generously rather than assuming ~1 row per period. */
+const RECENT_ENTRIES_TAKE = 60;
+
+type EntryWithEvaluator = {
+  anonymous: boolean;
+  enteredById: string;
+  enteredBy: { id: string; displayName: string };
+};
+
+/** Withholds the evaluator's identity on an anonymous entry from anyone
+ *  without kpis:manage — `canSeeEvaluators` is resolved once per request,
+ *  not per entry, since it's the same answer for every row in a response. */
+function scrubAnonymousEntry<T extends EntryWithEvaluator>(
+  entry: T,
+  canSeeEvaluators: boolean,
+): T {
+  if (!entry.anonymous || canSeeEvaluators) return entry;
+  return { ...entry, enteredById: '', enteredBy: { id: '', displayName: 'anonymous' } };
+}
 
 /**
  * KPI definitions (just a name + Evaluation Areas), dynamic role/department/
@@ -99,6 +118,19 @@ export class KpisService {
       select: { scope: true },
     });
     return !grants.some((g) => g.scope === 'all');
+  }
+
+  /** Whether this caller holds kpis:manage in any role — gates seeing the
+   *  evaluator identity on entries their originating mapping marked anonymous. */
+  private async canSeeAnonymousEvaluators(userId: string): Promise<boolean> {
+    const grant = await this.prisma.rolePermission.findFirst({
+      where: {
+        role: { isActive: true, users: { some: { userId } } },
+        permission: { resource: 'kpis', action: 'manage' },
+      },
+      select: { roleId: true },
+    });
+    return grant !== null;
   }
 
   /** { assignments: { some: { OR: [...] } } } scoped to a user's own roles/department. */
@@ -192,23 +224,36 @@ export class KpisService {
    * per-person breakdown client-side, no extra endpoint needed.
    */
   async listMine(userId: string) {
-    return this.prisma.kpi.findMany({
-      where: { isActive: true, ...(await this.myAssignmentFilter(userId)) },
-      orderBy: { name: 'asc' },
-      include: {
-        evaluationAreas: {
-          where: { isActive: true },
-          include: {
-            entries: {
-              orderBy: { periodStart: 'desc' },
-              take: RECENT_ENTRIES_TAKE,
-              include: { person: { select: { id: true, displayName: true } } },
+    const [kpis, canSeeEvaluators] = await Promise.all([
+      this.prisma.kpi.findMany({
+        where: { isActive: true, ...(await this.myAssignmentFilter(userId)) },
+        orderBy: { name: 'asc' },
+        include: {
+          evaluationAreas: {
+            where: { isActive: true },
+            include: {
+              entries: {
+                orderBy: { periodStart: 'desc' },
+                take: RECENT_ENTRIES_TAKE,
+                include: {
+                  person: { select: { id: true, displayName: true } },
+                  enteredBy: { select: { id: true, displayName: true } },
+                },
+              },
+              subCriteria: { orderBy: { name: 'asc' } },
             },
-            subCriteria: { orderBy: { name: 'asc' } },
           },
         },
-      },
-    });
+      }),
+      this.canSeeAnonymousEvaluators(userId),
+    ]);
+    return kpis.map((kpi) => ({
+      ...kpi,
+      evaluationAreas: kpi.evaluationAreas.map((area) => ({
+        ...area,
+        entries: area.entries.map((entry) => scrubAnonymousEntry(entry, canSeeEvaluators)),
+      })),
+    }));
   }
 
   async createEvaluationArea(kpiId: string, input: CreateEvaluationAreaInput, actorId: string) {
@@ -355,20 +400,24 @@ export class KpisService {
     const periodStart = new Date(input.periodStart);
     const periodEnd = new Date(input.periodEnd);
 
+    // Keyed by evaluator too: this only guards against the SAME evaluator
+    // double-recording — a different evaluator scoring the same person/area/
+    // period is a second, coexisting rater, not a duplicate.
     const duplicate = await this.prisma.evaluationAreaEntry.findUnique({
       where: {
-        evaluationAreaId_personId_periodStart_periodEnd: {
+        evaluationAreaId_personId_periodStart_periodEnd_enteredById: {
           evaluationAreaId: areaId,
           personId: input.personId,
           periodStart,
           periodEnd,
+          enteredById,
         },
       },
     });
     if (duplicate) {
       throw new AppError(
         'CONFLICT',
-        `An entry for ${person.displayName} in "${area.name}" already exists for ${input.periodStart} → ${input.periodEnd}`,
+        `You've already recorded an entry for ${person.displayName} in "${area.name}" for ${input.periodStart} → ${input.periodEnd}`,
       );
     }
 

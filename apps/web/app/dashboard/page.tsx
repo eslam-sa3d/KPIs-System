@@ -20,7 +20,12 @@ interface RawEntry {
   periodStart: string;
   periodEnd: string;
   note: string | null;
+  reviewType: string | null;
+  anonymous: boolean;
+  context: string | null;
+  comment: string | null;
   person: { id: string; displayName: string };
+  enteredBy: { id: string; displayName: string };
 }
 
 interface RawEvaluationArea {
@@ -35,6 +40,8 @@ interface RawKpi {
   id: string;
   name: string;
   isActive: boolean;
+  /** relative importance 0-100; null means "no weight set" — see compositeScore. */
+  weight: string | number | null;
   evaluationAreas: RawEvaluationArea[];
 }
 
@@ -43,7 +50,8 @@ interface ComputedKpi {
   name: string;
   isActive: boolean;
   areas: RawEvaluationArea[];
-  /** average of each area's single most recent entry, blended across whoever was evaluated */
+  weight: number | null;
+  /** average across every area's most recent PERIOD, itself averaged across every rater/evaluatee scored in that period */
   latestValue: number | null;
   status: StatusKey;
   lastUpdated: string | null;
@@ -58,21 +66,61 @@ const CADENCE_LABEL: Record<string, string> = {
   yearly: 'Yearly',
 };
 
-/** Entries arrive ordered periodStart desc (see KpisService.listMine) — [0] is the latest. */
-function latestEntryOf(area: RawEvaluationArea): RawEntry | null {
-  return area.entries[0] ?? null;
+const REVIEW_TYPE_LABEL: Record<string, string> = {
+  self: 'Self',
+  peer: 'Peer',
+  manager: 'Manager',
+  '360': '360',
+};
+
+function avg(values: number[]): number {
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** Entries arrive ordered periodStart desc (see KpisService.listMine). Multi-rater
+ *  means several entries can share one (person, period) slot, so "the latest" is
+ *  every entry whose periodStart equals the area's own most recent one — not just
+ *  entries[0], which would arbitrarily pick a single rater/evaluatee and ignore the rest. */
+function latestPeriodEntries(area: RawEvaluationArea): RawEntry[] {
+  if (area.entries.length === 0) return [];
+  const maxPeriodStart = area.entries.reduce((max, e) => (e.periodStart > max ? e.periodStart : max), area.entries[0]!.periodStart);
+  return area.entries.filter((e) => e.periodStart === maxPeriodStart);
+}
+
+/** An area's blended latest score: every rater's and every evaluatee's entry in its most recent period, averaged. */
+function latestAreaValue(area: RawEvaluationArea): number | null {
+  const entries = latestPeriodEntries(area);
+  return entries.length > 0 ? avg(entries.map((e) => Number(e.value))) : null;
+}
+
+/** The period immediately before the area's latest one, for a period-over-period delta. */
+function previousAreaValue(area: RawEvaluationArea): number | null {
+  const distinctPeriods = [...new Set(area.entries.map((e) => e.periodStart))].sort().reverse();
+  if (distinctPeriods.length < 2) return null;
+  const previousPeriod = distinctPeriods[1];
+  const entries = area.entries.filter((e) => e.periodStart === previousPeriod);
+  return entries.length > 0 ? avg(entries.map((e) => Number(e.value))) : null;
 }
 
 function computeKpi(kpi: RawKpi): ComputedKpi {
-  const latestByArea = kpi.evaluationAreas.map(latestEntryOf).filter((e): e is RawEntry => e !== null);
-  const values = latestByArea.map((e) => Number(e.value));
-  const latestValue = values.length > 0 ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100 : null;
-  const lastUpdated = latestByArea.map((e) => e.periodEnd).sort().at(-1) ?? null;
+  const areaValues = kpi.evaluationAreas.map(latestAreaValue).filter((v): v is number => v !== null);
+  const latestValue = areaValues.length > 0 ? round2(avg(areaValues)) : null;
+  const lastUpdated =
+    kpi.evaluationAreas
+      .flatMap(latestPeriodEntries)
+      .map((e) => e.periodEnd)
+      .sort()
+      .at(-1) ?? null;
   return {
     id: kpi.id,
     name: kpi.name,
     isActive: kpi.isActive,
     areas: kpi.evaluationAreas,
+    weight: kpi.weight === null ? null : Number(kpi.weight),
     latestValue,
     status: statusOf(latestValue),
     lastUpdated,
@@ -137,15 +185,37 @@ export default function DashboardPage() {
   // "KPI status by cadence": groups EVALUATION AREAS (not KPIs — a KPI can span
   // several cadences) by their own cadence, stacking each area's latest status.
   const areaStatuses = useMemo(
-    () =>
-      levelData.flatMap((k) =>
-        k.areas.map((a) => {
-          const latest = latestEntryOf(a);
-          return { cadence: a.cadence, status: statusOf(latest ? Number(latest.value) : null) };
-        }),
-      ),
+    () => levelData.flatMap((k) => k.areas.map((a) => ({ cadence: a.cadence, status: statusOf(latestAreaValue(a)) }))),
     [levelData],
   );
+
+  // Weighted composite: each scored KPI contributes latestValue × weight, where an
+  // unweighted KPI (Kpi.weight left unset) defaults to a weight of 1 — an even
+  // baseline against any KPI an admin has explicitly weighted heavier.
+  const compositeScore = useMemo(() => {
+    const scored = levelData.filter((k): k is ComputedKpi & { latestValue: number } => k.latestValue !== null);
+    if (scored.length === 0) return null;
+    const totalWeight = scored.reduce((sum, k) => sum + (k.weight ?? 1), 0);
+    if (totalWeight === 0) return null;
+    const weightedSum = scored.reduce((sum, k) => sum + k.latestValue * (k.weight ?? 1), 0);
+    return round2(weightedSum / totalWeight);
+  }, [levelData]);
+
+  // Tally each rater's reviewType across every area's latest period, so the
+  // dashboard shows the self/peer/manager/360 mix behind the numbers above.
+  const reviewMix = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const kpi of levelData) {
+      for (const area of kpi.areas) {
+        for (const entry of latestPeriodEntries(area)) {
+          const key = entry.reviewType ?? 'peer';
+          counts[key] = (counts[key] ?? 0) + 1;
+        }
+      }
+    }
+    return counts;
+  }, [levelData]);
+  const reviewMixTotal = Object.values(reviewMix).reduce((a, b) => a + b, 0);
 
   const distributionData = useMemo(() => {
     const groups = level === 'all' ? levels : [level];
@@ -170,16 +240,15 @@ export default function DashboardPage() {
     const byPerson = new Map<string, { name: string; values: number[] }>();
     for (const kpi of levelData) {
       for (const area of kpi.areas) {
-        const latest = latestEntryOf(area);
-        if (!latest) continue;
-        const entry = byPerson.get(latest.person.id) ?? { name: latest.person.displayName, values: [] };
-        entry.values.push(Number(latest.value));
-        byPerson.set(latest.person.id, entry);
+        for (const entry of latestPeriodEntries(area)) {
+          const bucket = byPerson.get(entry.person.id) ?? { name: entry.person.displayName, values: [] };
+          bucket.values.push(Number(entry.value));
+          byPerson.set(entry.person.id, bucket);
+        }
       }
     }
     return [...byPerson.values()].map(({ name, values }) => {
-      const avg = values.reduce((a, b) => a + b, 0) / values.length;
-      const status = statusOf(avg);
+      const status = statusOf(avg(values));
       return {
         level: name,
         outstanding: status === 'outstanding' ? 1 : 0,
@@ -218,11 +287,17 @@ export default function DashboardPage() {
           id: a.id,
           name: a.name,
           cadence: CADENCE_LABEL[a.cadence] ?? a.cadence,
-          latestValue: latestEntryOf(a) ? Number(latestEntryOf(a)!.value) : null,
+          latestValue: latestAreaValue(a),
+          previousValue: previousAreaValue(a),
           entries: [...a.entries].reverse().map((e) => ({
             label: new Date(e.periodStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
             value: Number(e.value),
             personName: e.person.displayName,
+            evaluatorName: e.enteredBy.displayName,
+            reviewType: e.reviewType,
+            anonymous: e.anonymous,
+            context: e.context,
+            comment: e.comment,
           })),
         })),
       }
@@ -289,6 +364,30 @@ export default function DashboardPage() {
                   </div>
                 </button>
               ))}
+            </div>
+
+            <div className="p-card" style={{ marginBottom: 16 }}>
+              <div className="p-card-title">Composite score</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+                <span
+                  className={`p-score-ring p-status-${statusOf(compositeScore)}`}
+                  style={{ width: 64, height: 44, fontSize: 15 }}
+                >
+                  {compositeScore !== null ? compositeScore.toLocaleString() : '—'}
+                </span>
+                <span className="muted" style={{ fontSize: 11 }}>
+                  weighted average of every scored KPI in this view (KPIs without a set weight count as 1)
+                </span>
+              </div>
+              {reviewMixTotal > 0 && (
+                <div className="p-legend-row">
+                  {Object.entries(reviewMix).map(([type, count]) => (
+                    <span key={type} className="p-fpill" style={{ cursor: 'default' }}>
+                      {REVIEW_TYPE_LABEL[type] ?? type}: {count}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="p-charts-row">

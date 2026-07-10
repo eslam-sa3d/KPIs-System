@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { FormDefinition } from '@pulse/contracts';
+import type { FormDefinition, ReviewType } from '@pulse/contracts';
+import { REVIEW_TYPES } from '@pulse/contracts';
 import { api } from '../lib/api-client';
 
 interface EvaluationAreaOption {
@@ -22,6 +23,10 @@ interface MappingRow {
   evaluationAreaId: string;
   evaluateeFieldKey: string;
   scoreFieldKey: string;
+  reviewType: ReviewType;
+  anonymous: boolean;
+  contextFieldKey: string | null;
+  commentFieldKey: string | null;
   evaluationArea: { id: string; name: string; kpiId: string; cadence: string };
 }
 
@@ -29,6 +34,13 @@ interface BulkMappingResult {
   created: MappingRow[];
   skipped: Array<{ evaluationAreaId: string; reason: string }>;
 }
+
+const REVIEW_TYPE_LABEL: Record<ReviewType, string> = {
+  self: 'self-assessment',
+  peer: 'peer review',
+  manager: 'manager review',
+  '360': '360 review',
+};
 
 /** Lowercase, strip everything but letters/digits to single spaces — a field
  *  label and an Evaluation Area name only need to agree on their words, not
@@ -83,12 +95,22 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [evaluationAreaId, setEvaluationAreaId] = useState('');
   const [evaluateeFieldKey, setEvaluateeFieldKey] = useState('');
   const [scoreFieldKey, setScoreFieldKey] = useState('');
+  const [reviewType, setReviewType] = useState<ReviewType>('peer');
+  const [anonymous, setAnonymous] = useState(false);
+  const [contextFieldKey, setContextFieldKey] = useState('');
+  const [commentFieldKey, setCommentFieldKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [backfillingId, setBackfillingId] = useState<string | null>(null);
 
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkEvaluateeFieldKey, setBulkEvaluateeFieldKey] = useState('');
+  const [bulkReviewType, setBulkReviewType] = useState<ReviewType>('peer');
+  const [bulkAnonymous, setBulkAnonymous] = useState(false);
+  const [bulkContextFieldKey, setBulkContextFieldKey] = useState('');
+  const [bulkCommentFieldKey, setBulkCommentFieldKey] = useState('');
   const [bulkSelections, setBulkSelections] = useState<Record<string, string>>({});
   const [bulkResult, setBulkResult] = useState<BulkMappingResult | null>(null);
 
@@ -131,12 +153,24 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
     try {
       await api(`/v1/forms/${formId}/kpi-mappings`, {
         method: 'POST',
-        body: JSON.stringify({ evaluationAreaId, evaluateeFieldKey, scoreFieldKey }),
+        body: JSON.stringify({
+          evaluationAreaId,
+          evaluateeFieldKey,
+          scoreFieldKey,
+          reviewType,
+          anonymous,
+          ...(contextFieldKey ? { contextFieldKey } : {}),
+          ...(commentFieldKey ? { commentFieldKey } : {}),
+        }),
       });
       setKpiId('');
       setEvaluationAreaId('');
       setEvaluateeFieldKey('');
       setScoreFieldKey('');
+      setReviewType('peer');
+      setAnonymous(false);
+      setContextFieldKey('');
+      setCommentFieldKey('');
       reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'the request failed');
@@ -156,6 +190,26 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
       setError(cause instanceof Error ? cause.message : 'the request failed');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onBackfill(mappingId: string, areaLabel: string) {
+    setBackfillingId(mappingId);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await api<{ scored: number; skipped: number }>(
+        `/v1/forms/${formId}/kpi-mappings/${mappingId}/backfill`,
+        { method: 'POST' },
+      );
+      setNotice(
+        `scored ${result.scored} existing submission${result.scored === 1 ? '' : 's'} into "${areaLabel}"` +
+          (result.skipped > 0 ? ` · skipped ${result.skipped}` : ''),
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'the request failed');
+    } finally {
+      setBackfillingId(null);
     }
   }
 
@@ -184,6 +238,10 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         method: 'POST',
         body: JSON.stringify({
           evaluateeFieldKey: bulkEvaluateeFieldKey,
+          reviewType: bulkReviewType,
+          anonymous: bulkAnonymous,
+          ...(bulkContextFieldKey ? { contextFieldKey: bulkContextFieldKey } : {}),
+          ...(bulkCommentFieldKey ? { commentFieldKey: bulkCommentFieldKey } : {}),
           mappings: unmappedScoreFields
             .filter((f) => bulkSelections[f.key])
             .map((f) => ({ scoreFieldKey: f.key, evaluationAreaId: bulkSelections[f.key]! })),
@@ -205,13 +263,14 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
       <p className="muted">
         connect this survey to a KPI Evaluation Area: pick which field names the person being
         evaluated and which field supplies the score. Every future submission upserts a scored
-        entry for that person and period automatically — existing submissions are unaffected.
+        entry for that person and period automatically.
       </p>
       {error && (
         <p role="alert" className="form-error">
           {error}
         </p>
       )}
+      {notice && <p className="form-notice">{notice}</p>}
 
       {personFields.length === 0 ? (
         <p className="muted">add a &quot;person&quot; field to this form (the evaluatee) to enable KPI scoring.</p>
@@ -228,8 +287,19 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
             <ul className="summary-samples">
               {mappings.map((m) => (
                 <li key={m.id}>
-                  <strong>{m.evaluationArea.name}</strong> ({m.evaluationArea.cadence}) — evaluatee:{' '}
-                  {fieldLabel(m.evaluateeFieldKey)}, score: {fieldLabel(m.scoreFieldKey)}{' '}
+                  <strong>{m.evaluationArea.name}</strong> ({m.evaluationArea.cadence}) —{' '}
+                  {REVIEW_TYPE_LABEL[m.reviewType]}
+                  {m.anonymous && ' · anonymous'} · evaluatee: {fieldLabel(m.evaluateeFieldKey)}, score:{' '}
+                  {fieldLabel(m.scoreFieldKey)}{' '}
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={backfillingId === m.id}
+                    onClick={() => onBackfill(m.id, m.evaluationArea.name)}
+                    title="score every existing submission against this mapping too"
+                  >
+                    {backfillingId === m.id ? 'scoring…' : 'backfill existing responses'}
+                  </button>{' '}
                   {confirmDeleteId === m.id ? (
                     <>
                       <span className="muted">remove this mapping?</span>{' '}
@@ -304,6 +374,45 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               </option>
             ))}
           </select>
+          <select
+            aria-label="review type"
+            value={reviewType}
+            onChange={(e) => setReviewType(e.target.value as ReviewType)}
+          >
+            {REVIEW_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {REVIEW_TYPE_LABEL[t]}
+              </option>
+            ))}
+          </select>
+          <label className="check-item">
+            <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
+            keep the evaluator anonymous
+          </label>
+          <select
+            aria-label="context field (optional)"
+            value={contextFieldKey}
+            onChange={(e) => setContextFieldKey(e.target.value)}
+          >
+            <option value="">no context field</option>
+            {definition.fields.map((f) => (
+              <option key={f.key} value={f.key}>
+                context: {f.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="comment field (optional)"
+            value={commentFieldKey}
+            onChange={(e) => setCommentFieldKey(e.target.value)}
+          >
+            <option value="">no comment field</option>
+            {definition.fields.map((f) => (
+              <option key={f.key} value={f.key}>
+                comment: {f.label}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             className="btn-ghost"
@@ -338,6 +447,49 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     {personFields.map((f) => (
                       <option key={f.key} value={f.key}>
                         {f.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="review type for this batch"
+                    value={bulkReviewType}
+                    onChange={(e) => setBulkReviewType(e.target.value as ReviewType)}
+                  >
+                    {REVIEW_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {REVIEW_TYPE_LABEL[t]}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="check-item">
+                    <input
+                      type="checkbox"
+                      checked={bulkAnonymous}
+                      onChange={(e) => setBulkAnonymous(e.target.checked)}
+                    />
+                    keep evaluators anonymous
+                  </label>
+                  <select
+                    aria-label="context field for this batch (optional)"
+                    value={bulkContextFieldKey}
+                    onChange={(e) => setBulkContextFieldKey(e.target.value)}
+                  >
+                    <option value="">no context field</option>
+                    {definition.fields.map((f) => (
+                      <option key={f.key} value={f.key}>
+                        context: {f.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="comment field for this batch (optional)"
+                    value={bulkCommentFieldKey}
+                    onChange={(e) => setBulkCommentFieldKey(e.target.value)}
+                  >
+                    <option value="">no comment field</option>
+                    {definition.fields.map((f) => (
+                      <option key={f.key} value={f.key}>
+                        comment: {f.label}
                       </option>
                     ))}
                   </select>

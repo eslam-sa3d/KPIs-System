@@ -46,7 +46,13 @@ function makeFormsStub() {
   };
 }
 
-const validInput = { evaluationAreaId: 'area-1', evaluateeFieldKey: 'evaluatee', scoreFieldKey: 'score' };
+const validInput = {
+  evaluationAreaId: 'area-1',
+  evaluateeFieldKey: 'evaluatee',
+  scoreFieldKey: 'score',
+  reviewType: 'peer' as const,
+  anonymous: false,
+};
 
 describe('FormKpiMappingsService.create', () => {
   let prisma: ReturnType<typeof makePrismaStub>;
@@ -67,9 +73,39 @@ describe('FormKpiMappingsService.create', () => {
         evaluationAreaId: 'area-1',
         evaluateeFieldKey: 'evaluatee',
         scoreFieldKey: 'score',
+        reviewType: 'peer',
+        anonymous: false,
+        contextFieldKey: undefined,
+        commentFieldKey: undefined,
       },
     });
     expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts a reviewType/anonymous/context/comment field selection', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await service.create(
+      'form-1',
+      { ...validInput, reviewType: 'manager', anonymous: true, contextFieldKey: 'notes', commentFieldKey: 'notes' },
+      'admin-1',
+    );
+
+    expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        reviewType: 'manager',
+        anonymous: true,
+        contextFieldKey: 'notes',
+        commentFieldKey: 'notes',
+      }),
+    });
+  });
+
+  it('rejects a contextFieldKey/commentFieldKey that does not exist on the form', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await expect(
+      service.create('form-1', { ...validInput, contextFieldKey: 'ghost-field' }, 'admin-1'),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
   });
 
   it('rejects when evaluateeFieldKey does not reference a person field', async () => {
@@ -155,6 +191,8 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   const bulkInput = {
     evaluateeFieldKey: 'evaluatee',
+    reviewType: 'peer' as const,
+    anonymous: false,
     mappings: [
       { evaluationAreaId: 'area-1', scoreFieldKey: 'score' },
       { evaluationAreaId: 'area-2', scoreFieldKey: 'score2' },
@@ -192,7 +230,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
     const result = await service.bulkCreate(
       'form-1',
-      { evaluateeFieldKey: 'evaluatee', mappings: [{ evaluationAreaId: 'ghost-area', scoreFieldKey: 'score' }] },
+      { evaluateeFieldKey: 'evaluatee', reviewType: 'peer' as const, anonymous: false, mappings: [{ evaluationAreaId: 'ghost-area', scoreFieldKey: 'score' }] },
       'admin-1',
     );
 
@@ -206,7 +244,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
     const result = await service.bulkCreate(
       'form-1',
-      { evaluateeFieldKey: 'evaluatee', mappings: [{ evaluationAreaId: 'area-1', scoreFieldKey: 'notes' }] },
+      { evaluateeFieldKey: 'evaluatee', reviewType: 'peer' as const, anonymous: false, mappings: [{ evaluationAreaId: 'area-1', scoreFieldKey: 'notes' }] },
       'admin-1',
     );
 
@@ -232,7 +270,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
     await service.bulkCreate(
       'form-1',
-      { evaluateeFieldKey: 'evaluatee', mappings: [{ evaluationAreaId: 'ghost-area', scoreFieldKey: 'score' }] },
+      { evaluateeFieldKey: 'evaluatee', reviewType: 'peer' as const, anonymous: false, mappings: [{ evaluationAreaId: 'ghost-area', scoreFieldKey: 'score' }] },
       'admin-1',
     );
 

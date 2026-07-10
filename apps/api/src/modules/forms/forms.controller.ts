@@ -243,6 +243,14 @@ export class FormsController {
     return this.kpiMappings.delete(formId, mappingId, req.user.id);
   }
 
+  /** Retroactively scores every existing submission against a mapping created
+   *  after they were collected — see SubmissionsService.backfillMapping. */
+  @Post(':formId/kpi-mappings/:mappingId/backfill')
+  @RequirePermissions('forms:manage', 'kpis:write')
+  backfillKpiMapping(@Param('formId') formId: string, @Param('mappingId') mappingId: string) {
+    return this.submissions.backfillMapping(formId, mappingId);
+  }
+
   @Get(':slug')
   @RequirePermissions('forms:read')
   getForm(@Param('slug') slug: string) {
