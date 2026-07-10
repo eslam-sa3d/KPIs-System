@@ -8,6 +8,7 @@ import type { FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/con
 import { PortalShell, can } from '../../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FormRenderer, SubmissionScore } from '../../../components/form-renderer';
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
 import { ShareLinkPanel } from '../../../components/share-link-panel';
@@ -213,12 +214,14 @@ function FormView() {
       {tab === 'submissions' && (
         <section role="tabpanel" aria-label="submissions">
           {fieldFilter && (
-            <p className="form-notice">
-              filtered by {fieldFilter.label}: <strong>{fieldFilter.value}</strong>{' '}
-              <Button variant="ghost" size="sm" onClick={() => setFieldFilter(null)}>
-                clear
-              </Button>
-            </p>
+            <Alert>
+              <AlertDescription>
+                filtered by {fieldFilter.label}: <strong>{fieldFilter.value}</strong>{' '}
+                <Button variant="ghost" size="sm" onClick={() => setFieldFilter(null)}>
+                  clear
+                </Button>
+              </AlertDescription>
+            </Alert>
           )}
           <div className="page-title-row">
             <input
@@ -288,7 +291,11 @@ function FormView() {
                 </Button>
               ))}
           </div>
-          {notice && <p className="form-notice">{notice}</p>}
+          {notice && (
+            <Alert>
+              <AlertDescription>{notice}</AlertDescription>
+            </Alert>
+          )}
           {rows === null ? (
             <p className="muted">loading…</p>
           ) : filteredRows.length === 0 ? (

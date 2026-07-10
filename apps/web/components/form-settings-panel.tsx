@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import type { FormSettings } from '@pulse/contracts';
 import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const toLocalInputValue = (iso?: string) => (iso ? iso.slice(0, 16) : '');
 const toIso = (local: string) => (local ? new Date(local).toISOString() : undefined);
@@ -254,11 +255,15 @@ export function FormSettingsPanel({
       <Button type="submit" disabled={busy}>
         {busy ? 'saving…' : 'save settings'}
       </Button>
-      {notice && <p className="form-notice">{notice}</p>}
+      {notice && (
+        <Alert>
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
+      )}
       {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
     </form>
   );

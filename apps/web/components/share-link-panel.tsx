@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { API_URL, api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 /** Public share link + QR (client-generated, no external network call). */
 export function ShareLinkPanel({
@@ -106,9 +107,9 @@ export function ShareLinkPanel({
         share link. Disabling it (or rotating) invalidates the previous link immediately.
       </p>
       {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {!token ? (

@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -106,9 +107,9 @@ export default function RolesAdminPage() {
         compose custom roles from the permission catalog — no deployment needed
       </p>
       {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {can(user, 'roles:manage') && catalog && (

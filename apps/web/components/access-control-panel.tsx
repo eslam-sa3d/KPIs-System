@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface UserOption {
   id: string;
@@ -111,9 +112,9 @@ export function AccessControlPanel({
         limits that to specific people — the public share link above is unaffected either way.
       </p>
       {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <label className="check-item">

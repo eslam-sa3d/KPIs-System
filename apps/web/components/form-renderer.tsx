@@ -5,6 +5,7 @@ import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormFie
 import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 /** Google Forms' three-way font choice, mapped to system stacks — no new font files/CDN loads. */
 const FONT_STACKS: Record<NonNullable<FormTheme['fontFamily']>, string | undefined> = {
@@ -366,7 +367,11 @@ export function FieldInput({
               </ul>
             )}
             {uploadState.busy && <p className="muted">uploading…</p>}
-            {uploadState.error && <p role="alert" className="form-error">{uploadState.error}</p>}
+            {uploadState.error && (
+              <Alert variant="destructive">
+                <AlertDescription>{uploadState.error}</AlertDescription>
+              </Alert>
+            )}
           </div>
         );
       }
@@ -383,7 +388,11 @@ export function FieldInput({
           />
           {uploadState.busy && <p className="muted">uploading…</p>}
           {attachedName && !uploadState.busy && <p className="muted">✓ {attachedName}</p>}
-          {uploadState.error && <p role="alert" className="form-error">{uploadState.error}</p>}
+          {uploadState.error && (
+            <Alert variant="destructive">
+              <AlertDescription>{uploadState.error}</AlertDescription>
+            </Alert>
+          )}
         </div>
       );
     }
@@ -811,7 +820,9 @@ export function FormRenderer({
             });
           })()}
           {(pageError || error) && (
-            <p role="alert" className="form-error">{pageError ?? error}</p>
+            <Alert variant="destructive">
+              <AlertDescription>{pageError ?? error}</AlertDescription>
+            </Alert>
           )}
           {(!hasSections || isLastPage) && captchaSlot}
           <div className="page-title-row">

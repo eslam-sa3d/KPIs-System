@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, FolderOpen, Pencil, Search, Share2 } from 'lucide-react';
 import { PortalShell, can } from '../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '../../lib/api-client';
@@ -104,9 +105,9 @@ export default function FormsPage() {
       </div>
       <p className="portal-subtitle">collect data with custom forms, then aggregate and export it</p>
       {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {forms === null ? (

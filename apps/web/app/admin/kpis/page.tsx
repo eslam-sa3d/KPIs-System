@@ -2,7 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, EyeOff, FolderPlus, Layers, ListPlus, Pencil, Plus, Search, Target } from 'lucide-react';
+import { toast } from 'sonner';
 import { PortalShell, can } from '../../../components/portal-shell';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -132,7 +134,6 @@ export default function KpisAdminPage() {
   const [selectedKpiId, setSelectedKpiId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [creatingKpi, setCreatingKpi] = useState(false);
   const [renamingKpiId, setRenamingKpiId] = useState<string | null>(null);
   const [confirmDeleteKpiId, setConfirmDeleteKpiId] = useState<string | null>(null);
@@ -170,20 +171,13 @@ export default function KpisAdminPage() {
     }
   }, [kpis, selectedKpiId]);
 
-  // Toasts self-dismiss; errors stay put until the next action so they're
-  // not missed mid-read.
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 3500);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
+  // Success toasts self-dismiss (Sonner's own default timing); errors stay
+  // put as an inline alert until the next action so they're not missed mid-read.
   function report(promise: Promise<unknown>, successNote: string) {
     setError(null);
-    setNotice(null);
     return promise
       .then(async () => {
-        setNotice(successNote);
+        toast.success(successNote);
         await reload();
       })
       .catch((cause) => setError(cause instanceof Error ? cause.message : 'The request failed'));
@@ -420,15 +414,10 @@ export default function KpisAdminPage() {
       <h1>KPIs</h1>
       <p className="portal-subtitle">define KPIs, evaluation areas, and sub-criteria</p>
 
-      {(notice || error) && (
-        <div className="kpi-toast-stack" role="status">
-          {notice && <div className="kpi-toast">{notice}</div>}
-          {error && (
-            <div className="kpi-toast kpi-toast-error" role="alert">
-              {error}
-            </div>
-          )}
-        </div>
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {kpis === null ? (

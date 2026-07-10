@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PortalShell } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -127,12 +128,18 @@ export default function SettingsPage() {
           </>
         )}
 
-        {notice && <p className="form-notice">{notice}</p>}
-        {error && (
-          <p role="alert" className="form-error">
-            {error}
-          </p>
-        )}
+        <div className="space-y-2 mb-4">
+          {notice && (
+            <Alert>
+              <AlertDescription>{notice}</AlertDescription>
+            </Alert>
+          )}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </div>
       </section>
     </PortalShell>
   );

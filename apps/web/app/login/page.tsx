@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { login } from '../../lib/api-client';
 import { asset } from '../../lib/asset';
@@ -46,9 +47,9 @@ export default function LoginPage() {
         />
 
         {error && (
-          <p role="alert" className="form-error">
-            {error}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         <Button type="submit" disabled={pending} className="w-full">

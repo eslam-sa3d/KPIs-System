@@ -3193,35 +3193,6 @@ h3 {
   }
 }
 
-.kpi-toast-stack {
-  position: fixed;
-  right: var(--space-4);
-  bottom: var(--space-4);
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  max-width: min(360px, calc(100vw - var(--space-8)));
-}
-
-.kpi-toast {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-  font-size: var(--font-size-sm);
-  border-left: 3px solid var(--color-success);
-  color: var(--color-text);
-}
-
-.kpi-toast-error {
-  border-left-color: var(--pulse-coral);
-  color: var(--pulse-coral);
-}
-
 .kpi-back-to-list {
   display: none;
 }

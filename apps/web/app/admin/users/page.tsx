@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { PortalShell, can } from '../../../components/portal-shell';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -162,11 +163,15 @@ export default function UsersAdminPage() {
             </>
           )}
           <Button type="submit">create user</Button>
-          {notice && <p className="form-notice">{notice}</p>}
+          {notice && (
+            <Alert>
+              <AlertDescription>{notice}</AlertDescription>
+            </Alert>
+          )}
           {error && (
-            <p role="alert" className="form-error">
-              {error}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
         </form>
       )}

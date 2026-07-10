@@ -5,6 +5,7 @@ import type { FormDefinition, ReviewType } from '@pulse/contracts';
 import { REVIEW_TYPES } from '@pulse/contracts';
 import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface EvaluationAreaOption {
   id: string;
@@ -267,11 +268,15 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         entry for that person and period automatically.
       </p>
       {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
-      {notice && <p className="form-notice">{notice}</p>}
+      {notice && (
+        <Alert>
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
+      )}
 
       {personFields.length === 0 ? (
         <p className="muted">add a &quot;person&quot; field to this form (the evaluatee) to enable KPI scoring.</p>
@@ -428,13 +433,15 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
           {unmappedScoreFields.length >= 2 && (
             <div className="kpi-bulk-mapping">
               {bulkResult && (
-                <p className="form-notice">
+                <Alert>
+                  <AlertDescription>
                   mapped {bulkResult.created.length} question{bulkResult.created.length === 1 ? '' : 's'}
                   {bulkResult.skipped.length > 0 &&
                     ` · skipped ${bulkResult.skipped.length}: ${bulkResult.skipped
                       .map((s) => `${areaName(s.evaluationAreaId)} (${s.reason})`)
                       .join('; ')}`}
-                </p>
+                  </AlertDescription>
+                </Alert>
               )}
               {bulkOpen ? (
                 <>
