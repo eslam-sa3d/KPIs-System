@@ -6,6 +6,11 @@ import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 /** Google Forms' three-way font choice, mapped to system stacks — no new font files/CDN loads. */
 const FONT_STACKS: Record<NonNullable<FormTheme['fontFamily']>, string | undefined> = {
@@ -111,16 +116,16 @@ export function FieldInput({
 
   switch (field.type) {
     case 'long_text':
-      return <textarea id={id} rows={4} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
+      return <Textarea id={id} rows={4} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
     case 'number':
       return (
-        <input id={id} type="number" value={(value as number | undefined) ?? ''}
+        <Input id={id} type="number" value={(value as number | undefined) ?? ''}
           onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))} />
       );
     case 'date':
-      return <input id={id} type="date" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
+      return <Input id={id} type="date" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
     case 'boolean':
-      return <input id={id} type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />;
+      return <Checkbox id={id} checked={Boolean(value)} onCheckedChange={(checked) => onChange(checked === true)} />;
     case 'rating': {
       const current = value as number | undefined;
       if (field.style === 'stars') {
@@ -174,39 +179,50 @@ export function FieldInput({
       const isOther = raw.startsWith('other:');
       if (field.layout === 'radio') {
         return (
-          <span className="check-group" id={id}>
+          <RadioGroup
+            id={id}
+            value={isOther ? 'other:' : raw}
+            onValueChange={(v) => onChange(v)}
+            className="check-group"
+          >
             {field.options.map((o) => (
               <label key={o.value} className="check-item">
-                <input type="radio" name={id} checked={raw === o.value} onChange={() => onChange(o.value)} />
+                <RadioGroupItem value={o.value} />
                 {o.imageAssetId && <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" />}
                 {o.label}
               </label>
             ))}
             {field.allowOther && (
               <label className="check-item">
-                <input type="radio" name={id} checked={isOther} onChange={() => onChange('other:')} />
+                <RadioGroupItem value="other:" />
                 other:
                 {isOther && (
-                  <input type="text" aria-label={`${field.label} other`} value={raw.slice(6)}
+                  <Input type="text" aria-label={`${field.label} other`} value={raw.slice(6)}
                     onChange={(e) => onChange(`other:${e.target.value}`)} />
                 )}
               </label>
             )}
-          </span>
+          </RadioGroup>
         );
       }
       return (
         <>
-          <select id={id} value={isOther ? '__other' : raw}
-            onChange={(e) => onChange(e.target.value === '__other' ? 'other:' : e.target.value)}>
-            <option value="">—</option>
-            {field.options.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-            {field.allowOther && <option value="__other">other…</option>}
-          </select>
+          <Select
+            value={isOther ? '__other' : raw || undefined}
+            onValueChange={(v) => onChange(v === '__other' ? 'other:' : v)}
+          >
+            <SelectTrigger id={id}>
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              {field.options.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+              {field.allowOther && <SelectItem value="__other">other…</SelectItem>}
+            </SelectContent>
+          </Select>
           {isOther && (
-            <input type="text" aria-label={`${field.label} other`} placeholder="please specify"
+            <Input type="text" aria-label={`${field.label} other`} placeholder="please specify"
               value={raw.slice(6)} onChange={(e) => onChange(`other:${e.target.value}`)} />
           )}
         </>
@@ -218,9 +234,9 @@ export function FieldInput({
         <span className="check-group" id={id}>
           {field.options.map((o) => (
             <label key={o.value} className="check-item">
-              <input type="checkbox" checked={selected.includes(o.value)}
-                onChange={(e) =>
-                  onChange(e.target.checked ? [...selected, o.value] : selected.filter((v) => v !== o.value))
+              <Checkbox checked={selected.includes(o.value)}
+                onCheckedChange={(checked) =>
+                  onChange(checked ? [...selected, o.value] : selected.filter((v) => v !== o.value))
                 } />
               {o.imageAssetId && <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" />}
               {o.label}
@@ -340,7 +356,7 @@ export function FieldInput({
         const ids = (value as string[] | undefined) ?? [];
         return (
           <div id={id}>
-            <input
+            <Input
               type="file"
               multiple
               aria-label={fileField.label}
@@ -379,7 +395,7 @@ export function FieldInput({
       const attachedName = uploadState.filename ?? (value ? 'file attached' : null);
       return (
         <div id={id}>
-          <input
+          <Input
             type="file"
             aria-label={fileField.label}
             accept={fileField.acceptedMimeTypes.join(',')}
@@ -423,15 +439,15 @@ export function FieldInput({
           <label htmlFor={`${id}-name`} className="muted">
             name{field.requireName && ' *'}
           </label>
-          <input id={`${id}-name`} value={current.name ?? ''} onChange={(e) => set('name', e.target.value)} />
+          <Input id={`${id}-name`} value={current.name ?? ''} onChange={(e) => set('name', e.target.value)} />
           <label htmlFor={`${id}-email`} className="muted">
             email{field.requireEmail && ' *'}
           </label>
-          <input id={`${id}-email`} type="email" value={current.email ?? ''} onChange={(e) => set('email', e.target.value)} />
+          <Input id={`${id}-email`} type="email" value={current.email ?? ''} onChange={(e) => set('email', e.target.value)} />
           <label htmlFor={`${id}-phone`} className="muted">
             phone{field.requirePhone && ' *'}
           </label>
-          <input id={`${id}-phone`} type="tel" value={current.phone ?? ''} onChange={(e) => set('phone', e.target.value)} />
+          <Input id={`${id}-phone`} type="tel" value={current.phone ?? ''} onChange={(e) => set('phone', e.target.value)} />
         </div>
       );
     }
@@ -473,7 +489,7 @@ export function FieldInput({
             </span>
           ) : (
             <>
-              <input
+              <Input
                 type="text"
                 aria-label={`${field.label} search`}
                 placeholder={userOptions === null ? 'loading…' : 'search by name or email'}
@@ -482,24 +498,23 @@ export function FieldInput({
                 onChange={(e) => setPersonFilter(e.target.value)}
               />
               {personFilter && candidates.length > 0 && (
-                <select
-                  aria-label={`${field.label} matches`}
-                  size={Math.min(5, candidates.length)}
-                  value=""
-                  onChange={(e) => {
-                    onChange(e.target.value);
-                    setPersonFilter('');
-                  }}
-                >
-                  <option value="" disabled>
-                    choose…
-                  </option>
+                <div role="listbox" aria-label={`${field.label} matches`} className="max-h-48 overflow-y-auto rounded-md border">
                   {candidates.map((u) => (
-                    <option key={u.id} value={u.id}>
+                    <button
+                      key={u.id}
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      onClick={() => {
+                        onChange(u.id);
+                        setPersonFilter('');
+                      }}
+                      className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-accent"
+                    >
                       {u.displayName} ({u.email})
-                    </option>
+                    </button>
                   ))}
-                </select>
+                </div>
               )}
               {personFilter && candidates.length === 0 && userOptions !== null && (
                 <p className="muted">no matches</p>
@@ -510,7 +525,7 @@ export function FieldInput({
       );
     }
     default:
-      return <input id={id} type="text" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
+      return <Input id={id} type="text" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
   }
 }
 
