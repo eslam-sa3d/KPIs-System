@@ -29,6 +29,12 @@ import { PortalShell } from '../../../components/portal-shell';
 import { LoadingState } from '../../../components/loading-state';
 import { api, assetUrl, uploadAsset } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'short_text', label: 'short text' },
@@ -1135,7 +1141,7 @@ function NewFormPage() {
             </div>
           )}
           <label htmlFor="form-title">form title</label>
-          <input
+          <Input
             id="form-title"
             className="msform-title-input"
             value={title}
@@ -1143,7 +1149,7 @@ function NewFormPage() {
             placeholder="untitled form"
           />
           <label htmlFor="form-description" className="msform-desc-label">description (optional)</label>
-          <input
+          <Input
             id="form-description"
             className="msform-desc-input"
             value={description}
@@ -1163,7 +1169,7 @@ function NewFormPage() {
             types default to short text. Word (.docx): one question per line, optionally ending in a type
             hint like "how satisfied are you? (rating)".
           </p>
-          <input
+          <Input
             ref={fileInputRef}
             id="excel-import-input"
             type="file"
@@ -1171,14 +1177,14 @@ function NewFormPage() {
             onChange={onImportExcel}
             style={{ display: 'none' }}
           />
-          <button
+          <Button
             type="button"
-            className="btn-ghost"
+            variant="ghost"
             disabled={importing}
             onClick={() => fileInputRef.current?.click()}
           >
             {importing ? 'reading file…' : 'import from Excel, CSV, or Word'}
-          </button>
+          </Button>
           {importIssues.length > 0 && (
             <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
               {importIssues.slice(0, 5).map((issue, i) => (
@@ -1191,20 +1197,20 @@ function NewFormPage() {
 
         {fields.length > 0 && (
           <div className="page-title-row" style={{ marginBottom: 8 }}>
-            <button
+            <Button
               type="button"
-              className="btn-ghost"
+              variant="ghost"
               onClick={() => setFields((current) => current.map((f) => ({ ...f, required: true })))}
             >
               mark all required
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn-ghost"
+              variant="ghost"
               onClick={() => setFields((current) => current.map((f) => ({ ...f, required: false })))}
             >
               mark all optional
-            </button>
+            </Button>
           </div>
         )}
 
@@ -1242,8 +1248,9 @@ function NewFormPage() {
               <span className="question-number">{index + 1}</span>
             </legend>
 
-            <button
+            <Button
               type="button"
+              variant="ghost"
               className="field-drag-handle"
               draggable
               title="drag to reorder"
@@ -1266,12 +1273,12 @@ function NewFormPage() {
                 <span />
                 <span />
               </span>
-            </button>
+            </Button>
 
             <div className="field-head-row">
               <div className="field-title-group">
                 <label htmlFor={`field-label-${index}`}>field label</label>
-                <input
+                <Input
                   id={`field-label-${index}`}
                   className="field-title-input"
                   value={field.label}
@@ -1280,8 +1287,9 @@ function NewFormPage() {
                 />
               </div>
               {field.type !== 'section_header' && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   className={`field-image-btn${field.mediaType === 'image' ? ' is-on' : ''}`}
                   title="add image"
                   aria-label="add image to question"
@@ -1291,47 +1299,46 @@ function NewFormPage() {
                   }}
                 >
                   🖼
-                </button>
+                </Button>
               )}
               <div className="field-type-group">
                 <label htmlFor={`field-type-${index}`}>field type</label>
-                <details className="field-type-dropdown">
-                  <summary id={`field-type-${index}`} className="field-type-summary">
-                    <span className="field-type-icon">{FIELD_TYPE_ICON[field.type]}</span>
-                    <span className="field-type-summary-label">
-                      {FIELD_TYPE_OPTIONS.find((option) => option.value === field.type)?.label}
-                    </span>
-                  </summary>
-                  <div className="field-type-menu" role="listbox" aria-label="field type">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button id={`field-type-${index}`} type="button" className="field-type-summary">
+                      <span className="field-type-icon">{FIELD_TYPE_ICON[field.type]}</span>
+                      <span className="field-type-summary-label">
+                        {FIELD_TYPE_OPTIONS.find((option) => option.value === field.type)?.label}
+                      </span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent aria-label="field type">
                     {FIELD_TYPE_OPTIONS.map((option) => (
-                      <button
+                      <DropdownMenuItem
                         key={option.value}
-                        type="button"
-                        role="option"
-                        aria-selected={field.type === option.value}
                         className={`field-type-option${field.type === option.value ? ' is-selected' : ''}`}
-                        onClick={(e) => {
+                        onSelect={() => {
                           updateField(index, { type: option.value });
-                          e.currentTarget.closest('details')?.removeAttribute('open');
                         }}
                       >
                         <span className="field-type-icon">{FIELD_TYPE_ICON[option.value]}</span>
                         {option.label}
-                      </button>
+                      </DropdownMenuItem>
                     ))}
-                  </div>
-                </details>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
               {!isActive && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   className="field-expand-btn"
                   title="edit question"
                   aria-label="edit question"
                   onClick={() => setActiveFieldIndex(index)}
                 >
                   ⌄
-                </button>
+                </Button>
               )}
             </div>
 
@@ -1339,7 +1346,7 @@ function NewFormPage() {
             <div className="field-detail-inner">
 
             <label htmlFor={`field-help-${index}`}>help text (optional)</label>
-            <input
+            <Input
               id={`field-help-${index}`}
               value={field.helpText}
               onChange={(e) => updateField(index, { helpText: e.target.value })}
@@ -1361,18 +1368,22 @@ function NewFormPage() {
             {field.type !== 'section_header' && (
               <>
                 <label htmlFor={`field-media-type-${index}`}>question media (optional)</label>
-                <select
-                  id={`field-media-type-${index}`}
+                <Select
                   value={field.mediaType}
-                  onChange={(e) => updateField(index, { mediaType: e.target.value as DraftField['mediaType'] })}
+                  onValueChange={(v) => updateField(index, { mediaType: v as DraftField['mediaType'] })}
                 >
-                  <option value="none">none</option>
-                  <option value="image">image</option>
-                  <option value="video">video (embed URL)</option>
-                </select>
+                  <SelectTrigger id={`field-media-type-${index}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">none</SelectItem>
+                    <SelectItem value="image">image</SelectItem>
+                    <SelectItem value="video">video (embed URL)</SelectItem>
+                  </SelectContent>
+                </Select>
                 {field.mediaType === 'image' && (
                   <>
-                    <input
+                    <Input
                       type="file"
                       accept="image/*"
                       onChange={(e) => e.target.files?.[0] && onUploadFieldMedia(index, e.target.files[0])}
@@ -1383,7 +1394,7 @@ function NewFormPage() {
                   </>
                 )}
                 {field.mediaType === 'video' && (
-                  <input
+                  <Input
                     value={field.mediaUrl}
                     onChange={(e) => updateField(index, { mediaUrl: e.target.value })}
                     placeholder="https://www.youtube.com/embed/…"
@@ -1398,48 +1409,64 @@ function NewFormPage() {
               return (
                 <>
                   <label htmlFor={`field-visible-field-${index}`}>show only if (optional)</label>
-                  <select
-                    id={`field-visible-field-${index}`}
-                    value={field.visibleWhenFieldKey}
-                    onChange={(e) => updateField(index, { visibleWhenFieldKey: e.target.value, visibleWhenValue: '' })}
+                  <Select
+                    value={field.visibleWhenFieldKey || '__none__'}
+                    onValueChange={(v) =>
+                      updateField(index, { visibleWhenFieldKey: v === '__none__' ? '' : v, visibleWhenValue: '' })
+                    }
                     disabled={earlierFields.length === 0}
                   >
-                    <option value="">always visible</option>
-                    {earlierFields.map((f) => (
-                      <option key={f.key} value={f.key}>
-                        {f.label} ({f.type})
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger id={`field-visible-field-${index}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">always visible</SelectItem>
+                      {earlierFields.map((f) => (
+                        <SelectItem key={f.key} value={f.key}>
+                          {f.label} ({f.type})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
                   {field.visibleWhenFieldKey && (
                     <>
                       <label htmlFor={`field-visible-op-${index}`}>condition</label>
-                      <select
-                        id={`field-visible-op-${index}`}
+                      <Select
                         value={field.visibleWhenOperator}
-                        onChange={(e) => updateField(index, { visibleWhenOperator: e.target.value as ConditionOperator })}
+                        onValueChange={(v) => updateField(index, { visibleWhenOperator: v as ConditionOperator })}
                       >
-                        {CONDITION_OPERATORS.map((op) => (
-                          <option key={op} value={op}>
-                            {op.replace('_', ' ')}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger id={`field-visible-op-${index}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CONDITION_OPERATORS.map((op) => (
+                            <SelectItem key={op} value={op}>
+                              {op.replace('_', ' ')}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
                       <label htmlFor={`field-visible-value-${index}`}>value</label>
                       {visibleWhenTarget?.type === 'boolean' ? (
-                        <select
-                          id={`field-visible-value-${index}`}
-                          value={field.visibleWhenValue}
-                          onChange={(e) => updateField(index, { visibleWhenValue: e.target.value })}
+                        <Select
+                          value={field.visibleWhenValue || '__none__'}
+                          onValueChange={(v) =>
+                            updateField(index, { visibleWhenValue: v === '__none__' ? '' : v })
+                          }
                         >
-                          <option value="">choose…</option>
-                          <option value="true">yes</option>
-                          <option value="false">no</option>
-                        </select>
+                          <SelectTrigger id={`field-visible-value-${index}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">choose…</SelectItem>
+                            <SelectItem value="true">yes</SelectItem>
+                            <SelectItem value="false">no</SelectItem>
+                          </SelectContent>
+                        </Select>
                       ) : (
-                        <input
+                        <Input
                           id={`field-visible-value-${index}`}
                           value={field.visibleWhenValue}
                           onChange={(e) => updateField(index, { visibleWhenValue: e.target.value })}
@@ -1459,7 +1486,7 @@ function NewFormPage() {
             {field.type !== 'section_header' && (
               <>
                 <label htmlFor={`field-captured-param-${index}`}>capture from URL parameter (optional)</label>
-                <input
+                <Input
                   id={`field-captured-param-${index}`}
                   value={field.capturedFromUrlParam}
                   onChange={(e) => updateField(index, { capturedFromUrlParam: e.target.value })}
@@ -1481,7 +1508,7 @@ function NewFormPage() {
                       >
                         {field.type === 'ranking' ? optionIndex + 1 : ''}
                       </span>
-                      <input
+                      <Input
                         value={optionValue}
                         onChange={(e) => {
                           const list = parseList(field.options);
@@ -1490,8 +1517,10 @@ function NewFormPage() {
                         }}
                         placeholder={`Option ${optionIndex + 1}`}
                       />
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon-xs"
                         className="option-row-remove"
                         title="remove option"
                         aria-label={`remove option ${optionIndex + 1}`}
@@ -1501,27 +1530,30 @@ function NewFormPage() {
                         }}
                       >
                         ✕
-                      </button>
+                      </Button>
                     </div>
                   ))}
                   {field.type === 'select' && field.allowOther && (
                     <div className="option-row option-row-other">
                       <span className="option-row-mark" />
                       <span className="option-row-other-label">Other…</span>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon-xs"
                         className="option-row-remove"
                         title="remove &quot;other&quot;"
                         aria-label="remove other"
                         onClick={() => updateField(index, { allowOther: false })}
                       >
                         ✕
-                      </button>
+                      </Button>
                     </div>
                   )}
                   <div className="option-row-add-line">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       className="option-row-add"
                       onClick={() => {
                         const list = parseList(field.options);
@@ -1531,27 +1563,27 @@ function NewFormPage() {
                     >
                       <span className={`option-row-mark${field.type === 'multi_select' ? ' is-checkbox' : ''}`} />
                       add option
-                    </button>
+                    </Button>
                     {field.type === 'select' && !field.allowOther && (
                       <>
                         {' '}or{' '}
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
                           className="option-row-other-link"
                           onClick={() => updateField(index, { allowOther: true })}
                         >
                           add &quot;Other&quot;
-                        </button>
+                        </Button>
                       </>
                     )}
                   </div>
                 </div>
                 <span className="builder-required">
-                  <input
+                  <Checkbox
                     id={`field-shuffle-${index}`}
-                    type="checkbox"
                     checked={field.shuffleOptions}
-                    onChange={(e) => updateField(index, { shuffleOptions: e.target.checked })}
+                    onCheckedChange={(checked) => updateField(index, { shuffleOptions: checked === true })}
                   />
                   <label htmlFor={`field-shuffle-${index}`}>
                     {field.type === 'ranking' ? 'randomize starting order' : 'shuffle option order per respondent'}
@@ -1563,7 +1595,7 @@ function NewFormPage() {
                     {parseList(field.options).map((optionValue) => (
                       <div key={optionValue} className="builder-required" style={{ marginTop: 4 }}>
                         <span style={{ minWidth: 100, display: 'inline-block' }}>{optionValue}</span>
-                        <input
+                        <Input
                           type="file"
                           accept="image/*"
                           onChange={(e) => e.target.files?.[0] && onUploadOptionImage(index, optionValue, e.target.files[0])}
@@ -1581,14 +1613,18 @@ function NewFormPage() {
             {field.type === 'select' && (
               <>
                 <label htmlFor={`field-layout-${index}`}>layout</label>
-                <select
-                  id={`field-layout-${index}`}
+                <Select
                   value={field.layout}
-                  onChange={(e) => updateField(index, { layout: e.target.value as 'dropdown' | 'radio' })}
+                  onValueChange={(v) => updateField(index, { layout: v as 'dropdown' | 'radio' })}
                 >
-                  <option value="dropdown">dropdown</option>
-                  <option value="radio">radio buttons</option>
-                </select>
+                  <SelectTrigger id={`field-layout-${index}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dropdown">dropdown</SelectItem>
+                    <SelectItem value="radio">radio buttons</SelectItem>
+                  </SelectContent>
+                </Select>
               </>
             )}
 
@@ -1603,25 +1639,29 @@ function NewFormPage() {
                 {field.type === 'select' && (
                   <>
                     <label htmlFor={`field-correct-${index}`}>correct option</label>
-                    <select
-                      id={`field-correct-${index}`}
-                      value={field.correctValue}
-                      onChange={(e) => updateField(index, { correctValue: e.target.value })}
+                    <Select
+                      value={field.correctValue || '__none__'}
+                      onValueChange={(v) => updateField(index, { correctValue: v === '__none__' ? '' : v })}
                     >
-                      <option value="">not graded</option>
-                      {parseList(field.options).map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger id={`field-correct-${index}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">not graded</SelectItem>
+                        {parseList(field.options).map((o) => (
+                          <SelectItem key={o} value={o}>
+                            {o}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </>
                 )}
 
                 {field.type === 'multi_select' && (
                   <>
                     <label htmlFor={`field-correct-${index}`}>correct options (comma-separated, exact set)</label>
-                    <input
+                    <Input
                       id={`field-correct-${index}`}
                       value={field.correctValues}
                       onChange={(e) => updateField(index, { correctValues: e.target.value })}
@@ -1633,22 +1673,26 @@ function NewFormPage() {
                 {field.type === 'boolean' && (
                   <>
                     <label htmlFor={`field-correct-${index}`}>correct answer</label>
-                    <select
-                      id={`field-correct-${index}`}
-                      value={field.correctValue}
-                      onChange={(e) => updateField(index, { correctValue: e.target.value })}
+                    <Select
+                      value={field.correctValue || '__none__'}
+                      onValueChange={(v) => updateField(index, { correctValue: v === '__none__' ? '' : v })}
                     >
-                      <option value="">not graded</option>
-                      <option value="true">yes</option>
-                      <option value="false">no</option>
-                    </select>
+                      <SelectTrigger id={`field-correct-${index}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">not graded</SelectItem>
+                        <SelectItem value="true">yes</SelectItem>
+                        <SelectItem value="false">no</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </>
                 )}
 
                 {field.type === 'short_text' && (
                   <>
                     <label htmlFor={`field-correct-${index}`}>accepted answers (comma-separated, case-insensitive)</label>
-                    <input
+                    <Input
                       id={`field-correct-${index}`}
                       value={field.correctAnswers}
                       onChange={(e) => updateField(index, { correctAnswers: e.target.value })}
@@ -1660,7 +1704,7 @@ function NewFormPage() {
                 {field.type === 'number' && (
                   <>
                     <label htmlFor={`field-correct-${index}`}>correct value</label>
-                    <input
+                    <Input
                       id={`field-correct-${index}`}
                       type="number"
                       value={field.correctValue}
@@ -1671,7 +1715,7 @@ function NewFormPage() {
                 )}
 
                 <label htmlFor={`field-points-${index}`}>points</label>
-                <input
+                <Input
                   id={`field-points-${index}`}
                   type="number"
                   min={0}
@@ -1681,7 +1725,7 @@ function NewFormPage() {
                 />
 
                 <label htmlFor={`field-feedback-correct-${index}`}>feedback if correct (optional)</label>
-                <input
+                <Input
                   id={`field-feedback-correct-${index}`}
                   value={field.feedbackCorrect}
                   onChange={(e) => updateField(index, { feedbackCorrect: e.target.value })}
@@ -1689,7 +1733,7 @@ function NewFormPage() {
                 />
 
                 <label htmlFor={`field-feedback-incorrect-${index}`}>feedback if incorrect (optional)</label>
-                <input
+                <Input
                   id={`field-feedback-incorrect-${index}`}
                   value={field.feedbackIncorrect}
                   onChange={(e) => updateField(index, { feedbackIncorrect: e.target.value })}
@@ -1701,14 +1745,14 @@ function NewFormPage() {
             {field.type === 'likert' && (
               <>
                 <label htmlFor={`field-options-${index}`}>statements (comma-separated)</label>
-                <input
+                <Input
                   id={`field-options-${index}`}
                   value={field.options}
                   onChange={(e) => updateField(index, { options: e.target.value })}
                   placeholder="tooling quality, delivery pace"
                 />
                 <label htmlFor={`field-scale-${index}`}>scale labels (comma-separated)</label>
-                <input
+                <Input
                   id={`field-scale-${index}`}
                   value={field.likertScale}
                   onChange={(e) => updateField(index, { likertScale: e.target.value })}
@@ -1720,14 +1764,14 @@ function NewFormPage() {
             {field.type === 'file' && (
               <>
                 <label htmlFor={`field-mime-${index}`}>accepted file types (comma-separated MIME types)</label>
-                <input
+                <Input
                   id={`field-mime-${index}`}
                   value={field.acceptedMimeTypes}
                   onChange={(e) => updateField(index, { acceptedMimeTypes: e.target.value })}
                   placeholder="application/pdf, image/png, image/jpeg"
                 />
                 <label htmlFor={`field-maxsize-${index}`}>max file size (MB, up to 25)</label>
-                <input
+                <Input
                   id={`field-maxsize-${index}`}
                   type="number"
                   min={1}
@@ -1736,7 +1780,7 @@ function NewFormPage() {
                   onChange={(e) => updateField(index, { maxSizeMb: Number(e.target.value) })}
                 />
                 <label htmlFor={`field-maxfiles-${index}`}>max number of files (up to 10)</label>
-                <input
+                <Input
                   id={`field-maxfiles-${index}`}
                   type="number"
                   min={1}
@@ -1750,7 +1794,7 @@ function NewFormPage() {
             {field.type === 'rating' && (
               <>
                 <label htmlFor={`field-scale-n-${index}`}>scale (2–10)</label>
-                <input
+                <Input
                   id={`field-scale-n-${index}`}
                   type="number"
                   min={2}
@@ -1759,35 +1803,39 @@ function NewFormPage() {
                   onChange={(e) => updateField(index, { scale: Number(e.target.value) })}
                 />
                 <label htmlFor={`field-rating-style-${index}`}>style</label>
-                <select
-                  id={`field-rating-style-${index}`}
+                <Select
                   value={field.ratingStyle}
-                  onChange={(e) => updateField(index, { ratingStyle: e.target.value as 'pills' | 'stars' })}
+                  onValueChange={(v) => updateField(index, { ratingStyle: v as 'pills' | 'stars' })}
                 >
-                  <option value="pills">numbered pills</option>
-                  <option value="stars">stars</option>
-                </select>
+                  <SelectTrigger id={`field-rating-style-${index}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pills">numbered pills</SelectItem>
+                    <SelectItem value="stars">stars</SelectItem>
+                  </SelectContent>
+                </Select>
               </>
             )}
 
             {field.type === 'slider' && (
               <>
                 <label htmlFor={`field-slider-min-${index}`}>minimum</label>
-                <input
+                <Input
                   id={`field-slider-min-${index}`}
                   type="number"
                   value={field.sliderMin}
                   onChange={(e) => updateField(index, { sliderMin: Number(e.target.value) })}
                 />
                 <label htmlFor={`field-slider-max-${index}`}>maximum</label>
-                <input
+                <Input
                   id={`field-slider-max-${index}`}
                   type="number"
                   value={field.sliderMax}
                   onChange={(e) => updateField(index, { sliderMax: Number(e.target.value) })}
                 />
                 <label htmlFor={`field-slider-step-${index}`}>step</label>
-                <input
+                <Input
                   id={`field-slider-step-${index}`}
                   type="number"
                   min={0.01}
@@ -1800,14 +1848,14 @@ function NewFormPage() {
             {(field.type === 'rating' || field.type === 'nps' || field.type === 'slider') && (
               <>
                 <label htmlFor={`field-low-${index}`}>low-end label (optional)</label>
-                <input
+                <Input
                   id={`field-low-${index}`}
                   value={field.lowLabel}
                   onChange={(e) => updateField(index, { lowLabel: e.target.value })}
                   placeholder="not likely"
                 />
                 <label htmlFor={`field-high-${index}`}>high-end label (optional)</label>
-                <input
+                <Input
                   id={`field-high-${index}`}
                   value={field.highLabel}
                   onChange={(e) => updateField(index, { highLabel: e.target.value })}
@@ -1820,7 +1868,7 @@ function NewFormPage() {
               <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
                 <span className="muted" style={{ fontSize: 12 }}>response validation (optional)</span>
                 <label htmlFor={`field-minlen-${index}`}>minimum length</label>
-                <input
+                <Input
                   id={`field-minlen-${index}`}
                   type="number"
                   min={0}
@@ -1829,7 +1877,7 @@ function NewFormPage() {
                   placeholder="no minimum"
                 />
                 <label htmlFor={`field-pattern-${index}`}>must match pattern (regex, optional)</label>
-                <input
+                <Input
                   id={`field-pattern-${index}`}
                   value={field.pattern}
                   onChange={(e) => updateField(index, { pattern: e.target.value })}
@@ -1838,7 +1886,7 @@ function NewFormPage() {
                 {field.pattern && (
                   <>
                     <label htmlFor={`field-pattern-msg-${index}`}>error message when it doesn't match</label>
-                    <input
+                    <Input
                       id={`field-pattern-msg-${index}`}
                       value={field.patternErrorMessage}
                       onChange={(e) => updateField(index, { patternErrorMessage: e.target.value })}
@@ -1852,29 +1900,26 @@ function NewFormPage() {
             {field.type === 'contact_info' && (
               <>
                 <span className="builder-required">
-                  <input
+                  <Checkbox
                     id={`field-req-name-${index}`}
-                    type="checkbox"
                     checked={field.requireName}
-                    onChange={(e) => updateField(index, { requireName: e.target.checked })}
+                    onCheckedChange={(checked) => updateField(index, { requireName: checked === true })}
                   />
                   <label htmlFor={`field-req-name-${index}`}>require name</label>
                 </span>
                 <span className="builder-required">
-                  <input
+                  <Checkbox
                     id={`field-req-email-${index}`}
-                    type="checkbox"
                     checked={field.requireEmail}
-                    onChange={(e) => updateField(index, { requireEmail: e.target.checked })}
+                    onCheckedChange={(checked) => updateField(index, { requireEmail: checked === true })}
                   />
                   <label htmlFor={`field-req-email-${index}`}>require email</label>
                 </span>
                 <span className="builder-required">
-                  <input
+                  <Checkbox
                     id={`field-req-phone-${index}`}
-                    type="checkbox"
                     checked={field.requirePhone}
-                    onChange={(e) => updateField(index, { requirePhone: e.target.checked })}
+                    onCheckedChange={(checked) => updateField(index, { requirePhone: checked === true })}
                   />
                   <label htmlFor={`field-req-phone-${index}`}>require phone</label>
                 </span>
@@ -1884,7 +1929,7 @@ function NewFormPage() {
             {field.type === 'hot_spot' && (
               <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
                 <label htmlFor={`field-hotspot-image-${index}`}>image</label>
-                <input
+                <Input
                   id={`field-hotspot-image-${index}`}
                   type="file"
                   accept="image/*"
@@ -1903,7 +1948,7 @@ function NewFormPage() {
                 </span>
                 {field.hotSpotRegions.map((region, ri) => (
                   <div key={ri} className="builder-required" style={{ marginTop: 4, flexWrap: 'wrap' }}>
-                    <input
+                    <Input
                       aria-label="region label"
                       value={region.label}
                       placeholder="label"
@@ -1915,7 +1960,7 @@ function NewFormPage() {
                       }}
                     />
                     {(['x', 'y', 'width', 'height'] as const).map((axis) => (
-                      <input
+                      <Input
                         key={axis}
                         aria-label={axis}
                         type="number"
@@ -1931,20 +1976,20 @@ function NewFormPage() {
                         }}
                       />
                     ))}
-                    <button
+                    <Button
                       type="button"
-                      className="btn-ghost"
+                      variant="ghost"
                       onClick={() =>
                         updateField(index, { hotSpotRegions: field.hotSpotRegions.filter((_, i) => i !== ri) })
                       }
                     >
                       remove
-                    </button>
+                    </Button>
                   </div>
                 ))}
-                <button
+                <Button
                   type="button"
-                  className="btn-ghost"
+                  variant="ghost"
                   style={{ marginTop: 4 }}
                   onClick={() =>
                     updateField(index, {
@@ -1956,84 +2001,72 @@ function NewFormPage() {
                   }
                 >
                   + add region
-                </button>
+                </Button>
               </div>
             )}
 
             <div className="builder-field-actions">
               <div className="field-actions-primary">
-                <button type="button" className="btn-ghost" title="duplicate" aria-label="duplicate question" onClick={() => duplicateField(index)}>
+                <Button type="button" variant="ghost" size="icon-sm" title="duplicate" aria-label="duplicate question" onClick={() => duplicateField(index)}>
                   ⧉
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="btn-ghost"
+                  variant="ghost"
+                  size="icon-sm"
                   title="remove field"
                   aria-label="remove field"
                   onClick={() => removeField(index)}
                 >
                   🗑
-                </button>
+                </Button>
               </div>
 
               {field.type !== 'section_header' && (
                 <span className="builder-required field-required-toggle">
                   <label htmlFor={`field-required-${index}`}>required</label>
-                  <label className="switch">
-                    <input
-                      id={`field-required-${index}`}
-                      type="checkbox"
-                      checked={field.required}
-                      onChange={(e) => updateField(index, { required: e.target.checked })}
-                    />
-                    <span className="switch-track">
-                      <span className="switch-thumb" />
-                    </span>
-                  </label>
+                  <Switch
+                    id={`field-required-${index}`}
+                    checked={field.required}
+                    onCheckedChange={(checked) => updateField(index, { required: checked })}
+                  />
                 </span>
               )}
 
-              <details className="field-kebab">
-                <summary className="field-kebab-summary" aria-label="more actions" title="more actions">
-                  ⋮
-                </summary>
-                <div className="field-kebab-menu" role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="field-kebab-summary" aria-label="more actions" title="more actions">
+                    ⋮
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem
                     disabled={index === 0}
-                    onClick={(e) => {
+                    onSelect={() => {
                       moveField(index, -1);
-                      e.currentTarget.closest('details')?.removeAttribute('open');
                     }}
                   >
                     ↑ move up
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     disabled={index === fields.length - 1}
-                    onClick={(e) => {
+                    onSelect={() => {
                       moveField(index, 1);
-                      e.currentTarget.closest('details')?.removeAttribute('open');
                     }}
                   >
                     ↓ move down
-                  </button>
+                  </DropdownMenuItem>
                   {sectionsEnabled && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={(e) => {
+                    <DropdownMenuItem
+                      onSelect={() => {
                         splitPageHere(index);
-                        e.currentTarget.closest('details')?.removeAttribute('open');
                       }}
                     >
                       ⏎ split into a new page here
-                    </button>
+                    </DropdownMenuItem>
                   )}
-                </div>
-              </details>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             </div>
@@ -2042,64 +2075,72 @@ function NewFormPage() {
           );
         })}
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
           className="msform-add-field"
           onClick={() => addField()}
         >
           + add field
-        </button>
+        </Button>
         </div>
 
         <aside className="builder-toolbar" aria-label="add to form" style={{ top: toolbarTop }}>
-          <button
+          <Button
             type="button"
-            className="btn-ghost"
+            variant="ghost"
+            size="icon-lg"
             title="add question"
             aria-label="add question"
             onClick={() => addField()}
           >
             ⊕
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn-ghost"
+            variant="ghost"
+            size="icon-lg"
             title="import questions from a file"
             aria-label="import questions from a file"
             onClick={() => fileInputRef.current?.click()}
           >
             📥
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn-ghost builder-toolbar-tt"
+            variant="ghost"
+            size="icon-lg"
+            className="builder-toolbar-tt"
             title="add title and description"
             aria-label="add title and description"
             onClick={() => addField({ type: 'section_header' })}
           >
             Tt
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn-ghost"
+            variant="ghost"
+            size="icon-lg"
             title="add image question"
             aria-label="add image question"
             onClick={() => addField({ mediaType: 'image' })}
           >
             🖼
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn-ghost"
+            variant="ghost"
+            size="icon-lg"
             title="add video question"
             aria-label="add video question"
             onClick={() => addField({ mediaType: 'video' })}
           >
             🎬
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn-ghost"
+            variant="ghost"
+            size="icon-lg"
             title="add a new page"
             aria-label="add a new page"
             onClick={() => {
@@ -2111,19 +2152,18 @@ function NewFormPage() {
               <span />
               <span />
             </span>
-          </button>
+          </Button>
         </aside>
         </div>
 
         <div className="admin-card" style={{ marginTop: 24, marginBottom: 16 }}>
           <span className="builder-required">
-            <input
+            <Checkbox
               id="sections-toggle"
-              type="checkbox"
               checked={sectionsEnabled}
-              onChange={(e) => {
-                setSectionsEnabled(e.target.checked);
-                if (e.target.checked && sections.length === 0) setSections([emptySection(0)]);
+              onCheckedChange={(checked) => {
+                setSectionsEnabled(checked === true);
+                if (checked === true && sections.length === 0) setSections([emptySection(0)]);
               }}
             />
             <label htmlFor="sections-toggle">split into pages, with branching</label>
@@ -2154,7 +2194,7 @@ function NewFormPage() {
                     <legend>page {index + 1}</legend>
 
                     <label htmlFor={`section-title-${index}`}>page title (optional)</label>
-                    <input
+                    <Input
                       id={`section-title-${index}`}
                       value={section.title}
                       onChange={(e) => updateSection(index, { title: e.target.value })}
@@ -2162,7 +2202,7 @@ function NewFormPage() {
                     />
 
                     <label htmlFor={`section-description-${index}`}>page description (optional)</label>
-                    <input
+                    <Input
                       id={`section-description-${index}`}
                       value={section.description}
                       onChange={(e) => updateSection(index, { description: e.target.value })}
@@ -2170,18 +2210,22 @@ function NewFormPage() {
                     />
 
                     <label htmlFor={`section-media-type-${index}`}>page media (optional)</label>
-                    <select
-                      id={`section-media-type-${index}`}
+                    <Select
                       value={section.mediaType}
-                      onChange={(e) => updateSection(index, { mediaType: e.target.value as DraftSection['mediaType'] })}
+                      onValueChange={(v) => updateSection(index, { mediaType: v as DraftSection['mediaType'] })}
                     >
-                      <option value="none">none</option>
-                      <option value="image">image</option>
-                      <option value="video">video (embed URL)</option>
-                    </select>
+                      <SelectTrigger id={`section-media-type-${index}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">none</SelectItem>
+                        <SelectItem value="image">image</SelectItem>
+                        <SelectItem value="video">video (embed URL)</SelectItem>
+                      </SelectContent>
+                    </Select>
                     {section.mediaType === 'image' && (
                       <>
-                        <input
+                        <Input
                           type="file"
                           accept="image/*"
                           onChange={(e) => e.target.files?.[0] && onUploadSectionMedia(index, e.target.files[0])}
@@ -2192,7 +2236,7 @@ function NewFormPage() {
                       </>
                     )}
                     {section.mediaType === 'video' && (
-                      <input
+                      <Input
                         value={section.mediaUrl}
                         onChange={(e) => updateSection(index, { mediaUrl: e.target.value })}
                         placeholder="https://www.youtube.com/embed/…"
@@ -2204,11 +2248,10 @@ function NewFormPage() {
                       {keyedFields.length === 0 && <span className="muted">add questions above first.</span>}
                       {keyedFields.map((f) => (
                         <span key={f.key} className="builder-required">
-                          <input
+                          <Checkbox
                             id={`section-${index}-${f.key}`}
-                            type="checkbox"
                             checked={section.fieldKeys.includes(f.key)}
-                            onChange={() => toggleFieldInSection(index, f.key)}
+                            onCheckedChange={() => toggleFieldInSection(index, f.key)}
                           />
                           <label htmlFor={`section-${index}-${f.key}`}>{f.label}</label>
                         </span>
@@ -2224,39 +2267,50 @@ function NewFormPage() {
                           return (
                             <div key={ruleIndex} className="admin-card" style={{ padding: 10, marginTop: 8 }}>
                               <label htmlFor={`section-trigger-${index}-${ruleIndex}`}>branch on</label>
-                              <select
-                                id={`section-trigger-${index}-${ruleIndex}`}
-                                value={rule.fieldKey}
-                                onChange={(e) => {
-                                  const next = triggerCandidates.find((f) => f.key === e.target.value);
-                                  onTriggerFieldChange(index, ruleIndex, e.target.value, caseKeysFor(next));
+                              <Select
+                                value={rule.fieldKey || '__none__'}
+                                onValueChange={(v) => {
+                                  const fieldKey = v === '__none__' ? '' : v;
+                                  const next = triggerCandidates.find((f) => f.key === fieldKey);
+                                  onTriggerFieldChange(index, ruleIndex, fieldKey, caseKeysFor(next));
                                 }}
                               >
-                                <option value="">choose a question</option>
-                                {triggerCandidates.map((f) => (
-                                  <option key={f.key} value={f.key}>
-                                    {f.label} ({f.type})
-                                  </option>
-                                ))}
-                              </select>
+                                <SelectTrigger id={`section-trigger-${index}-${ruleIndex}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">choose a question</SelectItem>
+                                  {triggerCandidates.map((f) => (
+                                    <SelectItem key={f.key} value={f.key}>
+                                      {f.label} ({f.type})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
 
                               {trigger?.type === 'likert' && (
                                 <>
                                   <label htmlFor={`section-statement-${index}-${ruleIndex}`}>
                                     which statement drives the branch
                                   </label>
-                                  <select
-                                    id={`section-statement-${index}-${ruleIndex}`}
-                                    value={rule.statement}
-                                    onChange={(e) => onStatementChange(index, ruleIndex, e.target.value, trigger.likertScale)}
+                                  <Select
+                                    value={rule.statement || '__none__'}
+                                    onValueChange={(v) =>
+                                      onStatementChange(index, ruleIndex, v === '__none__' ? '' : v, trigger.likertScale)
+                                    }
                                   >
-                                    <option value="">choose a statement</option>
-                                    {trigger.options.map((st) => (
-                                      <option key={st} value={st}>
-                                        {st}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    <SelectTrigger id={`section-statement-${index}-${ruleIndex}`}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none__">choose a statement</SelectItem>
+                                      {trigger.options.map((st) => (
+                                        <SelectItem key={st} value={st}>
+                                          {st}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </>
                               )}
 
@@ -2268,58 +2322,71 @@ function NewFormPage() {
                                         if {trigger.type === 'multi_select' ? 'selections include' : 'answer is'} "
                                         {caseLabelOf(trigger, c.equals)}" go to
                                       </label>
-                                      <select
-                                        id={`section-case-${index}-${ruleIndex}-${ci}`}
-                                        value={c.goTo}
-                                        onChange={(e) => updateCase(index, ruleIndex, ci, { goTo: e.target.value })}
+                                      <Select
+                                        value={c.goTo || '__none__'}
+                                        onValueChange={(v) =>
+                                          updateCase(index, ruleIndex, ci, { goTo: v === '__none__' ? '' : v })
+                                        }
                                       >
-                                        <option value="">continue normally</option>
-                                        {laterSections.map((t) => (
-                                          <option key={t.id} value={t.id}>
-                                            {t.title.trim() || t.id}
-                                          </option>
-                                        ))}
-                                        <option value={END_OF_FORM}>end the form</option>
-                                      </select>
+                                        <SelectTrigger id={`section-case-${index}-${ruleIndex}-${ci}`}>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="__none__">continue normally</SelectItem>
+                                          {laterSections.map((t) => (
+                                            <SelectItem key={t.id} value={t.id}>
+                                              {t.title.trim() || t.id}
+                                            </SelectItem>
+                                          ))}
+                                          <SelectItem value={END_OF_FORM}>end the form</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                     </div>
                                   ))
                                 ) : (
                                   <>
                                     {rule.cases.map((c, ci) => (
                                       <div key={ci} className="builder-required">
-                                        <input
+                                        <Input
                                           value={c.equals}
                                           onChange={(e) => updateCase(index, ruleIndex, ci, { equals: e.target.value })}
                                           placeholder="exact answer to match"
                                         />
-                                        <select
-                                          value={c.goTo}
-                                          onChange={(e) => updateCase(index, ruleIndex, ci, { goTo: e.target.value })}
+                                        <Select
+                                          value={c.goTo || '__none__'}
+                                          onValueChange={(v) =>
+                                            updateCase(index, ruleIndex, ci, { goTo: v === '__none__' ? '' : v })
+                                          }
                                         >
-                                          <option value="">go to…</option>
-                                          {laterSections.map((t) => (
-                                            <option key={t.id} value={t.id}>
-                                              {t.title.trim() || t.id}
-                                            </option>
-                                          ))}
-                                          <option value={END_OF_FORM}>end the form</option>
-                                        </select>
-                                        <button
+                                          <SelectTrigger>
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="__none__">go to…</SelectItem>
+                                            {laterSections.map((t) => (
+                                              <SelectItem key={t.id} value={t.id}>
+                                                {t.title.trim() || t.id}
+                                              </SelectItem>
+                                            ))}
+                                            <SelectItem value={END_OF_FORM}>end the form</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        <Button
                                           type="button"
-                                          className="btn-ghost"
+                                          variant="ghost"
                                           onClick={() => removeCase(index, ruleIndex, ci)}
                                         >
                                           remove case
-                                        </button>
+                                        </Button>
                                       </div>
                                     ))}
-                                    <button
+                                    <Button
                                       type="button"
-                                      className="btn-ghost"
+                                      variant="ghost"
                                       onClick={() => addManualCase(index, ruleIndex)}
                                     >
                                       + add case
-                                    </button>
+                                    </Button>
                                   </>
                                 )
                               )}
@@ -2327,78 +2394,88 @@ function NewFormPage() {
                               <label htmlFor={`section-default-${index}-${ruleIndex}`}>
                                 {trigger ? 'if none of the above match' : 'always jump to (unconditional)'}
                               </label>
-                              <select
-                                id={`section-default-${index}-${ruleIndex}`}
-                                value={rule.defaultGoTo}
-                                onChange={(e) => updateBranchRule(index, ruleIndex, { defaultGoTo: e.target.value })}
+                              <Select
+                                value={rule.defaultGoTo || '__none__'}
+                                onValueChange={(v) =>
+                                  updateBranchRule(index, ruleIndex, { defaultGoTo: v === '__none__' ? '' : v })
+                                }
                               >
-                                <option value="">continue to the next page</option>
-                                {laterSections.map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.title.trim() || t.id}
-                                  </option>
-                                ))}
-                                <option value={END_OF_FORM}>end the form</option>
-                              </select>
+                                <SelectTrigger id={`section-default-${index}-${ruleIndex}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">continue to the next page</SelectItem>
+                                  {laterSections.map((t) => (
+                                    <SelectItem key={t.id} value={t.id}>
+                                      {t.title.trim() || t.id}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value={END_OF_FORM}>end the form</SelectItem>
+                                </SelectContent>
+                              </Select>
 
                               <div className="builder-field-actions">
-                                <button
+                                <Button
                                   type="button"
-                                  className="btn-ghost"
+                                  variant="ghost"
+                                  size="icon-sm"
                                   title="remove this rule"
                                   aria-label="remove this rule"
                                   onClick={() => removeBranchRule(index, ruleIndex)}
                                 >
                                   🗑
-                                </button>
+                                </Button>
                               </div>
                             </div>
                           );
                         })}
-                        <button type="button" className="btn-ghost" onClick={() => addBranchRule(index)}>
+                        <Button type="button" variant="ghost" onClick={() => addBranchRule(index)}>
                           + add branch rule
-                        </button>
+                        </Button>
                       </>
                     )}
 
                     <div className="builder-field-actions">
-                      <button
+                      <Button
                         type="button"
-                        className="btn-ghost"
+                        variant="ghost"
+                        size="icon-sm"
                         title="move up"
                         aria-label={`move page ${index + 1} up`}
                         disabled={index === 0}
                         onClick={() => moveSection(index, -1)}
                       >
                         ↑
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="btn-ghost"
+                        variant="ghost"
+                        size="icon-sm"
                         title="move down"
                         aria-label={`move page ${index + 1} down`}
                         disabled={index === sections.length - 1}
                         onClick={() => moveSection(index, 1)}
                       >
                         ↓
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="btn-ghost"
+                        variant="ghost"
+                        size="icon-sm"
                         title="remove page"
                         aria-label={`remove page ${index + 1}`}
                         onClick={() => setSections((current) => current.filter((_, i) => i !== index))}
                       >
                         🗑
-                      </button>
+                      </Button>
                     </div>
                   </fieldset>
                 );
               })}
 
-              <button type="button" className="msform-add-field" onClick={addSection}>
+              <Button type="button" variant="ghost" className="msform-add-field" onClick={addSection}>
                 + add page
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -2425,35 +2502,39 @@ function NewFormPage() {
                 }}
               />
             ))}
-            <input
+            <Input
               type="color"
               aria-label="custom accent color"
               value={themeAccentColor || '#4f008c'}
               onChange={(e) => setThemeAccentColor(e.target.value)}
             />
             {themeAccentColor && (
-              <button type="button" className="btn-ghost" onClick={() => setThemeAccentColor('')}>
+              <Button type="button" variant="ghost" onClick={() => setThemeAccentColor('')}>
                 reset to default
-              </button>
+              </Button>
             )}
           </div>
 
           <label htmlFor="theme-font">font (optional)</label>
-          <select
-            id="theme-font"
-            value={themeFontFamily}
-            onChange={(e) => setThemeFontFamily(e.target.value as typeof themeFontFamily)}
+          <Select
+            value={themeFontFamily || '__none__'}
+            onValueChange={(v) => setThemeFontFamily((v === '__none__' ? '' : v) as typeof themeFontFamily)}
           >
-            <option value="">default (app font)</option>
-            {FORM_FONT_FAMILIES.filter((f) => f !== 'default').map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="theme-font">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">default (app font)</SelectItem>
+              {FORM_FONT_FAMILIES.filter((f) => f !== 'default').map((f) => (
+                <SelectItem key={f} value={f}>
+                  {f}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <label htmlFor="theme-logo">logo (optional)</label>
-          <input
+          <Input
             id="theme-logo"
             type="file"
             accept="image/*"
@@ -2462,7 +2543,7 @@ function NewFormPage() {
           {themeLogoAssetId && <img src={assetUrl(themeLogoAssetId)} alt="" className="option-image" />}
 
           <label htmlFor="theme-background">banner background image (optional)</label>
-          <input
+          <Input
             id="theme-background"
             type="file"
             accept="image/*"
@@ -2472,9 +2553,8 @@ function NewFormPage() {
         </div>
 
         <div className="page-title-row">
-          <button
+          <Button
             type="button"
-            className="btn-primary"
             onClick={onPublish}
             disabled={
               !title.trim() ||
@@ -2485,7 +2565,7 @@ function NewFormPage() {
             }
           >
             {editingForm ? 'save changes' : 'publish'}
-          </button>
+          </Button>
         </div>
 
         {error && (
