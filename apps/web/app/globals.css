@@ -1831,6 +1831,32 @@ h3 {
   color: var(--color-text-muted) !important;
 }
 
+.msform-edit-badge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-4);
+  background: var(--md-sys-color-primary-container);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+}
+
+.msform-edit-badge a {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+}
+
+.msform-edit-badge a:hover {
+  text-decoration: underline;
+}
+
+.msform-edit-badge span {
+  color: var(--color-text-muted);
+}
+
 .msform-title-input {
   width: 100%;
   font: inherit;
@@ -2862,44 +2888,82 @@ h3 {
   min-width: 0;
 }
 
-.kpi-list-summary {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+/* Quick-insights widget row: sits above a list/workspace so the numbers that
+   matter (counts, allocation, anything needing attention) are visible before
+   drilling into any one item. Shared across admin list pages (KPIs, forms). */
+.insights-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
 }
 
-.kpi-allocation {
+.insight-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-width: 160px;
+  font: inherit;
+  text-align: left;
+}
+
+.insight-card-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 2px;
 }
 
-.kpi-allocation-track {
-  height: 6px;
-  border-radius: var(--md-sys-shape-corner-full);
-  background: var(--color-border);
-  overflow: hidden;
+.insight-card strong {
+  font-size: var(--md-sys-typescale-title-large-size);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  line-height: 1.1;
 }
 
-.kpi-allocation-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-primary);
-  transition: width var(--transition-fast);
-}
-
-.kpi-allocation.is-warning .kpi-allocation-fill {
-  background: var(--md-sys-color-error);
-}
-
-.kpi-allocation-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--font-size-xs);
+.insight-card span {
+  font-size: var(--md-sys-typescale-label-medium-size);
   color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.kpi-allocation.is-warning .kpi-allocation-label strong {
-  color: var(--md-sys-color-error);
+.insight-card.is-warning {
+  background: var(--md-sys-color-error-container);
+  border-color: transparent;
+}
+
+.insight-card.is-warning strong,
+.insight-card.is-warning span {
+  color: var(--md-sys-color-on-error-container);
+}
+
+/* The inactive-KPI count is the one widget that's actionable, not just
+   informational — it's a real <button> that jumps straight to the first
+   inactive KPI instead of just reporting a number. */
+.insight-card.is-alert {
+  background: var(--md-sys-color-error-container);
+  border-color: transparent;
+  cursor: pointer;
+  transition: box-shadow var(--transition-fast);
+}
+
+.insight-card.is-alert strong,
+.insight-card.is-alert span {
+  color: var(--md-sys-color-on-error-container);
+}
+
+.insight-card.is-alert:hover,
+.insight-card.is-alert:focus-visible {
+  box-shadow: var(--shadow-card);
+}
+
+.insight-card.is-alert:focus-visible {
+  outline: 2px solid var(--md-sys-color-error);
+  outline-offset: 2px;
 }
 
 .kpi-list-items {
@@ -3239,6 +3303,9 @@ h3 {
 }
 
 .btn-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   background: none;
   border: none;
   color: var(--color-primary);
@@ -3250,6 +3317,7 @@ h3 {
   border-radius: var(--md-sys-shape-corner-full);
   cursor: pointer;
   white-space: nowrap;
+  text-decoration: none;
   transition: background var(--transition-fast);
 }
 

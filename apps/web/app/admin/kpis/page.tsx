@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, FolderPlus, Layers, ListPlus, Pencil, Plus, Search, Target } from 'lucide-react';
+import { ArrowLeft, EyeOff, FolderPlus, Layers, ListPlus, Pencil, Plus, Search, Target } from 'lucide-react';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -282,10 +282,12 @@ export default function KpisAdminPage() {
       subCriteriaCount: subCriteria.length,
       totalWeight,
       hasWeights: weighted.length > 0,
+      inactiveCount: kpis.filter((k) => !k.isActive).length,
     };
   }, [kpis]);
 
   const selectedKpi = useMemo(() => kpis?.find((k) => k.id === selectedKpiId) ?? null, [kpis, selectedKpiId]);
+  const firstInactiveKpiId = useMemo(() => kpis?.find((k) => !k.isActive)?.id ?? null, [kpis]);
   const canWrite = can(user, 'kpis:write');
   const canManage = can(user, 'kpis:manage');
 
@@ -334,375 +336,414 @@ export default function KpisAdminPage() {
             ))}
         </div>
       ) : (
-        <div className="kpi-workspace" data-has-selection={selectedKpi ? 'true' : 'false'}>
-          <div className="kpi-list-pane">
-            <p className="kpi-list-summary">
-              {pluralize(stats!.kpiCount, 'kpi')} · {pluralize(stats!.areaCount, 'area')} ·{' '}
-              {pluralize(stats!.subCriteriaCount, 'sub-criteria', 'sub-criteria')}
-            </p>
-
+        <>
+          <div className="insights-row">
+            <div className="insight-card">
+              <span className="hierarchy-icon hierarchy-icon-sm">
+                <Target size={15} aria-hidden="true" />
+              </span>
+              <span className="insight-card-body">
+                <strong>{stats!.kpiCount}</strong>
+                <span>{stats!.kpiCount === 1 ? 'kpi' : 'kpis'}</span>
+              </span>
+            </div>
+            <div className="insight-card">
+              <span className="hierarchy-icon hierarchy-icon-sm">
+                <Layers size={15} aria-hidden="true" />
+              </span>
+              <span className="insight-card-body">
+                <strong>{stats!.areaCount}</strong>
+                <span>evaluation areas</span>
+              </span>
+            </div>
+            <div className="insight-card">
+              <span className="hierarchy-icon hierarchy-icon-sm">
+                <ListPlus size={15} aria-hidden="true" />
+              </span>
+              <span className="insight-card-body">
+                <strong>{stats!.subCriteriaCount}</strong>
+                <span>sub-criteria</span>
+              </span>
+            </div>
             {stats!.hasWeights && (
-              <div className={`kpi-allocation${stats!.totalWeight !== 100 ? ' is-warning' : ''}`}>
-                <div className="kpi-allocation-track">
-                  <div className="kpi-allocation-fill" style={{ width: `${Math.min(100, stats!.totalWeight)}%` }} />
-                </div>
-                <div className="kpi-allocation-label">
-                  <span>weight allocated</span>
-                  <strong>{stats!.totalWeight}% / 100%</strong>
-                </div>
+              <div className={`insight-card${stats!.totalWeight !== 100 ? ' is-warning' : ''}`}>
+                <WeightRing value={Math.min(100, stats!.totalWeight)} size="sm" />
+                <span className="insight-card-body">
+                  <strong>{stats!.totalWeight}%</strong>
+                  <span>{stats!.totalWeight === 100 ? 'weight allocated' : 'weight — not 100%'}</span>
+                </span>
               </div>
             )}
-
-            <div className="kpi-search">
-              <Search size={16} aria-hidden="true" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="search KPIs by name…"
-                aria-label="search KPIs"
-              />
-            </div>
-
-            {canWrite &&
-              (creatingKpi ? (
-                <form className="inline-form" onSubmit={(e) => onCreateKpi(e)}>
-                  <input name="name" required minLength={2} placeholder="new KPI name" aria-label="KPI name" autoFocus />
-                  <input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
-                  <button className="btn-primary" type="submit">
-                    create
-                  </button>
-                  <button type="button" className="btn-ghost" onClick={() => setCreatingKpi(false)}>
-                    close
-                  </button>
-                </form>
-              ) : (
-                <button type="button" className="add-trigger" onClick={() => setCreatingKpi(true)}>
-                  <Plus size={16} aria-hidden="true" />
-                  new KPI
-                </button>
-              ))}
-
-            {filteredKpis && filteredKpis.length === 0 ? (
-              <p className="empty-state-inline">
-                <Search size={14} aria-hidden="true" />
-                no KPIs match &quot;{search}&quot;
-              </p>
-            ) : (
-              <div className="kpi-list-items">
-                {filteredKpis?.map((kpi) => (
-                  <button
-                    key={kpi.id}
-                    type="button"
-                    className={`kpi-list-item${selectedKpiId === kpi.id ? ' is-selected' : ''}`}
-                    aria-current={selectedKpiId === kpi.id ? 'true' : undefined}
-                    onClick={() => setSelectedKpiId(kpi.id)}
-                  >
-                    {kpi.weight !== null ? (
-                      <WeightRing value={kpi.weight} size="sm" />
-                    ) : (
-                      <span className="hierarchy-icon hierarchy-icon-sm">
-                        <Target size={14} aria-hidden="true" />
-                      </span>
-                    )}
-                    <span className="kpi-list-item-body">
-                      <span className="kpi-list-item-name">{kpi.name}</span>
-                      <span className="kpi-list-item-meta">
-                        {!kpi.isActive && <span className="status-dot status-dot-inactive" aria-hidden="true" />}
-                        {pluralize(kpi.evaluationAreas.length, 'area')}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
+            {stats!.inactiveCount > 0 && (
+              <button
+                type="button"
+                className="insight-card is-alert"
+                onClick={() => firstInactiveKpiId && setSelectedKpiId(firstInactiveKpiId)}
+              >
+                <span className="hierarchy-icon hierarchy-icon-sm">
+                  <EyeOff size={15} aria-hidden="true" />
+                </span>
+                <span className="insight-card-body">
+                  <strong>{stats!.inactiveCount}</strong>
+                  <span>{stats!.inactiveCount === 1 ? 'inactive kpi' : 'inactive kpis'}</span>
+                </span>
+              </button>
             )}
           </div>
 
-          <div className="kpi-detail-pane">
-            {!selectedKpi ? (
-              <div className="kpi-detail-empty">
-                <Target size={28} aria-hidden="true" />
-                <p>select a KPI from the list to view its evaluation areas and sub-criteria.</p>
-              </div>
-            ) : (
-              <article>
-                <button type="button" className="btn-ghost kpi-back-to-list" onClick={() => setSelectedKpiId(null)}>
-                  <ArrowLeft size={16} aria-hidden="true" />
-                  back to KPIs
-                </button>
+          <div className="kpi-search">
+            <Search size={16} aria-hidden="true" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="search KPIs by name…"
+              aria-label="search KPIs"
+            />
+          </div>
 
-                {renamingKpiId === selectedKpi.id ? (
-                  <form className="inline-form" onSubmit={(e) => onRenameKpi(selectedKpi.id, e)}>
-                    <input name="name" defaultValue={selectedKpi.name} required minLength={2} aria-label="KPI name" autoFocus />
-                    <input
-                      name="weight"
-                      type="number"
-                      min={0}
-                      max={100}
-                      step="0.5"
-                      defaultValue={selectedKpi.weight ?? ''}
-                      aria-label={`${selectedKpi.name} weight percent`}
-                      placeholder="weight %"
-                    />
-                    <button className="btn-ghost" type="submit">
-                      save
+          <div className="kpi-workspace" data-has-selection={selectedKpi ? 'true' : 'false'}>
+            <div className="kpi-list-pane">
+              {canWrite &&
+                (creatingKpi ? (
+                  <form className="inline-form" onSubmit={(e) => onCreateKpi(e)}>
+                    <input name="name" required minLength={2} placeholder="new KPI name" aria-label="KPI name" autoFocus />
+                    <input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
+                    <button className="btn-primary" type="submit">
+                      create
                     </button>
-                    <button type="button" className="btn-ghost" onClick={() => setRenamingKpiId(null)}>
-                      cancel
+                    <button type="button" className="btn-ghost" onClick={() => setCreatingKpi(false)}>
+                      close
                     </button>
                   </form>
                 ) : (
-                  <div className="kpi-detail-header">
-                    <div className="hierarchy-title-row">
-                      {selectedKpi.weight !== null ? (
-                        <WeightRing value={selectedKpi.weight} />
+                  <button type="button" className="add-trigger" onClick={() => setCreatingKpi(true)}>
+                    <Plus size={16} aria-hidden="true" />
+                    new KPI
+                  </button>
+                ))}
+
+              {filteredKpis && filteredKpis.length === 0 ? (
+                <p className="empty-state-inline">
+                  <Search size={14} aria-hidden="true" />
+                  no KPIs match &quot;{search}&quot;
+                </p>
+              ) : (
+                <div className="kpi-list-items">
+                  {filteredKpis?.map((kpi) => (
+                    <button
+                      key={kpi.id}
+                      type="button"
+                      className={`kpi-list-item${selectedKpiId === kpi.id ? ' is-selected' : ''}`}
+                      aria-current={selectedKpiId === kpi.id ? 'true' : undefined}
+                      onClick={() => setSelectedKpiId(kpi.id)}
+                    >
+                      {kpi.weight !== null ? (
+                        <WeightRing value={kpi.weight} size="sm" />
                       ) : (
-                        <span className="hierarchy-icon hierarchy-icon-lg">
-                          <Target size={20} aria-hidden="true" />
+                        <span className="hierarchy-icon hierarchy-icon-sm">
+                          <Target size={14} aria-hidden="true" />
                         </span>
                       )}
-                      <h2>{selectedKpi.name}</h2>
-                      {canWrite && (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          aria-label={`rename ${selectedKpi.name}`}
-                          onClick={() => setRenamingKpiId(selectedKpi.id)}
-                        >
-                          <Pencil size={15} aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                    {canWrite && (
-                      <span className="row-actions">
-                        <StatusPill isActive={selectedKpi.isActive} onToggle={() => onToggleKpiActive(selectedKpi)} />
-                        {canManage &&
-                          (confirmDeleteKpiId === selectedKpi.id ? (
-                            <>
-                              <span className="muted">delete permanently?</span>
-                              <button
-                                type="button"
-                                className="btn-text btn-text-danger"
-                                onClick={() => onDeleteKpi(selectedKpi.id)}
-                              >
-                                confirm delete
-                              </button>
-                              <button type="button" className="btn-text" onClick={() => setConfirmDeleteKpiId(null)}>
-                                cancel
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              className="btn-text btn-text-danger"
-                              onClick={() => setConfirmDeleteKpiId(selectedKpi.id)}
-                            >
-                              delete
-                            </button>
-                          ))}
+                      <span className="kpi-list-item-body">
+                        <span className="kpi-list-item-name">{kpi.name}</span>
+                        <span className="kpi-list-item-meta">
+                          {!kpi.isActive && <span className="status-dot status-dot-inactive" aria-hidden="true" />}
+                          {pluralize(kpi.evaluationAreas.length, 'area')}
+                        </span>
                       </span>
-                    )}
-                  </div>
-                )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-                {selectedKpi.evaluationAreas.length === 0 ? (
-                  <p className="empty-state-inline">
-                    <Layers size={14} aria-hidden="true" />
-                    no evaluation areas yet
-                  </p>
-                ) : (
-                  selectedKpi.evaluationAreas.map((area) => (
-                    <div key={area.id} className="builder-field kpi-area">
-                      {renamingAreaId === area.id ? (
-                        <form className="inline-form" onSubmit={(e) => onRenameArea(selectedKpi.id, area.id, e)}>
-                          <input name="name" defaultValue={area.name} required minLength={2} aria-label="evaluation area name" autoFocus />
-                          <button className="btn-ghost" type="submit">
-                            save
-                          </button>
-                          <button type="button" className="btn-ghost" onClick={() => setRenamingAreaId(null)}>
-                            cancel
-                          </button>
-                        </form>
-                      ) : (
-                        <div className="kpi-area-head hover-actions-row">
-                          <div className="hierarchy-title-row">
-                            <span className="hierarchy-icon hierarchy-icon-sm">
-                              <Layers size={15} aria-hidden="true" />
-                            </span>
-                            <strong>{area.name}</strong>
-                            {area.subCriteria.length > 0 && (
-                              <span className="muted">{pluralize(area.subCriteria.length, 'sub-criteria', 'sub-criteria')}</span>
-                            )}
-                          </div>
-                          {canWrite && (
-                            <span className="hover-actions">
-                              <button
-                                type="button"
-                                className="icon-btn"
-                                aria-label={`rename ${area.name}`}
-                                onClick={() => setRenamingAreaId(area.id)}
-                              >
-                                <Pencil size={14} aria-hidden="true" />
-                              </button>
-                              <StatusPill
-                                isActive={area.isActive}
-                                onToggle={() => onToggleAreaActive(selectedKpi.id, area)}
-                                size="sm"
-                              />
-                              {canManage &&
-                                (confirmDeleteAreaId === area.id ? (
-                                  <>
-                                    <span className="muted">delete permanently?</span>
-                                    <button
-                                      type="button"
-                                      className="btn-text btn-text-danger"
-                                      onClick={() => onDeleteArea(selectedKpi.id, area.id)}
-                                    >
-                                      confirm delete
-                                    </button>
-                                    <button type="button" className="btn-text" onClick={() => setConfirmDeleteAreaId(null)}>
-                                      cancel
-                                    </button>
-                                  </>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="btn-text btn-text-danger"
-                                    onClick={() => setConfirmDeleteAreaId(area.id)}
-                                  >
-                                    delete
-                                  </button>
-                                ))}
-                            </span>
-                          )}
-                        </div>
-                      )}
+            <div className="kpi-detail-pane">
+              {!selectedKpi ? (
+                <div className="kpi-detail-empty">
+                  <Target size={28} aria-hidden="true" />
+                  <p>select a KPI from the list to view its evaluation areas and sub-criteria.</p>
+                </div>
+              ) : (
+                <article>
+                  <button type="button" className="btn-ghost kpi-back-to-list" onClick={() => setSelectedKpiId(null)}>
+                    <ArrowLeft size={16} aria-hidden="true" />
+                    back to KPIs
+                  </button>
 
-                      <div className="kpi-subcriteria-list">
-                        {area.subCriteria.length === 0 && (
-                          <p className="empty-state-inline">
-                            <ListPlus size={14} aria-hidden="true" />
-                            no sub-criteria yet
-                          </p>
-                        )}
-                        {area.subCriteria.map((sub) =>
-                          renamingSubCriteriaId === sub.id ? (
-                            <form
-                              key={sub.id}
-                              className="inline-form"
-                              onSubmit={(e) => onRenameSubCriteria(selectedKpi.id, area.id, sub.id, e)}
-                            >
-                              <input name="name" defaultValue={sub.name} required minLength={2} aria-label="sub-criteria name" autoFocus />
-                              <button className="btn-ghost" type="submit">
-                                save
-                              </button>
-                              <button type="button" className="btn-ghost" onClick={() => setRenamingSubCriteriaId(null)}>
-                                cancel
-                              </button>
-                            </form>
-                          ) : (
-                            <div key={sub.id} className="kpi-subcriteria-row hover-actions-row">
-                              <span>
-                                <span className="hierarchy-dot" aria-hidden="true" />
-                                {sub.name}
-                              </span>
-                              {canWrite && (
-                                <span className="hover-actions">
-                                  <button
-                                    type="button"
-                                    className="icon-btn"
-                                    aria-label={`rename ${sub.name}`}
-                                    onClick={() => setRenamingSubCriteriaId(sub.id)}
-                                  >
-                                    <Pencil size={13} aria-hidden="true" />
-                                  </button>
-                                  {canManage &&
-                                    (confirmDeleteSubCriteriaId === sub.id ? (
-                                      <>
-                                        <span className="muted">delete?</span>
-                                        <button
-                                          type="button"
-                                          className="btn-text btn-text-danger"
-                                          onClick={() => onDeleteSubCriteria(selectedKpi.id, area.id, sub.id)}
-                                        >
-                                          confirm
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="btn-text"
-                                          onClick={() => setConfirmDeleteSubCriteriaId(null)}
-                                        >
-                                          cancel
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        className="btn-text btn-text-danger"
-                                        onClick={() => setConfirmDeleteSubCriteriaId(sub.id)}
-                                      >
-                                        delete
-                                      </button>
-                                    ))}
-                                </span>
-                              )}
-                            </div>
-                          ),
-                        )}
-                        {canWrite &&
-                          (addingSubCriteriaForAreaId === area.id ? (
-                            <form className="inline-form" onSubmit={(e) => onCreateSubCriteria(selectedKpi.id, area.id, e)}>
-                              <input
-                                name="name"
-                                required
-                                minLength={2}
-                                placeholder="new sub-criteria name"
-                                aria-label={`new sub-criteria under ${area.name}`}
-                                autoFocus
-                              />
-                              <button className="btn-ghost" type="submit">
-                                add
-                              </button>
-                              <button type="button" className="btn-ghost" onClick={() => setAddingSubCriteriaForAreaId(null)}>
-                                close
-                              </button>
-                            </form>
-                          ) : (
-                            <button
-                              type="button"
-                              className="add-trigger"
-                              onClick={() => setAddingSubCriteriaForAreaId(area.id)}
-                            >
-                              <Plus size={14} aria-hidden="true" />
-                              add sub-criteria
-                            </button>
-                          ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-
-                {canWrite &&
-                  (addingAreaForKpiId === selectedKpi.id ? (
-                    <form className="inline-form" onSubmit={(e) => onCreateArea(selectedKpi.id, e)}>
-                      <input name="name" required minLength={2} placeholder="new area name" aria-label="new area name" autoFocus />
+                  {renamingKpiId === selectedKpi.id ? (
+                    <form className="inline-form" onSubmit={(e) => onRenameKpi(selectedKpi.id, e)}>
+                      <input name="name" defaultValue={selectedKpi.name} required minLength={2} aria-label="KPI name" autoFocus />
+                      <input
+                        name="weight"
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.5"
+                        defaultValue={selectedKpi.weight ?? ''}
+                        aria-label={`${selectedKpi.name} weight percent`}
+                        placeholder="weight %"
+                      />
                       <button className="btn-ghost" type="submit">
-                        add
+                        save
                       </button>
-                      <button type="button" className="btn-ghost" onClick={() => setAddingAreaForKpiId(null)}>
-                        close
+                      <button type="button" className="btn-ghost" onClick={() => setRenamingKpiId(null)}>
+                        cancel
                       </button>
                     </form>
                   ) : (
-                    <button type="button" className="add-trigger" onClick={() => setAddingAreaForKpiId(selectedKpi.id)}>
-                      <FolderPlus size={16} aria-hidden="true" />
-                      add evaluation area
-                    </button>
-                  ))}
-              </article>
-            )}
+                    <div className="kpi-detail-header">
+                      <div className="hierarchy-title-row">
+                        {selectedKpi.weight !== null ? (
+                          <WeightRing value={selectedKpi.weight} />
+                        ) : (
+                          <span className="hierarchy-icon hierarchy-icon-lg">
+                            <Target size={20} aria-hidden="true" />
+                          </span>
+                        )}
+                        <h2>{selectedKpi.name}</h2>
+                        {canWrite && (
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label={`rename ${selectedKpi.name}`}
+                            onClick={() => setRenamingKpiId(selectedKpi.id)}
+                          >
+                            <Pencil size={15} aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                      {canWrite && (
+                        <span className="row-actions">
+                          <StatusPill isActive={selectedKpi.isActive} onToggle={() => onToggleKpiActive(selectedKpi)} />
+                          {canManage &&
+                            (confirmDeleteKpiId === selectedKpi.id ? (
+                              <>
+                                <span className="muted">delete permanently?</span>
+                                <button
+                                  type="button"
+                                  className="btn-text btn-text-danger"
+                                  onClick={() => onDeleteKpi(selectedKpi.id)}
+                                >
+                                  confirm delete
+                                </button>
+                                <button type="button" className="btn-text" onClick={() => setConfirmDeleteKpiId(null)}>
+                                  cancel
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn-text btn-text-danger"
+                                onClick={() => setConfirmDeleteKpiId(selectedKpi.id)}
+                              >
+                                delete
+                              </button>
+                            ))}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedKpi.evaluationAreas.length === 0 ? (
+                    <p className="empty-state-inline">
+                      <Layers size={14} aria-hidden="true" />
+                      no evaluation areas yet
+                    </p>
+                  ) : (
+                    selectedKpi.evaluationAreas.map((area) => (
+                      <div key={area.id} className="builder-field kpi-area">
+                        {renamingAreaId === area.id ? (
+                          <form className="inline-form" onSubmit={(e) => onRenameArea(selectedKpi.id, area.id, e)}>
+                            <input name="name" defaultValue={area.name} required minLength={2} aria-label="evaluation area name" autoFocus />
+                            <button className="btn-ghost" type="submit">
+                              save
+                            </button>
+                            <button type="button" className="btn-ghost" onClick={() => setRenamingAreaId(null)}>
+                              cancel
+                            </button>
+                          </form>
+                        ) : (
+                          <div className="kpi-area-head hover-actions-row">
+                            <div className="hierarchy-title-row">
+                              <span className="hierarchy-icon hierarchy-icon-sm">
+                                <Layers size={15} aria-hidden="true" />
+                              </span>
+                              <strong>{area.name}</strong>
+                              {area.subCriteria.length > 0 && (
+                                <span className="muted">{pluralize(area.subCriteria.length, 'sub-criteria', 'sub-criteria')}</span>
+                              )}
+                            </div>
+                            {canWrite && (
+                              <span className="hover-actions">
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  aria-label={`rename ${area.name}`}
+                                  onClick={() => setRenamingAreaId(area.id)}
+                                >
+                                  <Pencil size={14} aria-hidden="true" />
+                                </button>
+                                <StatusPill
+                                  isActive={area.isActive}
+                                  onToggle={() => onToggleAreaActive(selectedKpi.id, area)}
+                                  size="sm"
+                                />
+                                {canManage &&
+                                  (confirmDeleteAreaId === area.id ? (
+                                    <>
+                                      <span className="muted">delete permanently?</span>
+                                      <button
+                                        type="button"
+                                        className="btn-text btn-text-danger"
+                                        onClick={() => onDeleteArea(selectedKpi.id, area.id)}
+                                      >
+                                        confirm delete
+                                      </button>
+                                      <button type="button" className="btn-text" onClick={() => setConfirmDeleteAreaId(null)}>
+                                        cancel
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="btn-text btn-text-danger"
+                                      onClick={() => setConfirmDeleteAreaId(area.id)}
+                                    >
+                                      delete
+                                    </button>
+                                  ))}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="kpi-subcriteria-list">
+                          {area.subCriteria.length === 0 && (
+                            <p className="empty-state-inline">
+                              <ListPlus size={14} aria-hidden="true" />
+                              no sub-criteria yet
+                            </p>
+                          )}
+                          {area.subCriteria.map((sub) =>
+                            renamingSubCriteriaId === sub.id ? (
+                              <form
+                                key={sub.id}
+                                className="inline-form"
+                                onSubmit={(e) => onRenameSubCriteria(selectedKpi.id, area.id, sub.id, e)}
+                              >
+                                <input name="name" defaultValue={sub.name} required minLength={2} aria-label="sub-criteria name" autoFocus />
+                                <button className="btn-ghost" type="submit">
+                                  save
+                                </button>
+                                <button type="button" className="btn-ghost" onClick={() => setRenamingSubCriteriaId(null)}>
+                                  cancel
+                                </button>
+                              </form>
+                            ) : (
+                              <div key={sub.id} className="kpi-subcriteria-row hover-actions-row">
+                                <span>
+                                  <span className="hierarchy-dot" aria-hidden="true" />
+                                  {sub.name}
+                                </span>
+                                {canWrite && (
+                                  <span className="hover-actions">
+                                    <button
+                                      type="button"
+                                      className="icon-btn"
+                                      aria-label={`rename ${sub.name}`}
+                                      onClick={() => setRenamingSubCriteriaId(sub.id)}
+                                    >
+                                      <Pencil size={13} aria-hidden="true" />
+                                    </button>
+                                    {canManage &&
+                                      (confirmDeleteSubCriteriaId === sub.id ? (
+                                        <>
+                                          <span className="muted">delete?</span>
+                                          <button
+                                            type="button"
+                                            className="btn-text btn-text-danger"
+                                            onClick={() => onDeleteSubCriteria(selectedKpi.id, area.id, sub.id)}
+                                          >
+                                            confirm
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="btn-text"
+                                            onClick={() => setConfirmDeleteSubCriteriaId(null)}
+                                          >
+                                            cancel
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="btn-text btn-text-danger"
+                                          onClick={() => setConfirmDeleteSubCriteriaId(sub.id)}
+                                        >
+                                          delete
+                                        </button>
+                                      ))}
+                                  </span>
+                                )}
+                              </div>
+                            ),
+                          )}
+                          {canWrite &&
+                            (addingSubCriteriaForAreaId === area.id ? (
+                              <form className="inline-form" onSubmit={(e) => onCreateSubCriteria(selectedKpi.id, area.id, e)}>
+                                <input
+                                  name="name"
+                                  required
+                                  minLength={2}
+                                  placeholder="new sub-criteria name"
+                                  aria-label={`new sub-criteria under ${area.name}`}
+                                  autoFocus
+                                />
+                                <button className="btn-ghost" type="submit">
+                                  add
+                                </button>
+                                <button type="button" className="btn-ghost" onClick={() => setAddingSubCriteriaForAreaId(null)}>
+                                  close
+                                </button>
+                              </form>
+                            ) : (
+                              <button
+                                type="button"
+                                className="add-trigger"
+                                onClick={() => setAddingSubCriteriaForAreaId(area.id)}
+                              >
+                                <Plus size={14} aria-hidden="true" />
+                                add sub-criteria
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {canWrite &&
+                    (addingAreaForKpiId === selectedKpi.id ? (
+                      <form className="inline-form" onSubmit={(e) => onCreateArea(selectedKpi.id, e)}>
+                        <input name="name" required minLength={2} placeholder="new area name" aria-label="new area name" autoFocus />
+                        <button className="btn-ghost" type="submit">
+                          add
+                        </button>
+                        <button type="button" className="btn-ghost" onClick={() => setAddingAreaForKpiId(null)}>
+                          close
+                        </button>
+                      </form>
+                    ) : (
+                      <button type="button" className="add-trigger" onClick={() => setAddingAreaForKpiId(selectedKpi.id)}>
+                        <FolderPlus size={16} aria-hidden="true" />
+                        add evaluation area
+                      </button>
+                    ))}
+                </article>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </PortalShell>
   );

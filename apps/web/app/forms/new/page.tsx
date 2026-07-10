@@ -1,8 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { useLayoutEffect, useRef, useState } from 'react';
-import { BRANCH_TRIGGER_TYPES, CONDITION_OPERATORS, END_OF_FORM, FORM_FONT_FAMILIES, type FieldType } from '@pulse/contracts';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  BRANCH_TRIGGER_TYPES,
+  CONDITION_OPERATORS,
+  END_OF_FORM,
+  FORM_FONT_FAMILIES,
+  type FieldType,
+  type FormDefinition,
+  type FormField,
+  type FormSection,
+} from '@pulse/contracts';
 import { palette } from '@pulse/theme';
 
 const THEME_SWATCHES = [
@@ -63,6 +73,11 @@ const parseList = (raw: string) =>
   raw.split(',').map((s) => s.trim()).filter(Boolean);
 
 interface DraftField {
+  /** Pinned to the original field's key when hydrated for editing — keeps
+   *  visibleWhen references, quotas, KPI mappings, and existing submission
+   *  answers stable across a republish even if the label changes or the
+   *  field moves. undefined (brand-new fields) falls back to toKey(label, index). */
+  key?: string;
   label: string;
   helpText: string;
   type: FieldType;
@@ -262,7 +277,7 @@ function coerceVisibleWhenValue(raw: string, operator: ConditionOperator, target
 function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedField[]) {
   const visibleWhenTarget = keyedFields.find((f) => f.key === draft.visibleWhenFieldKey);
   const base = {
-    key: toKey(draft.label, index),
+    key: draft.key ?? toKey(draft.label, index),
     label: draft.label,
     required: draft.required,
     ...(draft.helpText.trim() ? { helpText: draft.helpText.trim() } : {}),
@@ -410,8 +425,176 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
   }
 }
 
-export default function NewFormPage() {
+/** Reverses toDefinitionField for edit mode: rebuilds a DraftField from a
+ *  saved FormField, pinning `key` so a republish doesn't regenerate it (see
+ *  DraftField.key). Options/statements collapse label back to value — this
+ *  builder never lets label and value diverge, so nothing is lost for any
+ *  form actually authored through it. */
+function fromDefinitionField(field: FormField): DraftField {
+  const draft = emptyField();
+  draft.key = field.key;
+  draft.label = field.label;
+  draft.helpText = field.helpText ?? '';
+  draft.type = field.type;
+  draft.required = field.required;
+  draft.capturedFromUrlParam = field.capturedFromUrlParam ?? '';
+
+  if (field.media?.type === 'image') {
+    draft.mediaType = 'image';
+    draft.mediaAssetId = field.media.assetId ?? '';
+    draft.mediaAlt = field.media.alt ?? '';
+  } else if (field.media?.type === 'video') {
+    draft.mediaType = 'video';
+    draft.mediaUrl = field.media.url ?? '';
+    draft.mediaAlt = field.media.alt ?? '';
+  }
+
+  if (field.visibleWhen) {
+    draft.visibleWhenFieldKey = field.visibleWhen.fieldKey;
+    draft.visibleWhenOperator = field.visibleWhen.operator;
+    draft.visibleWhenValue = String(field.visibleWhen.equals);
+  }
+
+  const optionsToDraft = (options: Array<{ value: string; imageAssetId?: string }>) => {
+    draft.options = options.map((o) => o.value).join(', ');
+    draft.optionImages = Object.fromEntries(
+      options.filter((o) => o.imageAssetId).map((o) => [o.value, o.imageAssetId!]),
+    );
+  };
+
+  switch (field.type) {
+    case 'select':
+      optionsToDraft(field.options);
+      draft.layout = field.layout;
+      draft.allowOther = field.allowOther;
+      draft.shuffleOptions = field.shuffleOptions;
+      if (field.correctValue !== undefined) {
+        draft.correctValue = field.correctValue;
+        draft.points = field.points ?? 0;
+        draft.feedbackCorrect = field.feedbackCorrect ?? '';
+        draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
+      }
+      break;
+    case 'multi_select':
+      optionsToDraft(field.options);
+      draft.shuffleOptions = field.shuffleOptions;
+      if (field.correctValues) {
+        draft.correctValues = field.correctValues.join(', ');
+        draft.points = field.points ?? 0;
+        draft.feedbackCorrect = field.feedbackCorrect ?? '';
+        draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
+      }
+      break;
+    case 'boolean':
+      if (field.correctValue !== undefined) {
+        draft.correctValue = field.correctValue ? 'true' : 'false';
+        draft.points = field.points ?? 0;
+        draft.feedbackCorrect = field.feedbackCorrect ?? '';
+        draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
+      }
+      break;
+    case 'short_text':
+      draft.minLength = field.minLength ?? 0;
+      draft.pattern = field.pattern ?? '';
+      draft.patternErrorMessage = field.patternErrorMessage ?? '';
+      if (field.correctAnswers) {
+        draft.correctAnswers = field.correctAnswers.join(', ');
+        draft.points = field.points ?? 0;
+        draft.feedbackCorrect = field.feedbackCorrect ?? '';
+        draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
+      }
+      break;
+    case 'long_text':
+      draft.minLength = field.minLength ?? 0;
+      draft.pattern = field.pattern ?? '';
+      draft.patternErrorMessage = field.patternErrorMessage ?? '';
+      break;
+    case 'number':
+      if (field.correctValue !== undefined) {
+        draft.correctValue = String(field.correctValue);
+        draft.points = field.points ?? 0;
+        draft.feedbackCorrect = field.feedbackCorrect ?? '';
+        draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
+      }
+      break;
+    case 'ranking':
+      optionsToDraft(field.options);
+      draft.shuffleOptions = field.shuffleOptions;
+      break;
+    case 'likert':
+      draft.options = field.statements.map((s) => s.value).join(', ');
+      draft.likertScale = field.scale.join(', ');
+      break;
+    case 'file':
+      draft.acceptedMimeTypes = field.acceptedMimeTypes.join(', ');
+      draft.maxSizeMb = field.maxSizeMb;
+      draft.maxFiles = field.maxFiles;
+      break;
+    case 'rating':
+      draft.scale = field.scale;
+      draft.ratingStyle = field.style;
+      draft.lowLabel = field.lowLabel ?? '';
+      draft.highLabel = field.highLabel ?? '';
+      break;
+    case 'nps':
+      draft.lowLabel = field.lowLabel ?? '';
+      draft.highLabel = field.highLabel ?? '';
+      break;
+    case 'slider':
+      draft.sliderMin = field.min;
+      draft.sliderMax = field.max;
+      draft.sliderStep = field.step;
+      draft.lowLabel = field.lowLabel ?? '';
+      draft.highLabel = field.highLabel ?? '';
+      break;
+    case 'contact_info':
+      draft.requireName = field.requireName;
+      draft.requireEmail = field.requireEmail;
+      draft.requirePhone = field.requirePhone;
+      break;
+    case 'hot_spot':
+      draft.hotSpotAssetId = field.imageAssetId;
+      draft.hotSpotRegions = field.regions;
+      break;
+    case 'date':
+    case 'section_header':
+    case 'person':
+      break;
+  }
+  return draft;
+}
+
+/** Reverses buildSectionsPayload: rebuilds a DraftSection from a saved
+ *  FormSection, folding the deprecated singular `branching` field into
+ *  `branchRules` when a legacy definition has no `branchRules` of its own. */
+function fromDefinitionSection(section: FormSection): DraftSection {
+  const rules = section.branchRules && section.branchRules.length > 0
+    ? section.branchRules
+    : section.branching
+      ? [section.branching]
+      : [];
+  return {
+    id: section.id,
+    title: section.title ?? '',
+    description: section.description ?? '',
+    mediaType: section.media?.type === 'image' ? 'image' : section.media?.type === 'video' ? 'video' : 'none',
+    mediaAssetId: section.media?.type === 'image' ? (section.media.assetId ?? '') : '',
+    mediaUrl: section.media?.type === 'video' ? (section.media.url ?? '') : '',
+    mediaAlt: section.media?.alt ?? '',
+    fieldKeys: section.fieldKeys,
+    branchRules: rules.map((r) => ({
+      fieldKey: r.onFieldKey ?? '',
+      statement: r.onStatement ?? '',
+      cases: r.cases.map(({ equals, goTo }) => ({ equals, goTo })),
+      defaultGoTo: r.defaultGoTo ?? '',
+    })),
+  };
+}
+
+function NewFormPage() {
   const user = useSession();
+  const router = useRouter();
+  const editSlug = useSearchParams().get('edit');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [fields, setFields] = useState<DraftField[]>([]);
@@ -430,10 +613,48 @@ export default function NewFormPage() {
   const [themeAccentColor, setThemeAccentColor] = useState('');
   const [themeBackgroundAssetId, setThemeBackgroundAssetId] = useState('');
   const [themeLogoAssetId, setThemeLogoAssetId] = useState('');
+  // Set once the existing form has loaded — id/slug drive the publishNewVersion
+  // call instead of createForm; null means "creating a new form" (or, while
+  // editSlug is set but the fetch hasn't resolved yet, "still loading").
+  const [editingForm, setEditingForm] = useState<{ id: string; slug: string } | null>(null);
+  const [loadingExisting, setLoadingExisting] = useState(Boolean(editSlug));
   const [themeFontFamily, setThemeFontFamily] = useState<'' | (typeof FORM_FONT_FAMILIES)[number]>('');
 
+  useEffect(() => {
+    if (!editSlug) return;
+    let cancelled = false;
+    setLoadingExisting(true);
+    api<{ form: { id: string; slug: string }; definition: FormDefinition }>(
+      `/v1/forms/${encodeURIComponent(editSlug)}`,
+    )
+      .then(({ form, definition }) => {
+        if (cancelled) return;
+        setEditingForm({ id: form.id, slug: form.slug });
+        setTitle(definition.title);
+        setDescription(definition.description ?? '');
+        setFields(definition.fields.map(fromDefinitionField));
+        if (definition.sections && definition.sections.length > 0) {
+          setSectionsEnabled(true);
+          setSections(definition.sections.map(fromDefinitionSection));
+        }
+        setThemeAccentColor(definition.theme?.accentColor ?? '');
+        setThemeBackgroundAssetId(definition.theme?.backgroundAssetId ?? '');
+        setThemeLogoAssetId(definition.theme?.logoAssetId ?? '');
+        setThemeFontFamily(definition.theme?.fontFamily ?? '');
+      })
+      .catch((cause) => {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : 'could not load this form');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingExisting(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editSlug]);
+
   const keyedFields = fields.map((f, i) => ({
-    key: toKey(f.label, i),
+    key: f.key ?? toKey(f.label, i),
     label: f.label.trim() || `question ${i + 1}`,
     type: f.type,
     options: parseList(f.options),
@@ -613,7 +834,9 @@ export default function NewFormPage() {
   function duplicateField(index: number) {
     setFields((current) => {
       const next = [...current];
-      next.splice(index + 1, 0, { ...current[index]! });
+      // strip the pinned key — a duplicate is a new field and must get its own
+      // computed key, or it would collide with the original's stable key
+      next.splice(index + 1, 0, { ...current[index]!, key: undefined });
       return next;
     });
     setActiveFieldIndex(index + 1);
@@ -845,25 +1068,40 @@ export default function NewFormPage() {
 
   async function onPublish() {
     setError(null);
+    const definition = {
+      title,
+      ...(description.trim() ? { description: description.trim() } : {}),
+      fields: fields.map((f, i) => toDefinitionField(f, i, keyedFields)),
+      ...(buildSectionsPayload() ? { sections: buildSectionsPayload() } : {}),
+      ...(buildThemePayload() ? { theme: buildThemePayload() } : {}),
+    };
     try {
+      if (editingForm) {
+        await api(`/v1/forms/${editingForm.id}/versions`, {
+          method: 'POST',
+          body: JSON.stringify({ definition }),
+        });
+        router.push(`/forms/view?slug=${encodeURIComponent(editingForm.slug)}`);
+        return;
+      }
       const slug = `${toKey(title, 0)}-${Date.now().toString(36)}`.replace(/_/g, '-');
       const form = await api<{ slug: string }>('/v1/forms', {
         method: 'POST',
-        body: JSON.stringify({
-          slug,
-          definition: {
-            title,
-            ...(description.trim() ? { description: description.trim() } : {}),
-            fields: fields.map((f, i) => toDefinitionField(f, i, keyedFields)),
-            ...(buildSectionsPayload() ? { sections: buildSectionsPayload() } : {}),
-            ...(buildThemePayload() ? { theme: buildThemePayload() } : {}),
-          },
-        }),
+        body: JSON.stringify({ slug, definition }),
       });
       setPublished({ slug: form.slug });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Publishing failed');
     }
+  }
+
+  if (loadingExisting) {
+    return (
+      <PortalShell user={user}>
+        <h1>edit form</h1>
+        <p className="portal-subtitle">loading…</p>
+      </PortalShell>
+    );
   }
 
   if (published) {
@@ -887,6 +1125,14 @@ export default function NewFormPage() {
     <PortalShell user={user}>
       <div className="msform">
         <header className="msform-banner msform-banner-edit">
+          {editingForm && (
+            <div className="msform-edit-badge">
+              <Link href={`/forms/view?slug=${encodeURIComponent(editingForm.slug)}`}>
+                ← back to form
+              </Link>
+              <span>editing an existing form — publishing saves a new version</span>
+            </div>
+          )}
           <label htmlFor="form-title">form title</label>
           <input
             id="form-title"
@@ -2237,7 +2483,7 @@ export default function NewFormPage() {
                 (unassignedFieldKeys.length > 0 || sections.some((s) => s.fieldKeys.length === 0)))
             }
           >
-            publish
+            {editingForm ? 'save changes' : 'publish'}
           </button>
         </div>
 
@@ -2249,5 +2495,14 @@ export default function NewFormPage() {
         </div>
       </div>
     </PortalShell>
+  );
+}
+
+export default function NewOrEditFormPage() {
+  // useSearchParams requires a Suspense boundary under static export
+  return (
+    <Suspense fallback={null}>
+      <NewFormPage />
+    </Suspense>
   );
 }

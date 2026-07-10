@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
+import { ClipboardList, Pencil } from 'lucide-react';
 import type { FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { FormRenderer, SubmissionScore } from '../../../components/form-renderer';
@@ -157,25 +159,43 @@ function FormView() {
   return (
     <PortalShell user={user}>
       <div className="page-title-row">
-        <div role="tablist" className="tabs" aria-label="form views">
-          <button role="tab" aria-selected={tab === 'form'} onClick={() => setTab('form')}>
-            form
-          </button>
-          <button role="tab" aria-selected={tab === 'submissions'} onClick={() => setTab('submissions')}>
-            submissions
-          </button>
-          <button role="tab" aria-selected={tab === 'summary'} onClick={() => setTab('summary')}>
-            summary
-          </button>
-          {canManage && (
-            <button role="tab" aria-selected={tab === 'settings'} onClick={() => setTab('settings')}>
-              settings
-            </button>
-          )}
+        <div className="hierarchy-title-row">
+          <span className="hierarchy-icon hierarchy-icon-lg">
+            <ClipboardList size={18} aria-hidden="true" />
+          </span>
+          <h1>{definition.title}</h1>
+          <span className={`status-pill${settings.acceptingResponses ? '' : ' status-pill-inactive'}`}>
+            <span className={`status-dot${settings.acceptingResponses ? '' : ' status-dot-inactive'}`} aria-hidden="true" />
+            {settings.acceptingResponses ? 'open' : 'closed'}
+          </span>
         </div>
         {canManage && (
-          <button className="btn-ghost" onClick={onDuplicate}>
-            duplicate form
+          <span className="row-actions">
+            <Link href={`/forms/new?edit=${encodeURIComponent(slug)}`} className="btn-text">
+              <Pencil size={13} aria-hidden="true" />
+              edit form
+            </Link>
+            <button type="button" className="btn-text" onClick={onDuplicate}>
+              duplicate form
+            </button>
+          </span>
+        )}
+      </div>
+      {definition.description && <p className="portal-subtitle">{definition.description}</p>}
+
+      <div role="tablist" className="tabs" aria-label="form views">
+        <button role="tab" aria-selected={tab === 'form'} onClick={() => setTab('form')}>
+          form
+        </button>
+        <button role="tab" aria-selected={tab === 'submissions'} onClick={() => setTab('submissions')}>
+          submissions
+        </button>
+        <button role="tab" aria-selected={tab === 'summary'} onClick={() => setTab('summary')}>
+          summary
+        </button>
+        {canManage && (
+          <button role="tab" aria-selected={tab === 'settings'} onClick={() => setTab('settings')}>
+            settings
           </button>
         )}
       </div>
@@ -319,22 +339,22 @@ function FormView() {
                       );
                     })}
                     <td>
-                      <span className="builder-field-actions">
-                        <button className="btn-ghost" onClick={() => setSelectedRowId(row.id)}>
+                      <span className="row-actions">
+                        <button className="btn-text" onClick={() => setSelectedRowId(row.id)}>
                           view
                         </button>
                         {canModerate &&
                           (confirmDeleteRowId === row.id ? (
                             <>
-                              <button className="btn-ghost" onClick={() => onDelete(row.id)}>
+                              <button className="btn-text btn-text-danger" onClick={() => onDelete(row.id)}>
                                 confirm
                               </button>
-                              <button className="btn-ghost" onClick={() => setConfirmDeleteRowId(null)}>
+                              <button className="btn-text" onClick={() => setConfirmDeleteRowId(null)}>
                                 cancel
                               </button>
                             </>
                           ) : (
-                            <button className="btn-ghost" onClick={() => setConfirmDeleteRowId(row.id)}>
+                            <button className="btn-text btn-text-danger" onClick={() => setConfirmDeleteRowId(row.id)}>
                               delete
                             </button>
                           ))}
