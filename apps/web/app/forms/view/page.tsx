@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { ClipboardList, Pencil } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Pencil } from 'lucide-react';
 import type { FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
@@ -165,6 +165,12 @@ function FormView() {
 
   return (
     <PortalShell user={user}>
+      <Button asChild variant="ghost" size="sm" className="mb-2">
+        <Link href="/forms">
+          <ArrowLeft size={16} aria-hidden="true" />
+          back to forms
+        </Link>
+      </Button>
       <div className="page-title-row">
         <div className="hierarchy-title-row">
           <span className="hierarchy-icon hierarchy-icon-lg">
