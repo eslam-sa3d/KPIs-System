@@ -7,6 +7,7 @@ import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface EvaluationAreaOption {
   id: string;
@@ -508,18 +509,18 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     ))}
                   </select>
 
-                  <table className="data-table kpi-bulk-mapping-table">
-                    <thead>
-                      <tr>
-                        <th>question</th>
-                        <th>evaluation area</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <Table className="kpi-bulk-mapping-table">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>question</TableHead>
+                        <TableHead>evaluation area</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {unmappedScoreFields.map((f) => (
-                        <tr key={f.key}>
-                          <td>{f.label}</td>
-                          <td>
+                        <TableRow key={f.key}>
+                          <TableCell>{f.label}</TableCell>
+                          <TableCell>
                             <select
                               aria-label={`evaluation area for ${f.label}`}
                               value={bulkSelections[f.key] ?? ''}
@@ -540,11 +541,11 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                                 </optgroup>
                               ))}
                             </select>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
 
                   <div className="row-actions">
                     <Button

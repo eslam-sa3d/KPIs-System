@@ -8,6 +8,7 @@ import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, downloadCsv } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusBadgeStyle, statusOf } from '../../lib/kpi-status';
@@ -444,48 +445,48 @@ export default function DashboardPage() {
                   sort: {sort.key} {sort.dir > 0 ? '↑' : '↓'}
                 </span>
               </div>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead
                       className="p-th-sortable"
                       aria-sort={sort.key === 'name' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
                     >
                       <button type="button" onClick={() => sortBy('name')}>
                         name
                       </button>
-                    </th>
-                    <th>areas</th>
-                    <th
+                    </TableHead>
+                    <TableHead>areas</TableHead>
+                    <TableHead
                       className="p-th-sortable"
                       aria-sort={sort.key === 'latestValue' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
                     >
                       <button type="button" onClick={() => sortBy('latestValue')}>
                         latest
                       </button>
-                    </th>
-                    <th>status</th>
-                    <th
+                    </TableHead>
+                    <TableHead>status</TableHead>
+                    <TableHead
                       className="p-th-sortable"
                       aria-sort={sort.key === 'updated' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
                     >
                       <button type="button" onClick={() => sortBy('updated')}>
                         last updated
                       </button>
-                    </th>
-                    <th>action</th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                    <TableHead>action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {tableData.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="muted" style={{ textAlign: 'center' }}>
+                    <TableRow>
+                      <TableCell colSpan={6} className="muted" style={{ textAlign: 'center' }}>
                         {kpis.length === 0 ? 'no KPIs assigned yet.' : 'no KPIs match this filter.'}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     tableData.map((k) => (
-                      <tr
+                      <TableRow
                         key={k.id}
                         tabIndex={0}
                         role="button"
@@ -500,22 +501,22 @@ export default function DashboardPage() {
                         }}
                         style={{ cursor: 'pointer' }}
                       >
-                        <td style={{ fontWeight: 500 }}>{k.name}</td>
-                        <td className="muted">{k.areas.length}</td>
-                        <td>
+                        <TableCell style={{ fontWeight: 500 }}>{k.name}</TableCell>
+                        <TableCell className="muted">{k.areas.length}</TableCell>
+                        <TableCell>
                           <span className={`p-score-ring p-status-${k.status}`}>
                             {k.latestValue !== null ? k.latestValue.toLocaleString() : '—'}
                           </span>
-                        </td>
-                        <td>
+                        </TableCell>
+                        <TableCell>
                           <Badge className="border-transparent" style={statusBadgeStyle(k.status)}>
                             {STATUS_LABEL[k.status]}
                           </Badge>
-                        </td>
-                        <td className="muted" style={{ fontFamily: 'var(--mono)' }}>
+                        </TableCell>
+                        <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
                           {k.lastUpdated ? new Date(k.lastUpdated).toLocaleDateString() : '—'}
-                        </td>
-                        <td>
+                        </TableCell>
+                        <TableCell>
                           <Button
                             variant="outline"
                             size="sm"
@@ -526,12 +527,12 @@ export default function DashboardPage() {
                           >
                             View →
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               <div className="p-table-footer">
                 <span className="p-tf-count">
                   showing {tableData.length} of {levelData.length} KPIs

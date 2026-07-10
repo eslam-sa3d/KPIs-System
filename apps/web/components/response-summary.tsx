@@ -3,6 +3,7 @@
 import type { FormResponseSummary } from '@pulse/contracts';
 import { palette } from '@pulse/theme';
 import { Card, CardContent } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export type ResponseSummaryData = FormResponseSummary;
 
@@ -133,26 +134,26 @@ export function ResponseSummary({
           )}
 
           {field.matrix && field.scale && (
-            <table className="data-table summary-likert-table">
-              <thead>
-                <tr>
-                  <th />
+            <Table className="summary-likert-table">
+              <TableHeader>
+                <TableRow>
+                  <TableHead />
                   {field.scale.map((s) => (
-                    <th key={s}>{s}</th>
+                    <TableHead key={s}>{s}</TableHead>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {Object.entries(field.matrix).map(([statement, dist]) => (
-                  <tr key={statement}>
-                    <td>{statement}</td>
+                  <TableRow key={statement}>
+                    <TableCell>{statement}</TableCell>
                     {field.scale!.map((_, idx) => (
-                      <td key={idx}>{dist[String(idx)] ?? 0}</td>
+                      <TableCell key={idx}>{dist[String(idx)] ?? 0}</TableCell>
                     ))}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
 
           {field.averagePosition && (

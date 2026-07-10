@@ -9,6 +9,7 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FormRenderer, SubmissionScore } from '../../../components/form-renderer';
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
 import { ShareLinkPanel } from '../../../components/share-link-panel';
@@ -301,26 +302,26 @@ function FormView() {
           ) : filteredRows.length === 0 ? (
             <p className="muted">no submissions{filter ? ' match the filter' : ' yet'}.</p>
           ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>submitted</th>
-                  <th>by</th>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>submitted</TableHead>
+                  <TableHead>by</TableHead>
                   {definition.fields.map((f) => (
-                    <th key={f.key}>{f.label}</th>
+                    <TableHead key={f.key}>{f.label}</TableHead>
                   ))}
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredRows.map((row) => (
-                  <tr key={row.id}>
-                    <td>{new Date(row.createdAt).toLocaleString()}</td>
-                    <td>{row.submittedBy?.displayName ?? 'anonymous'}</td>
+                  <TableRow key={row.id}>
+                    <TableCell>{new Date(row.createdAt).toLocaleString()}</TableCell>
+                    <TableCell>{row.submittedBy?.displayName ?? 'anonymous'}</TableCell>
                     {definition.fields.map((f) => {
                       const value = row.answers[f.key];
                       return (
-                        <td key={f.key}>
+                        <TableCell key={f.key}>
                           {f.type === 'file' && typeof value === 'string' && value ? (
                             <Button
                               variant="ghost"
@@ -349,10 +350,10 @@ function FormView() {
                           ) : (
                             String(value ?? '—')
                           )}
-                        </td>
+                        </TableCell>
                       );
                     })}
-                    <td>
+                    <TableCell>
                       <span className="row-actions">
                         <Button variant="ghost" size="sm" className="text-primary hover:text-primary" onClick={() => setSelectedRowId(row.id)}>
                           view
@@ -373,11 +374,11 @@ function FormView() {
                             </Button>
                           ))}
                       </span>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
 
           {(() => {

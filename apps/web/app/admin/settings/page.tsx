@@ -5,6 +5,7 @@ import { PortalShell } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableRow } from '@/components/ui/table';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -70,22 +71,22 @@ export default function SettingsPage() {
           <p className="muted">loading…</p>
         ) : (
           <>
-            <table className="data-table demo-status-table">
-              <tbody>
-                <tr>
-                  <th>status</th>
-                  <td>{status.present ? 'demo data present' : 'no demo data'}</td>
-                </tr>
-                <tr>
-                  <th>records</th>
-                  <td>
+            <Table className="demo-status-table">
+              <TableBody>
+                <TableRow>
+                  <TableHead>status</TableHead>
+                  <TableCell>{status.present ? 'demo data present' : 'no demo data'}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableHead>records</TableHead>
+                  <TableCell>
                     {status.counts.users} users · {status.counts.roles} role ·{' '}
                     {status.counts.departments} departments · {status.counts.kpis} KPIs ·{' '}
                     {status.counts.forms} form · {status.counts.submissions} submissions
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
 
             <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
               <Button

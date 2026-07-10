@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 
@@ -111,10 +112,8 @@ export default function FormsPage() {
       )}
 
       {forms === null ? (
-        <div className="rounded-md border bg-card mt-4 mb-6 p-6 space-y-3" aria-hidden="true">
-          <Skeleton className="h-3.5" style={{ width: '60%' }} />
-          <Skeleton className="h-3.5" style={{ width: '40%' }} />
-          <Skeleton className="h-3.5" style={{ width: '50%' }} />
+        <div className="rounded-md border bg-card mt-4 mb-6 p-6" style={{ display: 'flex', justifyContent: 'center' }}>
+          <Spinner className="size-6" />
         </div>
       ) : forms.length === 0 ? (
         <div className="empty-state">
@@ -206,25 +205,25 @@ export default function FormsPage() {
               no forms match your filters
             </p>
           ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>title</th>
-                  <th>status</th>
-                  <th>fields</th>
-                  <th>version</th>
-                  <th>public link</th>
-                  <th>folder</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>title</TableHead>
+                  <TableHead>status</TableHead>
+                  <TableHead>fields</TableHead>
+                  <TableHead>version</TableHead>
+                  <TableHead>public link</TableHead>
+                  <TableHead>folder</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {visibleForms.map((form) => (
-                  <tr key={form.id} className="hover-actions-row">
-                    <td>
+                  <TableRow key={form.id} className="hover-actions-row">
+                    <TableCell>
                       <Link href={`/forms/view?slug=${encodeURIComponent(form.slug)}`}>{form.title}</Link>
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       {form.status === 'archived' ? (
                         <StatusBadge active={false} label="archived" size="sm" />
                       ) : (
@@ -234,11 +233,11 @@ export default function FormsPage() {
                           size="sm"
                         />
                       )}
-                    </td>
-                    <td>{pluralize(form.fieldCount, 'field')}</td>
-                    <td>v{form.version}</td>
-                    <td>{form.hasPublicLink ? 'shared' : '—'}</td>
-                    <td>
+                    </TableCell>
+                    <TableCell>{pluralize(form.fieldCount, 'field')}</TableCell>
+                    <TableCell>v{form.version}</TableCell>
+                    <TableCell>{form.hasPublicLink ? 'shared' : '—'}</TableCell>
+                    <TableCell>
                       {editingFolderId === form.id ? (
                         <span className="builder-required">
                           <input
@@ -266,8 +265,8 @@ export default function FormsPage() {
                           {form.folder ?? 'move to folder'}
                         </Button>
                       )}
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       <span className="row-actions hover-actions">
                         {can(user, 'forms:write') && (
                           <Button asChild variant="ghost" size="icon-sm" aria-label={`edit ${form.title}`}>
@@ -317,11 +316,11 @@ export default function FormsPage() {
                           </>
                         )}
                       </span>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </>
       )}

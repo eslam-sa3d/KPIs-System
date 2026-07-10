@@ -5,6 +5,7 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -150,19 +151,19 @@ export default function RolesAdminPage() {
           <p className="muted">create the first custom role above to start composing access tiers.</p>
         </div>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>role</th>
-              <th>members</th>
-              <th>permissions</th>
-              {can(user, 'roles:manage') && <th />}
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>role</TableHead>
+              <TableHead>members</TableHead>
+              <TableHead>permissions</TableHead>
+              {can(user, 'roles:manage') && <TableHead />}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {roles.map((role) => (
-              <tr key={role.id}>
-                <td>
+              <TableRow key={role.id}>
+                <TableCell>
                   {renamingRoleId === role.id ? (
                     <form className="inline-form" onSubmit={(e) => onRename(role.id, e)}>
                       <input name="name" defaultValue={role.name} required minLength={2} autoFocus />
@@ -181,9 +182,9 @@ export default function RolesAdminPage() {
                       {role.description && <div className="muted">{role.description}</div>}
                     </>
                   )}
-                </td>
-                <td>{role.memberCount}</td>
-                <td>
+                </TableCell>
+                <TableCell>{role.memberCount}</TableCell>
+                <TableCell>
                   <span className="chip-row">
                     {role.permissions.map((p) => (
                       <code key={`${p.resource}:${p.action}`} className="perm-chip">
@@ -191,9 +192,9 @@ export default function RolesAdminPage() {
                       </code>
                     ))}
                   </span>
-                </td>
+                </TableCell>
                 {can(user, 'roles:manage') && (
-                  <td>
+                  <TableCell>
                     {!role.isSystem && renamingRoleId !== role.id && (
                       <span className="builder-field-actions">
                         <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingRoleId(role.id)}>
@@ -229,12 +230,12 @@ export default function RolesAdminPage() {
                         )}
                       </span>
                     )}
-                  </td>
+                  </TableCell>
                 )}
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
     </PortalShell>
   );

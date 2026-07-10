@@ -5,6 +5,7 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -191,24 +192,24 @@ export default function UsersAdminPage() {
             <p className="muted">create the first account above to start granting access.</p>
           </div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>name</th>
-                <th>email</th>
-                <th>department</th>
-                <th>roles</th>
-                <th>status</th>
-                {(can(user, 'users:manage') || canEditRoles) && <th />}
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>name</TableHead>
+                <TableHead>email</TableHead>
+                <TableHead>department</TableHead>
+                <TableHead>roles</TableHead>
+                <TableHead>status</TableHead>
+                {(can(user, 'users:manage') || canEditRoles) && <TableHead />}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {users.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.displayName}</td>
-                  <td>{row.email}</td>
-                  <td>{row.department?.name ?? '—'}</td>
-                  <td>
+                <TableRow key={row.id}>
+                  <TableCell>{row.displayName}</TableCell>
+                  <TableCell>{row.email}</TableCell>
+                  <TableCell>{row.department?.name ?? '—'}</TableCell>
+                  <TableCell>
                     {editingUserId === row.id ? (
                       <span className="check-group">
                         {roles.map((r) => (
@@ -225,10 +226,10 @@ export default function UsersAdminPage() {
                     ) : (
                       row.roles.map((r) => r.name).join(', ') || '—'
                     )}
-                  </td>
-                  <td>{row.isActive ? 'active' : 'deactivated'}</td>
+                  </TableCell>
+                  <TableCell>{row.isActive ? 'active' : 'deactivated'}</TableCell>
                   {(can(user, 'users:manage') || canEditRoles) && (
-                    <td>
+                    <TableCell>
                       <span className="builder-field-actions">
                         {can(user, 'users:manage') && (
                           <Button variant="ghost" size="sm" onClick={() => onToggleStatus(row)}>
@@ -255,12 +256,12 @@ export default function UsersAdminPage() {
                             </Button>
                           ))}
                       </span>
-                    </td>
+                    </TableCell>
                   )}
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         );
       })()}
     </PortalShell>
