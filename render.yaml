@@ -23,8 +23,13 @@ services:
       pnpm --filter @pulse/api exec prisma generate &&
       pnpm --filter @pulse/api build
     # db:seed is idempotent (upserts) — running on boot replaces shell access,
-    # which the free tier doesn't include.
+    # which the free tier doesn't include. The `migrate resolve --rolled-back`
+    # before it is the same substitute for a one-off failed-migration fix: it
+    # only matters if that exact migration is still stuck in a failed state,
+    # so `|| true` makes it a safe no-op on every deploy after the first time
+    # it actually resolves something.
     startCommand: >-
+      pnpm --filter @pulse/api exec prisma migrate resolve --rolled-back 20260710110000_kpi_multi_rater_and_review_type || true &&
       pnpm --filter @pulse/api exec prisma migrate deploy &&
       pnpm db:seed &&
       node apps/api/dist/main.js
