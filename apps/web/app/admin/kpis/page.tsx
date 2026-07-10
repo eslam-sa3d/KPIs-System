@@ -19,6 +19,13 @@ interface EvaluationAreaRow {
   subCriteria: SubCriteriaRow[];
 }
 
+interface KpiAssignmentRow {
+  id: string;
+  roleId: string | null;
+  departmentId: string | null;
+  deliveryStream: string | null;
+}
+
 interface KpiRow {
   id: string;
   name: string;
@@ -26,6 +33,20 @@ interface KpiRow {
   weight: number | null;
   isActive: boolean;
   evaluationAreas: EvaluationAreaRow[];
+  /** Which roles/departments/delivery streams see this KPI on their own
+   *  dashboard — /v1/kpis/my filters on this unconditionally, even for an
+   *  admin, so an unassigned KPI never appears there regardless of scoring. */
+  assignments: KpiAssignmentRow[];
+}
+
+interface RoleOption {
+  id: string;
+  name: string;
+}
+
+interface DepartmentOption {
+  id: string;
+  name: string;
 }
 
 // Evaluation Areas are created with this fixed cadence — the field still
@@ -116,12 +137,19 @@ export default function KpisAdminPage() {
   const [renamingSubCriteriaId, setRenamingSubCriteriaId] = useState<string | null>(null);
   const [confirmDeleteSubCriteriaId, setConfirmDeleteSubCriteriaId] = useState<string | null>(null);
   const [addingSubCriteriaForAreaId, setAddingSubCriteriaForAreaId] = useState<string | null>(null);
+  const [roles, setRoles] = useState<RoleOption[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const [assigningKpiId, setAssigningKpiId] = useState<string | null>(null);
+  const [assignTarget, setAssignTarget] = useState('');
+  const [confirmUnassignId, setConfirmUnassignId] = useState<string | null>(null);
 
   const reload = useCallback(() => api<KpiRow[]>('/v1/kpis?pageSize=100').then(setKpis), []);
 
   useEffect(() => {
     if (!user) return;
     void reload();
+    api<RoleOption[]>('/v1/roles').then(setRoles).catch(() => setRoles([]));
+    api<DepartmentOption[]>('/v1/departments').then(setDepartments).catch(() => setDepartments([]));
   }, [user, reload]);
 
   // The selected KPI can disappear out from under the detail pane (deleted,
@@ -206,6 +234,30 @@ export default function KpisAdminPage() {
         }
       });
     }
+  }
+
+  function onAssignKpi(kpiId: string) {
+    if (!assignTarget) return;
+    const [kind, id] = assignTarget.split(':') as ['role' | 'dept', string];
+    void report(
+      api(`/v1/kpis/${kpiId}/assignments`, {
+        method: 'POST',
+        body: JSON.stringify(kind === 'role' ? { roleId: id } : { departmentId: id }),
+      }),
+      'KPI assigned',
+    ).then(() => setAssignTarget(''));
+  }
+
+  function onUnassignKpi(kpiId: string, assignmentId: string) {
+    void report(api(`/v1/kpis/${kpiId}/assignments/${assignmentId}`, { method: 'DELETE' }), 'assignment removed').then(
+      () => setConfirmUnassignId(null),
+    );
+  }
+
+  function assignmentLabel(a: KpiAssignmentRow): string {
+    if (a.roleId) return roles.find((r) => r.id === a.roleId)?.name ?? 'unknown role';
+    if (a.departmentId) return departments.find((d) => d.id === a.departmentId)?.name ?? 'unknown department';
+    return a.deliveryStream ?? 'unknown';
   }
 
   function onCreateArea(kpiId: string, event: FormEvent<HTMLFormElement>) {
@@ -584,6 +636,107 @@ export default function KpisAdminPage() {
                       )}
                     </div>
                   )}
+
+                  <div className="kpi-assignments">
+                    <label>visible to</label>
+                    {selectedKpi.assignments.length === 0 ? (
+                      <p className="empty-state-inline">
+                        <EyeOff size={14} aria-hidden="true" />
+                        not assigned to any role or department — only visible here on the admin page
+                      </p>
+                    ) : (
+                      <span className="row-actions">
+                        {selectedKpi.assignments.map((a) => (
+                          <span key={a.id} className="status-pill status-pill-sm">
+                            {assignmentLabel(a)}
+                            {canManage &&
+                              (confirmUnassignId === a.id ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="icon-btn"
+                                    aria-label="confirm remove"
+                                    onClick={() => onUnassignKpi(selectedKpi.id, a.id)}
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="icon-btn"
+                                    aria-label="cancel remove"
+                                    onClick={() => setConfirmUnassignId(null)}
+                                  >
+                                    ✕
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="icon-btn"
+                                  aria-label={`remove ${assignmentLabel(a)} assignment`}
+                                  onClick={() => setConfirmUnassignId(a.id)}
+                                >
+                                  ✕
+                                </button>
+                              ))}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                    {canManage &&
+                      (assigningKpiId === selectedKpi.id ? (
+                        <span className="inline-form">
+                          <select
+                            aria-label="assign to"
+                            value={assignTarget}
+                            onChange={(e) => setAssignTarget(e.target.value)}
+                          >
+                            <option value="">choose a role or department…</option>
+                            {roles.length > 0 && (
+                              <optgroup label="roles">
+                                {roles.map((r) => (
+                                  <option key={r.id} value={`role:${r.id}`}>
+                                    {r.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {departments.length > 0 && (
+                              <optgroup label="departments">
+                                {departments.map((d) => (
+                                  <option key={d.id} value={`dept:${d.id}`}>
+                                    {d.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            disabled={!assignTarget}
+                            onClick={() => onAssignKpi(selectedKpi.id)}
+                          >
+                            assign
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            onClick={() => {
+                              setAssigningKpiId(null);
+                              setAssignTarget('');
+                            }}
+                          >
+                            close
+                          </button>
+                        </span>
+                      ) : (
+                        <button type="button" className="add-trigger" onClick={() => setAssigningKpiId(selectedKpi.id)}>
+                          <Plus size={14} aria-hidden="true" />
+                          assign to role or department
+                        </button>
+                      ))}
+                  </div>
 
                   {selectedKpi.evaluationAreas.length === 0 ? (
                     <p className="empty-state-inline">

@@ -172,6 +172,17 @@ export class KpisService {
     return assignment;
   }
 
+  async unassign(kpiId: string, assignmentId: string, actorId: string) {
+    const assignment = await this.prisma.kpiAssignment.findFirst({ where: { id: assignmentId, kpiId } });
+    if (!assignment) throw AppError.notFound('KPI assignment', assignmentId);
+
+    await this.prisma.kpiAssignment.delete({ where: { id: assignmentId } });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'kpi.unassigned', entity: 'Kpi', entityId: kpiId, detail: { assignmentId } },
+    });
+    return null;
+  }
+
   /**
    * The KPIs relevant to the caller: assigned to any of their roles OR their
    * department. Scope is derived server-side from the user record — the

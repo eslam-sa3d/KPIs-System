@@ -75,6 +75,16 @@ export class KpisController {
     return this.kpis.assign(kpiId, input, req.user.id);
   }
 
+  @Delete(':kpiId/assignments/:assignmentId')
+  @RequirePermissions('kpis:manage')
+  unassign(
+    @Param('kpiId') kpiId: string,
+    @Param('assignmentId') assignmentId: string,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpis.unassign(kpiId, assignmentId, req.user.id);
+  }
+
   @Post(':kpiId/areas')
   @RequirePermissions('kpis:write')
   createArea(

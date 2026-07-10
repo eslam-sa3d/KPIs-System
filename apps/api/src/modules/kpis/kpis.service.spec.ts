@@ -5,7 +5,7 @@ import { KpisService } from './kpis.service';
 function makePrismaStub() {
   return {
     kpi: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
-    kpiAssignment: { findFirst: vi.fn(), create: vi.fn() },
+    kpiAssignment: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
     rolePermission: { findMany: vi.fn() },
     evaluationArea: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     subCriteria: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
@@ -411,6 +411,26 @@ describe('KpisService', () => {
       expect(prisma.auditLog.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ action: 'kpi.assigned', entityId: 'kpi-1' }),
       });
+    });
+  });
+
+  describe('unassign', () => {
+    it('deletes an existing assignment and audit-logs it', async () => {
+      prisma.kpiAssignment.findFirst.mockResolvedValue({ id: 'assign-1', kpiId: 'kpi-1' });
+
+      await service.unassign('kpi-1', 'assign-1', 'admin-1');
+
+      expect(prisma.kpiAssignment.delete).toHaveBeenCalledWith({ where: { id: 'assign-1' } });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ action: 'kpi.unassigned', entityId: 'kpi-1' }),
+      });
+    });
+
+    it('rejects an assignment that does not belong to this KPI', async () => {
+      prisma.kpiAssignment.findFirst.mockResolvedValue(null);
+
+      await expect(service.unassign('kpi-1', 'ghost', 'admin-1')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(prisma.kpiAssignment.delete).not.toHaveBeenCalled();
     });
   });
 

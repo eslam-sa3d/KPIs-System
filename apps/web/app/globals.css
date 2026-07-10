@@ -3119,6 +3119,18 @@ h3 {
   font-size: var(--font-size-xs);
 }
 
+/* A remove (x) button nested inside a pill needs to be small enough to sit
+   inline with the pill's own text, not the full-size row-action icon-btn. */
+.status-pill .icon-btn {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+
+.kpi-assignments {
+  margin: var(--space-4) 0;
+}
+
 .kpi-area-head {
   display: flex;
   flex-wrap: wrap;
