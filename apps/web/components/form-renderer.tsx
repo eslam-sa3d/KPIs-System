@@ -807,7 +807,18 @@ export function FormRenderer({
           </Button>
         </div>
       ) : (
-        <form className="fill-form msform-body" onSubmit={handleSubmit}>
+        <form
+          className="fill-form msform-body"
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            // block HTML's implicit submit-on-Enter for text-like inputs — without this,
+            // hitting Enter while answering (e.g. the last question) silently activates the
+            // Submit button and posts in-progress answers with no click and no review step.
+            if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+              e.preventDefault();
+            }
+          }}
+        >
           {hasSections && (
             <div style={{ marginBottom: 8 }}>
               <p className="muted" style={{ margin: 0 }}>
