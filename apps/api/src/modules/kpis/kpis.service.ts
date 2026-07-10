@@ -50,8 +50,11 @@ export class KpisService {
 
   /** Hard delete — cascades to its Evaluation Areas, their entries, and
    *  assignments. Blocked once any entry has ever been recorded under it, so
-   *  scored history can't be silently destroyed — deactivate instead. */
-  async deleteKpi(id: string, actorId: string) {
+   *  scored history can't be silently destroyed — deactivate instead, or
+   *  pass force to delete it (and that history) anyway. Both paths require
+   *  kpis:manage; force-deletes are audit-logged distinctly, with the
+   *  destroyed entry count, since there's no undoing this one. */
+  async deleteKpi(id: string, actorId: string, force = false) {
     const kpi = await this.prisma.kpi.findUnique({
       where: { id },
       include: { evaluationAreas: { include: { _count: { select: { entries: true } } } } },
@@ -59,16 +62,22 @@ export class KpisService {
     if (!kpi) throw AppError.notFound('KPI', id);
 
     const entryCount = kpi.evaluationAreas.reduce((sum, area) => sum + area._count.entries, 0);
-    if (entryCount > 0) {
+    if (entryCount > 0 && !force) {
       throw new AppError(
         'CONFLICT',
-        `"${kpi.name}" has ${entryCount} recorded score(s) across its evaluation areas — deactivate it instead`,
+        `"${kpi.name}" has ${entryCount} recorded score(s) across its evaluation areas — deactivate it instead, or force delete to permanently destroy this history too`,
       );
     }
 
     await this.prisma.kpi.delete({ where: { id } });
     await this.prisma.auditLog.create({
-      data: { actorId, action: 'kpi.deleted', entity: 'Kpi', entityId: id, detail: { name: kpi.name } },
+      data: {
+        actorId,
+        action: entryCount > 0 ? 'kpi.force_deleted' : 'kpi.deleted',
+        entity: 'Kpi',
+        entityId: id,
+        detail: { name: kpi.name, ...(entryCount > 0 ? { destroyedEntryCount: entryCount } : {}) },
+      },
     });
     return null;
   }

@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, EyeOff, FolderPlus, Layers, ListPlus, Pencil, Plus, Search, Target } from 'lucide-react';
 import { PortalShell, can } from '../../../components/portal-shell';
-import { api } from '../../../lib/api-client';
+import { ApiRequestError, api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
 interface SubCriteriaRow {
@@ -106,6 +106,10 @@ export default function KpisAdminPage() {
   const [creatingKpi, setCreatingKpi] = useState(false);
   const [renamingKpiId, setRenamingKpiId] = useState<string | null>(null);
   const [confirmDeleteKpiId, setConfirmDeleteKpiId] = useState<string | null>(null);
+  /** Set when a plain delete was blocked by existing recorded scores — offers
+   *  a distinct, scarier force-delete confirmation instead of leaving the
+   *  admin stuck on the "deactivate it instead" error. */
+  const [forceDeleteKpiId, setForceDeleteKpiId] = useState<string | null>(null);
   const [renamingAreaId, setRenamingAreaId] = useState<string | null>(null);
   const [confirmDeleteAreaId, setConfirmDeleteAreaId] = useState<string | null>(null);
   const [addingAreaForKpiId, setAddingAreaForKpiId] = useState<string | null>(null);
@@ -184,10 +188,24 @@ export default function KpisAdminPage() {
     );
   }
 
-  function onDeleteKpi(kpiId: string) {
-    void report(api(`/v1/kpis/${kpiId}`, { method: 'DELETE' }), 'KPI deleted').then(() =>
-      setConfirmDeleteKpiId(null),
+  function onDeleteKpi(kpiId: string, force = false) {
+    const deletion = api(`/v1/kpis/${kpiId}${force ? '?force=true' : ''}`, { method: 'DELETE' });
+    void report(deletion, force ? 'KPI permanently deleted, including its recorded scores' : 'KPI deleted').then(
+      () => {
+        setConfirmDeleteKpiId(null);
+        setForceDeleteKpiId(null);
+      },
     );
+    // A plain delete blocked by existing scores offers a force-delete escalation
+    // instead of just surfacing the error and leaving the admin stuck.
+    if (!force) {
+      deletion.catch((cause) => {
+        if (cause instanceof ApiRequestError && cause.code === 'CONFLICT') {
+          setConfirmDeleteKpiId(null);
+          setForceDeleteKpiId(kpiId);
+        }
+      });
+    }
   }
 
   function onCreateArea(kpiId: string, event: FormEvent<HTMLFormElement>) {
@@ -533,6 +551,23 @@ export default function KpisAdminPage() {
                                   confirm delete
                                 </button>
                                 <button type="button" className="btn-text" onClick={() => setConfirmDeleteKpiId(null)}>
+                                  cancel
+                                </button>
+                              </>
+                            ) : forceDeleteKpiId === selectedKpi.id ? (
+                              <>
+                                <span className="muted">
+                                  this KPI has recorded scores — force deleting destroys that history
+                                  permanently and cannot be undone.
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn-text btn-text-danger"
+                                  onClick={() => onDeleteKpi(selectedKpi.id, true)}
+                                >
+                                  force delete permanently
+                                </button>
+                                <button type="button" className="btn-text" onClick={() => setForceDeleteKpiId(null)}>
                                   cancel
                                 </button>
                               </>

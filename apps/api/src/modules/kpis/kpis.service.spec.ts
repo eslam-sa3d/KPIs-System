@@ -104,6 +104,38 @@ describe('KpisService', () => {
       expect(prisma.kpi.delete).not.toHaveBeenCalled();
     });
 
+    it('force-deletes a KPI with recorded entries and audit-logs the destroyed count', async () => {
+      prisma.kpi.findUnique.mockResolvedValue({
+        ...activeKpi,
+        evaluationAreas: [{ _count: { entries: 3 } }, { _count: { entries: 2 } }],
+      });
+
+      await service.deleteKpi('kpi-1', actorId, true);
+
+      expect(prisma.kpi.delete).toHaveBeenCalledWith({ where: { id: 'kpi-1' } });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorId,
+          action: 'kpi.force_deleted',
+          entityId: 'kpi-1',
+          detail: expect.objectContaining({ destroyedEntryCount: 5 }),
+        }),
+      });
+    });
+
+    it('force=true on a KPI with no recorded entries behaves like a normal delete', async () => {
+      prisma.kpi.findUnique.mockResolvedValue({
+        ...activeKpi,
+        evaluationAreas: [{ _count: { entries: 0 } }],
+      });
+
+      await service.deleteKpi('kpi-1', actorId, true);
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ action: 'kpi.deleted' }),
+      });
+    });
+
     it('rejects an unknown KPI', async () => {
       prisma.kpi.findUnique.mockResolvedValue(null);
       await expect(service.deleteKpi('ghost', actorId)).rejects.toMatchObject({ code: 'NOT_FOUND' });

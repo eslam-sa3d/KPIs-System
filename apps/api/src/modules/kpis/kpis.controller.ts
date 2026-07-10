@@ -61,8 +61,8 @@ export class KpisController {
 
   @Delete(':id')
   @RequirePermissions('kpis:manage')
-  remove(@Param('id') id: string, @Req() req: AuthedRequest) {
-    return this.kpis.deleteKpi(id, req.user.id);
+  remove(@Param('id') id: string, @Query('force') force: string | undefined, @Req() req: AuthedRequest) {
+    return this.kpis.deleteKpi(id, req.user.id, force === 'true');
   }
 
   @Post(':kpiId/assignments')
