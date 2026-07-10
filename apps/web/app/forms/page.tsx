@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, FolderOpen, Pencil, Search, Share2 } from 'lucide-react';
 import { PortalShell, can } from '../../components/portal-shell';
+import { StatusBadge } from '@/components/status-badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 
@@ -107,10 +109,10 @@ export default function FormsPage() {
       )}
 
       {forms === null ? (
-        <div className="skeleton-card" aria-hidden="true">
-          <div className="skeleton-line" style={{ width: '60%' }} />
-          <div className="skeleton-line" style={{ width: '40%' }} />
-          <div className="skeleton-line" style={{ width: '50%' }} />
+        <div className="rounded-md border bg-card mt-4 mb-6 p-6 space-y-3" aria-hidden="true">
+          <Skeleton className="h-3.5" style={{ width: '60%' }} />
+          <Skeleton className="h-3.5" style={{ width: '40%' }} />
+          <Skeleton className="h-3.5" style={{ width: '50%' }} />
         </div>
       ) : forms.length === 0 ? (
         <div className="empty-state">
@@ -222,20 +224,13 @@ export default function FormsPage() {
                     </td>
                     <td>
                       {form.status === 'archived' ? (
-                        <span className="status-pill status-pill-sm status-pill-inactive">
-                          <span className="status-dot status-dot-inactive" aria-hidden="true" />
-                          archived
-                        </span>
+                        <StatusBadge active={false} label="archived" size="sm" />
                       ) : (
-                        <span
-                          className={`status-pill status-pill-sm${form.settings.acceptingResponses ? '' : ' status-pill-inactive'}`}
-                        >
-                          <span
-                            className={`status-dot${form.settings.acceptingResponses ? '' : ' status-dot-inactive'}`}
-                            aria-hidden="true"
-                          />
-                          {form.settings.acceptingResponses ? 'open' : 'closed'}
-                        </span>
+                        <StatusBadge
+                          active={form.settings.acceptingResponses}
+                          label={form.settings.acceptingResponses ? 'open' : 'closed'}
+                          size="sm"
+                        />
                       )}
                     </td>
                     <td>{pluralize(form.fieldCount, 'field')}</td>

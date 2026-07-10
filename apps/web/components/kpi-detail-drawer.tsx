@@ -1,7 +1,8 @@
 'use client';
 
 import type { StatusKey } from '../lib/kpi-status';
-import { STATUS_LABEL } from '../lib/kpi-status';
+import { STATUS_LABEL, statusBadgeStyle } from '../lib/kpi-status';
+import { Badge } from '@/components/ui/badge';
 
 export interface DrawerKpi {
   id: string;
@@ -72,7 +73,9 @@ export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClo
                 {kpi.areas.length} evaluation area{kpi.areas.length === 1 ? '' : 's'}
               </div>
               <div style={{ marginTop: 8 }}>
-                <span className={`p-pill p-status-${kpi.status}`}>{STATUS_LABEL[kpi.status]}</span>
+                <Badge className="border-transparent" style={statusBadgeStyle(kpi.status)}>
+                  {STATUS_LABEL[kpi.status]}
+                </Badge>
               </div>
             </div>
             <div className="p-drawer-body">

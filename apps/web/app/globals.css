@@ -1,6 +1,71 @@
 /* Single source of truth for all styling primitives. */
-@import '@pulse/theme/tokens.css';
 @import 'tailwindcss';
+@import '@pulse/theme/tokens.css';
+/* Tailwind's zero-config content detection only scans the CSS file's own
+   directory tree (app/) — components/ and lib/ are siblings, not
+   descendants, so they're invisible to it without this. Confirmed via a
+   compiled-output check: without it, not a single shadcn-authored utility
+   class (bg-primary, has-[>svg], aria-invalid:*, ...) was emitted at all,
+   even though the components themselves reference them correctly. */
+@source '../components';
+@source '../lib';
+
+/* Every shadcn variable aliases onto the existing --color-* / --md-sys-color-*
+   chain (packages/theme) — nothing here is a new hardcoded color. inline
+   keeps these as live var() references rather than baking a static value at
+   build time, so they keep following the same light/dark/system swap the
+   rest of the app already does.
+
+   --color-primary/--color-accent/--color-border below reference
+   --md-sys-color-* directly, not the same-named --color-primary/
+   --color-accent/--color-border alias one layer up in tokens.css — aliasing
+   a @theme var onto a CSS custom property of the exact same name is
+   circular (the property ends up referencing itself) and silently resolves
+   to nothing, so bg-primary etc. rendered invisible everywhere outside the
+   one page that happens to redefine --color-primary itself
+   ([data-surface=purple], see globals.css below). Found via a Badge
+   default-variant screenshot showing no fill at all.
+
+   IMPORTANT: no comments INSIDE the @theme block below, between properties —
+   Tailwind v4.3.2's @theme parser silently fails on that (passes the whole
+   block through as unprocessed raw text, so NONE of these variables take
+   effect, with no build error). Confirmed by bisection. Comments before/
+   after the block are fine; put any future notes here instead. */
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-text);
+  --color-popover: var(--md-sys-color-surface-container-high);
+  --color-popover-foreground: var(--color-text);
+  --color-primary: var(--md-sys-color-primary);
+  --color-primary-foreground: var(--color-on-primary);
+  --color-secondary: var(--md-sys-color-secondary-container);
+  --color-secondary-foreground: var(--md-sys-color-on-secondary-container);
+  --color-muted: var(--md-sys-color-surface-container-high);
+  --color-muted-foreground: var(--color-text-muted);
+  --color-accent: var(--md-sys-color-tertiary);
+  --color-accent-foreground: var(--md-sys-color-on-tertiary);
+  --color-destructive: var(--color-danger);
+  --color-destructive-foreground: var(--md-sys-color-on-error);
+  --color-border: var(--md-sys-color-outline-variant);
+  --color-input: var(--color-border);
+  --color-ring: var(--color-primary);
+
+  --color-chart-1: var(--pulse-purple);
+  --color-chart-2: var(--pulse-coral);
+  --color-chart-3: var(--pulse-chart-oasis);
+  --color-chart-4: var(--pulse-chart-sunset);
+  --color-chart-5: var(--pulse-chart-sea);
+
+  --font-sans: var(--font-family-base);
+
+  --radius-sm: var(--md-sys-shape-corner-small);
+  --radius-md: var(--md-sys-shape-corner-medium);
+  --radius-lg: var(--md-sys-shape-corner-large);
+  --radius-xl: var(--md-sys-shape-corner-extra-large);
+  --radius: var(--md-sys-shape-corner-medium);
+}
 
 @layer base, legacy-base, legacy-components, components, utilities;
 
@@ -18,47 +83,6 @@
       @slot;
     }
   }
-}
-
-/* Every shadcn variable aliases onto the existing --color-*/--md-sys-color-*
-   chain (packages/theme) — nothing here is a new hardcoded color. `inline`
-   keeps these as live var() references rather than baking a static value at
-   build time, so they keep following the same light/dark/system swap the
-   rest of the app already does. */
-@theme inline {
-  --color-background: var(--color-bg);
-  --color-foreground: var(--color-text);
-  --color-card: var(--color-surface);
-  --color-card-foreground: var(--color-text);
-  --color-popover: var(--md-sys-color-surface-container-high);
-  --color-popover-foreground: var(--color-text);
-  --color-primary: var(--color-primary);
-  --color-primary-foreground: var(--color-on-primary);
-  --color-secondary: var(--md-sys-color-secondary-container);
-  --color-secondary-foreground: var(--md-sys-color-on-secondary-container);
-  --color-muted: var(--md-sys-color-surface-container-high);
-  --color-muted-foreground: var(--color-text-muted);
-  --color-accent: var(--color-accent);
-  --color-accent-foreground: var(--md-sys-color-on-tertiary);
-  --color-destructive: var(--color-danger);
-  --color-destructive-foreground: var(--md-sys-color-on-error);
-  --color-border: var(--color-border);
-  --color-input: var(--color-border);
-  --color-ring: var(--color-primary);
-
-  --color-chart-1: var(--pulse-purple);
-  --color-chart-2: var(--pulse-coral);
-  --color-chart-3: var(--pulse-chart-oasis);
-  --color-chart-4: var(--pulse-chart-sunset);
-  --color-chart-5: var(--pulse-chart-sea);
-
-  --font-sans: var(--font-family-base);
-
-  --radius-sm: var(--md-sys-shape-corner-small);
-  --radius-md: var(--md-sys-shape-corner-medium);
-  --radius-lg: var(--md-sys-shape-corner-large);
-  --radius-xl: var(--md-sys-shape-corner-extra-large);
-  --radius: var(--md-sys-shape-corner-medium);
 }
 
 @layer legacy-base {
@@ -861,30 +885,6 @@ h3 {
   flex-wrap: wrap;
 }
 
-.p-fpill {
-  font-size: 11px;
-  padding: 5px 11px;
-  min-height: 30px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  background: none;
-  color: var(--text-3);
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s;
-}
-
-.p-fpill:hover {
-  border-color: var(--border-strong);
-  color: var(--text-2);
-}
-
-.p-fpill.active {
-  background: var(--accent-glow);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  color: var(--accent);
-}
-
 .p-table-footer {
   padding: 10px 16px;
   border-top: 1px solid var(--border);
@@ -948,17 +948,6 @@ h3 {
   font-family: var(--mono);
   color: var(--kc, var(--text-3));
   border-color: var(--kc, var(--text-3));
-}
-
-.p-pill {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 3px 9px;
-  border-radius: 20px;
-  white-space: nowrap;
-  color: var(--kc, var(--text-3));
-  background: color-mix(in srgb, var(--kc, var(--text-3)) 12%, transparent);
 }
 
 .p-action-btn {
@@ -3091,18 +3080,6 @@ h3 {
   color: var(--color-text-muted);
 }
 
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-success);
-  flex-shrink: 0;
-}
-
-.status-dot-inactive {
-  background: var(--color-text-muted);
-}
-
 .kpi-detail-pane {
   min-width: 0;
 }
@@ -3153,43 +3130,6 @@ h3 {
 .icon-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--md-sys-shape-corner-full);
-  border: 1px solid var(--color-border);
-  background: none;
-  font: inherit;
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  flex-shrink: 0;
-}
-
-.status-pill:hover {
-  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
-}
-
-.status-pill-inactive {
-  color: var(--color-text-muted);
-}
-
-.status-pill-sm {
-  padding: 2px var(--space-2);
-  font-size: var(--font-size-xs);
-}
-
-/* A remove (x) button nested inside a pill needs to be small enough to sit
-   inline with the pill's own text, not the full-size row-action icon-btn. */
-.status-pill .icon-btn {
-  width: 18px;
-  height: 18px;
-  font-size: 10px;
 }
 
 .kpi-assignments {
@@ -3342,41 +3282,6 @@ h3 {
 .add-trigger:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-}
-
-/* Loading skeleton */
-.skeleton-card {
-  padding: var(--space-6);
-  margin: var(--space-4) 0 var(--space-6);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.skeleton-line {
-  height: 14px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(
-    90deg,
-    var(--md-sys-color-surface-container-high) 25%,
-    var(--md-sys-color-surface-container-highest) 50%,
-    var(--md-sys-color-surface-container-high) 75%
-  );
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.4s ease-in-out infinite;
-}
-
-.skeleton-line + .skeleton-line {
-  margin-top: var(--space-3);
-}
-
-@keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeleton-line { animation: none; }
 }
 
 .btn-text {

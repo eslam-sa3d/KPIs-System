@@ -5,9 +5,11 @@ import { useMemo, useState } from 'react';
 import { useEffect } from 'react';
 import { PortalShell } from '../../components/portal-shell';
 import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { api, downloadCsv } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
-import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusOf } from '../../lib/kpi-status';
+import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusBadgeStyle, statusOf } from '../../lib/kpi-status';
 
 // Lazy-loaded: recharts only ships once the dashboard actually renders a chart.
 const KpiDistributionChart = dynamic(() => import('../../components/kpi-distribution-chart'), {
@@ -324,22 +326,24 @@ export default function DashboardPage() {
 
         {kpis && (
           <div className="p-filter-pills" style={{ marginBottom: 20 }}>
-            <button className={`p-fpill${level === 'all' ? ' active' : ''}`} onClick={() => setLevel('all')}>
-              all levels ({kpis.length})
-            </button>
+            <Badge asChild variant={level === 'all' ? 'default' : 'outline'} className="cursor-pointer py-1">
+              <button onClick={() => setLevel('all')}>all levels ({kpis.length})</button>
+            </Badge>
             {levels.map((l) => (
-              <button key={l} className={`p-fpill${level === l ? ' active' : ''}`} onClick={() => setLevel(l)}>
-                {CADENCE_LABEL[l] ?? l} ({kpis.filter((k) => k.areas.some((a) => a.cadence === l)).length})
-              </button>
+              <Badge key={l} asChild variant={level === l ? 'default' : 'outline'} className="cursor-pointer py-1">
+                <button onClick={() => setLevel(l)}>
+                  {CADENCE_LABEL[l] ?? l} ({kpis.filter((k) => k.areas.some((a) => a.cadence === l)).length})
+                </button>
+              </Badge>
             ))}
           </div>
         )}
 
         {kpis === null ? (
-          <div className="skeleton-card" aria-hidden="true">
-            <div className="skeleton-line" style={{ width: '50%' }} />
-            <div className="skeleton-line" style={{ width: '70%' }} />
-            <div className="skeleton-line" style={{ width: '40%' }} />
+          <div className="rounded-md border bg-card mt-4 mb-6 p-6 space-y-3" aria-hidden="true">
+            <Skeleton className="h-3.5" style={{ width: '50%' }} />
+            <Skeleton className="h-3.5" style={{ width: '70%' }} />
+            <Skeleton className="h-3.5" style={{ width: '40%' }} />
           </div>
         ) : (
           <>
@@ -382,9 +386,9 @@ export default function DashboardPage() {
               {reviewMixTotal > 0 && (
                 <div className="p-legend-row">
                   {Object.entries(reviewMix).map(([type, count]) => (
-                    <span key={type} className="p-fpill" style={{ cursor: 'default' }}>
+                    <Badge key={type} variant="outline" className="py-1">
                       {REVIEW_TYPE_LABEL[type] ?? type}: {count}
-                    </span>
+                    </Badge>
                   ))}
                 </div>
               )}
@@ -430,13 +434,9 @@ export default function DashboardPage() {
               <div className="p-table-header">
                 <div className="p-filter-pills">
                   {(['all', ...STATUS_ORDER] as const).map((s) => (
-                    <button
-                      key={s}
-                      className={`p-fpill${statusFilter === s ? ' active' : ''}`}
-                      onClick={() => setStatusFilter(s)}
-                    >
-                      {s === 'all' ? 'All' : STATUS_LABEL[s]}
-                    </button>
+                    <Badge key={s} asChild variant={statusFilter === s ? 'default' : 'outline'} className="cursor-pointer py-1">
+                      <button onClick={() => setStatusFilter(s)}>{s === 'all' ? 'All' : STATUS_LABEL[s]}</button>
+                    </Badge>
                   ))}
                 </div>
                 <span className="muted" style={{ fontSize: 11 }}>
@@ -507,7 +507,9 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td>
-                          <span className={`p-pill p-status-${k.status}`}>{STATUS_LABEL[k.status]}</span>
+                          <Badge className="border-transparent" style={statusBadgeStyle(k.status)}>
+                            {STATUS_LABEL[k.status]}
+                          </Badge>
                         </td>
                         <td className="muted" style={{ fontFamily: 'var(--mono)' }}>
                           {k.lastUpdated ? new Date(k.lastUpdated).toLocaleDateString() : '—'}

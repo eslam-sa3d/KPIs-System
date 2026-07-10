@@ -3,6 +3,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, EyeOff, FolderPlus, Layers, ListPlus, Pencil, Plus, Search, Target } from 'lucide-react';
 import { PortalShell, can } from '../../../components/portal-shell';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ApiRequestError, api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -95,24 +97,30 @@ function StatusPill({
   size?: 'sm';
 }) {
   return (
-    <button
-      type="button"
-      className={`status-pill${isActive ? '' : ' status-pill-inactive'}${size === 'sm' ? ' status-pill-sm' : ''}`}
-      onClick={onToggle}
+    <Badge
+      asChild
+      variant="outline"
+      className={size === 'sm' ? 'gap-1.5 py-0.5 text-xs' : 'gap-1.5 py-1'}
     >
-      <span className={`status-dot${isActive ? '' : ' status-dot-inactive'}`} aria-hidden="true" />
-      {isActive ? 'active' : 'inactive'}
-    </button>
+      <button type="button" onClick={onToggle} className={isActive ? '' : 'text-muted-foreground'}>
+        <span
+          className="size-[7px] shrink-0 rounded-full"
+          style={{ background: isActive ? 'var(--color-success)' : 'var(--color-text-muted)' }}
+          aria-hidden="true"
+        />
+        {isActive ? 'active' : 'inactive'}
+      </button>
+    </Badge>
   );
 }
 
 function SkeletonRows() {
   return (
-    <div className="skeleton-card" aria-hidden="true">
-      <div className="skeleton-line" style={{ width: '70%' }} />
-      <div className="skeleton-line" style={{ width: '50%' }} />
-      <div className="skeleton-line" style={{ width: '65%' }} />
-      <div className="skeleton-line" style={{ width: '40%' }} />
+    <div className="rounded-md border bg-card mt-4 mb-6 p-6 space-y-3" aria-hidden="true">
+      <Skeleton className="h-3.5" style={{ width: '70%' }} />
+      <Skeleton className="h-3.5" style={{ width: '50%' }} />
+      <Skeleton className="h-3.5" style={{ width: '65%' }} />
+      <Skeleton className="h-3.5" style={{ width: '40%' }} />
     </div>
   );
 }
@@ -565,7 +573,13 @@ export default function KpisAdminPage() {
                       <span className="kpi-list-item-body">
                         <span className="kpi-list-item-name">{kpi.name}</span>
                         <span className="kpi-list-item-meta">
-                          {!kpi.isActive && <span className="status-dot status-dot-inactive" aria-hidden="true" />}
+                          {!kpi.isActive && (
+                            <span
+                              className="size-[7px] shrink-0 rounded-full"
+                              style={{ background: 'var(--color-text-muted)' }}
+                              aria-hidden="true"
+                            />
+                          )}
                           {pluralize(kpi.evaluationAreas.length, 'area')}
                         </span>
                       </span>
@@ -689,7 +703,7 @@ export default function KpisAdminPage() {
                     ) : (
                       <span className="row-actions">
                         {selectedKpi.assignments.map((a) => (
-                          <span key={a.id} className="status-pill status-pill-sm">
+                          <Badge key={a.id} variant="outline" className="gap-1.5 py-0.5 text-xs">
                             {assignmentLabel(a)}
                             {canManage &&
                               (confirmUnassignId === a.id ? (
@@ -721,7 +735,7 @@ export default function KpisAdminPage() {
                                   ✕
                                 </button>
                               ))}
-                          </span>
+                          </Badge>
                         ))}
                       </span>
                     )}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -44,13 +45,15 @@ export function ThemeToggle() {
   const label = theme === 'system' ? 'auto' : theme;
 
   return (
-    <button
+    <Button
       type="button"
-      className="theme-toggle"
+      variant="outline"
+      size="sm"
+      className="rounded-full"
       onClick={cycle}
       aria-label={`theme: ${label} — click to change`}
     >
       {label}
-    </button>
+    </Button>
   );
 }

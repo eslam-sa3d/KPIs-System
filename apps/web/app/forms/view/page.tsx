@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { ClipboardList, Pencil } from 'lucide-react';
 import type { FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { PortalShell, can } from '../../../components/portal-shell';
+import { StatusBadge } from '@/components/status-badge';
 import { FormRenderer, SubmissionScore } from '../../../components/form-renderer';
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
 import { ShareLinkPanel } from '../../../components/share-link-panel';
@@ -164,10 +165,7 @@ function FormView() {
             <ClipboardList size={18} aria-hidden="true" />
           </span>
           <h1>{definition.title}</h1>
-          <span className={`status-pill${settings.acceptingResponses ? '' : ' status-pill-inactive'}`}>
-            <span className={`status-dot${settings.acceptingResponses ? '' : ' status-dot-inactive'}`} aria-hidden="true" />
-            {settings.acceptingResponses ? 'open' : 'closed'}
-          </span>
+          <StatusBadge active={settings.acceptingResponses} label={settings.acceptingResponses ? 'open' : 'closed'} />
         </div>
         {canManage && (
           <span className="row-actions">
