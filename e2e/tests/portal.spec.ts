@@ -101,6 +101,33 @@ test.describe('KPI module (create → evaluation area → score via a mapped for
     await page.getByRole('button', { name: 'create', exact: true }).click();
     await expect(page.getByRole('heading', { name: kpiName, exact: true })).toBeVisible();
 
+    // /v1/kpis/my (what the dashboard reads) unconditionally filters to KPIs
+    // assigned to one of the caller's roles/department — even for an admin —
+    // and the admin/kpis page no longer has a UI for that assignment, so make
+    // it directly against the API the same way that removed form used to.
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    const accessToken: string = await page.evaluate(async (base) => {
+      const res = await fetch(`${base}/api/v1/auth/refresh`, { method: 'POST', credentials: 'include' });
+      const envelope = await res.json();
+      return envelope.data.accessToken;
+    }, apiUrl);
+    const authHeaders = { Authorization: `Bearer ${accessToken}` };
+
+    const kpisEnvelope = await (
+      await page.request.get(`${apiUrl}/api/v1/kpis?pageSize=100`, { headers: authHeaders })
+    ).json();
+    const kpiId = (kpisEnvelope.data as Array<{ id: string; name: string }>).find((k) => k.name === kpiName)!.id;
+
+    const rolesEnvelope = await (await page.request.get(`${apiUrl}/api/v1/roles`, { headers: authHeaders })).json();
+    const adminRoleId = (rolesEnvelope.data as Array<{ id: string; name: string }>).find(
+      (r) => r.name === 'admin',
+    )!.id;
+
+    await page.request.post(`${apiUrl}/api/v1/kpis/${kpiId}/assignments`, {
+      headers: authHeaders,
+      data: { roleId: adminRoleId },
+    });
+
     // add an evaluation area under it
     await page.getByRole('button', { name: 'add evaluation area' }).click();
     await page.getByLabel('new area name').fill(areaName);

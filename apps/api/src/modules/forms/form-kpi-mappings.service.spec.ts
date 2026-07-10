@@ -19,13 +19,22 @@ function makePrismaStub() {
     },
     formKpiMapping: {
       findMany: vi.fn(),
-      findUnique: vi.fn(async (): Promise<{ id: string } | null> => null),
+      findUnique: vi.fn(
+        async (_args: {
+          where: { formId_evaluationAreaId: { formId: string; evaluationAreaId: string } };
+        }): Promise<{ id: string } | null> => null,
+      ),
       findFirst: vi.fn(),
       create: vi.fn(async ({ data }: { data: object }) => ({ id: 'mapping-1', ...data })),
       delete: vi.fn(),
     },
     evaluationArea: {
-      findUnique: vi.fn(async (): Promise<{ id: string; name: string } | null> => ({ id: 'area-1', name: 'Leadership' })),
+      findUnique: vi.fn(
+        async (_args: { where: { id: string } }): Promise<{ id: string; name: string } | null> => ({
+          id: 'area-1',
+          name: 'Leadership',
+        }),
+      ),
     },
     auditLog: { create: vi.fn() },
   };
@@ -135,12 +144,11 @@ describe('FormKpiMappingsService.bulkCreate', () => {
   /** existingMappings is per-call, not shared, so tests can't leak state into each other. */
   function makeBulkPrismaStub(existingMappings: Record<string, { id: string } | null> = {}) {
     const prisma = makePrismaStub();
-    prisma.evaluationArea.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
-      Object.prototype.hasOwnProperty.call(areas, where.id) ? areas[where.id] : null,
+    prisma.evaluationArea.findUnique.mockImplementation(async ({ where }) =>
+      Object.prototype.hasOwnProperty.call(areas, where.id) ? areas[where.id]! : null,
     );
     prisma.formKpiMapping.findUnique.mockImplementation(
-      async ({ where }: { where: { formId_evaluationAreaId: { evaluationAreaId: string } } }) =>
-        existingMappings[where.formId_evaluationAreaId.evaluationAreaId] ?? null,
+      async ({ where }) => existingMappings[where.formId_evaluationAreaId.evaluationAreaId] ?? null,
     );
     return prisma;
   }
