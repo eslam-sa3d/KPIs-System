@@ -6,6 +6,7 @@ import { PortalShell } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { LoadingState } from '@/components/loading-state';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -47,7 +48,7 @@ export default function BrandingAdminPage() {
       <p className="portal-subtitle">customize the company identity on the landing page</p>
 
       {identity === null ? (
-        <p className="muted">loading…</p>
+        <LoadingState />
       ) : (
         <Card>
           <CardContent className="pt-6">

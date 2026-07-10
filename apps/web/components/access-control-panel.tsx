@@ -5,6 +5,7 @@ import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingState } from '@/components/loading-state';
 
 interface UserOption {
   id: string;
@@ -184,7 +185,7 @@ export function AccessControlPanel({
 
           <label>people with access</label>
           {collaborators === null ? (
-            <p className="muted">loading…</p>
+            <LoadingState />
           ) : collaborators.length === 0 ? (
             <p className="muted">no one invited yet — only you and admins can open this form.</p>
           ) : (

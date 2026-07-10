@@ -7,7 +7,7 @@ import { PortalShell, can } from '../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';

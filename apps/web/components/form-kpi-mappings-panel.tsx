@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { LoadingState } from '@/components/loading-state';
 
 interface EvaluationAreaOption {
   id: string;
@@ -291,7 +292,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         <>
           <label>current mappings</label>
           {mappings === null ? (
-            <p className="muted">loading…</p>
+            <LoadingState />
           ) : mappings.length === 0 ? (
             <p className="muted">no KPI mapping yet — add one below.</p>
           ) : (

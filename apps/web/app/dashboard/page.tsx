@@ -7,7 +7,8 @@ import { PortalShell } from '../../components/portal-shell';
 import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
+import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, downloadCsv } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
@@ -16,7 +17,7 @@ import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusBadgeStyle, s
 // Lazy-loaded: recharts only ships once the dashboard actually renders a chart.
 const KpiDistributionChart = dynamic(() => import('../../components/kpi-distribution-chart'), {
   ssr: false,
-  loading: () => <p className="muted">loading chart…</p>,
+  loading: () => <LoadingState label="loading chart…" />,
 });
 
 interface RawEntry {
@@ -342,10 +343,8 @@ export default function DashboardPage() {
         )}
 
         {kpis === null ? (
-          <div className="rounded-md border bg-card mt-4 mb-6 p-6 space-y-3" aria-hidden="true">
-            <Skeleton className="h-3.5" style={{ width: '50%' }} />
-            <Skeleton className="h-3.5" style={{ width: '70%' }} />
-            <Skeleton className="h-3.5" style={{ width: '40%' }} />
+          <div className="rounded-md border bg-card mt-4 mb-6 p-6" style={{ display: 'flex', justifyContent: 'center' }}>
+            <Spinner className="size-6" />
           </div>
         ) : (
           <>

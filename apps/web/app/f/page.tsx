@@ -5,6 +5,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { BrandIdentity, FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { FormRenderer, SubmissionScore } from '../../components/form-renderer';
+import { LoadingState } from '../../components/loading-state';
 import { API_URL } from '../../lib/api-client';
 import { asset } from '../../lib/asset';
 
@@ -114,7 +115,7 @@ function PublicForm() {
         {missing ? (
           <div className="empty-state"><h2>this form link is invalid or expired</h2></div>
         ) : !data ? (
-          <p className="muted">loading…</p>
+          <LoadingState />
         ) : (
           <FormRenderer
             definition={data.definition}

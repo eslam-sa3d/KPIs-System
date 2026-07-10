@@ -9,6 +9,7 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FormRenderer, SubmissionScore } from '../../../components/form-renderer';
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
@@ -135,7 +136,7 @@ function FormView() {
   if (!detail) {
     return (
       <PortalShell user={user}>
-        <p className="muted">loading…</p>
+        <LoadingState />
       </PortalShell>
     );
   }
@@ -298,7 +299,7 @@ function FormView() {
             </Alert>
           )}
           {rows === null ? (
-            <p className="muted">loading…</p>
+            <LoadingState />
           ) : filteredRows.length === 0 ? (
             <p className="muted">no submissions{filter ? ' match the filter' : ' yet'}.</p>
           ) : (
@@ -412,7 +413,7 @@ function FormView() {
       {tab === 'summary' && (
         <section role="tabpanel" aria-label="response summary">
           {summary === null ? (
-            <p className="muted">loading…</p>
+            <LoadingState />
           ) : (
             <ResponseSummary data={summary} onFilterByAnswer={onFilterByAnswer} />
           )}

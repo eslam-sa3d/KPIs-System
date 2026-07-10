@@ -1380,6 +1380,7 @@ h3 {
    .builder-field usage is unaffected. */
 .builder-field.kpi-area {
   background: var(--md-sys-color-surface-container);
+  margin-bottom: var(--space-5);
 }
 
 .builder-field:hover,
@@ -2886,9 +2887,9 @@ h3 {
    matter (counts, allocation, anything needing attention) are visible before
    drilling into any one item. Shared across admin list pages (KPIs, forms). */
 .insights-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
   margin: var(--space-4) 0 var(--space-6);
 }
 
@@ -2896,13 +2897,23 @@ h3 {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
+  padding: var(--space-4) var(--space-5);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
+  border-top: 3px solid var(--color-primary);
   border-radius: var(--radius-md);
-  min-width: 160px;
+  box-shadow: var(--shadow-card);
   font: inherit;
   text-align: left;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.insight-card .hierarchy-icon-sm {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--md-sys-color-primary-container);
+  color: var(--color-primary);
 }
 
 .insight-card-body {
@@ -2912,7 +2923,7 @@ h3 {
 }
 
 .insight-card strong {
-  font-size: var(--md-sys-typescale-title-large-size);
+  font-size: var(--md-sys-typescale-headline-small-size, var(--md-sys-typescale-title-large-size));
   font-weight: var(--font-weight-bold);
   color: var(--color-primary);
   line-height: 1.1;
@@ -2928,11 +2939,17 @@ h3 {
 .insight-card.is-warning {
   background: var(--md-sys-color-error-container);
   border-color: transparent;
+  border-top-color: var(--md-sys-color-error);
 }
 
 .insight-card.is-warning strong,
 .insight-card.is-warning span {
   color: var(--md-sys-color-on-error-container);
+}
+
+.insight-card.is-warning .hierarchy-icon-sm {
+  background: var(--color-surface);
+  color: var(--md-sys-color-error);
 }
 
 /* The inactive-KPI count is the one widget that's actionable, not just
@@ -2941,8 +2958,8 @@ h3 {
 .insight-card.is-alert {
   background: var(--md-sys-color-error-container);
   border-color: transparent;
+  border-top-color: var(--md-sys-color-error);
   cursor: pointer;
-  transition: box-shadow var(--transition-fast);
 }
 
 .insight-card.is-alert strong,
@@ -2950,9 +2967,16 @@ h3 {
   color: var(--md-sys-color-on-error-container);
 }
 
+.insight-card.is-alert .hierarchy-icon-sm {
+  background: var(--color-surface);
+  color: var(--md-sys-color-error);
+}
+
+.insight-card:hover,
 .insight-card.is-alert:hover,
 .insight-card.is-alert:focus-visible {
-  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover, var(--shadow-card));
 }
 
 .insight-card.is-alert:focus-visible {
@@ -3063,8 +3087,8 @@ h3 {
 .kpi-subcriteria-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 var(--space-3) var(--space-3);
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-4);
 }
 
 .kpi-subcriteria-row {

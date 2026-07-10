@@ -5,6 +5,7 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -144,7 +145,7 @@ export default function RolesAdminPage() {
       )}
 
       {roles === null ? (
-        <p className="muted">loading…</p>
+        <LoadingState />
       ) : roles.length === 0 ? (
         <div className="empty-state">
           <h2>no roles yet</h2>

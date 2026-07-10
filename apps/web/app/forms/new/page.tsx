@@ -26,6 +26,7 @@ const THEME_SWATCHES = [
 
 type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 import { PortalShell } from '../../../components/portal-shell';
+import { LoadingState } from '../../../components/loading-state';
 import { api, assetUrl, uploadAsset } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -1099,7 +1100,7 @@ function NewFormPage() {
     return (
       <PortalShell user={user}>
         <h1>edit form</h1>
-        <p className="portal-subtitle">loading…</p>
+        <LoadingState />
       </PortalShell>
     );
   }
