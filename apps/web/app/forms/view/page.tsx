@@ -261,13 +261,6 @@ function FormView() {
             >
               export PDF
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.pptx`, `${slug}-summary.pptx`)}
-            >
-              export PPTX
-            </Button>
             {canModerate &&
               (rows?.length ?? 0) > 0 &&
               (confirmDeleteAll ? (

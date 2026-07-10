@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FormResponseSummary } from '@pulse/contracts';
-import { buildSummaryPdf, buildSummaryPptx } from './report-export';
+import { buildSummaryPdf } from './report-export';
 
 const summary: FormResponseSummary = {
   responses: 3,
@@ -23,20 +23,6 @@ describe('buildSummaryPdf', () => {
   it('does not throw for a form with zero responses and no quiz', async () => {
     const empty: FormResponseSummary = { responses: 0, firstResponseAt: null, lastResponseAt: null, fields: [] };
     const buffer = await buildSummaryPdf('empty form', empty);
-    expect(buffer.length).toBeGreaterThan(0);
-  });
-});
-
-describe('buildSummaryPptx', () => {
-  it('produces a non-empty PPTX buffer (a zip archive, PK magic header)', async () => {
-    const buffer = await buildSummaryPptx('geography quiz', summary);
-    expect(buffer.length).toBeGreaterThan(0);
-    expect(buffer.subarray(0, 2).toString('ascii')).toBe('PK');
-  });
-
-  it('does not throw for a form with zero responses and no quiz', async () => {
-    const empty: FormResponseSummary = { responses: 0, firstResponseAt: null, lastResponseAt: null, fields: [] };
-    const buffer = await buildSummaryPptx('empty form', empty);
     expect(buffer.length).toBeGreaterThan(0);
   });
 });

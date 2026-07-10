@@ -20,7 +20,7 @@ import { PrismaService } from '../../infra/prisma.service';
 import { compileAnswerValidator } from './answer-validator';
 import { FormsService } from './forms.service';
 import { QuizScore, scoreSubmission } from './quiz-scoring';
-import { buildSummaryPdf, buildSummaryPptx } from './report-export';
+import { buildSummaryPdf } from './report-export';
 import { TurnstileService } from './turnstile.service';
 
 /**
@@ -674,22 +674,6 @@ export class SubmissionsService {
       },
     });
     return buildSummaryPdf(definition.title, summary);
-  }
-
-  /** Slide-deck version of the same report as exportPdf. */
-  async exportPptx(formSlug: string, actorId: string | null): Promise<Buffer> {
-    const { definition } = await this.forms.getLatestVersion(formSlug);
-    const summary = await this.summary(formSlug);
-    await this.prisma.auditLog.create({
-      data: {
-        actorId,
-        action: 'submissions.exported_pptx',
-        entity: 'Form',
-        entityId: formSlug,
-        detail: { count: summary.responses },
-      },
-    });
-    return buildSummaryPptx(definition.title, summary);
   }
 
   private async buildExportTable(
