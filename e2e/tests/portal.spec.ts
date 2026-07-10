@@ -59,8 +59,8 @@ test.describe('form builder → submission → list (happy path)', () => {
     await page.getByRole('button', { name: 'add field' }).click();
     await page.getByLabel('field label').fill('Team');
     await page.locator('.field-type-summary').first().click();
-    await page.getByRole('option', { name: 'short text' }).click();
-    await page.getByLabel('required').check();
+    await page.getByRole('menuitem', { name: 'short text' }).click();
+    await page.getByLabel('required').click();
     await page.getByRole('button', { name: 'publish' }).click();
     await expect(page.getByText(/published/i)).toBeVisible();
 
@@ -146,13 +146,13 @@ test.describe('KPI module (create → evaluation area → score via a mapped for
     const whoField = page.locator('.builder-field').nth(0);
     await whoField.getByLabel('field label').fill('Who');
     await whoField.locator('.field-type-summary').click();
-    await page.getByRole('option', { name: 'person' }).click();
+    await page.getByRole('menuitem', { name: 'person' }).click();
 
     await page.getByRole('button', { name: 'add field' }).click();
     const scoreField = page.locator('.builder-field').nth(1);
     await scoreField.getByLabel('field label').fill('Score');
     await scoreField.locator('.field-type-summary').click();
-    await page.getByRole('option', { name: 'rating' }).click();
+    await page.getByRole('menuitem', { name: 'rating' }).click();
 
     await page.getByRole('button', { name: 'publish' }).click();
     await expect(page.getByText(/published/i)).toBeVisible();
