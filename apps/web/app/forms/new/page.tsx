@@ -635,6 +635,7 @@ function NewFormPage() {
   const [editingForm, setEditingForm] = useState<{ id: string; slug: string } | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(Boolean(editSlug));
   const [kpis, setKpis] = useState<KpiOption[] | null>(null);
+  const [kpiLinkErrors, setKpiLinkErrors] = useState<Record<number, string>>({});
 
   useEffect(() => {
     api<KpiOption[]>('/v1/kpis?pageSize=100').then(setKpis).catch(() => setKpis([]));
@@ -868,19 +869,41 @@ function NewFormPage() {
    *  the question itself. On a brand-new form there's no formId yet, so the
    *  choice is only staged locally; createPendingKpiLinks turns it into real
    *  mappings right after the form is created (see onPublish). */
+  function setKpiLinkError(index: number, message: string | null) {
+    setKpiLinkErrors((current) => {
+      if (message === null) {
+        if (!(index in current)) return current;
+        const next = { ...current };
+        delete next[index];
+        return next;
+      }
+      return { ...current, [index]: message };
+    });
+  }
+
   async function onLinkFieldToKpi(index: number, kpiId: string, evaluationAreaId: string) {
     const field = fields[index];
     const scoreFieldKey = keyedFields[index]?.key;
     if (!field || !scoreFieldKey) return;
+    setKpiLinkError(index, null);
 
     if (!editingForm) {
       updateField(index, { kpiId, evaluationAreaId });
       return;
     }
 
+    // A question added (or retyped) since the form was last saved doesn't
+    // exist yet in the published definition the backend validates against —
+    // linking it now would 422 against a field it can't find.
+    if (!field.key) {
+      setKpiLinkError(index, 'save the form first, then link this question to a KPI');
+      return;
+    }
+
     const evaluateeFieldKey = resolveEvaluateeFieldKey(field);
     if (!evaluateeFieldKey) {
-      setError(
+      setKpiLinkError(
+        index,
         personFields.length === 0
           ? 'add a "person" field to this form first — a KPI link needs one to know who this score is about'
           : 'choose which person field this question scores (above) first',
@@ -898,18 +921,19 @@ function NewFormPage() {
       });
       updateField(index, { kpiId, evaluationAreaId, kpiMappingId: mapping.id });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'linking this question to a KPI failed');
+      setKpiLinkError(index, cause instanceof Error ? cause.message : 'linking this question to a KPI failed');
     }
   }
 
   async function onUnlinkFieldFromKpi(index: number) {
     const field = fields[index];
     if (!field) return;
+    setKpiLinkError(index, null);
     if (field.kpiMappingId && editingForm) {
       try {
         await api(`/v1/forms/${editingForm.id}/kpi-mappings/${field.kpiMappingId}`, { method: 'DELETE' });
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'removing the KPI link failed');
+        setKpiLinkError(index, cause instanceof Error ? cause.message : 'removing the KPI link failed');
         return;
       }
     }
@@ -1997,6 +2021,11 @@ function NewFormPage() {
                   onSelect={(kpiId, evaluationAreaId) => void onLinkFieldToKpi(index, kpiId, evaluationAreaId)}
                   onClear={() => void onUnlinkFieldFromKpi(index)}
                 />
+                {kpiLinkErrors[index] && (
+                  <p role="alert" className="form-error" style={{ fontSize: 12, marginTop: 4 }}>
+                    {kpiLinkErrors[index]}
+                  </p>
+                )}
               </div>
             )}
 
