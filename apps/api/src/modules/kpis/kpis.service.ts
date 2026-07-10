@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import {
   CreateEvaluationAreaInput,
   CreateKpiInput,
@@ -39,6 +40,16 @@ function scrubAnonymousEntry<T extends EntryWithEvaluator>(
   return { ...entry, enteredById: '', enteredBy: { id: '', displayName: 'anonymous' } };
 }
 
+/** Prisma.Decimal's own toJSON() serializes to a string, so every KPI
+ *  leaving this service must go through here — otherwise `weight` reaches
+ *  the client as e.g. "20.00" and silently turns `sum + weight` client-side
+ *  into string concatenation instead of addition. */
+function serializeKpi<T extends { weight: Prisma.Decimal | number | null }>(
+  kpi: T,
+): Omit<T, 'weight'> & { weight: number | null } {
+  return { ...kpi, weight: kpi.weight === null ? null : Number(kpi.weight) };
+}
+
 /**
  * KPI definitions (just a name + Evaluation Areas), dynamic role/department/
  * stream mappings, and the per-person Evaluation Area score ingestion behind
@@ -54,7 +65,7 @@ export class KpisService {
     await this.prisma.auditLog.create({
       data: { actorId, action: 'kpi.created', entity: 'Kpi', entityId: kpi.id, detail: input },
     });
-    return kpi;
+    return serializeKpi(kpi);
   }
 
   async updateKpi(id: string, input: UpdateKpiInput, actorId: string) {
@@ -64,7 +75,7 @@ export class KpisService {
     await this.prisma.auditLog.create({
       data: { actorId, action: 'kpi.updated', entity: 'Kpi', entityId: id, detail: input },
     });
-    return updated;
+    return serializeKpi(updated);
   }
 
   /** Hard delete — cascades to its Evaluation Areas, their entries, and
@@ -176,7 +187,7 @@ export class KpisService {
         },
       }),
     ]);
-    return paged(items, buildPaginationMeta(page, pageSize, totalItems));
+    return paged(items.map(serializeKpi), buildPaginationMeta(page, pageSize, totalItems));
   }
 
   /** Map a KPI to a role, department and/or delivery stream (idempotent). */
@@ -248,7 +259,7 @@ export class KpisService {
       this.canSeeAnonymousEvaluators(userId),
     ]);
     return kpis.map((kpi) => ({
-      ...kpi,
+      ...serializeKpi(kpi),
       evaluationAreas: kpi.evaluationAreas.map((area) => ({
         ...area,
         entries: area.entries.map((entry) => scrubAnonymousEntry(entry, canSeeEvaluators)),

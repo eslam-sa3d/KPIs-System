@@ -7,7 +7,7 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { ApiRequestError, api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -42,11 +42,6 @@ interface KpiRow {
    *  dashboard — /v1/kpis/my filters on this unconditionally, even for an
    *  admin, so an unassigned KPI never appears there regardless of scoring. */
   assignments: KpiAssignmentRow[];
-}
-
-interface RoleOption {
-  id: string;
-  name: string;
 }
 
 interface DepartmentOption {
@@ -117,13 +112,10 @@ function StatusPill({
   );
 }
 
-function SkeletonRows() {
+function LoadingRows() {
   return (
-    <div className="rounded-md border bg-card mt-4 mb-6 p-6 space-y-3" aria-hidden="true">
-      <Skeleton className="h-3.5" style={{ width: '70%' }} />
-      <Skeleton className="h-3.5" style={{ width: '50%' }} />
-      <Skeleton className="h-3.5" style={{ width: '65%' }} />
-      <Skeleton className="h-3.5" style={{ width: '40%' }} />
+    <div className="rounded-md border bg-card mt-4 mb-6 p-6" style={{ display: 'flex', justifyContent: 'center' }}>
+      <Spinner className="size-6" />
     </div>
   );
 }
@@ -147,7 +139,6 @@ export default function KpisAdminPage() {
   const [renamingSubCriteriaId, setRenamingSubCriteriaId] = useState<string | null>(null);
   const [confirmDeleteSubCriteriaId, setConfirmDeleteSubCriteriaId] = useState<string | null>(null);
   const [addingSubCriteriaForAreaId, setAddingSubCriteriaForAreaId] = useState<string | null>(null);
-  const [roles, setRoles] = useState<RoleOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [assigningKpiId, setAssigningKpiId] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState('');
@@ -158,7 +149,6 @@ export default function KpisAdminPage() {
   useEffect(() => {
     if (!user) return;
     void reload();
-    api<RoleOption[]>('/v1/roles').then(setRoles).catch(() => setRoles([]));
     api<DepartmentOption[]>('/v1/departments').then(setDepartments).catch(() => setDepartments([]));
   }, [user, reload]);
 
@@ -192,10 +182,9 @@ export default function KpisAdminPage() {
       body: JSON.stringify({ name: form.get('name'), weight: parseWeight(form.get('weight')) }),
     }).then(async (kpi) => {
       if (assignTo) {
-        const [kind, id] = assignTo.split(':') as ['role' | 'dept', string];
         await api(`/v1/kpis/${kpi.id}/assignments`, {
           method: 'POST',
-          body: JSON.stringify(kind === 'role' ? { roleId: id } : { departmentId: id }),
+          body: JSON.stringify({ departmentId: assignTo }),
         });
       }
       return kpi;
@@ -210,32 +199,19 @@ export default function KpisAdminPage() {
     (event.target as HTMLFormElement).reset();
   }
 
-  /** Shared "visible to" picker for the KPI-creation forms — folds the
-   *  default role/department assignment into creation itself, instead of
-   *  leaving a brand-new KPI invisible on every dashboard until an admin
-   *  makes a separate follow-up trip to the assignment UI below. */
+  /** Shared department picker for the KPI-creation forms — folds the default
+   *  department assignment into creation itself, instead of leaving a
+   *  brand-new KPI invisible on every dashboard until an admin makes a
+   *  separate follow-up trip to the assignment UI below. */
   function AssignToField() {
     return (
-      <select name="assignTo" aria-label="visible to (optional)" defaultValue="">
-        <option value="">visible to (optional)…</option>
-        {roles.length > 0 && (
-          <optgroup label="roles">
-            {roles.map((r) => (
-              <option key={r.id} value={`role:${r.id}`}>
-                {r.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {departments.length > 0 && (
-          <optgroup label="departments">
-            {departments.map((d) => (
-              <option key={d.id} value={`dept:${d.id}`}>
-                {d.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
+      <select name="assignTo" aria-label="department (optional)" defaultValue="">
+        <option value="">department (optional)…</option>
+        {departments.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}
+          </option>
+        ))}
       </select>
     );
   }
@@ -281,11 +257,10 @@ export default function KpisAdminPage() {
 
   function onAssignKpi(kpiId: string) {
     if (!assignTarget) return;
-    const [kind, id] = assignTarget.split(':') as ['role' | 'dept', string];
     void report(
       api(`/v1/kpis/${kpiId}/assignments`, {
         method: 'POST',
-        body: JSON.stringify(kind === 'role' ? { roleId: id } : { departmentId: id }),
+        body: JSON.stringify({ departmentId: assignTarget }),
       }),
       'KPI assigned',
     ).then(() => setAssignTarget(''));
@@ -298,8 +273,8 @@ export default function KpisAdminPage() {
   }
 
   function assignmentLabel(a: KpiAssignmentRow): string {
-    if (a.roleId) return roles.find((r) => r.id === a.roleId)?.name ?? 'unknown role';
     if (a.departmentId) return departments.find((d) => d.id === a.departmentId)?.name ?? 'unknown department';
+    if (a.roleId) return 'role assignment (legacy)';
     return a.deliveryStream ?? 'unknown';
   }
 
@@ -421,7 +396,7 @@ export default function KpisAdminPage() {
       )}
 
       {kpis === null ? (
-        <SkeletonRows />
+        <LoadingRows />
       ) : kpis.length === 0 ? (
         <div className="empty-state">
           <span className="empty-state-icon">
@@ -703,11 +678,11 @@ export default function KpisAdminPage() {
                   )}
 
                   <div className="kpi-assignments">
-                    <label>visible to</label>
+                    <label>department</label>
                     {selectedKpi.assignments.length === 0 ? (
                       <p className="empty-state-inline">
                         <EyeOff size={14} aria-hidden="true" />
-                        not assigned to any role or department — only visible here on the admin page
+                        not assigned to a department — only visible here on the admin page
                       </p>
                     ) : (
                       <span className="row-actions">
@@ -755,29 +730,16 @@ export default function KpisAdminPage() {
                       (assigningKpiId === selectedKpi.id ? (
                         <span className="inline-form">
                           <select
-                            aria-label="assign to"
+                            aria-label="assign to department"
                             value={assignTarget}
                             onChange={(e) => setAssignTarget(e.target.value)}
                           >
-                            <option value="">choose a role or department…</option>
-                            {roles.length > 0 && (
-                              <optgroup label="roles">
-                                {roles.map((r) => (
-                                  <option key={r.id} value={`role:${r.id}`}>
-                                    {r.name}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
-                            {departments.length > 0 && (
-                              <optgroup label="departments">
-                                {departments.map((d) => (
-                                  <option key={d.id} value={`dept:${d.id}`}>
-                                    {d.name}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
+                            <option value="">choose a department…</option>
+                            {departments.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.name}
+                              </option>
+                            ))}
                           </select>
                           <Button
                             type="button"
@@ -806,7 +768,7 @@ export default function KpisAdminPage() {
                           onClick={() => setAssigningKpiId(selectedKpi.id)}
                         >
                           <Plus size={14} aria-hidden="true" />
-                          assign to role or department
+                          assign to department
                         </Button>
                       ))}
                   </div>
