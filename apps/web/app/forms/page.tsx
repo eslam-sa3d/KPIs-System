@@ -128,7 +128,7 @@ export default function FormsPage() {
         <>
           {stats && (
             <div className="insights-row">
-              <div className="insight-card">
+              <div className="insight-card tone-purple">
                 <span className="hierarchy-icon hierarchy-icon-sm">
                   <ClipboardList size={15} aria-hidden="true" />
                 </span>
@@ -137,7 +137,7 @@ export default function FormsPage() {
                   <span>{stats.total === 1 ? 'form' : 'forms'}</span>
                 </span>
               </div>
-              <div className="insight-card">
+              <div className="insight-card tone-green">
                 <span className="hierarchy-icon hierarchy-icon-sm">
                   <ClipboardList size={15} aria-hidden="true" />
                 </span>
@@ -146,7 +146,7 @@ export default function FormsPage() {
                   <span>accepting responses</span>
                 </span>
               </div>
-              <div className="insight-card">
+              <div className="insight-card tone-blue">
                 <span className="hierarchy-icon hierarchy-icon-sm">
                   <Share2 size={15} aria-hidden="true" />
                 </span>
@@ -156,7 +156,7 @@ export default function FormsPage() {
                 </span>
               </div>
               {stats.archived > 0 && (
-                <div className="insight-card">
+                <div className="insight-card tone-gray">
                   <span className="hierarchy-icon hierarchy-icon-sm">
                     <FolderOpen size={15} aria-hidden="true" />
                   </span>

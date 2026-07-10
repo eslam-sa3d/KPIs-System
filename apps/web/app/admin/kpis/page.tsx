@@ -439,7 +439,7 @@ export default function KpisAdminPage() {
       ) : (
         <>
           <div className="insights-row">
-            <div className="insight-card">
+            <div className="insight-card tone-purple">
               <span className="hierarchy-icon hierarchy-icon-sm">
                 <Target size={15} aria-hidden="true" />
               </span>
@@ -448,7 +448,7 @@ export default function KpisAdminPage() {
                 <span>{stats!.kpiCount === 1 ? 'kpi' : 'kpis'}</span>
               </span>
             </div>
-            <div className="insight-card">
+            <div className="insight-card tone-green">
               <span className="hierarchy-icon hierarchy-icon-sm">
                 <Layers size={15} aria-hidden="true" />
               </span>
@@ -457,7 +457,7 @@ export default function KpisAdminPage() {
                 <span>evaluation areas</span>
               </span>
             </div>
-            <div className="insight-card">
+            <div className="insight-card tone-amber">
               <span className="hierarchy-icon hierarchy-icon-sm">
                 <ListPlus size={15} aria-hidden="true" />
               </span>
@@ -467,7 +467,7 @@ export default function KpisAdminPage() {
               </span>
             </div>
             {stats!.hasWeights && (
-              <div className={`insight-card${stats!.totalWeight !== 100 ? ' is-warning' : ''}`}>
+              <div className={`insight-card${stats!.totalWeight !== 100 ? ' is-warning' : ' tone-blue'}`}>
                 <WeightRing value={Math.min(100, stats!.totalWeight)} size="sm" />
                 <span className="insight-card-body">
                   <strong>{stats!.totalWeight}%</strong>
