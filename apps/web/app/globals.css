@@ -1184,60 +1184,6 @@ h3 {
   margin-bottom: var(--space-2);
 }
 
-/* ── tabs ──────────────────────────────────────────────────────── */
-.tabs {
-  display: flex;
-  gap: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-  margin: var(--space-6) 0;
-}
-
-.tabs {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  flex-wrap: nowrap;
-}
-
-.tabs [role='tab'] {
-  font-family: inherit;
-  font-size: var(--md-sys-typescale-label-large-size);
-  line-height: var(--md-sys-typescale-label-large-line-height);
-  letter-spacing: var(--md-sys-typescale-label-large-tracking);
-  font-weight: var(--md-sys-typescale-label-large-weight);
-  background: none;
-  border: none;
-  border-bottom: 3px solid transparent;
-  padding: var(--space-2) var(--space-4);
-  min-height: 44px;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-/* M3 state layer, on-surface blended over the tab's own background. */
-.tabs [role='tab']:hover {
-  background: color-mix(in srgb, var(--color-text) 8%, transparent);
-  color: var(--color-text);
-}
-
-.tabs [role='tab']:focus-visible {
-  background: color-mix(in srgb, var(--color-text) 10%, transparent);
-  outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
-}
-
-.tabs [role='tab'][aria-selected='true'] {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-}
-
-.tabs [role='tab'][aria-selected='true']:hover {
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  color: var(--color-primary);
-}
-
 /* ── data tables ───────────────────────────────────────────────── */
 /* display:block lets the table scroll horizontally on narrow screens while
    thead/tbody/tr/td keep their default table-* display values (the standard

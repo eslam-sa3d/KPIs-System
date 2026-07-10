@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FormRenderer, SubmissionScore } from '../../../components/form-renderer';
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
 import { ShareLinkPanel } from '../../../components/share-link-panel';
@@ -187,34 +188,25 @@ function FormView() {
       </div>
       {definition.description && <p className="portal-subtitle">{definition.description}</p>}
 
-      <div role="tablist" className="tabs" aria-label="form views">
-        <button role="tab" aria-selected={tab === 'form'} onClick={() => setTab('form')}>
-          form
-        </button>
-        <button role="tab" aria-selected={tab === 'submissions'} onClick={() => setTab('submissions')}>
-          submissions
-        </button>
-        <button role="tab" aria-selected={tab === 'summary'} onClick={() => setTab('summary')}>
-          summary
-        </button>
-        {canManage && (
-          <button role="tab" aria-selected={tab === 'settings'} onClick={() => setTab('settings')}>
-            settings
-          </button>
-        )}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+      <TabsList variant="line" aria-label="form views">
+        <TabsTrigger value="form">form</TabsTrigger>
+        <TabsTrigger value="submissions">submissions</TabsTrigger>
+        <TabsTrigger value="summary">summary</TabsTrigger>
+        {canManage && <TabsTrigger value="settings">settings</TabsTrigger>}
+      </TabsList>
 
-      {tab === 'form' && (
+      <TabsContent value="form">
         <FormRenderer
           definition={definition}
           settings={settings}
           onSubmit={onSubmit}
           uploadPath={`/v1/forms/${encodeURIComponent(slug)}/uploads`}
         />
-      )}
+      </TabsContent>
 
-      {tab === 'submissions' && (
-        <section role="tabpanel" aria-label="submissions">
+      <TabsContent value="submissions">
+        <section aria-label="submissions">
           {fieldFilter && (
             <Alert>
               <AlertDescription>
@@ -408,36 +400,39 @@ function FormView() {
             );
           })()}
         </section>
-      )}
+      </TabsContent>
 
-      {tab === 'summary' && (
-        <section role="tabpanel" aria-label="response summary">
+      <TabsContent value="summary">
+        <section aria-label="response summary">
           {summary === null ? (
             <LoadingState />
           ) : (
             <ResponseSummary data={summary} onFilterByAnswer={onFilterByAnswer} />
           )}
         </section>
-      )}
+      </TabsContent>
 
-      {tab === 'settings' && canManage && (
-        <section role="tabpanel" aria-label="form settings">
-          <FormSettingsPanel
-            formId={form.id}
-            settings={settings}
-            onSaved={(next) => setDetail((d) => (d ? { ...d, settings: next } : d))}
-          />
-          <ShareLinkPanel formId={form.id} publicToken={form.publicToken} exportToken={form.exportToken} />
-          <AccessControlPanel
-            formId={form.id}
-            restricted={form.restricted}
-            onRestrictedChange={(next) =>
-              setDetail((d) => (d ? { ...d, form: { ...d.form, restricted: next } } : d))
-            }
-          />
-          <FormKpiMappingsPanel formId={form.id} definition={definition} />
-        </section>
+      {canManage && (
+        <TabsContent value="settings">
+          <section aria-label="form settings">
+            <FormSettingsPanel
+              formId={form.id}
+              settings={settings}
+              onSaved={(next) => setDetail((d) => (d ? { ...d, settings: next } : d))}
+            />
+            <ShareLinkPanel formId={form.id} publicToken={form.publicToken} exportToken={form.exportToken} />
+            <AccessControlPanel
+              formId={form.id}
+              restricted={form.restricted}
+              onRestrictedChange={(next) =>
+                setDetail((d) => (d ? { ...d, form: { ...d.form, restricted: next } } : d))
+              }
+            />
+            <FormKpiMappingsPanel formId={form.id} definition={definition} />
+          </section>
+        </TabsContent>
       )}
+      </Tabs>
     </PortalShell>
   );
 }
