@@ -23,8 +23,9 @@ test.describe('login gateway', () => {
     await page.getByLabel('email').fill(ADMIN.email);
     await page.getByLabel('password').fill('wrong-password');
     await page.getByRole('button', { name: 'sign in' }).click();
-    // .form-error, not getByRole('alert') — Next's route announcer is also role=alert
-    await expect(page.locator('.form-error')).toContainText(/invalid/i);
+    // [data-slot="alert"] (the shadcn Alert), not getByRole('alert') — Next's
+    // route announcer is also role=alert, and Alert itself sets role="alert" too
+    await expect(page.locator('[data-slot="alert"]')).toContainText(/invalid/i);
   });
 
   test('signs in and lands on the role-scoped dashboard', async ({ page }) => {
