@@ -155,8 +155,13 @@ export default function KpisAdminPage() {
       method: 'POST',
       body: JSON.stringify({ name: form.get('name'), weight: parseWeight(form.get('weight')) }),
     });
-    report(created, 'KPI created');
-    created.then((kpi) => setSelectedKpiId(kpi.id)).catch(() => undefined);
+    // Select only after report()'s own reload() has landed the new KPI in
+    // `kpis` — selecting first races the "clear a selection that no longer
+    // exists" effect below, which sees the still-stale list and immediately
+    // un-selects the KPI that was just created.
+    void report(created, 'KPI created').then(() =>
+      created.then((kpi) => setSelectedKpiId(kpi.id)).catch(() => undefined),
+    );
     (event.target as HTMLFormElement).reset();
   }
 
