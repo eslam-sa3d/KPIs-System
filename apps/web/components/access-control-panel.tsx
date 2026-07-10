@@ -145,18 +145,20 @@ export function AccessControlPanel({
             placeholder="search by name or email"
           />
           {filter && candidates.length > 0 && (
-            <select
-              aria-label="matching users"
-              size={Math.min(5, candidates.length)}
-              value={pickUserId}
-              onChange={(e) => setPickUserId(e.target.value)}
-            >
+            <div role="listbox" aria-label="matching users" className="max-h-48 overflow-y-auto rounded-md border">
               {candidates.map((u) => (
-                <option key={u.id} value={u.id}>
+                <button
+                  key={u.id}
+                  type="button"
+                  role="option"
+                  aria-selected={pickUserId === u.id}
+                  onClick={() => setPickUserId(u.id)}
+                  className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-accent aria-selected:bg-accent aria-selected:text-accent-foreground"
+                >
                   {u.displayName} ({u.email})
-                </option>
+                </button>
               ))}
-            </select>
+            </div>
           )}
           <span className="builder-required">
             <input

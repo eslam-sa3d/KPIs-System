@@ -7,8 +7,13 @@ import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LoadingState } from '@/components/loading-state';
+
+/** Radix Select forbids an empty-string item value, so the "clear this
+ *  optional field" choice needs a real sentinel we translate at the edges. */
+const NONE = '__none__';
 
 interface EvaluationAreaOption {
   id: string;
@@ -340,93 +345,108 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
           )}
 
           <label htmlFor="kpi-mapping-kpi">add a mapping</label>
-          <select
-            id="kpi-mapping-kpi"
+          <Select
             value={kpiId}
-            onChange={(e) => {
-              setKpiId(e.target.value);
+            onValueChange={(v) => {
+              setKpiId(v);
               setEvaluationAreaId('');
             }}
           >
-            <option value="">choose a KPI…</option>
-            {kpis?.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="evaluation area"
-            value={evaluationAreaId}
-            onChange={(e) => setEvaluationAreaId(e.target.value)}
-            disabled={!kpiId}
-          >
-            <option value="">choose an evaluation area…</option>
-            {kpiAreas.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="evaluatee field"
-            value={evaluateeFieldKey}
-            onChange={(e) => setEvaluateeFieldKey(e.target.value)}
-          >
-            <option value="">which field names who is being evaluated…</option>
-            {personFields.map((f) => (
-              <option key={f.key} value={f.key}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-          <select aria-label="score field" value={scoreFieldKey} onChange={(e) => setScoreFieldKey(e.target.value)}>
-            <option value="">which field supplies the score…</option>
-            {scoreFields.map((f) => (
-              <option key={f.key} value={f.key}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="review type"
-            value={reviewType}
-            onChange={(e) => setReviewType(e.target.value as ReviewType)}
-          >
-            {REVIEW_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {REVIEW_TYPE_LABEL[t]}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="kpi-mapping-kpi">
+              <SelectValue placeholder="choose a KPI…" />
+            </SelectTrigger>
+            <SelectContent>
+              {kpis?.map((k) => (
+                <SelectItem key={k.id} value={k.id}>
+                  {k.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={evaluationAreaId} onValueChange={setEvaluationAreaId} disabled={!kpiId}>
+            <SelectTrigger aria-label="evaluation area">
+              <SelectValue placeholder="choose an evaluation area…" />
+            </SelectTrigger>
+            <SelectContent>
+              {kpiAreas.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={evaluateeFieldKey} onValueChange={setEvaluateeFieldKey}>
+            <SelectTrigger aria-label="evaluatee field">
+              <SelectValue placeholder="which field names who is being evaluated…" />
+            </SelectTrigger>
+            <SelectContent>
+              {personFields.map((f) => (
+                <SelectItem key={f.key} value={f.key}>
+                  {f.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={scoreFieldKey} onValueChange={setScoreFieldKey}>
+            <SelectTrigger aria-label="score field">
+              <SelectValue placeholder="which field supplies the score…" />
+            </SelectTrigger>
+            <SelectContent>
+              {scoreFields.map((f) => (
+                <SelectItem key={f.key} value={f.key}>
+                  {f.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={reviewType} onValueChange={(v) => setReviewType(v as ReviewType)}>
+            <SelectTrigger aria-label="review type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REVIEW_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {REVIEW_TYPE_LABEL[t]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <label className="check-item">
             <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
             keep the evaluator anonymous
           </label>
-          <select
-            aria-label="context field (optional)"
-            value={contextFieldKey}
-            onChange={(e) => setContextFieldKey(e.target.value)}
+          <Select
+            value={contextFieldKey || NONE}
+            onValueChange={(v) => setContextFieldKey(v === NONE ? '' : v)}
           >
-            <option value="">no context field</option>
-            {definition.fields.map((f) => (
-              <option key={f.key} value={f.key}>
-                context: {f.label}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="comment field (optional)"
-            value={commentFieldKey}
-            onChange={(e) => setCommentFieldKey(e.target.value)}
+            <SelectTrigger aria-label="context field (optional)">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>no context field</SelectItem>
+              {definition.fields.map((f) => (
+                <SelectItem key={f.key} value={f.key}>
+                  context: {f.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={commentFieldKey || NONE}
+            onValueChange={(v) => setCommentFieldKey(v === NONE ? '' : v)}
           >
-            <option value="">no comment field</option>
-            {definition.fields.map((f) => (
-              <option key={f.key} value={f.key}>
-                comment: {f.label}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger aria-label="comment field (optional)">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>no comment field</SelectItem>
+              {definition.fields.map((f) => (
+                <SelectItem key={f.key} value={f.key}>
+                  comment: {f.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             variant="ghost"
@@ -455,28 +475,30 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     bulk-map the {unmappedScoreFields.length} remaining unmapped question
                     {unmappedScoreFields.length === 1 ? '' : 's'} — evaluatee field
                   </label>
-                  <select
-                    id="kpi-bulk-evaluatee"
-                    value={bulkEvaluateeFieldKey}
-                    onChange={(e) => setBulkEvaluateeFieldKey(e.target.value)}
-                  >
-                    {personFields.map((f) => (
-                      <option key={f.key} value={f.key}>
-                        {f.label}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    aria-label="review type for this batch"
-                    value={bulkReviewType}
-                    onChange={(e) => setBulkReviewType(e.target.value as ReviewType)}
-                  >
-                    {REVIEW_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {REVIEW_TYPE_LABEL[t]}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={bulkEvaluateeFieldKey} onValueChange={setBulkEvaluateeFieldKey}>
+                    <SelectTrigger id="kpi-bulk-evaluatee">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {personFields.map((f) => (
+                        <SelectItem key={f.key} value={f.key}>
+                          {f.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={bulkReviewType} onValueChange={(v) => setBulkReviewType(v as ReviewType)}>
+                    <SelectTrigger aria-label="review type for this batch">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REVIEW_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {REVIEW_TYPE_LABEL[t]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <label className="check-item">
                     <input
                       type="checkbox"
@@ -485,30 +507,38 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     />
                     keep evaluators anonymous
                   </label>
-                  <select
-                    aria-label="context field for this batch (optional)"
-                    value={bulkContextFieldKey}
-                    onChange={(e) => setBulkContextFieldKey(e.target.value)}
+                  <Select
+                    value={bulkContextFieldKey || NONE}
+                    onValueChange={(v) => setBulkContextFieldKey(v === NONE ? '' : v)}
                   >
-                    <option value="">no context field</option>
-                    {definition.fields.map((f) => (
-                      <option key={f.key} value={f.key}>
-                        context: {f.label}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    aria-label="comment field for this batch (optional)"
-                    value={bulkCommentFieldKey}
-                    onChange={(e) => setBulkCommentFieldKey(e.target.value)}
+                    <SelectTrigger aria-label="context field for this batch (optional)">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>no context field</SelectItem>
+                      {definition.fields.map((f) => (
+                        <SelectItem key={f.key} value={f.key}>
+                          context: {f.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={bulkCommentFieldKey || NONE}
+                    onValueChange={(v) => setBulkCommentFieldKey(v === NONE ? '' : v)}
                   >
-                    <option value="">no comment field</option>
-                    {definition.fields.map((f) => (
-                      <option key={f.key} value={f.key}>
-                        comment: {f.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="comment field for this batch (optional)">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>no comment field</SelectItem>
+                      {definition.fields.map((f) => (
+                        <SelectItem key={f.key} value={f.key}>
+                          comment: {f.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
                   <Table className="kpi-bulk-mapping-table">
                     <TableHeader>
@@ -522,26 +552,31 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                         <TableRow key={f.key}>
                           <TableCell>{f.label}</TableCell>
                           <TableCell>
-                            <select
-                              aria-label={`evaluation area for ${f.label}`}
-                              value={bulkSelections[f.key] ?? ''}
-                              onChange={(e) =>
-                                setBulkSelections((current) => ({ ...current, [f.key]: e.target.value }))
+                            <Select
+                              value={bulkSelections[f.key] || NONE}
+                              onValueChange={(v) =>
+                                setBulkSelections((current) => ({ ...current, [f.key]: v === NONE ? '' : v }))
                               }
                             >
-                              <option value="">— don&apos;t map —</option>
-                              {kpis?.map((k) => (
-                                <optgroup key={k.id} label={k.name}>
-                                  {k.evaluationAreas
-                                    .filter((a) => a.isActive)
-                                    .map((a) => (
-                                      <option key={a.id} value={a.id}>
-                                        {a.name}
-                                      </option>
-                                    ))}
-                                </optgroup>
-                              ))}
-                            </select>
+                              <SelectTrigger aria-label={`evaluation area for ${f.label}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={NONE}>— don&apos;t map —</SelectItem>
+                                {kpis?.map((k) => (
+                                  <SelectGroup key={k.id}>
+                                    <SelectLabel>{k.name}</SelectLabel>
+                                    {k.evaluationAreas
+                                      .filter((a) => a.isActive)
+                                      .map((a) => (
+                                        <SelectItem key={a.id} value={a.id}>
+                                          {a.name}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectGroup>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </TableCell>
                         </TableRow>
                       ))}

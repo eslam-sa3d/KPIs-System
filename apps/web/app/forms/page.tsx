@@ -7,6 +7,7 @@ import { PortalShell, can } from '../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../lib/api-client';
@@ -184,18 +185,22 @@ export default function FormsPage() {
               <label htmlFor="forms-folder-filter" className="muted" style={{ fontSize: 13 }}>
                 folder
               </label>
-              <select
-                id="forms-folder-filter"
-                value={folderFilter}
-                onChange={(e) => setFolderFilter(e.target.value)}
+              <Select
+                value={folderFilter || '__all__'}
+                onValueChange={(v) => setFolderFilter(v === '__all__' ? '' : v)}
               >
-                <option value="">all folders</option>
-                {folders.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="forms-folder-filter" size="sm" className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">all folders</SelectItem>
+                  {folders.map((f) => (
+                    <SelectItem key={f} value={f}>
+                      {f}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
