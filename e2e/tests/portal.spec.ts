@@ -69,9 +69,10 @@ test.describe('form builder → submission → list (happy path)', () => {
     await page.getByRole('button', { name: 'submit' }).click();
     await expect(page.getByText(/thank you/i)).toBeVisible();
 
-    // verify in submissions table
+    // verify in submissions table — exact: the row's "edit" icon-link's own
+    // aria-label embeds the same title text, which would otherwise also match
     await page.goto('/forms');
-    await page.getByRole('link', { name: formTitle }).click();
+    await page.getByRole('link', { name: formTitle, exact: true }).click();
     await page.getByRole('tab', { name: 'submissions' }).click();
     await expect(page.getByRole('cell', { name: 'digital-channels' })).toBeVisible();
   });
@@ -97,13 +98,13 @@ test.describe('KPI module (create → evaluation area → score via a mapped for
     await page.goto('/admin/kpis');
     await page.getByRole('button', { name: 'new KPI' }).click();
     await page.getByLabel('KPI name').fill(kpiName);
-    await page.getByLabel('KPI name').press('Enter');
+    await page.getByRole('button', { name: 'create', exact: true }).click();
     await expect(page.getByRole('heading', { name: kpiName, exact: true })).toBeVisible();
 
     // add an evaluation area under it
     await page.getByRole('button', { name: 'add evaluation area' }).click();
     await page.getByLabel('new area name').fill(areaName);
-    await page.getByLabel('new area name').press('Enter');
+    await page.getByRole('button', { name: 'add', exact: true }).click();
     await expect(page.getByText(areaName)).toBeVisible();
 
     // build a form with a "person" field (the evaluatee) and a "rating"
