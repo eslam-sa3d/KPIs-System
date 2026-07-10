@@ -217,7 +217,7 @@ model EvaluationAreaEntry {
   submission       FormSubmission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
   createdAt        DateTime        @default(now())
 
-  @@unique([evaluationAreaId, personId, periodStart, periodEnd, enteredById])
+  @@unique([evaluationAreaId, personId, periodStart, periodEnd, enteredById], map: "EvaluationAreaEntry_area_person_period_evaluator_key")
   @@index([evaluationAreaId, periodStart])
   @@index([personId])
   @@index([submissionId])

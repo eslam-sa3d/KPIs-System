@@ -1,5 +1,5 @@
 -- DropIndex
-DROP INDEX "EvaluationAreaEntry_evaluationAreaId_personId_periodStart_p_key";
+DROP INDEX "EvaluationAreaEntry_evaluationAreaId_personId_periodStart__key";
 
 -- AlterTable
 ALTER TABLE "EvaluationAreaEntry" ADD COLUMN     "anonymous" BOOLEAN NOT NULL DEFAULT false,
@@ -18,7 +18,7 @@ ADD COLUMN     "reviewType" TEXT NOT NULL DEFAULT 'peer';
 CREATE INDEX "EvaluationAreaEntry_submissionId_idx" ON "EvaluationAreaEntry"("submissionId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "EvaluationAreaEntry_evaluationAreaId_personId_periodStart_p_key" ON "EvaluationAreaEntry"("evaluationAreaId", "personId", "periodStart", "periodEnd", "enteredById");
+CREATE UNIQUE INDEX "EvaluationAreaEntry_area_person_period_evaluator_key" ON "EvaluationAreaEntry"("evaluationAreaId", "personId", "periodStart", "periodEnd", "enteredById");
 
 -- AddForeignKey
 ALTER TABLE "EvaluationAreaEntry" ADD CONSTRAINT "EvaluationAreaEntry_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "FormSubmission"("id") ON DELETE SET NULL ON UPDATE CASCADE;
