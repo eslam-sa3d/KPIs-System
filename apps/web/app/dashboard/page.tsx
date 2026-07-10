@@ -7,6 +7,7 @@ import { PortalShell, can } from '../../components/portal-shell';
 import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -62,19 +63,24 @@ interface ComputedKpi {
   lastUpdated: string | null;
 }
 
-interface CoverageRow {
+interface TeamMember {
   id: string;
   displayName: string;
   email: string;
+  department: string | null;
+  roles: string[];
+  hasKpi: boolean;
+  finalScore: number | null;
+  lastUpdated: string | null;
 }
 
-interface Coverage {
+interface TeamOverview {
   totalActiveUsers: number;
-  noKpi: CoverageRow[];
-  pending: CoverageRow[];
+  members: TeamMember[];
 }
 
 type SortKey = 'name' | 'latestValue' | 'status' | 'updated';
+type MemberSortKey = 'name' | 'department' | 'finalScore' | 'status' | 'updated';
 
 const CADENCE_LABEL: Record<string, string> = {
   weekly: 'Weekly',
@@ -151,17 +157,20 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'latestValue', dir: -1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [coverage, setCoverage] = useState<Coverage | null>(null);
-  const canSeeCoverage = can(user, 'kpis:manage');
+  const [teamOverview, setTeamOverview] = useState<TeamOverview | null>(null);
+  const [memberStatusFilter, setMemberStatusFilter] = useState<StatusKey | 'all'>('all');
+  const [memberSort, setMemberSort] = useState<{ key: MemberSortKey; dir: 1 | -1 }>({ key: 'finalScore', dir: -1 });
+  const [memberFilter, setMemberFilter] = useState('');
+  const canSeeTeamOverview = can(user, 'kpis:manage');
 
   useEffect(() => {
     if (user) void api<RawKpi[]>('/v1/kpis/my').then((raw) => setKpis(raw.map(computeKpi)));
   }, [user]);
 
-  // org-wide "who has no KPI" / "who's never been scored" — admin-only, powers the team-coverage cards below
+  // org-wide roster with KPI coverage/final score/last-updated — admin-only, powers the team coverage cards and table below
   useEffect(() => {
-    if (user && canSeeCoverage) void api<Coverage>('/v1/kpis/coverage').then(setCoverage);
-  }, [user, canSeeCoverage]);
+    if (user && canSeeTeamOverview) void api<TeamOverview>('/v1/kpis/team-overview').then(setTeamOverview);
+  }, [user, canSeeTeamOverview]);
 
   // cadence now lives on each Evaluation Area (a KPI can span several) — "level" filters
   // to KPIs that have at least one area on that cadence, rather than a single KPI-wide value
@@ -284,6 +293,65 @@ export default function DashboardPage() {
   }, [levelData]);
 
   const hasByPersonData = byPersonData.length > 0;
+
+  const teamMembers = teamOverview?.members ?? [];
+  const noKpiMembers = useMemo(() => teamMembers.filter((m) => !m.hasKpi), [teamMembers]);
+  const pendingMembers = useMemo(
+    () => teamMembers.filter((m) => m.hasKpi && m.finalScore === null),
+    [teamMembers],
+  );
+
+  const memberTableData = useMemo(() => {
+    let data = teamMembers.filter((m) => {
+      if (memberStatusFilter !== 'all' && statusOf(m.finalScore) !== memberStatusFilter) return false;
+      if (!memberFilter.trim()) return true;
+      const haystack = `${m.displayName} ${m.email} ${m.department ?? ''} ${m.roles.join(' ')}`.toLowerCase();
+      return haystack.includes(memberFilter.trim().toLowerCase());
+    });
+    data = [...data].sort((a, b) => {
+      const dir = memberSort.dir;
+      switch (memberSort.key) {
+        case 'department':
+          return (a.department ?? '').localeCompare(b.department ?? '') * dir;
+        case 'status':
+          return (
+            (STATUS_ORDER.indexOf(statusOf(a.finalScore)) - STATUS_ORDER.indexOf(statusOf(b.finalScore))) * dir
+          );
+        case 'updated':
+          return (a.lastUpdated ?? '').localeCompare(b.lastUpdated ?? '') * dir;
+        case 'finalScore': {
+          const av = a.finalScore;
+          const bv = b.finalScore;
+          if (av === null && bv === null) return 0;
+          if (av === null) return 1;
+          if (bv === null) return -1;
+          return (av - bv) * dir;
+        }
+        case 'name':
+        default:
+          return a.displayName.localeCompare(b.displayName) * dir;
+      }
+    });
+    return data;
+  }, [teamMembers, memberStatusFilter, memberFilter, memberSort]);
+
+  function sortMembersBy(key: MemberSortKey) {
+    setMemberSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
+  }
+
+  function onExportMembersCsv() {
+    const header = ['name', 'email', 'department', 'roles', 'final_score', 'status', 'last_updated'];
+    const rows = memberTableData.map((m) => [
+      m.displayName,
+      m.email,
+      m.department ?? '',
+      m.roles.join('; '),
+      m.finalScore ?? '',
+      STATUS_LABEL[statusOf(m.finalScore)],
+      m.lastUpdated ?? '',
+    ]);
+    downloadCsv('team-members-export.csv', [header, ...rows]);
+  }
 
   function sortBy(key: SortKey) {
     setSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
@@ -414,44 +482,49 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {canSeeCoverage && coverage && (
+            {canSeeTeamOverview && teamOverview && (
               <div className="p-charts-row" style={{ marginBottom: 16 }}>
-                <div className="p-card">
+                <button
+                  type="button"
+                  className="p-card"
+                  style={{ textAlign: 'left', cursor: 'pointer' }}
+                  onClick={() => setMemberStatusFilter('pending')}
+                >
                   <div className="p-card-title">Pending evaluation</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
                     <span className="p-score-ring p-status-pending" style={{ width: 64, height: 44, fontSize: 15 }}>
-                      {coverage.pending.length}
+                      {pendingMembers.length}
                     </span>
                     <span className="muted" style={{ fontSize: 11 }}>
-                      team members with a KPI mapped who haven&apos;t been scored yet, out of {coverage.totalActiveUsers}
+                      team members with a KPI mapped who haven&apos;t been scored yet, out of {teamOverview.totalActiveUsers}
                     </span>
                   </div>
-                  {coverage.pending.length > 0 && (
+                  {pendingMembers.length > 0 && (
                     <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
-                      {coverage.pending.slice(0, 8).map((u) => (
-                        <li key={u.id}>{u.displayName}</li>
+                      {pendingMembers.slice(0, 8).map((m) => (
+                        <li key={m.id}>{m.displayName}</li>
                       ))}
-                      {coverage.pending.length > 8 && <li>…and {coverage.pending.length - 8} more</li>}
+                      {pendingMembers.length > 8 && <li>…and {pendingMembers.length - 8} more</li>}
                     </ul>
                   )}
-                </div>
+                </button>
 
                 <div className="p-card">
                   <div className="p-card-title">No KPI assigned</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
                     <span className="p-score-ring p-status-below" style={{ width: 64, height: 44, fontSize: 15 }}>
-                      {coverage.noKpi.length}
+                      {noKpiMembers.length}
                     </span>
                     <span className="muted" style={{ fontSize: 11 }}>
                       team members whose role or department has no KPI mapped to it yet
                     </span>
                   </div>
-                  {coverage.noKpi.length > 0 && (
+                  {noKpiMembers.length > 0 && (
                     <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
-                      {coverage.noKpi.slice(0, 8).map((u) => (
-                        <li key={u.id}>{u.displayName}</li>
+                      {noKpiMembers.slice(0, 8).map((m) => (
+                        <li key={m.id}>{m.displayName}</li>
                       ))}
-                      {coverage.noKpi.length > 8 && <li>…and {coverage.noKpi.length - 8} more</li>}
+                      {noKpiMembers.length > 8 && <li>…and {noKpiMembers.length - 8} more</li>}
                     </ul>
                   )}
                 </div>
@@ -604,6 +677,145 @@ export default function DashboardPage() {
                 </Button>
               </div>
             </div>
+
+            {canSeeTeamOverview && teamOverview && (
+              <div className="p-table-card" style={{ marginTop: 16 }}>
+                <div className="p-table-header">
+                  <div className="p-filter-pills">
+                    {(['all', ...STATUS_ORDER] as const).map((s) => (
+                      <Badge
+                        key={s}
+                        asChild
+                        variant={memberStatusFilter === s ? 'default' : 'outline'}
+                        className="cursor-pointer py-1"
+                      >
+                        <button onClick={() => setMemberStatusFilter(s)}>{s === 'all' ? 'All' : STATUS_LABEL[s]}</button>
+                      </Badge>
+                    ))}
+                  </div>
+                  <span className="muted" style={{ fontSize: 11 }}>
+                    sort: {memberSort.key} {memberSort.dir > 0 ? '↑' : '↓'}
+                  </span>
+                </div>
+                <div className="page-title-row" style={{ marginBottom: 8 }}>
+                  <Input
+                    aria-label="filter team members"
+                    placeholder="filter by name, email, department, or role…"
+                    value={memberFilter}
+                    onChange={(e) => setMemberFilter(e.target.value)}
+                    style={{ maxWidth: 320 }}
+                  />
+                  <Button variant="outline" size="sm" onClick={onExportMembersCsv}>
+                    Export CSV
+                  </Button>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead
+                        className="p-th-sortable"
+                        aria-sort={memberSort.key === 'name' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'}
+                      >
+                        <button type="button" onClick={() => sortMembersBy('name')}>
+                          name
+                        </button>
+                      </TableHead>
+                      <TableHead
+                        className="p-th-sortable"
+                        aria-sort={
+                          memberSort.key === 'department' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
+                        }
+                      >
+                        <button type="button" onClick={() => sortMembersBy('department')}>
+                          department
+                        </button>
+                      </TableHead>
+                      <TableHead>role</TableHead>
+                      <TableHead
+                        className="p-th-sortable"
+                        aria-sort={
+                          memberSort.key === 'finalScore' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
+                        }
+                      >
+                        <button type="button" onClick={() => sortMembersBy('finalScore')}>
+                          final score
+                        </button>
+                      </TableHead>
+                      <TableHead
+                        className="p-th-sortable"
+                        aria-sort={memberSort.key === 'status' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'}
+                      >
+                        <button type="button" onClick={() => sortMembersBy('status')}>
+                          status
+                        </button>
+                      </TableHead>
+                      <TableHead
+                        className="p-th-sortable"
+                        aria-sort={
+                          memberSort.key === 'updated' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
+                        }
+                      >
+                        <button type="button" onClick={() => sortMembersBy('updated')}>
+                          last updated
+                        </button>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {memberTableData.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="muted" style={{ textAlign: 'center' }}>
+                          {teamMembers.length === 0 ? 'no active team members.' : 'no team members match this filter.'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      memberTableData.map((m) => {
+                        const status = statusOf(m.finalScore);
+                        return (
+                          <TableRow key={m.id}>
+                            <TableCell style={{ fontWeight: 500 }}>{m.displayName}</TableCell>
+                            <TableCell className="muted">{m.department ?? '—'}</TableCell>
+                            <TableCell className="muted">{m.roles.join(', ') || '—'}</TableCell>
+                            <TableCell>
+                              <span className={`p-score-ring p-status-${status}`}>
+                                {m.finalScore !== null ? m.finalScore.toLocaleString() : '—'}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {m.hasKpi ? (
+                                <Badge className="border-transparent" style={statusBadgeStyle(status)}>
+                                  {STATUS_LABEL[status]}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline">no KPI</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
+                              {m.lastUpdated ? new Date(m.lastUpdated).toLocaleDateString() : '—'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+                <div className="p-table-footer">
+                  <span className="p-tf-count">
+                    showing {memberTableData.length} of {teamMembers.length} team members
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setMemberStatusFilter('all');
+                      setMemberFilter('');
+                    }}
+                  >
+                    clear filters
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
 

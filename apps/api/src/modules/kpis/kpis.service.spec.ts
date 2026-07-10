@@ -589,45 +589,75 @@ describe('KpisService', () => {
     });
   });
 
-  describe('getCoverage', () => {
-    const coveredUser = { id: 'user-1', displayName: 'Covered User', email: 'covered@pulse.local', departmentId: null, roles: [{ roleId: 'role-1' }] };
-    const uncoveredUser = { id: 'user-2', displayName: 'Uncovered User', email: 'uncovered@pulse.local', departmentId: null, roles: [] };
+  describe('getTeamOverview', () => {
+    const coveredUser = {
+      id: 'user-1',
+      displayName: 'Covered User',
+      email: 'covered@pulse.local',
+      departmentId: null,
+      department: null,
+      roles: [{ roleId: 'role-1', role: { name: 'QA Engineer' } }],
+    };
+    const uncoveredUser = {
+      id: 'user-2',
+      displayName: 'Uncovered User',
+      email: 'uncovered@pulse.local',
+      departmentId: null,
+      department: null,
+      roles: [],
+    };
     const coveringKpi = {
       assignments: [{ roleId: 'role-1', departmentId: null }],
       evaluationAreas: [{ id: 'area-1' }],
     };
 
-    it('sorts a user whose roles/department match no active KPI assignment into noKpi', async () => {
+    it('marks a user whose roles/department match no active KPI assignment as hasKpi: false', async () => {
       prisma.user.findMany.mockResolvedValue([uncoveredUser]);
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
 
-      const result = await service.getCoverage();
+      const { members } = await service.getTeamOverview();
 
-      expect(result.noKpi).toEqual([{ id: 'user-2', displayName: 'Uncovered User', email: 'uncovered@pulse.local' }]);
-      expect(result.pending).toEqual([]);
+      expect(members).toEqual([
+        expect.objectContaining({ id: 'user-2', hasKpi: false, finalScore: null, lastUpdated: null }),
+      ]);
     });
 
-    it('sorts a covered user with no recorded entries into pending', async () => {
+    it('marks a covered user with no recorded entries as hasKpi: true with a null finalScore', async () => {
       prisma.user.findMany.mockResolvedValue([coveredUser]);
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
 
-      const result = await service.getCoverage();
+      const { members } = await service.getTeamOverview();
 
-      expect(result.pending).toEqual([{ id: 'user-1', displayName: 'Covered User', email: 'covered@pulse.local' }]);
-      expect(result.noKpi).toEqual([]);
+      expect(members).toEqual([
+        expect.objectContaining({ id: 'user-1', hasKpi: true, finalScore: null, lastUpdated: null }),
+      ]);
     });
 
-    it('excludes a covered user who has ever been scored, regardless of which KPI/period', async () => {
+    it('blends each area into a final score the same way computeKpi does client-side: latest-period average per area, then averaged across areas', async () => {
       prisma.user.findMany.mockResolvedValue([coveredUser]);
-      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
-      prisma.evaluationAreaEntry.findMany.mockResolvedValue([{ personId: 'user-1' }]);
+      prisma.kpi.findMany.mockResolvedValue([
+        {
+          assignments: [{ roleId: 'role-1', departmentId: null }],
+          evaluationAreas: [{ id: 'area-1' }, { id: 'area-2' }],
+        },
+      ]);
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([
+        // area-1's latest period (two raters, averaged to 4)
+        { personId: 'user-1', evaluationAreaId: 'area-1', value: 3, periodStart: new Date('2026-02-01'), periodEnd: new Date('2026-02-28') },
+        { personId: 'user-1', evaluationAreaId: 'area-1', value: 5, periodStart: new Date('2026-02-01'), periodEnd: new Date('2026-02-28') },
+        // area-1's earlier period — excluded from the average
+        { personId: 'user-1', evaluationAreaId: 'area-1', value: 1, periodStart: new Date('2026-01-01'), periodEnd: new Date('2026-01-31') },
+        // area-2 has just one entry, value 2
+        { personId: 'user-1', evaluationAreaId: 'area-2', value: 2, periodStart: new Date('2026-02-01'), periodEnd: new Date('2026-03-15') },
+      ]);
 
-      const result = await service.getCoverage();
+      const { members } = await service.getTeamOverview();
 
-      expect(result.pending).toEqual([]);
-      expect(result.noKpi).toEqual([]);
+      // area-1 latest avg = 4, area-2 latest avg = 2 → final score = 3
+      expect(members[0]!.finalScore).toBe(3);
+      expect(members[0]!.lastUpdated).toBe(new Date('2026-03-15').toISOString());
     });
 
     it('treats a KPI assignment with no active evaluation areas as not covering anyone', async () => {
@@ -635,9 +665,20 @@ describe('KpisService', () => {
       prisma.kpi.findMany.mockResolvedValue([{ ...coveringKpi, evaluationAreas: [] }]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
 
-      const result = await service.getCoverage();
+      const { members } = await service.getTeamOverview();
 
-      expect(result.noKpi).toEqual([{ id: 'user-1', displayName: 'Covered User', email: 'covered@pulse.local' }]);
+      expect(members[0]!.hasKpi).toBe(false);
+    });
+
+    it('surfaces department name and role names for the table', async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, department: { name: 'Quality Assurance' } }]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
+
+      const { members } = await service.getTeamOverview();
+
+      expect(members[0]!.department).toBe('Quality Assurance');
+      expect(members[0]!.roles).toEqual(['QA Engineer']);
     });
 
     it('returns totalActiveUsers as the count of active users queried', async () => {
@@ -645,9 +686,9 @@ describe('KpisService', () => {
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
 
-      const result = await service.getCoverage();
+      const { totalActiveUsers } = await service.getTeamOverview();
 
-      expect(result.totalActiveUsers).toBe(2);
+      expect(totalActiveUsers).toBe(2);
       expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
     });
   });

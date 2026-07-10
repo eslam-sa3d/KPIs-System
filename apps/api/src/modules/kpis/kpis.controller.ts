@@ -49,11 +49,11 @@ export class KpisController {
     return this.kpis.listMine(req.user.id);
   }
 
-  /** Org-wide "who has no KPI" / "who's never been scored" — powers the admin dashboard's team-coverage cards. */
-  @Get('coverage')
+  /** Every active user with their coverage/score/last-updated — powers the admin dashboard's team overview table. */
+  @Get('team-overview')
   @RequirePermissions('kpis:manage')
-  getCoverage() {
-    return this.kpis.getCoverage();
+  getTeamOverview() {
+    return this.kpis.getTeamOverview();
   }
 
   @Patch(':id')

@@ -268,19 +268,27 @@ export class KpisService {
   }
 
   /**
-   * Org-wide team coverage for the dashboard's admin view: every active user
-   * sorted into "no KPI assigned" (their roles/department match no active
-   * KPI's assignments — the same matching myAssignmentFilter uses for a
-   * single caller, just run for everyone at once) or "pending evaluation"
-   * (covered by at least one active KPI, but has never once been scored as
-   * an evaluatee — a person-wide check, not scoped to a specific KPI/period,
-   * since the ask is simply "has anyone ever evaluated this person").
+   * Org-wide team roster for the dashboard's admin view: every active user
+   * with whether an active KPI covers their role/department at all (the
+   * same matching myAssignmentFilter uses for a single caller, just run for
+   * everyone at once), plus a final score blended the same way computeKpi
+   * does client-side — each of the person's evaluation areas contributes
+   * its own latest-period average, then those area averages are themselves
+   * averaged. finalScore stays null (not zero) for anyone never scored, so
+   * the dashboard can tell "pending" apart from "scored a 0".
    */
-  async getCoverage() {
-    const [users, kpis, scoredPersonRows] = await Promise.all([
+  async getTeamOverview() {
+    const [users, kpis, entries] = await Promise.all([
       this.prisma.user.findMany({
         where: { isActive: true },
-        select: { id: true, displayName: true, email: true, departmentId: true, roles: { select: { roleId: true } } },
+        select: {
+          id: true,
+          displayName: true,
+          email: true,
+          departmentId: true,
+          department: { select: { name: true } },
+          roles: { select: { roleId: true, role: { select: { name: true } } } },
+        },
         orderBy: { displayName: 'asc' },
       }),
       this.prisma.kpi.findMany({
@@ -290,27 +298,66 @@ export class KpisService {
           evaluationAreas: { where: { isActive: true }, select: { id: true } },
         },
       }),
-      this.prisma.evaluationAreaEntry.findMany({ distinct: ['personId'], select: { personId: true } }),
+      this.prisma.evaluationAreaEntry.findMany({
+        where: { person: { isActive: true } },
+        select: { personId: true, evaluationAreaId: true, value: true, periodStart: true, periodEnd: true },
+      }),
     ]);
-    const scoredPersonIds = new Set(scoredPersonRows.map((e) => e.personId));
 
-    const noKpi: Array<{ id: string; displayName: string; email: string }> = [];
-    const pending: Array<{ id: string; displayName: string; email: string }> = [];
-    for (const user of users) {
+    const entriesByPerson = new Map<string, typeof entries>();
+    for (const entry of entries) {
+      const list = entriesByPerson.get(entry.personId);
+      if (list) list.push(entry);
+      else entriesByPerson.set(entry.personId, [entry]);
+    }
+
+    const members = users.map((user) => {
       const roleIds = new Set(user.roles.map((r) => r.roleId));
-      const covered = kpis.some(
+      const hasKpi = kpis.some(
         (kpi) =>
           kpi.evaluationAreas.length > 0 &&
           kpi.assignments.some(
             (a) => (a.roleId && roleIds.has(a.roleId)) || (a.departmentId && a.departmentId === user.departmentId),
           ),
       );
-      const row = { id: user.id, displayName: user.displayName, email: user.email };
-      if (!covered) noKpi.push(row);
-      else if (!scoredPersonIds.has(user.id)) pending.push(row);
-    }
 
-    return { totalActiveUsers: users.length, noKpi, pending };
+      const personEntries = entriesByPerson.get(user.id) ?? [];
+      const byArea = new Map<string, typeof personEntries>();
+      for (const entry of personEntries) {
+        const list = byArea.get(entry.evaluationAreaId);
+        if (list) list.push(entry);
+        else byArea.set(entry.evaluationAreaId, [entry]);
+      }
+      const areaLatestValues = [...byArea.values()].map((areaEntries) => {
+        const maxPeriodStart = areaEntries.reduce(
+          (max, e) => (e.periodStart > max ? e.periodStart : max),
+          areaEntries[0]!.periodStart,
+        );
+        const latest = areaEntries.filter((e) => e.periodStart.getTime() === maxPeriodStart.getTime());
+        return latest.reduce((sum, e) => sum + Number(e.value), 0) / latest.length;
+      });
+      const finalScore =
+        areaLatestValues.length > 0
+          ? Math.round((areaLatestValues.reduce((a, b) => a + b, 0) / areaLatestValues.length) * 100) / 100
+          : null;
+      const lastUpdated = personEntries.reduce<Date | null>(
+        (max, e) => (max === null || e.periodEnd > max ? e.periodEnd : max),
+        null,
+      );
+
+      return {
+        id: user.id,
+        displayName: user.displayName,
+        email: user.email,
+        department: user.department?.name ?? null,
+        roles: user.roles.map((r) => r.role.name),
+        hasKpi,
+        finalScore,
+        lastUpdated: lastUpdated ? lastUpdated.toISOString() : null,
+      };
+    });
+
+    return { totalActiveUsers: users.length, members };
   }
 
   async createEvaluationArea(kpiId: string, input: CreateEvaluationAreaInput, actorId: string) {
