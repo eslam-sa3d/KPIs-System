@@ -22,8 +22,8 @@ export class UsersController {
 
   @Get()
   @RequirePermissions('users:read')
-  list(@Query() query: PageQuery, @Query('isActive') isActive?: string) {
-    return this.users.list(query, isActive === undefined ? undefined : isActive === 'true');
+  list(@Query() query: PageQuery) {
+    return this.users.list(query);
   }
 
   @Post()

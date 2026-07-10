@@ -166,5 +166,9 @@ function validatorFor(field: FormField): ZodTypeAny {
       const values = field.regions.map((r) => r.value);
       return z.enum(values as [string, ...string[]]);
     }
+    case 'person':
+      // structural shape only — SubmissionsService resolves this against a
+      // real, active user at persist time, the actual trust boundary.
+      return z.string().uuid();
   }
 }

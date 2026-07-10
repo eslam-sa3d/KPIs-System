@@ -17,6 +17,7 @@ import { FormRenderer, SubmissionScore } from '../../../components/form-renderer
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
 import { ShareLinkPanel } from '../../../components/share-link-panel';
 import { AccessControlPanel } from '../../../components/access-control-panel';
+import { FormKpiMappingsPanel } from '../../../components/form-kpi-mappings-panel';
 import { ResponseSummary, ResponseSummaryData } from '../../../components/response-summary';
 import { ResponseDetailModal } from '../../../components/response-detail-modal';
 import { api, downloadFile } from '../../../lib/api-client';
@@ -427,6 +428,7 @@ function FormView() {
                 setDetail((d) => (d ? { ...d, form: { ...d.form, restricted: next } } : d))
               }
             />
+            <FormKpiMappingsPanel formId={form.id} definition={definition} />
           </section>
         </TabsContent>
       )}

@@ -22,21 +22,16 @@ export class UsersService {
     private readonly redis: RedisService,
   ) {}
 
-  /** `isActive` narrows to active-only/inactive-only when passed — e.g. the KPI-scoring
-   *  person-field picker asks for active users only, so deactivated accounts drop out
-   *  of its search options; omitted, every user comes back (the admin directory view). */
-  async list(query: PageQuery, isActive?: boolean) {
+  async list(query: PageQuery) {
     const page = Math.max(Number(query.page ?? PAGE_DEFAULTS.page), 1);
     const pageSize = Math.min(
       Number(query.pageSize ?? PAGE_DEFAULTS.pageSize),
       PAGE_DEFAULTS.maxPageSize,
     );
-    const where = isActive === undefined ? {} : { isActive };
 
     const [totalItems, users] = await this.prisma.$transaction([
-      this.prisma.user.count({ where }),
+      this.prisma.user.count(),
       this.prisma.user.findMany({
-        where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -67,10 +62,6 @@ export class UsersService {
           email: input.email,
           displayName: input.displayName,
           passwordHash,
-          // the password an admin types here is a temporary one by convention
-          // (see the "temporary password" label in the create-user form) —
-          // force a change-password prompt the first time this account logs in
-          mustChangePassword: true,
           departmentId: input.departmentId,
           roles: { create: input.roleIds.map((roleId) => ({ roleId })) },
         },

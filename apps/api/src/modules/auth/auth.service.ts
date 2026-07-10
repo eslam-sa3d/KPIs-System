@@ -129,7 +129,7 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },
-        data: { passwordHash: await this.hasher.hash(newPassword), mustChangePassword: false },
+        data: { passwordHash: await this.hasher.hash(newPassword) },
       }),
       // rotating the password revokes every other session
       this.prisma.session.updateMany({
@@ -184,7 +184,7 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: record.userId },
-        data: { passwordHash: await this.hasher.hash(newPassword), mustChangePassword: false },
+        data: { passwordHash: await this.hasher.hash(newPassword) },
       }),
       this.prisma.passwordResetToken.update({
         where: { id: record.id },
@@ -237,7 +237,6 @@ export class AuthService {
     id: string;
     email: string;
     displayName: string;
-    mustChangePassword: boolean;
     roles: Array<{ role: { name: string } }>;
   }): Promise<AuthenticatedUser> {
     return {
@@ -246,7 +245,6 @@ export class AuthService {
       displayName: user.displayName,
       roles: user.roles.map(({ role }) => role.name),
       permissions: [...(await this.rbac.getEffectivePermissions(user.id))],
-      mustChangePassword: user.mustChangePassword,
     };
   }
 }

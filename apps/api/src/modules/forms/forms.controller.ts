@@ -16,7 +16,15 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
-import { PageQuery, SubmissionAnswers, submissionAnswersSchema } from '@pulse/contracts';
+import {
+  BulkCreateFormKpiMappingInput,
+  CreateFormKpiMappingInput,
+  PageQuery,
+  SubmissionAnswers,
+  bulkCreateFormKpiMappingSchema,
+  createFormKpiMappingSchema,
+  submissionAnswersSchema,
+} from '@pulse/contracts';
 import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { memoryStorage } from 'multer';
@@ -25,6 +33,7 @@ import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
 import { AssetsService } from './assets.service';
 import { FileUploadsService } from './file-uploads.service';
+import { FormKpiMappingsService } from './form-kpi-mappings.service';
 import { FormPermission } from './form-permission.decorator';
 import { FormsService } from './forms.service';
 import { SubmissionsService } from './submissions.service';
@@ -59,6 +68,7 @@ export class FormsController {
     private readonly submissions: SubmissionsService,
     private readonly uploads: FileUploadsService,
     private readonly assets: AssetsService,
+    private readonly kpiMappings: FormKpiMappingsService,
   ) {}
 
   @Get()
@@ -193,6 +203,52 @@ export class FormsController {
   @RequirePermissions('forms:manage')
   deleteForm(@Param('formId') formId: string, @Req() req: AuthedRequest) {
     return this.forms.deleteForm(formId, req.user.id);
+  }
+
+  /** The Forms→KPI bridge: which of this form's own fields supplies the evaluatee
+   *  vs. the score, for a given Evaluation Area — see FormKpiMappingsService. */
+  @Get(':formId/kpi-mappings')
+  @RequirePermissions('forms:manage', 'kpis:write')
+  listKpiMappings(@Param('formId') formId: string) {
+    return this.kpiMappings.list(formId);
+  }
+
+  @Post(':formId/kpi-mappings')
+  @RequirePermissions('forms:manage', 'kpis:write')
+  createKpiMapping(
+    @Param('formId') formId: string,
+    @Body(new ZodValidationPipe(createFormKpiMappingSchema)) body: CreateFormKpiMappingInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpiMappings.create(formId, body, req.user.id);
+  }
+
+  @Post(':formId/kpi-mappings/bulk')
+  @RequirePermissions('forms:manage', 'kpis:write')
+  bulkCreateKpiMappings(
+    @Param('formId') formId: string,
+    @Body(new ZodValidationPipe(bulkCreateFormKpiMappingSchema)) body: BulkCreateFormKpiMappingInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpiMappings.bulkCreate(formId, body, req.user.id);
+  }
+
+  @Delete(':formId/kpi-mappings/:mappingId')
+  @RequirePermissions('forms:manage', 'kpis:write')
+  deleteKpiMapping(
+    @Param('formId') formId: string,
+    @Param('mappingId') mappingId: string,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpiMappings.delete(formId, mappingId, req.user.id);
+  }
+
+  /** Retroactively scores every existing submission against a mapping created
+   *  after they were collected — see SubmissionsService.backfillMapping. */
+  @Post(':formId/kpi-mappings/:mappingId/backfill')
+  @RequirePermissions('forms:manage', 'kpis:write')
+  backfillKpiMapping(@Param('formId') formId: string, @Param('mappingId') mappingId: string) {
+    return this.submissions.backfillMapping(formId, mappingId);
   }
 
   @Get(':slug')

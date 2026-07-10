@@ -23,6 +23,12 @@ function makePrismaStub() {
       updateMany: vi.fn(async () => ({ count: 0 })),
     },
     form: { findUnique: vi.fn(async () => activeForm) },
+    formKpiMapping: {
+      findMany: vi.fn(async (): Promise<unknown[]> => []),
+      findFirst: vi.fn(),
+    },
+    user: { findUnique: vi.fn() },
+    evaluationAreaEntry: { upsert: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(async (arg: unknown) =>
       Array.isArray(arg) ? Promise.all(arg) : (arg as () => unknown)(),
@@ -364,6 +370,229 @@ describe('SubmissionsService.updateSubmission', () => {
 
     await expect(service.updateSubmission('demo', 'sub-old', { team: 'y' }, 'admin-1')).rejects.toMatchObject({
       code: 'NOT_FOUND',
+    });
+  });
+});
+
+describe('SubmissionsService — Forms→KPI bridge', () => {
+  const kpiDefinition = formDefinitionSchema.parse({
+    title: 'peer review',
+    fields: [
+      { key: 'evaluatee', label: 'Who are you reviewing?', type: 'person', required: true },
+      { key: 'score', label: 'Rating', type: 'rating', scale: 5, required: true },
+    ],
+  });
+
+  function makeKpiFormsStub() {
+    return {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'version-1' },
+        definition: kpiDefinition,
+        settings: formSettingsSchema.parse({}),
+      })),
+      getByPublicToken: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'version-1' },
+        definition: kpiDefinition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+  }
+
+  const mapping = {
+    id: 'mapping-1',
+    formId: 'form-1',
+    evaluationAreaId: 'area-1',
+    evaluateeFieldKey: 'evaluatee',
+    scoreFieldKey: 'score',
+    reviewType: 'peer',
+    anonymous: false,
+    contextFieldKey: null as string | null,
+    commentFieldKey: null as string | null,
+    evaluationArea: { id: 'area-1', kpiId: 'kpi-1', cadence: 'monthly', isActive: true },
+  };
+
+  it('upserts a normalized EvaluationAreaEntry on submission when a mapping matches', async () => {
+    const prisma = makePrismaStub();
+    prisma.formKpiMapping.findMany.mockResolvedValue([mapping]);
+    prisma.user.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', isActive: true });
+    const forms = makeKpiFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4 }, 'evaluator-1');
+
+    expect(prisma.evaluationAreaEntry.upsert).toHaveBeenCalledTimes(1);
+    const call = prisma.evaluationAreaEntry.upsert.mock.calls[0]![0];
+    expect(call.where.evaluationAreaId_personId_periodStart_periodEnd_enteredById.enteredById).toBe('evaluator-1');
+    expect(call.create.evaluationAreaId).toBe('area-1');
+    expect(call.create.personId).toBe('11111111-1111-4111-8111-111111111111');
+    expect(call.create.enteredById).toBe('evaluator-1');
+    expect(call.create.value).toBeCloseTo(3.75); // (4-1)/(5-1)*5
+    expect(call.create.reviewType).toBe('peer');
+    expect(call.create.submissionId).toBe('sub-new');
+  });
+
+  it('keys the upsert by evaluator too, so a second rater adds a distinct entry instead of overwriting', async () => {
+    const prisma = makePrismaStub();
+    prisma.formKpiMapping.findMany.mockResolvedValue([mapping]);
+    prisma.user.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', isActive: true });
+    const forms = makeKpiFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4 }, 'evaluator-1');
+    await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 2 }, 'evaluator-2');
+
+    expect(prisma.evaluationAreaEntry.upsert).toHaveBeenCalledTimes(2);
+    const [first, second] = prisma.evaluationAreaEntry.upsert.mock.calls.map((c) => c[0]);
+    expect(first.where.evaluationAreaId_personId_periodStart_periodEnd_enteredById.enteredById).toBe('evaluator-1');
+    expect(second.where.evaluationAreaId_personId_periodStart_periodEnd_enteredById.enteredById).toBe('evaluator-2');
+  });
+
+  it('snapshots reviewType/anonymous/context/comment from the mapping onto the entry', async () => {
+    const prisma = makePrismaStub();
+    prisma.formKpiMapping.findMany.mockResolvedValue([
+      { ...mapping, reviewType: 'manager', anonymous: true, contextFieldKey: 'team', commentFieldKey: 'team' },
+    ]);
+    prisma.user.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', isActive: true });
+    const forms = makeKpiFormsStub();
+    forms.getLatestVersion.mockResolvedValue({
+      form: activeForm,
+      version: { id: 'version-1' },
+      definition: formDefinitionSchema.parse({
+        title: 'peer review',
+        fields: [
+          { key: 'evaluatee', label: 'Who are you reviewing?', type: 'person', required: true },
+          { key: 'score', label: 'Rating', type: 'rating', scale: 5, required: true },
+          { key: 'team', label: 'Team', type: 'short_text', required: false },
+        ],
+      }),
+      settings: formSettingsSchema.parse({}),
+    });
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit(
+      'demo',
+      { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4, team: 'digital-channels' },
+      'evaluator-1',
+    );
+
+    const call = prisma.evaluationAreaEntry.upsert.mock.calls[0]![0];
+    expect(call.create.reviewType).toBe('manager');
+    expect(call.create.anonymous).toBe(true);
+    expect(call.create.context).toBe('digital-channels');
+    expect(call.create.comment).toBe('digital-channels');
+  });
+
+  it('skips mapping application for anonymous public submissions (no enteredById)', async () => {
+    const prisma = makePrismaStub();
+    prisma.formKpiMapping.findMany.mockResolvedValue([mapping]);
+    const forms = makeKpiFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submitPublic('token-1', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4 }, 'fingerprint-1');
+
+    expect(prisma.formKpiMapping.findMany).not.toHaveBeenCalled();
+    expect(prisma.evaluationAreaEntry.upsert).not.toHaveBeenCalled();
+  });
+
+  it('skips a mapping whose evaluatee answer resolves to an inactive user', async () => {
+    const prisma = makePrismaStub();
+    prisma.formKpiMapping.findMany.mockResolvedValue([mapping]);
+    prisma.user.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', isActive: false });
+    const forms = makeKpiFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4 }, 'evaluator-1');
+
+    expect(prisma.evaluationAreaEntry.upsert).not.toHaveBeenCalled();
+  });
+
+  it('skips a mapping on an inactive Evaluation Area', async () => {
+    const prisma = makePrismaStub();
+    prisma.formKpiMapping.findMany.mockResolvedValue([
+      { ...mapping, evaluationArea: { ...mapping.evaluationArea, isActive: false } },
+    ]);
+    const forms = makeKpiFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4 }, 'evaluator-1');
+
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.evaluationAreaEntry.upsert).not.toHaveBeenCalled();
+  });
+
+  it('a failing mapping never fails the submission itself', async () => {
+    const prisma = makePrismaStub();
+    prisma.formKpiMapping.findMany.mockResolvedValue([mapping]);
+    prisma.user.findUnique.mockRejectedValue(new Error('db blip'));
+    const forms = makeKpiFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await expect(
+      service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4 }, 'evaluator-1'),
+    ).resolves.toMatchObject({ id: 'sub-new' });
+  });
+
+  describe('backfillMapping', () => {
+    it('scores every existing submission on the form against the mapping, into its own createdAt period', async () => {
+      const prisma = makePrismaStub();
+      prisma.formKpiMapping.findFirst.mockResolvedValue(mapping);
+      prisma.user.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', isActive: true });
+      prisma.formSubmission.findMany.mockResolvedValue([
+        {
+          id: 'sub-old-1',
+          answers: { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4 },
+          submittedById: 'evaluator-1',
+          createdAt: new Date('2025-01-15T00:00:00.000Z'),
+        },
+        {
+          id: 'sub-old-2',
+          answers: { evaluatee: '11111111-1111-4111-8111-111111111111', score: 5 },
+          submittedById: 'evaluator-2',
+          createdAt: new Date('2025-02-15T00:00:00.000Z'),
+        },
+      ]);
+      const forms = makeKpiFormsStub();
+      const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+      const result = await service.backfillMapping('form-1', 'mapping-1');
+
+      expect(result).toEqual({ scored: 2, skipped: 0 });
+      expect(prisma.evaluationAreaEntry.upsert).toHaveBeenCalledTimes(2);
+      const [first, second] = prisma.evaluationAreaEntry.upsert.mock.calls.map((c) => c[0]);
+      // monthly cadence: each submission scores into ITS OWN month, not today's
+      expect(first.create.periodStart.getUTCMonth()).toBe(0); // January
+      expect(second.create.periodStart.getUTCMonth()).toBe(1); // February
+    });
+
+    it('skips anonymous (no submittedById) submissions, same rule as live submissions', async () => {
+      const prisma = makePrismaStub();
+      prisma.formKpiMapping.findFirst.mockResolvedValue(mapping);
+      prisma.formSubmission.findMany.mockResolvedValue([
+        {
+          id: 'sub-old-1',
+          answers: { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4 },
+          submittedById: null,
+          createdAt: new Date('2025-01-15T00:00:00.000Z'),
+        },
+      ]);
+      const forms = makeKpiFormsStub();
+      const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+      const result = await service.backfillMapping('form-1', 'mapping-1');
+
+      expect(result).toEqual({ scored: 0, skipped: 1 });
+      expect(prisma.evaluationAreaEntry.upsert).not.toHaveBeenCalled();
+    });
+
+    it('rejects a mapping that does not belong to this form', async () => {
+      const prisma = makePrismaStub();
+      prisma.formKpiMapping.findFirst.mockResolvedValue(null);
+      const forms = makeKpiFormsStub();
+      const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+      await expect(service.backfillMapping('form-1', 'ghost')).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
   });
 });
