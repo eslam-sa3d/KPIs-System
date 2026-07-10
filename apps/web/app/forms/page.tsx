@@ -9,7 +9,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { StatCard, StatCardIcon } from '@/components/stat-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
@@ -128,28 +127,44 @@ export default function FormsPage() {
       ) : (
         <>
           {stats && (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <StatCard
-                icon={<StatCardIcon icon={<ClipboardList className="size-5" aria-hidden="true" />} />}
-                value={stats.total}
-                label={stats.total === 1 ? 'form' : 'forms'}
-              />
-              <StatCard
-                icon={<StatCardIcon icon={<ClipboardList className="size-5" aria-hidden="true" />} />}
-                value={stats.open}
-                label="accepting responses"
-              />
-              <StatCard
-                icon={<StatCardIcon icon={<Share2 className="size-5" aria-hidden="true" />} />}
-                value={stats.shared}
-                label="shared publicly"
-              />
+            <div className="insights-row">
+              <div className="insight-card">
+                <span className="hierarchy-icon hierarchy-icon-sm">
+                  <ClipboardList size={15} aria-hidden="true" />
+                </span>
+                <span className="insight-card-body">
+                  <strong>{stats.total}</strong>
+                  <span>{stats.total === 1 ? 'form' : 'forms'}</span>
+                </span>
+              </div>
+              <div className="insight-card">
+                <span className="hierarchy-icon hierarchy-icon-sm">
+                  <ClipboardList size={15} aria-hidden="true" />
+                </span>
+                <span className="insight-card-body">
+                  <strong>{stats.open}</strong>
+                  <span>accepting responses</span>
+                </span>
+              </div>
+              <div className="insight-card">
+                <span className="hierarchy-icon hierarchy-icon-sm">
+                  <Share2 size={15} aria-hidden="true" />
+                </span>
+                <span className="insight-card-body">
+                  <strong>{stats.shared}</strong>
+                  <span>shared publicly</span>
+                </span>
+              </div>
               {stats.archived > 0 && (
-                <StatCard
-                  icon={<StatCardIcon icon={<FolderOpen className="size-5" aria-hidden="true" />} />}
-                  value={stats.archived}
-                  label="archived"
-                />
+                <div className="insight-card">
+                  <span className="hierarchy-icon hierarchy-icon-sm">
+                    <FolderOpen size={15} aria-hidden="true" />
+                  </span>
+                  <span className="insight-card-body">
+                    <strong>{stats.archived}</strong>
+                    <span>archived</span>
+                  </span>
+                </div>
               )}
             </div>
           )}
