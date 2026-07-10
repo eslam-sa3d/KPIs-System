@@ -2723,29 +2723,6 @@ h3 {
    its container — the empty space between them belongs to the row, not to
    nothing. Used for a KPI's own Evaluation Area header and each
    Sub-Criteria row. */
-.hierarchy-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
-}
-
-.hierarchy-row:hover {
-  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
-}
-
-/* Sub-Criteria: indented with a rule tying it visually to its parent
-   Evaluation Area, reinforcing the nesting depth a bare row can't convey. */
-.hierarchy-row-child {
-  margin-left: var(--space-4);
-  padding-left: var(--space-3);
-  border-left: 2px solid var(--color-border);
-}
-
 .hierarchy-dot {
   display: inline-block;
   width: 6px;
@@ -2790,57 +2767,6 @@ h3 {
   gap: var(--space-3);
 }
 
-/* KPI/Evaluation Area rows double as accordion headers: the name+meta button
-   toggles its own body open/closed, while rename/deactivate/delete stay as
-   separate sibling buttons in .row-actions (a <button> can't nest another
-   interactive element). */
-.accordion-toggle {
-  flex: 1 1 auto;
-  min-width: 0;
-  background: none;
-  border: none;
-  margin: 0;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--md-sys-shape-corner-small);
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-
-.accordion-toggle:hover {
-  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
-}
-
-.accordion-toggle:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.hierarchy-kpi-name {
-  font-size: var(--md-sys-typescale-title-large-size);
-  line-height: var(--md-sys-typescale-title-large-line-height);
-  font-weight: var(--font-weight-light);
-}
-
-.accordion-chevron {
-  flex-shrink: 0;
-  margin-left: auto;
-  color: var(--color-text-muted);
-  transition: transform var(--transition-fast);
-}
-
-.accordion-chevron.is-open {
-  transform: rotate(90deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .accordion-chevron {
-    transition: none;
-  }
-}
-
 /* Weight ring: a conic-gradient dial, same visual language as the mini-dial
    pattern already established for scoring UI elsewhere — read the number
    at a glance instead of parsing "· 30%" out of a run of muted text. */
@@ -2873,47 +2799,13 @@ h3 {
   color: var(--color-text);
 }
 
-/* Page-level overview strip */
-.kpi-page-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin: var(--space-4) 0 var(--space-6);
+.weight-ring-sm {
+  width: 28px;
+  height: 28px;
 }
 
-.kpi-stat-chip {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--space-3) var(--space-5);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  min-width: 120px;
-}
-
-.kpi-stat-chip strong {
-  font-size: var(--md-sys-typescale-title-large-size);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-primary);
-  line-height: 1.1;
-}
-
-.kpi-stat-chip span {
-  font-size: var(--md-sys-typescale-label-medium-size);
-  color: var(--color-text-muted);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.kpi-stat-chip.kpi-stat-warning {
-  background: var(--md-sys-color-error-container);
-  border-color: transparent;
-}
-
-.kpi-stat-chip.kpi-stat-warning strong,
-.kpi-stat-chip.kpi-stat-warning span {
-  color: var(--md-sys-color-on-error-container);
+.weight-ring-sm .weight-ring-value {
+  font-size: 8px;
 }
 
 /* Search */
@@ -2947,6 +2839,336 @@ h3 {
   border-color: var(--color-primary);
   box-shadow: inset 0 0 0 1px var(--color-primary);
   outline: none;
+}
+
+/* ── KPI module: master-detail workspace ──────────────────────────────
+   A scannable KPI list on the left drives a focused detail pane on the
+   right, instead of every KPI's full area/sub-criteria tree competing for
+   attention in one long stacked scroll. Collapses to a single pane on
+   narrow viewports, switching between list and detail by selection. */
+.kpi-workspace {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.kpi-list-pane {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.kpi-list-summary {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.kpi-allocation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.kpi-allocation-track {
+  height: 6px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.kpi-allocation-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+  transition: width var(--transition-fast);
+}
+
+.kpi-allocation.is-warning .kpi-allocation-fill {
+  background: var(--md-sys-color-error);
+}
+
+.kpi-allocation-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.kpi-allocation.is-warning .kpi-allocation-label strong {
+  color: var(--md-sys-color-error);
+}
+
+.kpi-list-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: calc(100vh - 360px);
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.kpi-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.kpi-list-item:hover {
+  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
+}
+
+.kpi-list-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.kpi-list-item.is-selected {
+  background: var(--md-sys-color-primary-container);
+  border-color: var(--color-primary);
+}
+
+.kpi-list-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kpi-list-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kpi-list-item-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+}
+
+.status-dot-inactive {
+  background: var(--color-text-muted);
+}
+
+.kpi-detail-pane {
+  min-width: 0;
+}
+
+.kpi-detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 320px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: var(--space-8);
+}
+
+.kpi-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.icon-btn:hover {
+  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
+  color: var(--color-text);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--md-sys-shape-corner-full);
+  border: 1px solid var(--color-border);
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.status-pill:hover {
+  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
+}
+
+.status-pill-inactive {
+  color: var(--color-text-muted);
+}
+
+.status-pill-sm {
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+.kpi-area-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.kpi-subcriteria-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.kpi-subcriteria-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-left: var(--space-4);
+  border-left: 2px solid var(--color-border);
+  transition: background var(--transition-fast);
+}
+
+.kpi-subcriteria-row:hover {
+  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
+}
+
+/* Rename/delete fade in on hover or keyboard focus instead of sitting
+   permanently painted on every row — the list already reads the name and
+   count at a glance; the actions only need to appear when you mean to act. */
+.hover-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.hover-actions-row:hover .hover-actions,
+.hover-actions-row:focus-within .hover-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .hover-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.kpi-toast-stack {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: min(360px, calc(100vw - var(--space-8)));
+}
+
+.kpi-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  font-size: var(--font-size-sm);
+  border-left: 3px solid var(--color-success);
+  color: var(--color-text);
+}
+
+.kpi-toast-error {
+  border-left-color: var(--pulse-coral);
+  color: var(--pulse-coral);
+}
+
+.kpi-back-to-list {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .kpi-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-workspace[data-has-selection='true'] .kpi-list-pane {
+    display: none;
+  }
+
+  .kpi-workspace[data-has-selection='false'] .kpi-detail-pane {
+    display: none;
+  }
+
+  .kpi-list-pane {
+    position: static;
+  }
+
+  .kpi-list-items {
+    max-height: none;
+  }
+
+  .kpi-back-to-list {
+    display: inline-flex;
+  }
 }
 
 /* Collapsible "add" trigger — replaces a permanently-open bare form with a
