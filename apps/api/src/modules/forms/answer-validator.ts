@@ -106,6 +106,8 @@ function validatorFor(field: FormField): ZodTypeAny {
     }
     case 'date':
       return z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected ISO date (YYYY-MM-DD)');
+    case 'time':
+      return z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'expected 24h time (HH:mm)');
     case 'select': {
       const known = z.enum(field.options.map((o) => o.value) as [string, ...string[]]);
       // "Other" answers are stored as "other:<free text>"
@@ -114,7 +116,9 @@ function validatorFor(field: FormField): ZodTypeAny {
         : known;
     }
     case 'multi_select': {
-      const item = z.enum(field.options.map((o) => o.value) as [string, ...string[]]);
+      const known = z.enum(field.options.map((o) => o.value) as [string, ...string[]]);
+      // "Other" answers are stored as "other:<free text>", same convention as `select`
+      const item = field.allowOther ? z.union([known, z.string().startsWith('other:').max(260)]) : known;
       let schema = z.array(item).min(1);
       if (field.maxSelections) schema = schema.max(field.maxSelections);
       return schema;
@@ -170,5 +174,18 @@ function validatorFor(field: FormField): ZodTypeAny {
       // structural shape only — SubmissionsService resolves this against a
       // real, active user at persist time, the actual trust boundary.
       return z.string().uuid();
+    case 'grid': {
+      const rowKeys = field.rows.map((r) => r.value) as [string, ...string[]];
+      const columnEnum = z.enum(field.columns.map((c) => c.value) as [string, ...string[]]);
+      const perRow: ZodTypeAny = field.selection === 'multiple' ? z.array(columnEnum).min(1) : columnEnum;
+      let schema: ZodTypeAny = z.record(z.enum(rowKeys), perRow);
+      if (field.requireOnePerRow) {
+        schema = schema.refine(
+          (answers: Record<string, unknown>) => rowKeys.every((k) => answers[k] !== undefined),
+          { message: 'every row must be answered' },
+        );
+      }
+      return schema;
+    }
   }
 }

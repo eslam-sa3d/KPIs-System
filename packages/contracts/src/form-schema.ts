@@ -3,12 +3,13 @@ import { mediaSchema } from './form-media';
 import { END_OF_FORM, FormSection, SectionBranchRule, formSectionSchema } from './form-sections';
 
 /** Field types with an exact-match-comparable answer — everything except
- *  ranking (an ordered permutation), file (an opaque upload id), and
- *  section_header (never has an answer). Shared with the builder UI so the
- *  trigger-field picker and the validator never drift apart. */
+ *  ranking (an ordered permutation), file (an opaque upload id), grid (one
+ *  answer per row, not a single value), and section_header (never has an
+ *  answer). Shared with the builder UI so the trigger-field picker and the
+ *  validator never drift apart. */
 export const BRANCH_TRIGGER_TYPES: FieldType[] = [
   'select', 'multi_select', 'rating', 'likert', 'boolean', 'nps', 'short_text', 'long_text', 'number', 'date',
-  'slider', 'hot_spot',
+  'slider', 'hot_spot', 'time',
 ];
 
 /**
@@ -25,6 +26,8 @@ export const FIELD_TYPES = [
   'long_text',
   'number',
   'date',
+  /** time-of-day only, no date component — compared as an "HH:mm" string */
+  'time',
   'select',
   'multi_select',
   'boolean',
@@ -46,6 +49,10 @@ export const FIELD_TYPES = [
    *  rating/nps/slider field (the score) to a KPI Evaluation Area — see
    *  FormKpiMapping. */
   'person',
+  /** Google-Forms-style "grid": a shared set of column choices answered once
+   *  per row. `selection: 'single'` is a "multiple choice grid" (one column
+   *  per row); `'multiple'` is a "checkbox grid" (any columns per row). */
+  'grid',
 ] as const;
 
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -128,6 +135,9 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     feedbackIncorrect: z.string().max(500).optional(),
   }),
   baseField.extend({ type: z.literal('date') }),
+  /** time-of-day only. Answer is an "HH:mm" (24h) string — comparable and
+   *  sortable as-is, no timezone concerns since there's no date component. */
+  baseField.extend({ type: z.literal('time') }),
   baseField.extend({
     type: z.literal('select'),
     options: z.array(optionItem).min(1).max(200),
@@ -148,6 +158,8 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     options: z.array(optionItem).min(1).max(200),
     maxSelections: z.number().int().positive().optional(),
     shuffleOptions: z.boolean().default(false),
+    /** append a free-text "Other" option, matching `select`'s allowOther */
+    allowOther: z.boolean().default(false),
     /** quiz mode: the respondent's selections must equal this SET exactly (order-independent) */
     correctValues: z.array(z.string()).optional(),
     points: z.number().positive().optional(),
@@ -187,6 +199,20 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     options: z.array(optionItem).min(2).max(20),
     /** randomize the STARTING order shown, before the respondent reorders it */
     shuffleOptions: z.boolean().default(false),
+  }),
+  /** Grid: a shared set of column choices answered once per row. Google
+   *  Forms ships this as two separate types (multiple choice grid / checkbox
+   *  grid) that differ only in whether a row takes one answer or several —
+   *  modeled here as one type with a selection switch instead of duplicating
+   *  rows/columns/validation twice. Not a BRANCH_TRIGGER_TYPES member: a
+   *  per-row answer set isn't a single exact-match-comparable value. */
+  baseField.extend({
+    type: z.literal('grid'),
+    rows: z.array(optionItem).min(1).max(30),
+    columns: z.array(optionItem).min(2).max(10),
+    selection: z.enum(['single', 'multiple']).default('single'),
+    /** every row must have at least one answer to submit — Forms' "require a response in each row" */
+    requireOnePerRow: z.boolean().default(false),
   }),
   baseField.extend({
     type: z.literal('file'),
@@ -296,6 +322,11 @@ export const FORM_FONT_FAMILIES = ['default', 'serif', 'casual'] as const;
 
 export const formThemeSchema = z.object({
   accentColor: z.string().regex(/^#[0-9a-f]{6}$/i, 'expected a hex color like #4f008c').optional(),
+  /** page background wash — independent of accentColor, so a light form can
+   *  still carry a saturated accent (matches Google Forms' separate "header
+   *  color" vs "page color" controls). */
+  backgroundColor: z.string().regex(/^#[0-9a-f]{6}$/i, 'expected a hex color like #4f008c').optional(),
+  /** the wide banner photo cropped into the form header — see FormRenderer's msform-banner-image. */
   backgroundAssetId: z.string().uuid().optional(),
   logoAssetId: z.string().uuid().optional(),
   fontFamily: z.enum(FORM_FONT_FAMILIES).optional(),
@@ -486,7 +517,8 @@ export type FormDefinition = z.infer<typeof formDefinitionSchema>;
 
 /** A submission maps fieldKey → answer. Likert answers are row→scale-index
  *  records; rankings are ordered arrays of option values; contact_info answers
- *  are a name/email/phone record of strings. */
+ *  are a name/email/phone record of strings; a "single"-selection grid answer
+ *  is row→column-value, a "multiple"-selection grid answer is row→column-values[]. */
 export const submissionAnswersSchema = z.record(
   fieldKey,
   z.union([
@@ -496,6 +528,7 @@ export const submissionAnswersSchema = z.record(
     z.array(z.string()),
     z.record(z.string(), z.number()),
     z.record(z.string(), z.string()),
+    z.record(z.string(), z.array(z.string())),
     z.null(),
   ]),
 );

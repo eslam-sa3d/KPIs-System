@@ -4,6 +4,17 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   BRANCH_TRIGGER_TYPES,
   CONDITION_OPERATORS,
   END_OF_FORM,
@@ -11,6 +22,8 @@ import {
   type FormDefinition,
   type FormField,
   type FormSection,
+  type FormTheme,
+  FORM_FONT_FAMILIES,
 } from '@pulse/contracts';
 
 type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
@@ -31,12 +44,14 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'long_text', label: 'long text' },
   { value: 'number', label: 'number' },
   { value: 'date', label: 'date' },
+  { value: 'time', label: 'time' },
   { value: 'boolean', label: 'yes / no' },
   { value: 'rating', label: 'rating (2–10)' },
   { value: 'nps', label: 'net promoter score (0–10)' },
   { value: 'select', label: 'choice (one answer)' },
   { value: 'multi_select', label: 'choice (multiple answers)' },
   { value: 'likert', label: 'likert matrix' },
+  { value: 'grid', label: 'grid (multiple choice / checkbox)' },
   { value: 'ranking', label: 'ranking' },
   { value: 'file', label: 'file upload' },
   { value: 'section_header', label: 'section heading (no answer)' },
@@ -51,12 +66,14 @@ const FIELD_TYPE_ICON: Record<FieldType, string> = {
   long_text: '☰',
   number: '#',
   date: '📅',
+  time: '🕐',
   boolean: '◐',
   rating: '★',
   nps: '📊',
   select: '◉',
   multi_select: '☑',
   likert: '▤',
+  grid: '▦',
   ranking: '↕',
   file: '📎',
   section_header: 'Tt',
@@ -133,6 +150,12 @@ interface DraftField {
   /** hot_spot */
   hotSpotAssetId: string;
   hotSpotRegions: Array<{ value: string; label: string; x: number; y: number; width: number; height: number }>;
+  /** grid: comma-separated row statements and shared column choices */
+  gridRows: string;
+  gridColumns: string;
+  /** grid: one column per row ("multiple choice grid") or any columns per row ("checkbox grid") */
+  gridSelection: 'single' | 'multiple';
+  gridRequireOnePerRow: boolean;
   /** UTM-style hidden field: '' = a normal, respondent-filled question. When set, this
    *  question is never shown — its value is read once from this query-string parameter. */
   capturedFromUrlParam: string;
@@ -193,6 +216,10 @@ const emptyField = (): DraftField => ({
   requirePhone: false,
   hotSpotAssetId: '',
   hotSpotRegions: [],
+  gridRows: '',
+  gridColumns: '',
+  gridSelection: 'single',
+  gridRequireOnePerRow: false,
   capturedFromUrlParam: '',
   kpiId: '',
   evaluationAreaId: '',
@@ -346,9 +373,21 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
         type: draft.type,
         options,
         shuffleOptions: draft.shuffleOptions,
+        allowOther: draft.allowOther,
         ...(draft.points > 0 && draft.correctValues.trim()
           ? { correctValues: parseList(draft.correctValues), ...quizPoints, ...quizFeedback }
           : {}),
+      };
+    }
+    case 'grid': {
+      const toOptionItems = (values: string[]) => values.map((v) => ({ value: v, label: v }));
+      return {
+        ...base,
+        type: draft.type,
+        rows: toOptionItems(parseList(draft.gridRows)),
+        columns: toOptionItems(parseList(draft.gridColumns)),
+        selection: draft.gridSelection,
+        requireOnePerRow: draft.gridRequireOnePerRow,
       };
     }
     case 'boolean':
@@ -498,6 +537,7 @@ function fromDefinitionField(field: FormField): DraftField {
     case 'multi_select':
       optionsToDraft(field.options);
       draft.shuffleOptions = field.shuffleOptions;
+      draft.allowOther = field.allowOther;
       if (field.correctValues) {
         draft.correctValues = field.correctValues.join(', ');
         draft.points = field.points ?? 0;
@@ -576,7 +616,14 @@ function fromDefinitionField(field: FormField): DraftField {
       draft.hotSpotAssetId = field.imageAssetId;
       draft.hotSpotRegions = field.regions;
       break;
+    case 'grid':
+      draft.gridRows = field.rows.map((r) => r.value).join(', ');
+      draft.gridColumns = field.columns.map((c) => c.value).join(', ');
+      draft.gridSelection = field.selection;
+      draft.gridRequireOnePerRow = field.requireOnePerRow;
+      break;
     case 'date':
+    case 'time':
     case 'section_header':
     case 'person':
       break;
@@ -611,6 +658,45 @@ function fromDefinitionSection(section: FormSection): DraftSection {
   };
 }
 
+type DragHandleProps = Pick<ReturnType<typeof useSortable>, 'attributes' | 'listeners'>;
+
+/** A drag-sortable <fieldset> wrapper. Pulled out as its own component (not
+ *  inlined in a .map()) because useSortable is a hook — it can only run once
+ *  per rendered item, which means once per component instance. */
+function SortableCard({
+  id,
+  className,
+  style,
+  onFocus,
+  onClick,
+  setRef,
+  children,
+}: {
+  id: string | number;
+  className: string;
+  style?: React.CSSProperties;
+  onFocus?: () => void;
+  onClick?: () => void;
+  setRef?: (el: HTMLFieldSetElement | null) => void;
+  children: (drag: DragHandleProps) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <fieldset
+      ref={(el) => {
+        setRef?.(el);
+        setNodeRef(el);
+      }}
+      style={{ ...style, transform: CSS.Transform.toString(transform), transition }}
+      className={`${className}${isDragging ? ' is-dragging' : ''}`}
+      onFocus={onFocus}
+      onClick={onClick}
+    >
+      {children({ attributes, listeners })}
+    </fieldset>
+  );
+}
+
 function NewFormPage() {
   const user = useSession();
   const router = useRouter();
@@ -619,13 +705,17 @@ function NewFormPage() {
   const [description, setDescription] = useState('');
   const [fields, setFields] = useState<DraftField[]>([]);
   const [activeFieldIndex, setActiveFieldIndex] = useState<number | null>(null);
-  const [dragFieldIndex, setDragFieldIndex] = useState<number | null>(null);
-  const [dragOverFieldIndex, setDragOverFieldIndex] = useState<number | null>(null);
   const fieldRefs = useRef<Array<HTMLFieldSetElement | null>>([]);
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const [error, setError] = useState<string | null>(null);
   const [published, setPublished] = useState<{ slug: string } | null>(null);
   const [sectionsEnabled, setSectionsEnabled] = useState(false);
   const [sections, setSections] = useState<DraftSection[]>([]);
+  const [theme, setTheme] = useState<FormTheme>({});
+  const [suggestedAccent, setSuggestedAccent] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importIssues, setImportIssues] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -658,6 +748,7 @@ function NewFormPage() {
           setSectionsEnabled(true);
           setSections(definition.sections.map(fromDefinitionSection));
         }
+        setTheme(definition.theme ?? {});
         // hydrate any existing per-question KPI links — best-effort, a
         // failure here just means the inline pickers start unlinked instead
         // of blocking the whole form load
@@ -751,6 +842,19 @@ function NewFormPage() {
       if (target < 0 || target >= current.length) return current;
       const next = [...current];
       [next[index], next[target]] = [next[target]!, next[index]!];
+      return next;
+    });
+  }
+
+  function onSectionDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
+    setSections((current) => {
+      const from = current.findIndex((s) => s.id === active.id);
+      const to = current.findIndex((s) => s.id === over.id);
+      if (from === -1 || to === -1) return current;
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved!);
       return next;
     });
   }
@@ -1009,6 +1113,11 @@ function NewFormPage() {
     setActiveFieldIndex(to);
   }
 
+  function onFieldDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
+    reorderFieldByDrag(Number(active.id), Number(over.id));
+  }
+
   async function onImportExcel(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = ''; // allow re-selecting the same file after fixing it
@@ -1076,6 +1185,10 @@ function NewFormPage() {
           requirePhone: false,
           hotSpotAssetId: '',
           hotSpotRegions: [],
+          gridRows: '',
+          gridColumns: '',
+          gridSelection: 'single' as const,
+          gridRequireOnePerRow: false,
           capturedFromUrlParam: '',
           kpiId: '',
           evaluationAreaId: '',
@@ -1112,6 +1225,62 @@ function NewFormPage() {
       setError('could not read this file — is it a valid .xlsx, .csv, or .docx file?');
     } finally {
       setImporting(false);
+    }
+  }
+
+  /** Samples the dominant color of an uploaded image client-side (no server
+   *  round-trip) so the theme panel can suggest a matching accent color —
+   *  downsamples to a small canvas and averages its pixels. */
+  async function suggestAccentFromImage(assetId: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const size = 32;
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(null);
+          ctx.drawImage(img, 0, 0, size, size);
+          const { data } = ctx.getImageData(0, 0, size, size);
+          let r = 0, g = 0, b = 0, count = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            r += data[i]!;
+            g += data[i + 1]!;
+            b += data[i + 2]!;
+            count++;
+          }
+          const toHex = (n: number) => Math.round(n / count).toString(16).padStart(2, '0');
+          resolve(`#${toHex(r)}${toHex(g)}${toHex(b)}`);
+        } catch {
+          // a cross-origin image without CORS headers taints the canvas — no suggestion, not fatal
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = assetUrl(assetId);
+    });
+  }
+
+  async function onUploadThemeHeaderImage(file: File) {
+    try {
+      const uploaded = await uploadAsset<{ id: string }>(file);
+      setTheme((t) => ({ ...t, backgroundAssetId: uploaded.id }));
+      const suggested = await suggestAccentFromImage(uploaded.id);
+      setSuggestedAccent(suggested);
+    } catch {
+      setError('image upload failed');
+    }
+  }
+
+  async function onUploadThemeLogo(file: File) {
+    try {
+      const uploaded = await uploadAsset<{ id: string }>(file);
+      setTheme((t) => ({ ...t, logoAssetId: uploaded.id }));
+    } catch {
+      setError('image upload failed');
     }
   }
 
@@ -1208,6 +1377,7 @@ function NewFormPage() {
       ...(description.trim() ? { description: description.trim() } : {}),
       fields: fields.map((f, i) => toDefinitionField(f, i, keyedFields)),
       ...(buildSectionsPayload() ? { sections: buildSectionsPayload() } : {}),
+      ...(Object.keys(theme).length > 0 ? { theme } : {}),
     };
     try {
       if (editingForm) {
@@ -1321,6 +1491,80 @@ function NewFormPage() {
           )}
         </div>
 
+        <div className="admin-card" style={{ marginBottom: 16 }}>
+          <label>theme</label>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            header image, colors, and font — carried with the form when it's duplicated
+          </p>
+
+          <label htmlFor="theme-header-image">header image (optional)</label>
+          <Input
+            id="theme-header-image"
+            type="file"
+            accept="image/*"
+            onChange={(e) => e.target.files?.[0] && onUploadThemeHeaderImage(e.target.files[0])}
+          />
+          {theme.backgroundAssetId && (
+            <img src={assetUrl(theme.backgroundAssetId)} alt="" className="option-image" />
+          )}
+
+          <div className="builder-fields-row" style={{ marginTop: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label htmlFor="theme-accent-color">accent color</label>
+              <span className="builder-required">
+                <input
+                  id="theme-accent-color"
+                  type="color"
+                  value={theme.accentColor ?? '#4f008c'}
+                  onChange={(e) => setTheme((t) => ({ ...t, accentColor: e.target.value }))}
+                />
+                {suggestedAccent && suggestedAccent !== theme.accentColor && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setTheme((t) => ({ ...t, accentColor: suggestedAccent }))}
+                  >
+                    use suggested color {suggestedAccent}
+                  </Button>
+                )}
+              </span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label htmlFor="theme-bg-color">page background color</label>
+              <input
+                id="theme-bg-color"
+                type="color"
+                value={theme.backgroundColor ?? '#ffffff'}
+                onChange={(e) => setTheme((t) => ({ ...t, backgroundColor: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <label htmlFor="theme-logo">logo (optional)</label>
+          <Input
+            id="theme-logo"
+            type="file"
+            accept="image/*"
+            onChange={(e) => e.target.files?.[0] && onUploadThemeLogo(e.target.files[0])}
+          />
+          {theme.logoAssetId && <img src={assetUrl(theme.logoAssetId)} alt="" className="option-image" />}
+
+          <label htmlFor="theme-font">font</label>
+          <Select
+            value={theme.fontFamily ?? 'default'}
+            onValueChange={(v) => setTheme((t) => ({ ...t, fontFamily: v as (typeof FORM_FONT_FAMILIES)[number] }))}
+          >
+            <SelectTrigger id="theme-font">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FORM_FONT_FAMILIES.map((f) => (
+                <SelectItem key={f} value={f}>{f}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {fields.length > 0 && (
           <div className="page-title-row" style={{ marginBottom: 8 }}>
             <Button
@@ -1342,34 +1586,23 @@ function NewFormPage() {
 
         <div className="builder-fields-row">
         <div className="builder-fields-col">
+        <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={onFieldDragEnd}>
+        <SortableContext items={fields.map((_, i) => i)} strategy={verticalListSortingStrategy}>
         {fields.map((field, index) => {
           const isActive = activeFieldIndex === index;
           return (
-          <fieldset
+          <SortableCard
             key={index}
-            ref={(el) => {
-              fieldRefs.current[index] = el;
-            }}
-            className={`builder-field question-card${isActive ? ' is-active' : ''}${
-              dragFieldIndex === index ? ' is-dragging' : ''
-            }${dragOverFieldIndex === index && dragFieldIndex !== index ? ' is-drag-over' : ''}`}
+            id={index}
+            className={`builder-field question-card${isActive ? ' is-active' : ''}`}
             onFocus={() => setActiveFieldIndex(index)}
             onClick={() => setActiveFieldIndex(index)}
-            onDragOver={(e) => {
-              if (dragFieldIndex === null) return;
-              e.preventDefault();
-              setDragOverFieldIndex(index);
-            }}
-            onDragLeave={() => setDragOverFieldIndex((current) => (current === index ? null : current))}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (dragFieldIndex !== null && dragFieldIndex !== index) {
-                reorderFieldByDrag(dragFieldIndex, index);
-              }
-              setDragFieldIndex(null);
-              setDragOverFieldIndex(null);
+            setRef={(el) => {
+              fieldRefs.current[index] = el;
             }}
           >
+          {(drag) => (
+          <>
             <legend className="field-legend">
               <span className="question-number">{index + 1}</span>
             </legend>
@@ -1378,18 +1611,10 @@ function NewFormPage() {
               type="button"
               variant="ghost"
               className="field-drag-handle"
-              draggable
               title="drag to reorder"
               aria-label="drag to reorder"
-              onDragStart={(e) => {
-                e.dataTransfer.effectAllowed = 'move';
-                setDragFieldIndex(index);
-                setActiveFieldIndex(index);
-              }}
-              onDragEnd={() => {
-                setDragFieldIndex(null);
-                setDragOverFieldIndex(null);
-              }}
+              {...drag.attributes}
+              {...drag.listeners}
             >
               <span className="field-drag-dots">
                 <span />
@@ -1659,9 +1884,9 @@ function NewFormPage() {
                       </Button>
                     </div>
                   ))}
-                  {field.type === 'select' && field.allowOther && (
+                  {(field.type === 'select' || field.type === 'multi_select') && field.allowOther && (
                     <div className="option-row option-row-other">
-                      <span className="option-row-mark" />
+                      <span className={`option-row-mark${field.type === 'multi_select' ? ' is-checkbox' : ''}`} />
                       <span className="option-row-other-label">Other…</span>
                       <Button
                         type="button"
@@ -1690,7 +1915,7 @@ function NewFormPage() {
                       <span className={`option-row-mark${field.type === 'multi_select' ? ' is-checkbox' : ''}`} />
                       add option
                     </Button>
-                    {field.type === 'select' && !field.allowOther && (
+                    {(field.type === 'select' || field.type === 'multi_select') && !field.allowOther && (
                       <>
                         {' '}or{' '}
                         <Button
@@ -1884,6 +2109,46 @@ function NewFormPage() {
                   onChange={(e) => updateField(index, { likertScale: e.target.value })}
                   placeholder="disagree, neutral, agree"
                 />
+              </>
+            )}
+
+            {field.type === 'grid' && (
+              <>
+                <label htmlFor={`field-grid-rows-${index}`}>rows (comma-separated)</label>
+                <Input
+                  id={`field-grid-rows-${index}`}
+                  value={field.gridRows}
+                  onChange={(e) => updateField(index, { gridRows: e.target.value })}
+                  placeholder="communication, responsiveness, quality"
+                />
+                <label htmlFor={`field-grid-columns-${index}`}>columns (comma-separated)</label>
+                <Input
+                  id={`field-grid-columns-${index}`}
+                  value={field.gridColumns}
+                  onChange={(e) => updateField(index, { gridColumns: e.target.value })}
+                  placeholder="poor, fair, good, excellent"
+                />
+                <label htmlFor={`field-grid-selection-${index}`}>answers per row</label>
+                <Select
+                  value={field.gridSelection}
+                  onValueChange={(v) => updateField(index, { gridSelection: v as 'single' | 'multiple' })}
+                >
+                  <SelectTrigger id={`field-grid-selection-${index}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">one answer (multiple choice grid)</SelectItem>
+                    <SelectItem value="multiple">multiple answers (checkbox grid)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="builder-required">
+                  <Checkbox
+                    id={`field-grid-require-row-${index}`}
+                    checked={field.gridRequireOnePerRow}
+                    onCheckedChange={(checked) => updateField(index, { gridRequireOnePerRow: checked === true })}
+                  />
+                  <label htmlFor={`field-grid-require-row-${index}`}>require a response in each row</label>
+                </span>
               </>
             )}
 
@@ -2236,9 +2501,13 @@ function NewFormPage() {
 
             </div>
             </div>
-          </fieldset>
+          </>
+          )}
+          </SortableCard>
           );
         })}
+        </SortableContext>
+        </DndContext>
 
         <Button
           type="button"
@@ -2278,6 +2547,8 @@ function NewFormPage() {
                 </p>
               )}
 
+              <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={onSectionDragEnd}>
+              <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
               {sections.map((section, index) => {
                 const laterSections = sections.slice(index + 1);
                 const triggerCandidates = keyedFields.filter(
@@ -2285,8 +2556,23 @@ function NewFormPage() {
                 );
 
                 return (
-                  <fieldset key={section.id} className="question-card" style={{ marginBottom: 12 }}>
-                    <legend>page {index + 1}</legend>
+                  <SortableCard key={section.id} id={section.id} className="question-card" style={{ marginBottom: 12 }}>
+                  {(drag) => (
+                  <>
+                    <legend className="field-legend">page {index + 1}</legend>
+
+                    <button
+                      type="button"
+                      className="field-drag-handle"
+                      title="drag to reorder"
+                      aria-label={`drag page ${index + 1} to reorder`}
+                      {...drag.attributes}
+                      {...drag.listeners}
+                    >
+                      <span className="field-drag-dots">
+                        <span /><span /><span /><span /><span /><span />
+                      </span>
+                    </button>
 
                     <label htmlFor={`section-title-${index}`}>page title (optional)</label>
                     <Input
@@ -2564,9 +2850,13 @@ function NewFormPage() {
                         🗑
                       </Button>
                     </div>
-                  </fieldset>
+                  </>
+                  )}
+                  </SortableCard>
                 );
               })}
+              </SortableContext>
+              </DndContext>
 
               <Button type="button" variant="ghost" className="msform-add-field" onClick={addSection}>
                 + add page

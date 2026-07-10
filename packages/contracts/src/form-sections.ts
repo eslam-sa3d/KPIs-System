@@ -128,7 +128,7 @@ function findMatchedCase(
     // all five stringify losslessly for exact-match comparison
     answer = String(raw);
   } else {
-    // short_text, long_text, select, date, hot_spot — already stored as the raw string
+    // short_text, long_text, select, date, time, hot_spot — already stored as the raw string
     answer = typeof raw === 'string' ? raw : undefined;
   }
   return rule.cases.find((c) => c.equals === answer);

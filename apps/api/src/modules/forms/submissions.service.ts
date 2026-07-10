@@ -503,7 +503,10 @@ export class SubmissionsService {
         case 'multi_select': {
           const counts: Record<string, number> = {};
           for (const arr of values as string[][])
-            for (const v of arr) counts[v] = (counts[v] ?? 0) + 1;
+            for (const v of arr) {
+              const key = v.startsWith('other:') ? 'other' : v;
+              counts[key] = (counts[key] ?? 0) + 1;
+            }
           return { ...base, counts };
         }
         case 'boolean': {
@@ -569,6 +572,19 @@ export class SubmissionsService {
             ]),
           );
           return { ...base, averagePosition };
+        }
+        case 'grid': {
+          // row -> column value -> count. `selection: 'multiple'` rows hold a
+          // string[] instead of a single string; both flatten into the same matrix.
+          const matrix: Record<string, Record<string, number>> = {};
+          for (const rec of values as Array<Record<string, string | string[]>>) {
+            for (const [row, answer] of Object.entries(rec)) {
+              matrix[row] ??= {};
+              const columns = Array.isArray(answer) ? answer : [answer];
+              for (const col of columns) matrix[row][col] = (matrix[row][col] ?? 0) + 1;
+            }
+          }
+          return { ...base, matrix };
         }
         default: {
           return { ...base, samples: (values as string[]).slice(-5).reverse() };

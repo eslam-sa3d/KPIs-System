@@ -1,11 +1,18 @@
 'use client';
 
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import type { FormResponseSummary } from '@pulse/contracts';
-import { palette } from '@pulse/theme';
+import { chartSeries, palette } from '@pulse/theme';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export type ResponseSummaryData = FormResponseSummary;
+
+/** select/boolean/hot_spot are mutually exclusive single answers — their
+ *  counts sum to 100%, so a pie's whole-part framing is accurate. Every
+ *  other `counts`-bearing type (multi_select, or an ordered scale like
+ *  rating/nps) keeps the bar breakdown below instead. */
+const PIE_CHART_TYPES = new Set(['select', 'boolean', 'hot_spot']);
 
 /** One brand-purple hue, light→dark by share of total — a sequential ramp, not categorical. */
 function barColor(share: number): string {
@@ -51,6 +58,78 @@ function BarBreakdown({
           </Row>
         );
       })}
+    </div>
+  );
+}
+
+/** Mutually-exclusive single-answer breakdown: a pie (proportional whole)
+ *  plus a swatch legend — recharts' <Pie> alone fails the brand chart-series
+ *  contrast note (2 of 6 series read under 3:1), so every slice also carries
+ *  a direct label + count in the legend, never color alone. */
+function PieBreakdown({
+  counts,
+  total,
+  onSegmentClick,
+}: {
+  counts: Record<string, number>;
+  total: number;
+  onSegmentClick?: (value: string) => void;
+}) {
+  const data = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, count]) => ({ label, count }));
+
+  return (
+    <div className="summary-pie">
+      <div style={{ width: '100%', height: 200 }}>
+        <ResponsiveContainer>
+          <PieChart>
+            <Pie data={data} dataKey="count" nameKey="label" outerRadius={80}>
+              {data.map((entry, i) => (
+                <Cell key={entry.label} fill={chartSeries[i % chartSeries.length]} />
+              ))}
+            </Pie>
+            <RechartsTooltip
+              formatter={(value: number, _name, item) => [
+                `${value} (${total ? Math.round((value / total) * 100) : 0}%)`,
+                item.payload.label,
+              ]}
+              contentStyle={{
+                borderRadius: 8,
+                border: `1px solid ${palette.secondary.silverLight}`,
+                fontFamily: 'inherit',
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <ul className="summary-pie-legend">
+        {data.map(({ label, count }, i) => (
+          <li key={label} className="summary-pie-legend-row">
+            {onSegmentClick ? (
+              <button
+                type="button"
+                className="summary-pie-legend-row-inner summary-bar-row-clickable"
+                onClick={() => onSegmentClick(label)}
+              >
+                <span className="summary-pie-swatch" style={{ background: chartSeries[i % chartSeries.length] }} />
+                <span className="summary-bar-label">{label}</span>
+                <span className="summary-bar-count muted">
+                  {count} ({total ? Math.round((count / total) * 100) : 0}%)
+                </span>
+              </button>
+            ) : (
+              <span className="summary-pie-legend-row-inner">
+                <span className="summary-pie-swatch" style={{ background: chartSeries[i % chartSeries.length] }} />
+                <span className="summary-bar-label">{label}</span>
+                <span className="summary-bar-count muted">
+                  {count} ({total ? Math.round((count / total) * 100) : 0}%)
+                </span>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -106,19 +185,22 @@ export function ResponseSummary({
           <h3>{field.label}</h3>
           <p className="muted">{field.answered} response(s)</p>
 
-          {field.counts && (
-            <BarBreakdown
-              counts={field.counts}
-              total={field.answered}
-              // "other:" answers collapse to a single "other" bucket server-side and
-              // can't be exact-matched back to their free-text value — skip those
-              onSegmentClick={
-                onFilterByAnswer && (field.type === 'select' || field.type === 'multi_select')
-                  ? (value) => value !== 'other' && onFilterByAnswer(field.key, field.label, value)
-                  : undefined
-              }
-            />
-          )}
+          {field.counts && (() => {
+            const Breakdown = PIE_CHART_TYPES.has(field.type) ? PieBreakdown : BarBreakdown;
+            return (
+              <Breakdown
+                counts={field.counts}
+                total={field.answered}
+                // "other:" answers collapse to a single "other" bucket server-side and
+                // can't be exact-matched back to their free-text value — skip those
+                onSegmentClick={
+                  onFilterByAnswer && (field.type === 'select' || field.type === 'multi_select')
+                    ? (value) => value !== 'other' && onFilterByAnswer(field.key, field.label, value)
+                    : undefined
+                }
+              />
+            );
+          })()}
 
           {field.type === 'nps' && field.npsScore !== undefined && (
             <p className="summary-nps">
@@ -155,6 +237,34 @@ export function ResponseSummary({
               </TableBody>
             </Table>
           )}
+
+          {/* grid has no ordered `scale` (its columns are free-text choices,
+              not a scale) — derive column order from whatever the matrix holds. */}
+          {field.type === 'grid' && field.matrix && (() => {
+            const columns = Array.from(new Set(Object.values(field.matrix).flatMap((row) => Object.keys(row))));
+            return (
+              <Table className="summary-likert-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead />
+                    {columns.map((c) => (
+                      <TableHead key={c}>{c}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(field.matrix).map(([row, dist]) => (
+                    <TableRow key={row}>
+                      <TableCell>{row}</TableCell>
+                      {columns.map((c) => (
+                        <TableCell key={c}>{dist[c] ?? 0}</TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            );
+          })()}
 
           {field.averagePosition && (
             <ol className="summary-ranking">

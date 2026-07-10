@@ -124,6 +124,8 @@ export function FieldInput({
       );
     case 'date':
       return <Input id={id} type="date" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
+    case 'time':
+      return <Input id={id} type="time" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
     case 'boolean':
       return <Checkbox id={id} checked={Boolean(value)} onCheckedChange={(checked) => onChange(checked === true)} />;
     case 'rating': {
@@ -230,6 +232,7 @@ export function FieldInput({
     }
     case 'multi_select': {
       const selected = (value as string[] | undefined) ?? [];
+      const otherEntry = selected.find((v) => v.startsWith('other:'));
       return (
         <span className="check-group" id={id}>
           {field.options.map((o) => (
@@ -242,6 +245,25 @@ export function FieldInput({
               {o.label}
             </label>
           ))}
+          {field.allowOther && (
+            <label className="check-item">
+              <Checkbox checked={otherEntry !== undefined}
+                onCheckedChange={(checked) =>
+                  onChange(
+                    checked
+                      ? [...selected, 'other:']
+                      : selected.filter((v) => !v.startsWith('other:')),
+                  )
+                } />
+              other:
+              {otherEntry !== undefined && (
+                <Input type="text" aria-label={`${field.label} other`} value={otherEntry.slice(6)}
+                  onChange={(e) =>
+                    onChange(selected.map((v) => (v.startsWith('other:') ? `other:${e.target.value}` : v)))
+                  } />
+              )}
+            </label>
+          )}
         </span>
       );
     }
@@ -267,6 +289,50 @@ export function FieldInput({
               ))}
             </div>
           ))}
+        </div>
+      );
+    }
+    case 'grid': {
+      const current = (value as Record<string, string | string[]> | undefined) ?? {};
+      const isMultiple = field.selection === 'multiple';
+      return (
+        <div className="likert" id={id} role="table">
+          <div className="likert-row likert-head" role="row">
+            <span role="columnheader" />
+            {field.columns.map((c) => (
+              <span key={c.value} role="columnheader" className="muted">{c.label}</span>
+            ))}
+          </div>
+          {field.rows.map((row) => {
+            const rowAnswer = current[row.value];
+            const rowSelected = isMultiple ? ((rowAnswer as string[] | undefined) ?? []) : (rowAnswer as string | undefined);
+            return (
+              <div key={row.value} className="likert-row" role="row">
+                <span role="rowheader">{row.label}</span>
+                {field.columns.map((c) => (
+                  <span key={c.value} role="cell">
+                    <input
+                      type={isMultiple ? 'checkbox' : 'radio'}
+                      name={isMultiple ? undefined : `${id}-${row.value}`}
+                      aria-label={`${row.label}: ${c.label}`}
+                      checked={isMultiple ? (rowSelected as string[]).includes(c.value) : rowSelected === c.value}
+                      onChange={(e) => {
+                        if (isMultiple) {
+                          const list = (rowSelected as string[]) ?? [];
+                          onChange({
+                            ...current,
+                            [row.value]: e.target.checked ? [...list, c.value] : list.filter((v) => v !== c.value),
+                          } as Record<string, string[]>);
+                        } else {
+                          onChange({ ...current, [row.value]: c.value } as Record<string, string>);
+                        }
+                      }}
+                    />
+                  </span>
+                ))}
+              </div>
+            );
+          })}
         </div>
       );
     }
@@ -720,9 +786,10 @@ export function FormRenderer({
   const theme = definition.theme;
   const fontStack = theme?.fontFamily ? FONT_STACKS[theme.fontFamily] : undefined;
   const accentStyle =
-    theme?.accentColor || fontStack
+    theme?.accentColor || theme?.backgroundColor || fontStack
       ? ({
           ...(theme?.accentColor ? { '--msform-accent': theme.accentColor } : {}),
+          ...(theme?.backgroundColor ? { backgroundColor: theme.backgroundColor } : {}),
           ...(fontStack ? { '--msform-font-family': fontStack } : {}),
         } as React.CSSProperties)
       : undefined;

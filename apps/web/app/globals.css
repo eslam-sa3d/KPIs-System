@@ -1357,12 +1357,9 @@ h3 {
   box-shadow: var(--shadow-card);
 }
 
-.builder-field.is-dragging {
+.builder-field.is-dragging,
+.question-card.is-dragging {
   opacity: 0.4;
-}
-
-.builder-field.is-drag-over {
-  border-top: 3px solid var(--pulse-purple);
 }
 
 .builder-field legend {
@@ -3427,6 +3424,41 @@ button.insight-card:focus-visible {
 .summary-bar-count {
   font-size: var(--font-size-xs);
   white-space: nowrap;
+}
+
+.summary-pie {
+  margin-top: var(--space-3);
+}
+
+.summary-pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary-pie-legend-row-inner {
+  display: grid;
+  grid-template-columns: 10px minmax(70px, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  font-size: var(--font-size-sm);
+  background: transparent;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.summary-pie-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 
 .summary-nps {
