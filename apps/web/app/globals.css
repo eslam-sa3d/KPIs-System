@@ -4019,3 +4019,21 @@ h3 {
     padding: 0;
   }
 }
+
+/* Bulk KPI-mapping: maps many form questions to Evaluation Areas in one
+   pass instead of the one-at-a-time "add a mapping" form above it — the
+   shape a large multi-question evaluation survey actually needs. */
+.kpi-bulk-mapping {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.kpi-bulk-mapping-table {
+  margin: var(--space-3) 0;
+}
+
+.kpi-bulk-mapping-table select {
+  width: 100%;
+  max-width: 320px;
+}

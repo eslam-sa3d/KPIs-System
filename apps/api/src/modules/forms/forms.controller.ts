@@ -17,9 +17,11 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import {
+  BulkCreateFormKpiMappingInput,
   CreateFormKpiMappingInput,
   PageQuery,
   SubmissionAnswers,
+  bulkCreateFormKpiMappingSchema,
   createFormKpiMappingSchema,
   submissionAnswersSchema,
 } from '@pulse/contracts';
@@ -219,6 +221,16 @@ export class FormsController {
     @Req() req: AuthedRequest,
   ) {
     return this.kpiMappings.create(formId, body, req.user.id);
+  }
+
+  @Post(':formId/kpi-mappings/bulk')
+  @RequirePermissions('forms:manage', 'kpis:write')
+  bulkCreateKpiMappings(
+    @Param('formId') formId: string,
+    @Body(new ZodValidationPipe(bulkCreateFormKpiMappingSchema)) body: BulkCreateFormKpiMappingInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpiMappings.bulkCreate(formId, body, req.user.id);
   }
 
   @Delete(':formId/kpi-mappings/:mappingId')

@@ -7,6 +7,7 @@ const definition = formDefinitionSchema.parse({
   fields: [
     { key: 'evaluatee', label: 'Who are you reviewing?', type: 'person', required: true },
     { key: 'score', label: 'Rating', type: 'rating', scale: 5, required: true },
+    { key: 'score2', label: 'Communication', type: 'rating', scale: 5, required: true },
     { key: 'notes', label: 'Notes', type: 'short_text', required: false },
   ],
 });
@@ -122,5 +123,111 @@ describe('FormKpiMappingsService.delete', () => {
     await expect(service.delete('form-1', 'ghost', 'admin-1')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+});
+
+describe('FormKpiMappingsService.bulkCreate', () => {
+  const areas: Record<string, { id: string; name: string } | null> = {
+    'area-1': { id: 'area-1', name: 'Leadership' },
+    'area-2': { id: 'area-2', name: 'Communication' },
+  };
+
+  /** existingMappings is per-call, not shared, so tests can't leak state into each other. */
+  function makeBulkPrismaStub(existingMappings: Record<string, { id: string } | null> = {}) {
+    const prisma = makePrismaStub();
+    prisma.evaluationArea.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      Object.prototype.hasOwnProperty.call(areas, where.id) ? areas[where.id] : null,
+    );
+    prisma.formKpiMapping.findUnique.mockImplementation(
+      async ({ where }: { where: { formId_evaluationAreaId: { evaluationAreaId: string } } }) =>
+        existingMappings[where.formId_evaluationAreaId.evaluationAreaId] ?? null,
+    );
+    return prisma;
+  }
+
+  const bulkInput = {
+    evaluateeFieldKey: 'evaluatee',
+    mappings: [
+      { evaluationAreaId: 'area-1', scoreFieldKey: 'score' },
+      { evaluationAreaId: 'area-2', scoreFieldKey: 'score2' },
+    ],
+  };
+
+  it('creates every row when all are valid and unmapped', async () => {
+    const prisma = makeBulkPrismaStub();
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+
+    const result = await service.bulkCreate('form-1', bulkInput, 'admin-1');
+
+    expect(result.created).toHaveLength(2);
+    expect(result.skipped).toHaveLength(0);
+    expect(prisma.formKpiMapping.create).toHaveBeenCalledTimes(2);
+    expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a row whose Evaluation Area is already mapped on this form, keeping the rest', async () => {
+    const prisma = makeBulkPrismaStub({ 'area-2': { id: 'mapping-existing' } });
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+
+    const result = await service.bulkCreate('form-1', bulkInput, 'admin-1');
+
+    expect(result.created).toHaveLength(1);
+    expect(result.created[0]).toMatchObject({ evaluationAreaId: 'area-1' });
+    expect(result.skipped).toEqual([
+      { evaluationAreaId: 'area-2', reason: 'this form is already mapped to "Communication"' },
+    ]);
+  });
+
+  it('skips a row referencing an unknown Evaluation Area', async () => {
+    const prisma = makeBulkPrismaStub();
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+
+    const result = await service.bulkCreate(
+      'form-1',
+      { evaluateeFieldKey: 'evaluatee', mappings: [{ evaluationAreaId: 'ghost-area', scoreFieldKey: 'score' }] },
+      'admin-1',
+    );
+
+    expect(result.created).toHaveLength(0);
+    expect(result.skipped).toEqual([{ evaluationAreaId: 'ghost-area', reason: 'evaluation area not found' }]);
+  });
+
+  it('skips a row whose scoreFieldKey is not a rating/nps/slider field', async () => {
+    const prisma = makeBulkPrismaStub();
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+
+    const result = await service.bulkCreate(
+      'form-1',
+      { evaluateeFieldKey: 'evaluatee', mappings: [{ evaluationAreaId: 'area-1', scoreFieldKey: 'notes' }] },
+      'admin-1',
+    );
+
+    expect(result.created).toHaveLength(0);
+    expect(result.skipped).toEqual([
+      { evaluationAreaId: 'area-1', reason: '"notes" must be a rating, nps, or slider field' },
+    ]);
+  });
+
+  it('rejects the whole batch when evaluateeFieldKey is not a person field', async () => {
+    const prisma = makeBulkPrismaStub();
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+
+    await expect(
+      service.bulkCreate('form-1', { ...bulkInput, evaluateeFieldKey: 'notes' }, 'admin-1'),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
+  });
+
+  it('does not audit-log when nothing was created', async () => {
+    const prisma = makeBulkPrismaStub();
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+
+    await service.bulkCreate(
+      'form-1',
+      { evaluateeFieldKey: 'evaluatee', mappings: [{ evaluationAreaId: 'ghost-area', scoreFieldKey: 'score' }] },
+      'admin-1',
+    );
+
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 });

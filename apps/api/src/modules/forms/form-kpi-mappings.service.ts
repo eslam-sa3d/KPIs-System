@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { CreateFormKpiMappingInput, SCORE_FIELD_TYPES } from '@pulse/contracts';
+import type { FormKpiMapping as PrismaFormKpiMapping } from '@prisma/client';
+import {
+  BulkCreateFormKpiMappingInput,
+  BulkCreateFormKpiMappingResult,
+  CreateFormKpiMappingInput,
+  SCORE_FIELD_TYPES,
+} from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 import { FormsService } from './forms.service';
@@ -62,6 +68,86 @@ export class FormKpiMappingsService {
       data: { actorId, action: 'form_kpi_mapping.created', entity: 'FormKpiMapping', entityId: mapping.id, detail: input },
     });
     return mapping;
+  }
+
+  /**
+   * Maps many questions on one form in a single call, sharing one evaluatee
+   * field across all of them (the normal shape of a multi-question
+   * evaluation survey). Each row is validated and persisted independently —
+   * a row referencing an already-mapped Evaluation Area, an unknown area, or
+   * a field that isn't a valid score field is skipped with a reason rather
+   * than failing the whole batch, so re-running this against a form that's
+   * already partially mapped only fills in the gaps.
+   */
+  async bulkCreate(formId: string, input: BulkCreateFormKpiMappingInput, actorId: string) {
+    const { definition } = await this.forms.getLatestVersion((await this.requireForm(formId)).slug);
+
+    const evaluateeField = definition.fields.find((f) => f.key === input.evaluateeFieldKey);
+    if (!evaluateeField || evaluateeField.type !== 'person') {
+      throw AppError.validation([
+        { path: 'evaluateeFieldKey', message: 'must reference a "person" field on this form' },
+      ]);
+    }
+
+    // Raw Prisma rows (createdAt: Date) — serialized to the wire-format
+    // BulkCreateFormKpiMappingResult (createdAt: string) by Nest's response
+    // pipeline, same as every other Prisma-returning handler in this module.
+    const result: { created: PrismaFormKpiMapping[]; skipped: BulkCreateFormKpiMappingResult['skipped'] } = {
+      created: [],
+      skipped: [],
+    };
+
+    for (const row of input.mappings) {
+      const scoreField = definition.fields.find((f) => f.key === row.scoreFieldKey);
+      if (!scoreField || !(SCORE_FIELD_TYPES as readonly string[]).includes(scoreField.type)) {
+        result.skipped.push({
+          evaluationAreaId: row.evaluationAreaId,
+          reason: `"${row.scoreFieldKey}" must be a rating, nps, or slider field`,
+        });
+        continue;
+      }
+
+      const area = await this.prisma.evaluationArea.findUnique({ where: { id: row.evaluationAreaId } });
+      if (!area) {
+        result.skipped.push({ evaluationAreaId: row.evaluationAreaId, reason: 'evaluation area not found' });
+        continue;
+      }
+
+      const existing = await this.prisma.formKpiMapping.findUnique({
+        where: { formId_evaluationAreaId: { formId, evaluationAreaId: row.evaluationAreaId } },
+      });
+      if (existing) {
+        result.skipped.push({
+          evaluationAreaId: row.evaluationAreaId,
+          reason: `this form is already mapped to "${area.name}"`,
+        });
+        continue;
+      }
+
+      const mapping = await this.prisma.formKpiMapping.create({
+        data: {
+          formId,
+          evaluationAreaId: row.evaluationAreaId,
+          evaluateeFieldKey: input.evaluateeFieldKey,
+          scoreFieldKey: row.scoreFieldKey,
+        },
+      });
+      result.created.push(mapping);
+    }
+
+    if (result.created.length > 0) {
+      await this.prisma.auditLog.create({
+        data: {
+          actorId,
+          action: 'form_kpi_mapping.bulk_created',
+          entity: 'FormKpiMapping',
+          entityId: formId,
+          detail: { evaluateeFieldKey: input.evaluateeFieldKey, count: result.created.length },
+        },
+      });
+    }
+
+    return result;
   }
 
   async delete(formId: string, mappingId: string, actorId: string) {
