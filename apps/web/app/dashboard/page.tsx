@@ -247,7 +247,7 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        {kpis && kpis.length > 0 && (
+        {kpis && (
           <div className="p-filter-pills" style={{ marginBottom: 20 }}>
             <button className={`p-fpill${level === 'all' ? ' active' : ''}`} onClick={() => setLevel('all')}>
               all levels ({kpis.length})
@@ -261,14 +261,19 @@ export default function DashboardPage() {
         )}
 
         {kpis === null ? (
-          <p className="muted">loading…</p>
-        ) : kpis.length === 0 ? (
-          <div className="empty-state">
-            <h2>no KPIs assigned yet</h2>
-            <p className="muted">an admin can map KPIs to your role or department under KPI settings.</p>
+          <div className="skeleton-card" aria-hidden="true">
+            <div className="skeleton-line" style={{ width: '50%' }} />
+            <div className="skeleton-line" style={{ width: '70%' }} />
+            <div className="skeleton-line" style={{ width: '40%' }} />
           </div>
         ) : (
           <>
+            {kpis.length === 0 && (
+              <p className="muted" style={{ marginBottom: 12 }}>
+                no KPIs assigned yet — an admin can map KPIs to your role or department under KPI settings. the
+                widgets below will fill in as soon as one is.
+              </p>
+            )}
             <div className="p-kpi-strip">
               {STATUS_ORDER.map((s) => (
                 <button
@@ -375,7 +380,7 @@ export default function DashboardPage() {
                   {tableData.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="muted" style={{ textAlign: 'center' }}>
-                        no KPIs match this filter.
+                        {kpis.length === 0 ? 'no KPIs assigned yet.' : 'no KPIs match this filter.'}
                       </td>
                     </tr>
                   ) : (
