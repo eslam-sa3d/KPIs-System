@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { StatCard, StatCardIcon } from '@/components/stat-card';
 import { ApiRequestError, api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -438,57 +439,38 @@ export default function KpisAdminPage() {
         </div>
       ) : (
         <>
-          <div className="insights-row">
-            <div className="insight-card">
-              <span className="hierarchy-icon hierarchy-icon-sm">
-                <Target size={15} aria-hidden="true" />
-              </span>
-              <span className="insight-card-body">
-                <strong>{stats!.kpiCount}</strong>
-                <span>{stats!.kpiCount === 1 ? 'kpi' : 'kpis'}</span>
-              </span>
-            </div>
-            <div className="insight-card">
-              <span className="hierarchy-icon hierarchy-icon-sm">
-                <Layers size={15} aria-hidden="true" />
-              </span>
-              <span className="insight-card-body">
-                <strong>{stats!.areaCount}</strong>
-                <span>evaluation areas</span>
-              </span>
-            </div>
-            <div className="insight-card">
-              <span className="hierarchy-icon hierarchy-icon-sm">
-                <ListPlus size={15} aria-hidden="true" />
-              </span>
-              <span className="insight-card-body">
-                <strong>{stats!.subCriteriaCount}</strong>
-                <span>sub-criteria</span>
-              </span>
-            </div>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <StatCard
+              icon={<StatCardIcon icon={<Target className="size-5" aria-hidden="true" />} />}
+              value={stats!.kpiCount}
+              label={stats!.kpiCount === 1 ? 'kpi' : 'kpis'}
+            />
+            <StatCard
+              icon={<StatCardIcon icon={<Layers className="size-5" aria-hidden="true" />} />}
+              value={stats!.areaCount}
+              label="evaluation areas"
+            />
+            <StatCard
+              icon={<StatCardIcon icon={<ListPlus className="size-5" aria-hidden="true" />} />}
+              value={stats!.subCriteriaCount}
+              label="sub-criteria"
+            />
             {stats!.hasWeights && (
-              <div className={`insight-card${stats!.totalWeight !== 100 ? ' is-warning' : ''}`}>
-                <WeightRing value={Math.min(100, stats!.totalWeight)} size="sm" />
-                <span className="insight-card-body">
-                  <strong>{stats!.totalWeight}%</strong>
-                  <span>{stats!.totalWeight === 100 ? 'weight allocated' : 'weight — not 100%'}</span>
-                </span>
-              </div>
+              <StatCard
+                icon={<WeightRing value={Math.min(100, stats!.totalWeight)} size="sm" />}
+                value={`${stats!.totalWeight}%`}
+                label={stats!.totalWeight === 100 ? 'weight allocated' : 'weight — not 100%'}
+                tone={stats!.totalWeight !== 100 ? 'accent' : 'default'}
+              />
             )}
             {stats!.inactiveCount > 0 && (
-              <button
-                type="button"
-                className="insight-card is-alert"
+              <StatCard
+                icon={<StatCardIcon icon={<EyeOff className="size-5" aria-hidden="true" />} tone="accent" />}
+                value={stats!.inactiveCount}
+                label={stats!.inactiveCount === 1 ? 'inactive kpi' : 'inactive kpis'}
+                tone="accent"
                 onClick={() => firstInactiveKpiId && setSelectedKpiId(firstInactiveKpiId)}
-              >
-                <span className="hierarchy-icon hierarchy-icon-sm">
-                  <EyeOff size={15} aria-hidden="true" />
-                </span>
-                <span className="insight-card-body">
-                  <strong>{stats!.inactiveCount}</strong>
-                  <span>{stats!.inactiveCount === 1 ? 'inactive kpi' : 'inactive kpis'}</span>
-                </span>
-              </button>
+              />
             )}
           </div>
 
