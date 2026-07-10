@@ -1,5 +1,67 @@
 /* Single source of truth for all styling primitives. */
 @import '@pulse/theme/tokens.css';
+@import 'tailwindcss';
+
+@layer base, legacy-base, legacy-components, components, utilities;
+
+/* theme-toggle.tsx sets/removes data-theme on <html> (never a class) — three
+   states: explicit light, explicit dark, or absent ("system", OS-driven).
+   This mirrors that exact same three-way logic so shadcn's literal `dark:`
+   utilities (a handful inside its own component source) stay correct in all
+   three states, matching how m3-scheme.css already resolves --md-sys-color-*. */
+@custom-variant dark {
+  &:where([data-theme=dark], [data-theme=dark] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:not([data-theme=light]):not([data-theme=dark]), :not([data-theme=light]):not([data-theme=dark]) *) {
+      @slot;
+    }
+  }
+}
+
+/* Every shadcn variable aliases onto the existing --color-*/--md-sys-color-*
+   chain (packages/theme) — nothing here is a new hardcoded color. `inline`
+   keeps these as live var() references rather than baking a static value at
+   build time, so they keep following the same light/dark/system swap the
+   rest of the app already does. */
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-text);
+  --color-popover: var(--md-sys-color-surface-container-high);
+  --color-popover-foreground: var(--color-text);
+  --color-primary: var(--color-primary);
+  --color-primary-foreground: var(--color-on-primary);
+  --color-secondary: var(--md-sys-color-secondary-container);
+  --color-secondary-foreground: var(--md-sys-color-on-secondary-container);
+  --color-muted: var(--md-sys-color-surface-container-high);
+  --color-muted-foreground: var(--color-text-muted);
+  --color-accent: var(--color-accent);
+  --color-accent-foreground: var(--md-sys-color-on-tertiary);
+  --color-destructive: var(--color-danger);
+  --color-destructive-foreground: var(--md-sys-color-on-error);
+  --color-border: var(--color-border);
+  --color-input: var(--color-border);
+  --color-ring: var(--color-primary);
+
+  --color-chart-1: var(--pulse-purple);
+  --color-chart-2: var(--pulse-coral);
+  --color-chart-3: var(--pulse-chart-oasis);
+  --color-chart-4: var(--pulse-chart-sunset);
+  --color-chart-5: var(--pulse-chart-sea);
+
+  --font-sans: var(--font-family-base);
+
+  --radius-sm: var(--md-sys-shape-corner-small);
+  --radius-md: var(--md-sys-shape-corner-medium);
+  --radius-lg: var(--md-sys-shape-corner-large);
+  --radius-xl: var(--md-sys-shape-corner-extra-large);
+  --radius: var(--md-sys-shape-corner-medium);
+}
+
+@layer legacy-base {
 
 * {
   box-sizing: border-box;
@@ -56,6 +118,9 @@ h3 {
   letter-spacing: var(--md-sys-typescale-title-medium-tracking);
   font-weight: var(--font-weight-light);
 }
+}
+
+@layer legacy-components {
 
 .btn-primary {
   display: inline-block;
@@ -4048,4 +4113,5 @@ h3 {
 .kpi-bulk-mapping-table select {
   width: 100%;
   max-width: 320px;
+}
 }

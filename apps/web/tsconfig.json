@@ -18,6 +18,9 @@
       }
     ],
     "paths": {
+      "@/*": [
+        "./*"
+      ],
       "@pulse/contracts": [
         "../../packages/contracts/src"
       ],
