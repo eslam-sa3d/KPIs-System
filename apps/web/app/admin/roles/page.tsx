@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent } from '@/components/ui/card';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -113,28 +114,32 @@ export default function RolesAdminPage() {
       )}
 
       {can(user, 'roles:manage') && catalog && (
-        <form className="builder admin-card" onSubmit={onCreate}>
-          <h2>new role</h2>
-          <label htmlFor="r-name">role name</label>
-          <input id="r-name" name="name" required minLength={2} />
-          <label htmlFor="r-desc">description</label>
-          <input id="r-desc" name="description" />
-          <span className="field-label">permissions</span>
-          <div className="perm-grid">
-            {catalog.resources.map((resource) => (
-              <fieldset key={resource} className="perm-resource">
-                <legend>{resource.replace('_', ' ')}</legend>
-                {catalog.actions.map((action) => (
-                  <label key={action} className="check-item">
-                    <input type="checkbox" name="permissions" value={`${resource}:${action}`} />
-                    {action}
-                  </label>
+        <Card>
+          <CardContent className="pt-6">
+            <form className="builder" onSubmit={onCreate}>
+              <h2 className="text-lg font-semibold mb-2">new role</h2>
+              <label htmlFor="r-name">role name</label>
+              <input id="r-name" name="name" required minLength={2} />
+              <label htmlFor="r-desc">description</label>
+              <input id="r-desc" name="description" />
+              <span className="field-label">permissions</span>
+              <div className="perm-grid">
+                {catalog.resources.map((resource) => (
+                  <fieldset key={resource} className="perm-resource">
+                    <legend>{resource.replace('_', ' ')}</legend>
+                    {catalog.actions.map((action) => (
+                      <label key={action} className="check-item">
+                        <input type="checkbox" name="permissions" value={`${resource}:${action}`} />
+                        {action}
+                      </label>
+                    ))}
+                  </fieldset>
                 ))}
-              </fieldset>
-            ))}
-          </div>
-          <Button type="submit">create role</Button>
-        </form>
+              </div>
+              <Button type="submit">create role</Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
       {roles === null ? (

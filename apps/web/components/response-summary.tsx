@@ -2,6 +2,7 @@
 
 import type { FormResponseSummary } from '@pulse/contracts';
 import { palette } from '@pulse/theme';
+import { Card, CardContent } from '@/components/ui/card';
 
 export type ResponseSummaryData = FormResponseSummary;
 
@@ -68,7 +69,8 @@ export function ResponseSummary({
 }) {
   return (
     <div className="summary-grid">
-      <div className="admin-card summary-headline">
+      <Card className="summary-headline">
+        <CardContent>
         <strong>{data.responses}</strong>
         <span className="muted">total responses</span>
         {data.lastResponseAt && (
@@ -76,10 +78,12 @@ export function ResponseSummary({
             last response {new Date(data.lastResponseAt).toLocaleString()}
           </span>
         )}
-      </div>
+        </CardContent>
+      </Card>
 
       {data.quiz && (
-        <div className="admin-card summary-field-card">
+        <Card className="summary-field-card">
+          <CardContent>
           <h3>quiz results</h3>
           <p className="muted">
             average score <strong>{data.quiz.averagePercent}%</strong>
@@ -91,11 +95,13 @@ export function ResponseSummary({
             counts={data.quiz.distribution}
             total={Object.values(data.quiz.distribution).reduce((a, b) => a + b, 0)}
           />
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {data.fields.map((field) => (
-        <div key={field.key} className="admin-card summary-field-card">
+        <Card key={field.key} className="summary-field-card">
+          <CardContent>
           <h3>{field.label}</h3>
           <p className="muted">{field.answered} response(s)</p>
 
@@ -168,7 +174,8 @@ export function ResponseSummary({
               ))}
             </ul>
           )}
-        </div>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );

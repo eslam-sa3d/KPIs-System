@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { API_URL, api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 /** Public share link + QR (client-generated, no external network call). */
 export function ShareLinkPanel({
@@ -100,8 +101,11 @@ export function ShareLinkPanel({
   }
 
   return (
-    <div className="admin-card share-panel">
-      <h2>public share link</h2>
+    <Card className="share-panel">
+      <CardHeader>
+        <CardTitle>public share link</CardTitle>
+      </CardHeader>
+      <CardContent>
       <p className="muted">
         anyone with this link can submit a response without signing in — like a Microsoft Forms
         share link. Disabling it (or rotating) invalidates the previous link immediately.
@@ -194,6 +198,7 @@ export function ShareLinkPanel({
           </div>
         </div>
       )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }

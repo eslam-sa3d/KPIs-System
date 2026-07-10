@@ -3,6 +3,7 @@
 import type { StatusKey } from '../lib/kpi-status';
 import { STATUS_LABEL, statusBadgeStyle } from '../lib/kpi-status';
 import { Badge } from '@/components/ui/badge';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 export interface DrawerKpi {
   id: string;
@@ -56,19 +57,14 @@ function Delta({ latest, previous }: { latest: number | null; previous: number |
 
 /** Slide-in detail panel for a single KPI — one section per Evaluation Area. */
 export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClose: () => void }) {
-  const open = kpi !== null;
   return (
-    <>
-      <div className={`p-drawer-overlay${open ? ' open' : ''}`} onClick={onClose} aria-hidden={!open} />
-      <div className={`p-drawer${open ? ' open' : ''}`} role="dialog" aria-modal="true" aria-label="KPI detail">
+    <Sheet open={kpi !== null} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="w-full sm:max-w-[480px]">
         {kpi && (
           <>
-            <div className="p-drawer-header">
-              <button className="p-drawer-close" onClick={onClose} aria-label="close">
-                ✕
-              </button>
+            <SheetHeader className="p-drawer-header">
               <div className="p-drawer-avatar">{kpi.name.slice(0, 2).toUpperCase()}</div>
-              <div className="p-drawer-name">{kpi.name}</div>
+              <SheetTitle className="p-drawer-name">{kpi.name}</SheetTitle>
               <div className="p-drawer-meta">
                 {kpi.areas.length} evaluation area{kpi.areas.length === 1 ? '' : 's'}
               </div>
@@ -77,7 +73,7 @@ export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClo
                   {STATUS_LABEL[kpi.status]}
                 </Badge>
               </div>
-            </div>
+            </SheetHeader>
             <div className="p-drawer-body">
               {kpi.areas.length === 0 ? (
                 <p className="muted" style={{ fontSize: 12 }}>
@@ -165,7 +161,7 @@ export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClo
             </div>
           </>
         )}
-      </div>
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }

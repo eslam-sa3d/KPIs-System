@@ -5,6 +5,7 @@ import type { FormSettings } from '@pulse/contracts';
 import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent } from '@/components/ui/card';
 
 const toLocalInputValue = (iso?: string) => (iso ? iso.slice(0, 16) : '');
 const toIso = (local: string) => (local ? new Date(local).toISOString() : undefined);
@@ -44,8 +45,10 @@ export function FormSettingsPanel({
   }
 
   return (
-    <form className="admin-card builder" onSubmit={onSave}>
-      <h2>response settings</h2>
+    <Card>
+      <CardContent className="pt-6">
+    <form className="builder" onSubmit={onSave}>
+      <h2 className="text-lg font-semibold mb-2">response settings</h2>
 
       <label className="check-item">
         <input
@@ -266,5 +269,7 @@ export function FormSettingsPanel({
         </Alert>
       )}
     </form>
+      </CardContent>
+    </Card>
   );
 }

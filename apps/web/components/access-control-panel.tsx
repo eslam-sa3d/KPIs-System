@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface UserOption {
   id: string;
@@ -105,8 +106,11 @@ export function AccessControlPanel({
   );
 
   return (
-    <div className="admin-card">
-      <h2>access</h2>
+    <Card>
+      <CardHeader>
+        <CardTitle>access</CardTitle>
+      </CardHeader>
+      <CardContent>
       <p className="muted">
         by default, anyone signed in with the "view forms" permission can open this form. restricting it
         limits that to specific people — the public share link above is unaffected either way.
@@ -216,6 +220,7 @@ export function AccessControlPanel({
           )}
         </>
       )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }

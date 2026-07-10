@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { PortalShell } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -55,14 +56,16 @@ export default function SettingsPage() {
       <h1>settings</h1>
       <p className="portal-subtitle">platform administration</p>
 
-      <section className="admin-card">
-        <h2>demo data</h2>
-        <p className="muted">
-          Seed a complete, clearly-tagged sandbox — users, a custom role, departments, KPIs with
-          12 periods of history, and a form with submissions — to test dashboards, forms, users,
-          and KPIs end-to-end. Removing it deletes only tagged records; real data is untouched.
-        </p>
-
+      <Card>
+        <CardHeader>
+          <CardTitle>demo data</CardTitle>
+          <CardDescription>
+            Seed a complete, clearly-tagged sandbox — users, a custom role, departments, KPIs with
+            12 periods of history, and a form with submissions — to test dashboards, forms, users,
+            and KPIs end-to-end. Removing it deletes only tagged records; real data is untouched.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
         {status === null ? (
           <p className="muted">loading…</p>
         ) : (
@@ -140,7 +143,8 @@ export default function SettingsPage() {
             </Alert>
           )}
         </div>
-      </section>
+        </CardContent>
+      </Card>
     </PortalShell>
   );
 }

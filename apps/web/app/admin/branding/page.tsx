@@ -5,6 +5,7 @@ import type { BrandIdentity } from '@pulse/contracts';
 import { PortalShell } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent } from '@/components/ui/card';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -48,29 +49,33 @@ export default function BrandingAdminPage() {
       {identity === null ? (
         <p className="muted">loading…</p>
       ) : (
-        <form className="builder admin-card" onSubmit={onSave}>
-          <label htmlFor="b-name">company name</label>
-          <input id="b-name" name="companyName" defaultValue={identity.companyName} required />
-          <label htmlFor="b-headline">landing headline</label>
-          <input id="b-headline" name="headline" defaultValue={identity.headline ?? ''} />
-          <label htmlFor="b-tagline">tagline</label>
-          <input id="b-tagline" name="tagline" defaultValue={identity.tagline ?? ''} />
-          <label htmlFor="b-logo">logo URL (optional — defaults to the pulse logo)</label>
-          <input id="b-logo" name="logoUrl" defaultValue={identity.logoUrl ?? ''} />
-          <Button type="submit">save identity</Button>
-          <div className="space-y-2 mb-4">
-            {notice && (
-              <Alert>
-                <AlertDescription>{notice}</AlertDescription>
-              </Alert>
-            )}
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-          </div>
-        </form>
+        <Card>
+          <CardContent className="pt-6">
+            <form className="builder" onSubmit={onSave}>
+              <label htmlFor="b-name">company name</label>
+              <input id="b-name" name="companyName" defaultValue={identity.companyName} required />
+              <label htmlFor="b-headline">landing headline</label>
+              <input id="b-headline" name="headline" defaultValue={identity.headline ?? ''} />
+              <label htmlFor="b-tagline">tagline</label>
+              <input id="b-tagline" name="tagline" defaultValue={identity.tagline ?? ''} />
+              <label htmlFor="b-logo">logo URL (optional — defaults to the pulse logo)</label>
+              <input id="b-logo" name="logoUrl" defaultValue={identity.logoUrl ?? ''} />
+              <Button type="submit">save identity</Button>
+              <div className="space-y-2 mb-4">
+                {notice && (
+                  <Alert>
+                    <AlertDescription>{notice}</AlertDescription>
+                  </Alert>
+                )}
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       )}
     </PortalShell>
   );

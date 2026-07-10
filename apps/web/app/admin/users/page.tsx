@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 
@@ -129,51 +130,55 @@ export default function UsersAdminPage() {
       <p className="portal-subtitle">create accounts, assign roles, and manage access tiers</p>
 
       {can(user, 'users:write') && (
-        <form className="builder admin-card" onSubmit={onCreate}>
-          <h2>new user</h2>
-          <label htmlFor="u-email">email</label>
-          <input id="u-email" name="email" type="email" required />
-          <label htmlFor="u-name">display name</label>
-          <input id="u-name" name="displayName" required minLength={2} />
-          <label htmlFor="u-pass">temporary password</label>
-          <input id="u-pass" name="password" type="password" required minLength={8} />
-          {departments.length > 0 && (
-            <>
-              <label htmlFor="u-dept">department</label>
-              <select id="u-dept" name="departmentId" defaultValue="">
-                <option value="">— none —</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
-          {roles.length > 0 && (
-            <>
-              <span className="field-label">roles</span>
-              <span className="check-group">
-                {roles.map((r) => (
-                  <label key={r.id} className="check-item">
-                    <input type="checkbox" name="roleIds" value={r.id} /> {r.name}
-                  </label>
-                ))}
-              </span>
-            </>
-          )}
-          <Button type="submit">create user</Button>
-          {notice && (
-            <Alert>
-              <AlertDescription>{notice}</AlertDescription>
-            </Alert>
-          )}
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-        </form>
+        <Card>
+          <CardContent className="pt-6">
+            <form className="builder" onSubmit={onCreate}>
+              <h2 className="text-lg font-semibold mb-2">new user</h2>
+              <label htmlFor="u-email">email</label>
+              <input id="u-email" name="email" type="email" required />
+              <label htmlFor="u-name">display name</label>
+              <input id="u-name" name="displayName" required minLength={2} />
+              <label htmlFor="u-pass">temporary password</label>
+              <input id="u-pass" name="password" type="password" required minLength={8} />
+              {departments.length > 0 && (
+                <>
+                  <label htmlFor="u-dept">department</label>
+                  <select id="u-dept" name="departmentId" defaultValue="">
+                    <option value="">— none —</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+              {roles.length > 0 && (
+                <>
+                  <span className="field-label">roles</span>
+                  <span className="check-group">
+                    {roles.map((r) => (
+                      <label key={r.id} className="check-item">
+                        <input type="checkbox" name="roleIds" value={r.id} /> {r.name}
+                      </label>
+                    ))}
+                  </span>
+                </>
+              )}
+              <Button type="submit">create user</Button>
+              {notice && (
+                <Alert>
+                  <AlertDescription>{notice}</AlertDescription>
+                </Alert>
+              )}
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+            </form>
+          </CardContent>
+        </Card>
       )}
 
       {(() => {

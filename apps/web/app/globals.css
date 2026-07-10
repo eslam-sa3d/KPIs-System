@@ -967,41 +967,8 @@ h3 {
   color: var(--accent);
 }
 
-/* ── detail drawer ─────────────────────────────────────────────── */
-.p-drawer-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 0.5);
-  z-index: 200;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-
-.p-drawer-overlay.open {
-  opacity: 1;
-  pointer-events: all;
-}
-
-.p-drawer {
-  position: fixed;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: min(480px, 100vw);
-  background: var(--surface);
-  color: var(--text);
-  border-left: 1px solid var(--border);
-  z-index: 201;
-  transform: translateX(100%);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow-y: auto;
-}
-
-.p-drawer.open {
-  transform: translateX(0);
-}
-
+/* ── detail drawer (outer overlay/positioning now owned by shadcn Sheet;
+   these remaining rules only style the drawer's own header/content) ──── */
 .p-drawer-header {
   padding: 20px 20px 16px;
   border-bottom: 1px solid var(--border);
@@ -1009,28 +976,6 @@ h3 {
   top: 0;
   background: var(--surface);
   z-index: 2;
-}
-
-.p-drawer-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: none;
-  color: var(--text-2);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-}
-
-.p-drawer-close:hover {
-  background: var(--card);
-  color: var(--text);
 }
 
 .p-drawer-avatar {
@@ -3708,38 +3653,6 @@ h3 {
 }
 
 /* single-response detail modal (submissions tab) */
-.response-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 15, 20, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-4);
-  z-index: 300;
-}
-
-.response-modal-card {
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  /* modals float above a scrim — M3 elevation level3, not a card's level1 */
-  box-shadow: var(--shadow-modal);
-  max-width: 640px;
-  width: 100%;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.response-modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-5) var(--space-6);
-  border-bottom: 1px solid var(--color-border);
-}
-
 .response-modal-body {
   padding: var(--space-5) var(--space-6);
   overflow-y: auto;
@@ -3762,15 +3675,6 @@ h3 {
 
 .response-modal-qa dd {
   font-weight: var(--font-weight-medium);
-}
-
-.response-modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-6);
-  border-top: 1px solid var(--color-border);
 }
 
 /* dashboard spreadsheet import popup */

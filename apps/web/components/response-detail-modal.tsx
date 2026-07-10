@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import type { FormDefinition, SubmissionAnswers } from '@pulse/contracts';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, downloadFile } from '../lib/api-client';
 import { FieldInput, type SubmissionScore } from './form-renderer';
 
@@ -62,15 +65,17 @@ export function ResponseDetailModal({
   }, [submission]);
 
   useEffect(() => {
+    // Escape-to-close is now Radix Dialog's own responsibility (see
+    // onEscapeKeyDown below, which still respects the same `editing` guard);
+    // this listener only owns the arrow-key pagination Radix doesn't provide.
     function onKey(e: KeyboardEvent) {
-      if (editing) return; // don't hijack arrow keys / escape while correcting an answer
-      if (e.key === 'Escape') onClose();
+      if (editing) return; // don't hijack arrow keys while correcting an answer
       if (e.key === 'ArrowLeft' && onPrev) onPrev();
       if (e.key === 'ArrowRight' && onNext) onNext();
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editing, onClose, onPrev, onNext]);
+  }, [editing, onPrev, onNext]);
 
   async function onSave() {
     setSaving(true);
@@ -90,46 +95,38 @@ export function ResponseDetailModal({
   }
 
   return (
-    <div className="response-modal-backdrop" onClick={onClose}>
-      <div
-        className="response-modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-label="response detail"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="flex max-h-[85vh] flex-col sm:max-w-2xl"
+        onEscapeKeyDown={(e) => {
+          if (editing) e.preventDefault(); // don't hijack escape while correcting an answer
+        }}
       >
-        <div className="response-modal-header">
-          <div>
-            <h2>response {index + 1} of {total}</h2>
-            <p className="muted" style={{ margin: '4px 0 0' }}>
-              {submission.submittedBy?.displayName ?? 'anonymous'} ·{' '}
-              {new Date(submission.createdAt).toLocaleString()}
+        <DialogHeader>
+          <DialogTitle>response {index + 1} of {total}</DialogTitle>
+          <p className="muted" style={{ margin: '4px 0 0' }}>
+            {submission.submittedBy?.displayName ?? 'anonymous'} ·{' '}
+            {new Date(submission.createdAt).toLocaleString()}
+          </p>
+          {submission.score && submission.score.percent !== null && (
+            <p className="quiz-score" style={{ margin: '4px 0 0', fontSize: 'var(--font-size-md)' }}>
+              score: <strong>{submission.score.earnedPoints}</strong> / {submission.score.totalPoints} (
+              {submission.score.percent}%)
+              {submission.score.passed !== null && (
+                <span className={submission.score.passed ? 'quiz-passed' : 'quiz-failed'}>
+                  {' '}
+                  — {submission.score.passed ? 'passed' : 'did not pass'}
+                </span>
+              )}
             </p>
-            {submission.score && submission.score.percent !== null && (
-              <p className="quiz-score" style={{ margin: '4px 0 0', fontSize: 'var(--font-size-md)' }}>
-                score: <strong>{submission.score.earnedPoints}</strong> / {submission.score.totalPoints} (
-                {submission.score.percent}%)
-                {submission.score.passed !== null && (
-                  <span className={submission.score.passed ? 'quiz-passed' : 'quiz-failed'}>
-                    {' '}
-                    — {submission.score.passed ? 'passed' : 'did not pass'}
-                  </span>
-                )}
-              </p>
-            )}
-          </div>
-          <span className="builder-field-actions">
-            {canEdit && !editing && (
-              <button className="btn-ghost" onClick={() => setEditing(true)}>
-                edit
-              </button>
-            )}
-            <button className="btn-ghost" onClick={onClose} aria-label="close">
-              close
-            </button>
-          </span>
-        </div>
-        <div className="response-modal-body">
+          )}
+          {canEdit && !editing && (
+            <Button variant="ghost" size="sm" className="w-fit" onClick={() => setEditing(true)}>
+              edit
+            </Button>
+          )}
+        </DialogHeader>
+        <div className="response-modal-body min-h-0 flex-1">
           {editing ? (
             <div className="builder">
               {definition.fields
@@ -148,9 +145,9 @@ export function ResponseDetailModal({
                   </div>
                 ))}
               {saveError && (
-                <p role="alert" className="form-error">
-                  {saveError}
-                </p>
+                <Alert variant="destructive">
+                  <AlertDescription>{saveError}</AlertDescription>
+                </Alert>
               )}
             </div>
           ) : (
@@ -162,22 +159,24 @@ export function ResponseDetailModal({
                     <dt>{field.label}</dt>
                     <dd>
                       {field.type === 'file' && typeof value === 'string' && value ? (
-                        <button
-                          className="btn-ghost"
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${value}`, field.label)}
                         >
                           download attachment
-                        </button>
+                        </Button>
                       ) : field.type === 'file' && Array.isArray(value) && value.length > 0 ? (
                         <span className="builder-field-actions">
                           {value.map((uploadId, i) => (
-                            <button
+                            <Button
                               key={uploadId}
-                              className="btn-ghost"
+                              variant="ghost"
+                              size="sm"
                               onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${uploadId}`, `${field.label}-${i + 1}`)}
                             >
                               download {i + 1}
-                            </button>
+                            </Button>
                           ))}
                         </span>
                       ) : (
@@ -190,28 +189,31 @@ export function ResponseDetailModal({
             </dl>
           )}
         </div>
-        <div className="response-modal-footer">
+        <DialogFooter>
           {editing ? (
             <>
-              <button className="btn-ghost" onClick={() => { setEditing(false); setDraft(submission.answers); setSaveError(null); }}>
+              <Button
+                variant="ghost"
+                onClick={() => { setEditing(false); setDraft(submission.answers); setSaveError(null); }}
+              >
                 cancel
-              </button>
-              <button className="btn-primary" disabled={saving} onClick={onSave}>
+              </Button>
+              <Button disabled={saving} onClick={onSave}>
                 {saving ? 'saving…' : 'save'}
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <button className="btn-ghost" onClick={() => onPrev?.()} disabled={!onPrev}>
+              <Button variant="ghost" onClick={() => onPrev?.()} disabled={!onPrev}>
                 ← previous
-              </button>
-              <button className="btn-ghost" onClick={() => onNext?.()} disabled={!onNext}>
+              </Button>
+              <Button variant="ghost" onClick={() => onNext?.()} disabled={!onNext}>
                 next →
-              </button>
+              </Button>
             </>
           )}
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

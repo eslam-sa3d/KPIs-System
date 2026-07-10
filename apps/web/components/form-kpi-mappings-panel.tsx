@@ -6,6 +6,7 @@ import { REVIEW_TYPES } from '@pulse/contracts';
 import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface EvaluationAreaOption {
   id: string;
@@ -260,8 +261,11 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   }
 
   return (
-    <div className="admin-card">
-      <h2>KPI scoring</h2>
+    <Card>
+      <CardHeader>
+        <CardTitle>KPI scoring</CardTitle>
+      </CardHeader>
+      <CardContent>
       <p className="muted">
         connect this survey to a KPI Evaluation Area: pick which field names the person being
         evaluated and which field supplies the score. Every future submission upserts a scored
@@ -570,6 +574,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
           )}
         </>
       )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }
