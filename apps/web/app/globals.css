@@ -1326,7 +1326,7 @@ h3 {
    .builder-field usage is unaffected. */
 .builder-field.kpi-area {
   background: var(--md-sys-color-surface-container);
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-8);
 }
 
 .builder-field:hover,
@@ -2844,7 +2844,7 @@ h3 {
   align-items: center;
   gap: var(--space-4);
   min-height: 104px;
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-5) var(--space-6) var(--space-5) var(--space-8);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-top: 4px solid var(--color-primary);
@@ -3069,8 +3069,8 @@ h3 {
 .kpi-subcriteria-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: 0 var(--space-3) var(--space-4);
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-6);
 }
 
 .kpi-subcriteria-row {
