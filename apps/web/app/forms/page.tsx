@@ -290,13 +290,7 @@ export default function FormsPage() {
                             {confirmDeleteId === form.id ? (
                               <>
                                 <span className="muted">delete?</span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => onDelete(form.id)}
-                                >
+                                <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(form.id)}>
                                   confirm
                                 </Button>
                                 <Button

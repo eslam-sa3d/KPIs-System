@@ -654,13 +654,7 @@ export default function KpisAdminPage() {
                             (confirmDeleteKpiId === selectedKpi.id ? (
                               <>
                                 <span className="muted">delete permanently?</span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => onDeleteKpi(selectedKpi.id)}
-                                >
+                                <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteKpi(selectedKpi.id)}>
                                   confirm delete
                                 </Button>
                                 <Button
@@ -679,13 +673,7 @@ export default function KpisAdminPage() {
                                   this KPI has recorded scores — force deleting destroys that history
                                   permanently and cannot be undone.
                                 </span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => onDeleteKpi(selectedKpi.id, true)}
-                                >
+                                <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteKpi(selectedKpi.id, true)}>
                                   force delete permanently
                                 </Button>
                                 <Button
@@ -872,13 +860,7 @@ export default function KpisAdminPage() {
                                   (confirmDeleteAreaId === area.id ? (
                                     <>
                                       <span className="muted">delete permanently?</span>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-destructive hover:text-destructive"
-                                        onClick={() => onDeleteArea(selectedKpi.id, area.id)}
-                                      >
+                                      <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteArea(selectedKpi.id, area.id)}>
                                         confirm delete
                                       </Button>
                                       <Button
@@ -952,9 +934,8 @@ export default function KpisAdminPage() {
                                           <span className="muted">delete?</span>
                                           <Button
                                             type="button"
-                                            variant="ghost"
+                                            variant="destructive"
                                             size="sm"
-                                            className="text-destructive hover:text-destructive"
                                             onClick={() => onDeleteSubCriteria(selectedKpi.id, area.id, sub.id)}
                                           >
                                             confirm

@@ -2201,11 +2201,6 @@ h3 {
   margin-top: var(--space-2);
 }
 
-.form-notice {
-  color: var(--pulse-chart-oasis);
-  font-size: var(--font-size-sm);
-}
-
 .inline-form {
   display: flex;
   flex-wrap: wrap;
@@ -3107,31 +3102,6 @@ h3 {
   margin-bottom: var(--space-2);
 }
 
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 50%;
-  background: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.icon-btn:hover {
-  background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
-  color: var(--color-text);
-}
-
-.icon-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
 .kpi-assignments {
   margin: var(--space-4) 0;
 }
@@ -3226,87 +3196,6 @@ h3 {
 /* Collapsible "add" trigger — replaces a permanently-open bare form with a
    single low-emphasis action; clicking it reveals the same inline-form
    that used to sit exposed at all times. */
-.add-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  margin-top: var(--space-2);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: var(--md-sys-typescale-label-large-size);
-  font-weight: var(--md-sys-typescale-label-large-weight);
-  cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
-}
-
-.add-trigger:hover,
-.add-trigger:focus-visible {
-  border-color: var(--color-primary);
-  border-style: solid;
-  color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) var(--md-sys-state-hover-opacity), transparent);
-}
-
-.add-trigger:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.btn-text {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  font-size: var(--md-sys-typescale-label-large-size);
-  line-height: var(--md-sys-typescale-label-large-line-height);
-  letter-spacing: var(--md-sys-typescale-label-large-tracking);
-  font-weight: var(--md-sys-typescale-label-large-weight);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--md-sys-shape-corner-full);
-  cursor: pointer;
-  white-space: nowrap;
-  text-decoration: none;
-  transition: background var(--transition-fast);
-}
-
-.btn-text:hover {
-  background: color-mix(in srgb, var(--color-primary) var(--md-sys-state-hover-opacity), transparent);
-}
-
-.btn-text:focus-visible {
-  background: color-mix(in srgb, var(--color-primary) var(--md-sys-state-focus-opacity), transparent);
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.btn-text:active {
-  background: color-mix(in srgb, var(--color-primary) var(--md-sys-state-pressed-opacity), transparent);
-}
-
-/* Destructive actions (the "delete" step before its own confirm) get the
-   error role instead of primary — same text-button mechanics. */
-.btn-text-danger {
-  color: var(--color-danger);
-}
-
-.btn-text-danger:hover {
-  background: color-mix(in srgb, var(--color-danger) var(--md-sys-state-hover-opacity), transparent);
-}
-
-.btn-text-danger:focus-visible {
-  background: color-mix(in srgb, var(--color-danger) var(--md-sys-state-focus-opacity), transparent);
-  outline-color: var(--color-danger);
-}
-
-.btn-text-danger:active {
-  background: color-mix(in srgb, var(--color-danger) var(--md-sys-state-pressed-opacity), transparent);
-}
-
 .field-required-toggle {
   font-size: var(--font-size-sm);
   padding-left: var(--space-4);

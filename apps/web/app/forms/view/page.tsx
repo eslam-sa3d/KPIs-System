@@ -360,7 +360,7 @@ function FormView() {
                         {canModerate &&
                           (confirmDeleteRowId === row.id ? (
                             <>
-                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(row.id)}>
+                              <Button variant="destructive" size="sm" onClick={() => onDelete(row.id)}>
                                 confirm
                               </Button>
                               <Button variant="ghost" size="sm" className="text-primary hover:text-primary" onClick={() => setConfirmDeleteRowId(null)}>
