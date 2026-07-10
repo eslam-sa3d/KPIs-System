@@ -580,6 +580,15 @@ export function FormRenderer({
     renderDefinition.sections?.[0]?.id ?? null,
   );
 
+  // frozen per page: only re-resolved on explicit navigation (onNext/onBack), not on every
+  // answer change on the currently displayed page. Recomputing this live from `answers` let
+  // a branch rule resolve to "end of form" the instant its trigger field was answered, which
+  // silently swapped the "next →" button into a "submit" button in the same spot the
+  // respondent was about to click — submitting the form with no review step.
+  const [path, setPath] = useState<string[]>(() =>
+    hasSections ? resolveSectionPath(renderDefinition, initialAnswers ?? {}).visitedSectionIds : [],
+  );
+
   const shuffledQuestionOrder = useMemo(() => {
     if (!settings.shuffleQuestions) return definition.fields;
     return [...definition.fields].sort(() => Math.random() - 0.5);
@@ -596,9 +605,6 @@ export function FormRenderer({
     [shuffledQuestionOrder],
   );
 
-  // recomputed on every answer change: a branch decision made on the current
-  // page can only be resolved once its trigger field has been answered.
-  const path = hasSections ? resolveSectionPath(renderDefinition, answers).visitedSectionIds : [];
   const currentIndex = currentSectionId ? Math.max(0, path.indexOf(currentSectionId)) : -1;
   const currentSection = hasSections
     ? (renderDefinition.sections!.find((s) => s.id === path[currentIndex]) ?? renderDefinition.sections![0])
@@ -628,6 +634,9 @@ export function FormRenderer({
     }
     if (Object.keys(captured).length > 0) {
       setAnswers((prev) => ({ ...captured, ...prev }));
+      if (hasSections) {
+        setPath(resolveSectionPath(renderDefinition, captured).visitedSectionIds);
+      }
     }
   }, [definition]);
 
@@ -647,7 +656,13 @@ export function FormRenderer({
       return;
     }
     setPageError(null);
-    const next = path[currentIndex + 1];
+    // re-resolve now that this page's fields (including any branch trigger) are answered
+    const freshPath = resolveSectionPath(renderDefinition, answers).visitedSectionIds;
+    setPath(freshPath);
+    const idx = currentSectionId ? freshPath.indexOf(currentSectionId) : -1;
+    const next = freshPath[idx + 1];
+    // if branching resolved to end-of-form here, this click only reveals the submit button —
+    // it does not submit on the respondent's behalf.
     if (next) setCurrentSectionId(next);
   }
 
