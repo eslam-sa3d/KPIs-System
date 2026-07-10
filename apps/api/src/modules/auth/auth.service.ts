@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AccessTokenClaims, AuthenticatedUser, TokenGrant } from '@pulse/contracts';
 import { createHash, randomBytes } from 'node:crypto';
 import { AppError } from '../../common/app-error';
+import { resetPasswordEmail } from '../../infra/email-templates';
 import { MailerService } from '../../infra/mailer.service';
 import { PrismaService } from '../../infra/prisma.service';
 import { RbacService } from '../rbac/rbac.service';
@@ -155,15 +156,17 @@ export class AuthService {
           expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000),
         },
       });
-      const resetUrl = `${process.env.WEB_URL ?? 'http://localhost:3000'}/reset-password?token=${rawToken}`;
+      const webUrl = process.env.WEB_URL ?? 'http://localhost:3000';
+      const resetUrl = `${webUrl}/reset-password?token=${rawToken}`;
       await this.mailer.send(
         user.email,
         'reset your pulse password',
-        `<p>hi ${user.displayName},</p>` +
-          `<p>someone requested a password reset for your pulse account. if this was you, ` +
-          `click the link below — it expires in ${RESET_TOKEN_TTL_MINUTES} minutes.</p>` +
-          `<p><a href="${resetUrl}">${resetUrl}</a></p>` +
-          `<p>if you didn't request this, you can safely ignore this email.</p>`,
+        resetPasswordEmail({
+          displayName: user.displayName,
+          resetUrl,
+          logoUrl: `${webUrl}/brand/pulse-logo-email.png`,
+          expiresInMinutes: RESET_TOKEN_TTL_MINUTES,
+        }),
       );
     } else {
       this.logger.log(`forgot-password requested for unknown/inactive email — no email sent`);
