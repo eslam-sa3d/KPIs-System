@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import {
   BRANCH_TRIGGER_TYPES,
   CONDITION_OPERATORS,
@@ -609,7 +609,6 @@ function NewFormPage() {
   const [dragFieldIndex, setDragFieldIndex] = useState<number | null>(null);
   const [dragOverFieldIndex, setDragOverFieldIndex] = useState<number | null>(null);
   const fieldRefs = useRef<Array<HTMLFieldSetElement | null>>([]);
-  const [toolbarTop, setToolbarTop] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [published, setPublished] = useState<{ slug: string } | null>(null);
   const [sectionsEnabled, setSectionsEnabled] = useState(false);
@@ -871,16 +870,6 @@ function NewFormPage() {
     });
     setActiveFieldIndex(to);
   }
-
-  useLayoutEffect(() => {
-    function recomputeToolbarTop() {
-      const el = fieldRefs.current[activeFieldIndex ?? 0];
-      if (el) setToolbarTop(el.offsetTop);
-    }
-    recomputeToolbarTop();
-    window.addEventListener('resize', recomputeToolbarTop);
-    return () => window.removeEventListener('resize', recomputeToolbarTop);
-  }, [activeFieldIndex, fields.length]);
 
   async function onImportExcel(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -2084,76 +2073,6 @@ function NewFormPage() {
           + add field
         </Button>
         </div>
-
-        <aside className="builder-toolbar" aria-label="add to form" style={{ top: toolbarTop }}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            title="add question"
-            aria-label="add question"
-            onClick={() => addField()}
-          >
-            ⊕
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            title="import questions from a file"
-            aria-label="import questions from a file"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            📥
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            className="builder-toolbar-tt"
-            title="add title and description"
-            aria-label="add title and description"
-            onClick={() => addField({ type: 'section_header' })}
-          >
-            Tt
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            title="add image question"
-            aria-label="add image question"
-            onClick={() => addField({ mediaType: 'image' })}
-          >
-            🖼
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            title="add video question"
-            aria-label="add video question"
-            onClick={() => addField({ mediaType: 'video' })}
-          >
-            🎬
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            title="add a new page"
-            aria-label="add a new page"
-            onClick={() => {
-              setSectionsEnabled(true);
-              addSection();
-            }}
-          >
-            <span className="toolbar-bars-icon">
-              <span />
-              <span />
-            </span>
-          </Button>
-        </aside>
         </div>
 
         <div className="admin-card" style={{ marginTop: 24, marginBottom: 16 }}>
