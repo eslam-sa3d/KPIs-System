@@ -7,6 +7,7 @@ import { can } from './portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../lib/api-client';
@@ -49,7 +50,7 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
         <Card>
           <CardContent className="pt-6">
             <form className="inline-form" onSubmit={onCreate}>
-              <input name="name" required minLength={2} placeholder="new department name" aria-label="department name" />
+              <Input name="name" required minLength={2} placeholder="new department name" aria-label="department name" />
               <Button type="submit">create department</Button>
             </form>
             {notice && (

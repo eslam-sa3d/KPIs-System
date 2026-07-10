@@ -7,6 +7,8 @@ import { PortalShell, can } from '../../../components/portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { ApiRequestError, api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -203,16 +205,23 @@ export default function KpisAdminPage() {
    *  department assignment into creation itself, instead of leaving a
    *  brand-new KPI invisible on every dashboard until an admin makes a
    *  separate follow-up trip to the assignment UI below. */
+  // Radix Select renders a hidden native <select> in sync with its value when
+  // given a `name`, so this still participates in the surrounding form's
+  // FormData on submit exactly like the native <select> it replaces.
   function AssignToField() {
     return (
-      <select name="assignTo" aria-label="department (optional)" defaultValue="">
-        <option value="">department (optional)…</option>
-        {departments.map((d) => (
-          <option key={d.id} value={d.id}>
-            {d.name}
-          </option>
-        ))}
-      </select>
+      <Select name="assignTo">
+        <SelectTrigger aria-label="department (optional)">
+          <SelectValue placeholder="department (optional)…" />
+        </SelectTrigger>
+        <SelectContent>
+          {departments.map((d) => (
+            <SelectItem key={d.id} value={d.id}>
+              {d.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     );
   }
 
@@ -407,8 +416,8 @@ export default function KpisAdminPage() {
           {canWrite &&
             (creatingKpi ? (
               <form className="inline-form" onSubmit={(e) => onCreateKpi(e)}>
-                <input name="name" required minLength={2} placeholder="QA Lead Evaluation" aria-label="KPI name" autoFocus />
-                <input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
+                <Input name="name" required minLength={2} placeholder="QA Lead Evaluation" aria-label="KPI name" autoFocus />
+                <Input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
                 <AssignToField />
                 <Button type="submit">create</Button>
                 <Button type="button" variant="ghost" onClick={() => setCreatingKpi(false)}>
@@ -485,7 +494,7 @@ export default function KpisAdminPage() {
 
           <div className="kpi-search">
             <Search size={16} aria-hidden="true" />
-            <input
+            <Input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -499,8 +508,8 @@ export default function KpisAdminPage() {
               {canWrite &&
                 (creatingKpi ? (
                   <form className="inline-form" onSubmit={(e) => onCreateKpi(e)}>
-                    <input name="name" required minLength={2} placeholder="new KPI name" aria-label="KPI name" autoFocus />
-                    <input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
+                    <Input name="name" required minLength={2} placeholder="new KPI name" aria-label="KPI name" autoFocus />
+                    <Input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
                     <AssignToField />
                     <Button type="submit">create</Button>
                     <Button type="button" variant="ghost" onClick={() => setCreatingKpi(false)}>
@@ -581,8 +590,8 @@ export default function KpisAdminPage() {
 
                   {renamingKpiId === selectedKpi.id ? (
                     <form className="inline-form" onSubmit={(e) => onRenameKpi(selectedKpi.id, e)}>
-                      <input name="name" defaultValue={selectedKpi.name} required minLength={2} aria-label="KPI name" autoFocus />
-                      <input
+                      <Input name="name" defaultValue={selectedKpi.name} required minLength={2} aria-label="KPI name" autoFocus />
+                      <Input
                         name="weight"
                         type="number"
                         min={0}
@@ -729,18 +738,18 @@ export default function KpisAdminPage() {
                     {canManage &&
                       (assigningKpiId === selectedKpi.id ? (
                         <span className="inline-form">
-                          <select
-                            aria-label="assign to department"
-                            value={assignTarget}
-                            onChange={(e) => setAssignTarget(e.target.value)}
-                          >
-                            <option value="">choose a department…</option>
-                            {departments.map((d) => (
-                              <option key={d.id} value={d.id}>
-                                {d.name}
-                              </option>
-                            ))}
-                          </select>
+                          <Select value={assignTarget} onValueChange={setAssignTarget}>
+                            <SelectTrigger aria-label="assign to department">
+                              <SelectValue placeholder="choose a department…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {departments.map((d) => (
+                                <SelectItem key={d.id} value={d.id}>
+                                  {d.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <Button
                             type="button"
                             variant="ghost"
@@ -783,7 +792,7 @@ export default function KpisAdminPage() {
                       <div key={area.id} className="builder-field kpi-area">
                         {renamingAreaId === area.id ? (
                           <form className="inline-form" onSubmit={(e) => onRenameArea(selectedKpi.id, area.id, e)}>
-                            <input name="name" defaultValue={area.name} required minLength={2} aria-label="evaluation area name" autoFocus />
+                            <Input name="name" defaultValue={area.name} required minLength={2} aria-label="evaluation area name" autoFocus />
                             <Button type="submit" variant="ghost">
                               save
                             </Button>
@@ -865,7 +874,7 @@ export default function KpisAdminPage() {
                                 className="inline-form"
                                 onSubmit={(e) => onRenameSubCriteria(selectedKpi.id, area.id, sub.id, e)}
                               >
-                                <input name="name" defaultValue={sub.name} required minLength={2} aria-label="sub-criteria name" autoFocus />
+                                <Input name="name" defaultValue={sub.name} required minLength={2} aria-label="sub-criteria name" autoFocus />
                                 <Button type="submit" variant="ghost">
                                   save
                                 </Button>
@@ -931,7 +940,7 @@ export default function KpisAdminPage() {
                           {canWrite &&
                             (addingSubCriteriaForAreaId === area.id ? (
                               <form className="inline-form" onSubmit={(e) => onCreateSubCriteria(selectedKpi.id, area.id, e)}>
-                                <input
+                                <Input
                                   name="name"
                                   required
                                   minLength={2}
@@ -969,7 +978,7 @@ export default function KpisAdminPage() {
                   {canWrite &&
                     (addingAreaForKpiId === selectedKpi.id ? (
                       <form className="inline-form" onSubmit={(e) => onCreateArea(selectedKpi.id, e)}>
-                        <input name="name" required minLength={2} placeholder="new area name" aria-label="new area name" autoFocus />
+                        <Input name="name" required minLength={2} placeholder="new area name" aria-label="new area name" autoFocus />
                         <Button type="submit" variant="ghost">
                           add
                         </Button>

@@ -6,7 +6,10 @@ import { can } from './portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../lib/api-client';
 
@@ -137,22 +140,29 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
             <form className="builder" onSubmit={onCreate}>
               <h2 className="text-lg font-semibold mb-2">new user</h2>
               <label htmlFor="u-email">email</label>
-              <input id="u-email" name="email" type="email" required />
+              <Input id="u-email" name="email" type="email" required />
               <label htmlFor="u-name">display name</label>
-              <input id="u-name" name="displayName" required minLength={2} />
+              <Input id="u-name" name="displayName" required minLength={2} />
               <label htmlFor="u-pass">temporary password</label>
-              <input id="u-pass" name="password" type="password" required minLength={8} />
+              <Input id="u-pass" name="password" type="password" required minLength={8} />
               {departments.length > 0 && (
                 <>
                   <label htmlFor="u-dept">department</label>
-                  <select id="u-dept" name="departmentId" defaultValue="">
-                    <option value="">— none —</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
+                  {/* Radix Select renders a hidden native <select> in sync with its
+                      value when given a `name`, so this still participates in the
+                      surrounding form's FormData on submit like a native <select>. */}
+                  <Select name="departmentId">
+                    <SelectTrigger id="u-dept">
+                      <SelectValue placeholder="— none —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </>
               )}
               {roles.length > 0 && (
@@ -161,7 +171,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                   <span className="check-group">
                     {roles.map((r) => (
                       <label key={r.id} className="check-item">
-                        <input type="checkbox" name="roleIds" value={r.id} /> {r.name}
+                        <Checkbox name="roleIds" value={r.id} /> {r.name}
                       </label>
                     ))}
                   </span>
@@ -213,10 +223,9 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                     <span className="check-group">
                       {roles.map((r) => (
                         <label key={r.id} className="check-item">
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={pendingRoleIds.has(r.id)}
-                            onChange={() => onTogglePendingRole(r.id)}
+                            onCheckedChange={() => onTogglePendingRole(r.id)}
                           />{' '}
                           {r.name}
                         </label>
