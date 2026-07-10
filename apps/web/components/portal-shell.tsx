@@ -15,7 +15,6 @@ const NAV_ITEMS: Array<{ href: string; label: string; permission?: string }> = [
   { href: '/admin/kpis', label: 'KPIs', permission: 'kpis:write' },
   { href: '/admin/users', label: 'users', permission: 'users:read' },
   { href: '/admin/roles', label: 'roles', permission: 'roles:read' },
-  { href: '/admin/branding', label: 'branding', permission: 'branding:write' },
   { href: '/admin/settings', label: 'settings', permission: 'settings:manage' },
 ];
 
