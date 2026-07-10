@@ -160,17 +160,21 @@ test.describe('KPI module (create → evaluation area → score via a mapped for
 
     // map "Who"/"Score" to the evaluation area we just created
     await page.getByRole('tab', { name: 'settings' }).click();
-    await page.getByLabel('add a mapping').selectOption({ label: kpiName });
-    await page.getByLabel('evaluation area').selectOption({ label: areaName });
-    await page.getByLabel('evaluatee field').selectOption({ label: 'Who' });
-    await page.getByLabel('score field').selectOption({ label: 'Score' });
+    await page.getByLabel('add a mapping').click();
+    await page.getByRole('option', { name: kpiName }).click();
+    await page.getByLabel('evaluation area').click();
+    await page.getByRole('option', { name: areaName }).click();
+    await page.getByLabel('evaluatee field').click();
+    await page.getByRole('option', { name: 'Who' }).click();
+    await page.getByLabel('score field').click();
+    await page.getByRole('option', { name: 'Score' }).click();
     await page.getByRole('button', { name: 'add mapping' }).click();
     await expect(page.getByText(/no KPI mapping yet/i)).toHaveCount(0);
 
     // submit the form for the admin's own account (a real, always-present user)
     await page.getByRole('tab', { name: 'form' }).click();
     await page.getByLabel('Who search').fill(ADMIN.email.split('@')[0]!);
-    await page.getByLabel('Who matches').selectOption({ index: 1 });
+    await page.getByRole('listbox', { name: 'Who matches' }).getByRole('option').first().click();
     await page.getByLabel('Score').getByRole('radio', { name: '4', exact: true }).click();
     await page.getByRole('button', { name: 'submit' }).click();
     await expect(page.getByText(/thank you/i)).toBeVisible();
