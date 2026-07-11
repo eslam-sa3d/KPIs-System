@@ -34,7 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'short_text', label: 'short text' },
@@ -694,6 +694,8 @@ function NewFormPage() {
   const [loadingExisting, setLoadingExisting] = useState(Boolean(editSlug));
   const [kpis, setKpis] = useState<KpiOption[] | null>(null);
   const [kpiLinkErrors, setKpiLinkErrors] = useState<Record<number, string>>({});
+  // Explicit ⋮-menu overrides for the "link to KPI" panel's open/closed state — see kpiOpen below.
+  const [kpiPanelOverrides, setKpiPanelOverrides] = useState<Map<number, boolean>>(new Map());
 
   useEffect(() => {
     api<KpiOption[]>('/v1/kpis?pageSize=100').then(setKpis).catch(() => setKpis([]));
@@ -841,6 +843,10 @@ function NewFormPage() {
 
   function updateField(index: number, patch: Partial<DraftField>) {
     setFields((current) => current.map((f, i) => (i === index ? { ...f, ...patch } : f)));
+  }
+
+  function toggleKpiPanel(index: number, open: boolean) {
+    setKpiPanelOverrides((current) => new Map(current).set(index, open));
   }
 
   /** Picking a KPI + evaluation area for a question. On an existing form
@@ -1298,6 +1304,12 @@ function NewFormPage() {
             ? sections.findIndex((s) => s.fieldKeys.includes(keyedFields[index]?.key ?? ''))
             : -1;
           const laterSectionsForField = ownSectionIndex >= 0 ? sections.slice(ownSectionIndex + 1) : [];
+          // "link to KPI" panel visibility: an explicit toggle (via the ⋮ menu) overrides the
+          // default of "open if already linked" — so an existing link stays visible without
+          // requiring the toggle, but can still be tucked away once reviewed.
+          const kpiOpen = kpiPanelOverrides.has(index)
+            ? kpiPanelOverrides.get(index)!
+            : Boolean(field.kpiId);
           return (
           <SortableCard
             key={index}
@@ -1713,7 +1725,7 @@ function NewFormPage() {
               </>
             )}
 
-            {canLinkKpis && field.type !== 'section_header' && (
+            {canLinkKpis && field.type !== 'section_header' && kpiOpen && (
               <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
                 <span className="muted" style={{ fontSize: 12 }}>link to KPI (optional)</span>
                 {personFields.length > 1 && (
@@ -1952,6 +1964,15 @@ function NewFormPage() {
                     >
                       ⏎ split into a new page here
                     </DropdownMenuItem>
+                  )}
+                  {canLinkKpis && field.type !== 'section_header' && (
+                    <DropdownMenuCheckboxItem
+                      checked={kpiOpen}
+                      onCheckedChange={(checked) => toggleKpiPanel(index, checked === true)}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      link to KPI
+                    </DropdownMenuCheckboxItem>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
