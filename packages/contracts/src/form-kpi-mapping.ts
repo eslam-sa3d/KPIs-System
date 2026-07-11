@@ -1,12 +1,17 @@
 import { z } from 'zod';
 
 /**
- * Maps a form to a KPI Evaluation Area: one field supplies the evaluatee
- * (a 'person' field), another supplies the score (rating/nps/slider — the
- * only types with a well-defined numeric range to normalize to 0-5). On
- * every submission, SubmissionsService resolves both and upserts an
- * EvaluationAreaEntry — this is the bridge that lets a QA evaluation survey
- * actually produce KPI scores instead of sitting next to them unconnected.
+ * Maps a form to a KPI Evaluation Area: one field supplies the score
+ * (rating/nps/slider — the only types with a well-defined numeric range to
+ * normalize to 0-5). On every submission, SubmissionsService normalizes the
+ * score field's answer and upserts an EvaluationAreaEntry — this is the
+ * bridge that lets a QA evaluation survey actually produce KPI scores
+ * instead of sitting next to them unconnected.
+ *
+ * `evaluateeFieldKey` optionally names a field whose answer is the
+ * evaluatee's user id (a 'person' field, from an older form that still has
+ * one). Omitted — the normal case now — means self-assessment: the
+ * submitter scores themselves.
  *
  * Deliberately out of scope for this pass: 'likert'/'number' as score fields
  * (no well-defined bounds to normalize against), and more than one mapping
@@ -23,7 +28,7 @@ export type ReviewType = (typeof REVIEW_TYPES)[number];
 
 export const createFormKpiMappingSchema = z.object({
   evaluationAreaId: z.string().uuid(),
-  evaluateeFieldKey: z.string().min(1).max(64),
+  evaluateeFieldKey: z.string().min(1).max(64).optional(),
   scoreFieldKey: z.string().min(1).max(64),
   reviewType: z.enum(REVIEW_TYPES).default('peer'),
   /** Withholds the evaluator's identity from anyone without kpis:manage
@@ -43,7 +48,7 @@ export interface FormKpiMapping {
   id: string;
   formId: string;
   evaluationAreaId: string;
-  evaluateeFieldKey: string;
+  evaluateeFieldKey: string | null;
   scoreFieldKey: string;
   reviewType: ReviewType;
   anonymous: boolean;
@@ -53,9 +58,9 @@ export interface FormKpiMapping {
 }
 
 /**
- * Bulk variant: one shared evaluatee field, review type, anonymity setting,
- * and optional context/comment field (a form only ever names its respondent
- * — and represents one review relationship — once) paired with many
+ * Bulk variant: one shared evaluatee field (or none — self-assessment),
+ * review type, anonymity setting, and optional context/comment field (a form
+ * only ever represents one review relationship at a time) paired with many
  * (scoreFieldKey, evaluationAreaId) pairs — the shape a large multi-question
  * evaluation form actually needs, instead of repeating
  * createFormKpiMappingSchema's single-pair call once per question. Partial
@@ -64,7 +69,7 @@ export interface FormKpiMapping {
  * batch — see BulkCreateFormKpiMappingResult.
  */
 export const bulkCreateFormKpiMappingSchema = z.object({
-  evaluateeFieldKey: z.string().min(1).max(64),
+  evaluateeFieldKey: z.string().min(1).max(64).optional(),
   reviewType: z.enum(REVIEW_TYPES).default('peer'),
   anonymous: z.boolean().default(false),
   contextFieldKey: z.string().min(1).max(64).optional(),

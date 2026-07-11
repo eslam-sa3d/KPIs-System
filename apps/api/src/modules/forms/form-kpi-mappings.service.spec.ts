@@ -116,6 +116,16 @@ describe('FormKpiMappingsService.create', () => {
     expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
   });
 
+  it('creates a self-assessment mapping when evaluateeFieldKey is omitted', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const { evaluateeFieldKey: _omit, ...withoutEvaluatee } = validInput;
+    await service.create('form-1', withoutEvaluatee, 'admin-1');
+
+    expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ evaluateeFieldKey: undefined }),
+    });
+  });
+
   it('rejects when scoreFieldKey does not reference a rating/nps/slider field', async () => {
     const service = new FormKpiMappingsService(prisma as never, forms as never);
     await expect(
@@ -262,6 +272,19 @@ describe('FormKpiMappingsService.bulkCreate', () => {
       service.bulkCreate('form-1', { ...bulkInput, evaluateeFieldKey: 'notes' }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
+  });
+
+  it('creates every row as self-assessment when evaluateeFieldKey is omitted', async () => {
+    const prisma = makeBulkPrismaStub();
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const { evaluateeFieldKey: _omit, ...withoutEvaluatee } = bulkInput;
+
+    const result = await service.bulkCreate('form-1', withoutEvaluatee, 'admin-1');
+
+    expect(result.created).toHaveLength(2);
+    expect(prisma.formKpiMapping.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ evaluateeFieldKey: undefined }) }),
+    );
   });
 
   it('does not audit-log when nothing was created', async () => {

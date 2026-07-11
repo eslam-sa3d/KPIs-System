@@ -33,11 +33,13 @@ export class FormKpiMappingsService {
   async create(formId: string, input: CreateFormKpiMappingInput, actorId: string) {
     const { definition } = await this.forms.getLatestVersion((await this.requireForm(formId)).slug);
 
-    const evaluateeField = definition.fields.find((f) => f.key === input.evaluateeFieldKey);
-    if (!evaluateeField || evaluateeField.type !== 'person') {
-      throw AppError.validation([
-        { path: 'evaluateeFieldKey', message: 'must reference a "person" field on this form' },
-      ]);
+    if (input.evaluateeFieldKey) {
+      const evaluateeField = definition.fields.find((f) => f.key === input.evaluateeFieldKey);
+      if (!evaluateeField || evaluateeField.type !== 'person') {
+        throw AppError.validation([
+          { path: 'evaluateeFieldKey', message: 'must reference a "person" field on this form' },
+        ]);
+      }
     }
     const scoreField = definition.fields.find((f) => f.key === input.scoreFieldKey);
     if (!scoreField || !(SCORE_FIELD_TYPES as readonly string[]).includes(scoreField.type)) {
@@ -105,11 +107,13 @@ export class FormKpiMappingsService {
   async bulkCreate(formId: string, input: BulkCreateFormKpiMappingInput, actorId: string) {
     const { definition } = await this.forms.getLatestVersion((await this.requireForm(formId)).slug);
 
-    const evaluateeField = definition.fields.find((f) => f.key === input.evaluateeFieldKey);
-    if (!evaluateeField || evaluateeField.type !== 'person') {
-      throw AppError.validation([
-        { path: 'evaluateeFieldKey', message: 'must reference a "person" field on this form' },
-      ]);
+    if (input.evaluateeFieldKey) {
+      const evaluateeField = definition.fields.find((f) => f.key === input.evaluateeFieldKey);
+      if (!evaluateeField || evaluateeField.type !== 'person') {
+        throw AppError.validation([
+          { path: 'evaluateeFieldKey', message: 'must reference a "person" field on this form' },
+        ]);
+      }
     }
     this.validateExtraFieldKeys(definition, input.contextFieldKey, input.commentFieldKey);
 

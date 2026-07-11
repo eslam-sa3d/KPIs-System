@@ -484,6 +484,30 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
     expect(call.create.comment).toBe('digital-channels');
   });
 
+  it('self-assessment: scores the submitter themselves when the mapping has no evaluateeFieldKey', async () => {
+    const prisma = makePrismaStub();
+    prisma.formKpiMapping.findMany.mockResolvedValue([{ ...mapping, evaluateeFieldKey: null }]);
+    prisma.user.findUnique.mockResolvedValue({ id: 'evaluator-1', isActive: true });
+    const forms = makeKpiFormsStub();
+    forms.getLatestVersion.mockResolvedValue({
+      form: activeForm,
+      version: { id: 'version-1' },
+      definition: formDefinitionSchema.parse({
+        title: 'self review',
+        fields: [{ key: 'score', label: 'Rating', type: 'rating', scale: 5, required: true }],
+      }),
+      settings: formSettingsSchema.parse({}),
+    });
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit('demo', { score: 4 }, 'evaluator-1');
+
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'evaluator-1' } });
+    const call = prisma.evaluationAreaEntry.upsert.mock.calls[0]![0];
+    expect(call.create.personId).toBe('evaluator-1');
+    expect(call.create.enteredById).toBe('evaluator-1');
+  });
+
   it('skips mapping application for anonymous public submissions (no enteredById)', async () => {
     const prisma = makePrismaStub();
     prisma.formKpiMapping.findMany.mockResolvedValue([mapping]);

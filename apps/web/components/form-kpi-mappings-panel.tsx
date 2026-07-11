@@ -32,7 +32,7 @@ interface KpiOption {
 interface MappingRow {
   id: string;
   evaluationAreaId: string;
-  evaluateeFieldKey: string;
+  evaluateeFieldKey: string | null;
   scoreFieldKey: string;
   reviewType: ReviewType;
   anonymous: boolean;
@@ -96,15 +96,14 @@ function suggestAreaFor(fieldLabel: string, areas: Array<{ id: string; name: str
   return bestScore >= 30 ? bestId : '';
 }
 
-/** The Forms→KPI bridge: which of this form's own fields names the evaluatee
- *  vs. supplies the score, mapped to a KPI Evaluation Area. Every future
- *  submission upserts a scored entry for that person and period. */
+/** The Forms→KPI bridge: which of this form's own fields supplies the
+ *  score, mapped to a KPI Evaluation Area. Every future submission upserts a
+ *  scored entry — for the submitter themselves (self-assessment). */
 export function FormKpiMappingsPanel({ formId, definition }: { formId: string; definition: FormDefinition }) {
   const [mappings, setMappings] = useState<MappingRow[] | null>(null);
   const [kpis, setKpis] = useState<KpiOption[] | null>(null);
   const [kpiId, setKpiId] = useState('');
   const [evaluationAreaId, setEvaluationAreaId] = useState('');
-  const [evaluateeFieldKey, setEvaluateeFieldKey] = useState('');
   const [scoreFieldKey, setScoreFieldKey] = useState('');
   const [reviewType, setReviewType] = useState<ReviewType>('peer');
   const [anonymous, setAnonymous] = useState(false);
@@ -117,7 +116,6 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [backfillingId, setBackfillingId] = useState<string | null>(null);
 
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkEvaluateeFieldKey, setBulkEvaluateeFieldKey] = useState('');
   const [bulkReviewType, setBulkReviewType] = useState<ReviewType>('peer');
   const [bulkAnonymous, setBulkAnonymous] = useState(false);
   const [bulkContextFieldKey, setBulkContextFieldKey] = useState('');
@@ -125,7 +123,6 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [bulkSelections, setBulkSelections] = useState<Record<string, string>>({});
   const [bulkResult, setBulkResult] = useState<BulkMappingResult | null>(null);
 
-  const personFields = definition.fields.filter((f) => f.type === 'person');
   const scoreFields = definition.fields.filter(
     (f) => f.type === 'rating' || f.type === 'nps' || f.type === 'slider',
   );
@@ -158,7 +155,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   }
 
   async function onCreate() {
-    if (!evaluationAreaId || !evaluateeFieldKey || !scoreFieldKey) return;
+    if (!evaluationAreaId || !scoreFieldKey) return;
     setBusy(true);
     setError(null);
     try {
@@ -166,7 +163,6 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         method: 'POST',
         body: JSON.stringify({
           evaluationAreaId,
-          evaluateeFieldKey,
           scoreFieldKey,
           reviewType,
           anonymous,
@@ -176,7 +172,6 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
       });
       setKpiId('');
       setEvaluationAreaId('');
-      setEvaluateeFieldKey('');
       setScoreFieldKey('');
       setReviewType('peer');
       setAnonymous(false);
@@ -227,7 +222,6 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   function openBulk() {
     setBulkOpen(true);
     setBulkResult(null);
-    if (!bulkEvaluateeFieldKey && personFields.length > 0) setBulkEvaluateeFieldKey(personFields[0]!.key);
     setBulkSelections((current) => {
       const next = { ...current };
       for (const f of unmappedScoreFields) {
@@ -240,7 +234,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const bulkMappedCount = unmappedScoreFields.filter((f) => bulkSelections[f.key]).length;
 
   async function onBulkCreate() {
-    if (!bulkEvaluateeFieldKey || bulkMappedCount === 0) return;
+    if (bulkMappedCount === 0) return;
     setBusy(true);
     setError(null);
     setBulkResult(null);
@@ -248,7 +242,6 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
       const result = await api<BulkMappingResult>(`/v1/forms/${formId}/kpi-mappings/bulk`, {
         method: 'POST',
         body: JSON.stringify({
-          evaluateeFieldKey: bulkEvaluateeFieldKey,
           reviewType: bulkReviewType,
           anonymous: bulkAnonymous,
           ...(bulkContextFieldKey ? { contextFieldKey: bulkContextFieldKey } : {}),
@@ -275,9 +268,9 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
       </CardHeader>
       <CardContent>
       <p className="muted">
-        connect this survey to a KPI Evaluation Area: pick which field names the person being
-        evaluated and which field supplies the score. Every future submission upserts a scored
-        entry for that person and period automatically.
+        connect this survey to a KPI Evaluation Area: pick which field supplies the score.
+        Every future submission upserts a self-assessment entry for the submitter and period
+        automatically.
       </p>
       {error && (
         <Alert variant="destructive">
@@ -290,9 +283,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         </Alert>
       )}
 
-      {personFields.length === 0 ? (
-        <p className="muted">add a &quot;person&quot; field to this form (the evaluatee) to enable KPI scoring.</p>
-      ) : scoreFields.length === 0 ? (
+      {scoreFields.length === 0 ? (
         <p className="muted">add a rating, NPS, or slider field to this form to supply the score.</p>
       ) : (
         <>
@@ -307,7 +298,8 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                 <li key={m.id}>
                   <strong>{m.evaluationArea.name}</strong> ({m.evaluationArea.cadence}) —{' '}
                   {REVIEW_TYPE_LABEL[m.reviewType]}
-                  {m.anonymous && ' · anonymous'} · evaluatee: {fieldLabel(m.evaluateeFieldKey)}, score:{' '}
+                  {m.anonymous && ' · anonymous'} · evaluatee:{' '}
+                  {m.evaluateeFieldKey ? fieldLabel(m.evaluateeFieldKey) : 'self'}, score:{' '}
                   {fieldLabel(m.scoreFieldKey)}{' '}
                   <Button
                     type="button"
@@ -376,18 +368,6 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               ))}
             </SelectContent>
           </Select>
-          <Select value={evaluateeFieldKey} onValueChange={setEvaluateeFieldKey}>
-            <SelectTrigger aria-label="evaluatee field">
-              <SelectValue placeholder="which field names who is being evaluated…" />
-            </SelectTrigger>
-            <SelectContent>
-              {personFields.map((f) => (
-                <SelectItem key={f.key} value={f.key}>
-                  {f.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={scoreFieldKey} onValueChange={setScoreFieldKey}>
             <SelectTrigger aria-label="score field">
               <SelectValue placeholder="which field supplies the score…" />
@@ -451,7 +431,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
           <Button
             type="button"
             variant="ghost"
-            disabled={busy || !evaluationAreaId || !evaluateeFieldKey || !scoreFieldKey}
+            disabled={busy || !evaluationAreaId || !scoreFieldKey}
             onClick={onCreate}
           >
             add mapping
@@ -472,22 +452,10 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               )}
               {bulkOpen ? (
                 <>
-                  <label htmlFor="kpi-bulk-evaluatee">
+                  <label>
                     bulk-map the {unmappedScoreFields.length} remaining unmapped question
-                    {unmappedScoreFields.length === 1 ? '' : 's'} — evaluatee field
+                    {unmappedScoreFields.length === 1 ? '' : 's'}
                   </label>
-                  <Select value={bulkEvaluateeFieldKey} onValueChange={setBulkEvaluateeFieldKey}>
-                    <SelectTrigger id="kpi-bulk-evaluatee">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {personFields.map((f) => (
-                        <SelectItem key={f.key} value={f.key}>
-                          {f.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                   <Select value={bulkReviewType} onValueChange={(v) => setBulkReviewType(v as ReviewType)}>
                     <SelectTrigger aria-label="review type for this batch">
                       <SelectValue />
@@ -584,7 +552,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     <Button
                       type="button"
                       size="sm"
-                      disabled={busy || !bulkEvaluateeFieldKey || bulkMappedCount === 0}
+                      disabled={busy || bulkMappedCount === 0}
                       onClick={onBulkCreate}
                     >
                       map {bulkMappedCount} question{bulkMappedCount === 1 ? '' : 's'}

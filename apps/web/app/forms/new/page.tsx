@@ -168,10 +168,6 @@ interface DraftField {
   kpiId: string;
   evaluationAreaId: string;
   kpiMappingId: string;
-  /** Only meaningful when the form has more than one "person" field — which
-   *  one is the evaluatee for THIS question's link. With exactly one person
-   *  field, that field is used automatically and this stays empty. */
-  evaluateeFieldKey: string;
 }
 
 const emptyField = (): DraftField => ({
@@ -225,7 +221,6 @@ const emptyField = (): DraftField => ({
   kpiId: '',
   evaluationAreaId: '',
   kpiMappingId: '',
-  evaluateeFieldKey: '',
 });
 
 // fieldKey is capped at 64 chars server-side (packages/contracts/src/form-schema.ts) — long
@@ -761,17 +756,7 @@ function NewFormPage() {
   const unassignedFieldKeys = keyedFields
     .filter((f) => !sections.some((s) => s.fieldKeys.includes(f.key)))
     .map((f) => f.key);
-  const personFields = keyedFields.filter((f) => f.type === 'person');
   const canLinkKpis = can(user, 'forms:manage') && can(user, 'kpis:write');
-
-  /** With exactly one person field, that's always the evaluatee — no need to
-   *  ask. With more than one, each question's own evaluateeFieldKey choice
-   *  (from the inline picker) decides. With none, there's nothing to link yet. */
-  function resolveEvaluateeFieldKey(field: DraftField): string | null {
-    if (personFields.length === 1) return personFields[0]!.key;
-    if (personFields.length > 1) return field.evaluateeFieldKey || null;
-    return null;
-  }
 
   function addSection() {
     setSections((current) => [...current, emptySection(current.length)]);
@@ -886,24 +871,15 @@ function NewFormPage() {
       return;
     }
 
-    const evaluateeFieldKey = resolveEvaluateeFieldKey(field);
-    if (!evaluateeFieldKey) {
-      setKpiLinkError(
-        index,
-        personFields.length === 0
-          ? 'add a "person" field to this form first — a KPI link needs one to know who this score is about'
-          : 'choose which person field this question scores (above) first',
-      );
-      return;
-    }
-
     try {
       if (field.kpiMappingId) {
         await api(`/v1/forms/${editingForm.id}/kpi-mappings/${field.kpiMappingId}`, { method: 'DELETE' });
       }
+      // No evaluatee field — every KPI link is a self-assessment (the
+      // submitter scores themselves; see SubmissionsService.applyOneMapping).
       const mapping = await api<{ id: string }>(`/v1/forms/${editingForm.id}/kpi-mappings`, {
         method: 'POST',
-        body: JSON.stringify({ evaluationAreaId, evaluateeFieldKey, scoreFieldKey }),
+        body: JSON.stringify({ evaluationAreaId, scoreFieldKey }),
       });
       updateField(index, { kpiId, evaluationAreaId, kpiMappingId: mapping.id });
     } catch (cause) {
@@ -956,7 +932,6 @@ function NewFormPage() {
         kpiId: '',
         evaluationAreaId: '',
         kpiMappingId: '',
-        evaluateeFieldKey: '',
       });
       return next;
     });
@@ -1076,7 +1051,6 @@ function NewFormPage() {
           kpiId: '',
           evaluationAreaId: '',
           kpiMappingId: '',
-          evaluateeFieldKey: '',
         })),
       ]);
       setImportIssues(issues);
@@ -1147,13 +1121,12 @@ function NewFormPage() {
     for (let i = 0; i < fields.length; i++) {
       const field = fields[i]!;
       if (!field.kpiId || !field.evaluationAreaId) continue;
-      const evaluateeFieldKey = resolveEvaluateeFieldKey(field);
       const scoreFieldKey = keyedFields[i]?.key;
-      if (!evaluateeFieldKey || !scoreFieldKey) continue;
+      if (!scoreFieldKey) continue;
       try {
         await api(`/v1/forms/${formId}/kpi-mappings`, {
           method: 'POST',
-          body: JSON.stringify({ evaluationAreaId: field.evaluationAreaId, evaluateeFieldKey, scoreFieldKey }),
+          body: JSON.stringify({ evaluationAreaId: field.evaluationAreaId, scoreFieldKey }),
         });
       } catch {
         // best-effort, see above
@@ -1728,26 +1701,6 @@ function NewFormPage() {
             {canLinkKpis && field.type !== 'section_header' && kpiOpen && (
               <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
                 <span className="muted" style={{ fontSize: 12 }}>link to KPI (optional)</span>
-                {personFields.length > 1 && (
-                  <>
-                    <label htmlFor={`field-evaluatee-${index}`}>who this scores (evaluatee field)</label>
-                    <Select
-                      value={field.evaluateeFieldKey || undefined}
-                      onValueChange={(v) => updateField(index, { evaluateeFieldKey: v })}
-                    >
-                      <SelectTrigger id={`field-evaluatee-${index}`}>
-                        <SelectValue placeholder="choose a person field…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {personFields.map((p) => (
-                          <SelectItem key={p.key} value={p.key}>
-                            {p.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </>
-                )}
                 <label htmlFor={`field-kpi-${index}`}>KPI</label>
                 <KpiLinkCombobox
                   kpis={kpis}

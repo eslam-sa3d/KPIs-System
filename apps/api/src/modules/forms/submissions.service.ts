@@ -225,7 +225,8 @@ export class SubmissionsService {
 
   /**
    * The Forms→KPI bridge: for every FormKpiMapping on this form, resolves the
-   * evaluatee (the answer at evaluateeFieldKey), normalizes the answer at
+   * evaluatee (the answer at evaluateeFieldKey — or, when unset, the
+   * submitter themselves: self-assessment), normalizes the answer at
    * scoreFieldKey to 0-5, and upserts an EvaluationAreaEntry for the period
    * containing this submission — so editing a submission updates the same
    * period's entry rather than creating a duplicate.
@@ -284,7 +285,8 @@ export class SubmissionsService {
   ): Promise<boolean> {
     if (!mapping.evaluationArea.isActive) return false;
 
-    const evaluateeId = answers[mapping.evaluateeFieldKey];
+    // no evaluateeFieldKey => self-assessment: the submitter scores themselves
+    const evaluateeId = mapping.evaluateeFieldKey ? answers[mapping.evaluateeFieldKey] : enteredById;
     if (typeof evaluateeId !== 'string') return false;
     const rawScore = answers[mapping.scoreFieldKey];
     if (typeof rawScore !== 'number') return false;

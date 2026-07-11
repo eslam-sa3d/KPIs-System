@@ -303,7 +303,9 @@ model FormKpiMapping {
   form              Form           @relation(fields: [formId], references: [id], onDelete: Cascade)
   evaluationAreaId  String
   evaluationArea    EvaluationArea @relation(fields: [evaluationAreaId], references: [id], onDelete: Cascade)
-  evaluateeFieldKey String
+  /// Which field names the evaluatee — null means self-assessment: the
+  /// submitter scores themselves (see SubmissionsService.applyOneMapping).
+  evaluateeFieldKey String?
   scoreFieldKey     String
   /// Who this mapping's scores come from, relative to the evaluatee —
   /// 'self' | 'peer' | 'manager' | '360'. Drives the dashboard's per-type
