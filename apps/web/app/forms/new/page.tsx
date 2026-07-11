@@ -1278,9 +1278,13 @@ function NewFormPage() {
             ? sections.findIndex((s) => s.fieldKeys.includes(keyedFields[index]?.key ?? ''))
             : -1;
           const laterSectionsForField = ownSectionIndex >= 0 ? sections.slice(ownSectionIndex + 1) : [];
-          // Only field types with a well-defined 0-5 normalization can score a KPI — see
-          // SCORE_FIELD_TYPES and submissions.service.ts's normalizeScore for the full list.
-          const canScoreKpi = (SCORE_FIELD_TYPES as readonly string[]).includes(field.type);
+          // Any answerable question can be linked to a KPI — section_header is the only
+          // exclusion, since it has no answer at all. Whether the link actually produces a
+          // live score depends on the field type; see kpiProducesLiveScore below.
+          const canLinkKpiField = field.type !== 'section_header';
+          // Only these types have a well-defined 0-5 normalization (see submissions.service.ts's
+          // normalizeScore) — linking any other type is allowed, but never produces a score.
+          const kpiProducesLiveScore = (SCORE_FIELD_TYPES as readonly string[]).includes(field.type);
           // "link to KPI" panel visibility: an explicit toggle (via the ⋮ menu) overrides the
           // default of "open if already linked" — so an existing link stays visible without
           // requiring the toggle, but can still be tucked away once reviewed.
@@ -1702,9 +1706,15 @@ function NewFormPage() {
               </>
             )}
 
-            {canLinkKpis && canScoreKpi && kpiOpen && (
+            {canLinkKpis && canLinkKpiField && kpiOpen && (
               <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
                 <span className="muted" style={{ fontSize: 12 }}>link to KPI (optional)</span>
+                {!kpiProducesLiveScore && (
+                  <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                    this question type has no numeric answer, so linking it won't produce an automatic score —
+                    use rating, NPS, slider, number, yes/no, choice, checkboxes, or likert questions for that.
+                  </p>
+                )}
                 <label htmlFor={`field-kpi-${index}`}>KPI</label>
                 <KpiLinkCombobox
                   kpis={kpis}
@@ -1922,7 +1932,7 @@ function NewFormPage() {
                       ⏎ split into a new page here
                     </DropdownMenuItem>
                   )}
-                  {canLinkKpis && canScoreKpi && (
+                  {canLinkKpis && canLinkKpiField && (
                     <DropdownMenuCheckboxItem
                       checked={kpiOpen}
                       onCheckedChange={(checked) => toggleKpiPanel(index, checked === true)}

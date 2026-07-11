@@ -4,7 +4,6 @@ import {
   BulkCreateFormKpiMappingInput,
   BulkCreateFormKpiMappingResult,
   CreateFormKpiMappingInput,
-  SCORE_FIELD_TYPES,
 } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
@@ -41,10 +40,12 @@ export class FormKpiMappingsService {
         ]);
       }
     }
+    // Any answerable field can be linked — see normalizeScore in SubmissionsService for which
+    // types (SCORE_FIELD_TYPES) actually produce a live score; the rest just never do, silently.
     const scoreField = definition.fields.find((f) => f.key === input.scoreFieldKey);
-    if (!scoreField || !(SCORE_FIELD_TYPES as readonly string[]).includes(scoreField.type)) {
+    if (!scoreField || scoreField.type === 'section_header') {
       throw AppError.validation([
-        { path: 'scoreFieldKey', message: `must reference a scoreable field on this form (${SCORE_FIELD_TYPES.join(', ')})` },
+        { path: 'scoreFieldKey', message: 'must reference a question on this form' },
       ]);
     }
     this.validateExtraFieldKeys(definition, input.contextFieldKey, input.commentFieldKey);
@@ -127,10 +128,10 @@ export class FormKpiMappingsService {
 
     for (const row of input.mappings) {
       const scoreField = definition.fields.find((f) => f.key === row.scoreFieldKey);
-      if (!scoreField || !(SCORE_FIELD_TYPES as readonly string[]).includes(scoreField.type)) {
+      if (!scoreField || scoreField.type === 'section_header') {
         result.skipped.push({
           evaluationAreaId: row.evaluationAreaId,
-          reason: `"${row.scoreFieldKey}" must be a scoreable field (${SCORE_FIELD_TYPES.join(', ')})`,
+          reason: `"${row.scoreFieldKey}" must reference a question on this form`,
         });
         continue;
       }

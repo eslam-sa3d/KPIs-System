@@ -9,6 +9,7 @@ const definition = formDefinitionSchema.parse({
     { key: 'score', label: 'Rating', type: 'rating', scale: 5, required: true },
     { key: 'score2', label: 'Communication', type: 'rating', scale: 5, required: true },
     { key: 'notes', label: 'Notes', type: 'short_text', required: false },
+    { key: 'heading', label: 'Section heading', type: 'section_header', required: false },
   ],
 });
 
@@ -126,10 +127,24 @@ describe('FormKpiMappingsService.create', () => {
     });
   });
 
-  it('rejects when scoreFieldKey does not reference a scoreable field', async () => {
+  it('allows linking a field type with no live-scoring formula (e.g. short_text) — it just never scores', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await expect(service.create('form-1', { ...validInput, scoreFieldKey: 'notes' }, 'admin-1')).resolves.toMatchObject(
+      { id: 'mapping-1' },
+    );
+  });
+
+  it('rejects when scoreFieldKey references a section_header, which has no answer at all', async () => {
     const service = new FormKpiMappingsService(prisma as never, forms as never);
     await expect(
-      service.create('form-1', { ...validInput, scoreFieldKey: 'notes' }, 'admin-1'),
+      service.create('form-1', { ...validInput, scoreFieldKey: 'heading' }, 'admin-1'),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
+  it('rejects when scoreFieldKey does not reference any field on the form', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await expect(
+      service.create('form-1', { ...validInput, scoreFieldKey: 'ghost' }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
@@ -248,7 +263,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
     expect(result.skipped).toEqual([{ evaluationAreaId: 'ghost-area', reason: 'evaluation area not found' }]);
   });
 
-  it('skips a row whose scoreFieldKey is not a scoreable field', async () => {
+  it('creates a row whose scoreFieldKey has no live-scoring formula (e.g. short_text) — it just never scores', async () => {
     const prisma = makeBulkPrismaStub();
     const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
 
@@ -258,12 +273,23 @@ describe('FormKpiMappingsService.bulkCreate', () => {
       'admin-1',
     );
 
+    expect(result.skipped).toHaveLength(0);
+    expect(result.created).toHaveLength(1);
+  });
+
+  it('skips a row whose scoreFieldKey references a section_header, which has no answer at all', async () => {
+    const prisma = makeBulkPrismaStub();
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+
+    const result = await service.bulkCreate(
+      'form-1',
+      { evaluateeFieldKey: 'evaluatee', reviewType: 'peer' as const, anonymous: false, mappings: [{ evaluationAreaId: 'area-1', scoreFieldKey: 'heading' }] },
+      'admin-1',
+    );
+
     expect(result.created).toHaveLength(0);
     expect(result.skipped).toEqual([
-      {
-        evaluationAreaId: 'area-1',
-        reason: '"notes" must be a scoreable field (rating, nps, slider, number, boolean, select, multi_select, likert)',
-      },
+      { evaluationAreaId: 'area-1', reason: '"heading" must reference a question on this form' },
     ]);
   });
 
