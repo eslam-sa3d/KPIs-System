@@ -5,6 +5,35 @@ role-aware analytics dashboards, a schema-driven form builder, and a branded por
 
 Built on the **pulse by solutions** brand system (see `packages/theme`).
 
+## Tech stack
+
+**Monorepo tooling**: pnpm workspaces (`pnpm@9.15.0`), Node ≥20
+
+**Backend** — `apps/api` (`@pulse/api`)
+- [NestJS 10](https://nestjs.com/) on Express
+- [Prisma 6](https://www.prisma.io/) + PostgreSQL 16 (JSONB-driven KPI/form schema)
+- Redis (`ioredis`)
+- JWT auth (`@nestjs/jwt`), `argon2` password hashing
+- `zod` validation
+- `exceljs` / `pdfkit` for exports
+- Vitest (unit) + Supertest (integration)
+
+**Frontend** — `apps/web` (`@pulse/web`)
+- [Next.js 15](https://nextjs.org/) (React 19), static export (`next build` → `out/`, served via `serve`)
+- Tailwind CSS 4
+- Radix UI (`radix-ui`), `cmdk`, `lucide-react`
+- `@dnd-kit` (drag-and-drop form builder)
+- Zustand (state), Recharts (charts)
+- `mammoth` / `read-excel-file` (doc/Excel import), `qrcode`
+
+**Shared packages**
+- `@pulse/contracts` — shared Zod schemas/types between API and web
+- `@pulse/theme` — shared design tokens (pulse brand)
+
+**Testing / CI**: Vitest across packages, Playwright for E2E, GitHub Actions for CI
+
+**Hosting**: Render (API, web, Postgres, key-value) with a GitHub Pages static mirror of the frontend — see [Deployments](#deployments).
+
 ## Monorepo layout
 
 ```
