@@ -178,13 +178,14 @@ model EvaluationArea {
   updatedAt DateTime @updatedAt
 
   entries      EvaluationAreaEntry[]
+  formMappings FormKpiMapping[]
   subCriteria  SubCriteria[]
 
   @@index([kpiId])
 }
 
 /// A named leaf under an Evaluation Area — pure taxonomy, no scoring/cadence
-/// of its own (those stay at the EvaluationArea level; see
+/// of its own (those stay at the EvaluationArea level; see FormKpiMapping and
 /// EvaluationAreaEntry). Deleting one is a plain hard delete: unlike Kpi/
 /// EvaluationArea, there's no recorded history under it to protect.
 model SubCriteria {
@@ -215,15 +216,22 @@ model EvaluationAreaEntry {
   enteredById      String
   enteredBy        User            @relation("EvaluationAreaEntryEvaluator", fields: [enteredById], references: [id])
   note             String?
-  /// Who this score came from, relative to the evaluatee — 'self' | 'peer' |
-  /// 'manager' | '360'. Null for entries recorded before this concept existed.
+  /// Denormalized copy of the originating FormKpiMapping.reviewType at
+  /// record time ('self' | 'peer' | 'manager' | '360') — kept even if the
+  /// mapping's own reviewType later changes, so history doesn't shift under
+  /// it. Null for entries recorded before this concept existed, or via the
+  /// direct (non-forms) recording API.
   reviewType       String?
-  /// Whether enteredBy should be withheld from non-kpis:manage readers —
-  /// standard practice for honest peer/360 feedback.
+  /// Denormalized copy of the originating FormKpiMapping.anonymous at record
+  /// time — whether enteredBy should be withheld from non-kpis:manage
+  /// readers. Snapshotted for the same reason as reviewType: changing the
+  /// mapping's setting later shouldn't retroactively reveal/hide history.
   anonymous        Boolean         @default(false)
-  /// Optional free-text context about the evaluatee, e.g. "Level: Expert".
+  /// Free-text snapshot of the mapping's contextFieldKey answer at record
+  /// time (e.g. "Level: Expert"), when the mapping defines one.
   context          String?
-  /// Optional free-text qualitative comment accompanying the score.
+  /// Free-text snapshot of the mapping's commentFieldKey answer at record
+  /// time, when the mapping defines one.
   comment          String?
   submissionId     String?
   submission       FormSubmission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
@@ -261,6 +269,7 @@ model Form {
   fileUploads   FormFileUpload[]
   assets        FormAsset[]
   collaborators FormCollaborator[]
+  kpiMappings   FormKpiMapping[]
 }
 
 /// A specific person granted access to one restricted form, bypassing the
@@ -282,6 +291,38 @@ model FormCollaborator {
 
   @@unique([formId, userId])
   @@index([userId])
+}
+
+/// Bridges Forms and KPIs: on every submission to `formId`, the answer at
+/// `evaluateeFieldKey` (a 'person' field — the evaluatee) and the answer at
+/// `scoreFieldKey` (a rating/nps/slider field, normalized to 0-5) are upserted
+/// as an EvaluationAreaEntry against `evaluationAreaId`. See SubmissionsService.
+model FormKpiMapping {
+  id                String         @id @default(uuid())
+  formId            String
+  form              Form           @relation(fields: [formId], references: [id], onDelete: Cascade)
+  evaluationAreaId  String
+  evaluationArea    EvaluationArea @relation(fields: [evaluationAreaId], references: [id], onDelete: Cascade)
+  evaluateeFieldKey String
+  scoreFieldKey     String
+  /// Who this mapping's scores come from, relative to the evaluatee —
+  /// 'self' | 'peer' | 'manager' | '360'. Drives the dashboard's per-type
+  /// breakdown and is copied onto every entry it produces.
+  reviewType        String         @default("peer")
+  /// When true, the evaluator's identity is withheld from anyone without
+  /// kpis:manage when reading entries this mapping produced — standard
+  /// practice for honest peer/360 feedback.
+  anonymous         Boolean        @default(false)
+  /// Optional extra form field (any type) whose answer is snapshotted onto
+  /// each entry as free-text context, e.g. the evaluatee's level.
+  contextFieldKey   String?
+  /// Optional extra form field (normally long_text) snapshotted onto each
+  /// entry as its qualitative comment.
+  commentFieldKey   String?
+  createdAt         DateTime       @default(now())
+
+  @@unique([formId, evaluationAreaId])
+  @@index([evaluationAreaId])
 }
 
 /// Immutable versions: editing a published form creates a new version, so old

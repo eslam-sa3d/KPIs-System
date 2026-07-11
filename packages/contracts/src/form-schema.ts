@@ -44,7 +44,10 @@ export const FIELD_TYPES = [
   'contact_info',
   /** click a named region on an image; answer is that region's value */
   'hot_spot',
-  /** live search-and-select of a real user; answer is that User's id. */
+  /** live search-and-select of a real user; answer is that User's id. Powers
+   *  the Forms→KPI bridge: a form can map this field (the evaluatee) plus a
+   *  rating/nps/slider field (the score) to a KPI Evaluation Area — see
+   *  FormKpiMapping. */
   'person',
   /** Google-Forms-style "grid": a shared set of column choices answered once
    *  per row. `selection: 'single'` is a "multiple choice grid" (one column

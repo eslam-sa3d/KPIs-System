@@ -25,7 +25,8 @@ import {
 } from '@pulse/contracts';
 
 type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
-import { PortalShell } from '../../../components/portal-shell';
+import { PortalShell, can } from '../../../components/portal-shell';
+import { KpiLinkCombobox } from '../../../components/kpi-link-combobox';
 import { LoadingState } from '../../../components/loading-state';
 import { api, assetUrl, uploadAsset } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -55,7 +56,7 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'slider', label: 'slider' },
   { value: 'contact_info', label: 'contact info (name / email / phone)' },
   { value: 'hot_spot', label: 'hot spot (click a region on an image)' },
-  { value: 'person', label: 'person (search & select a user)' },
+  { value: 'person', label: 'person (search & select a user — for KPI scoring)' },
 ];
 
 const FIELD_TYPE_ICON: Record<FieldType, string> = {
@@ -85,9 +86,9 @@ const parseList = (raw: string) =>
 
 interface DraftField {
   /** Pinned to the original field's key when hydrated for editing — keeps
-   *  visibleWhen references, quotas, and existing submission answers stable
-   *  across a republish even if the label changes or the field moves.
-   *  undefined (brand-new fields) falls back to toKey(label, index). */
+   *  visibleWhen references, quotas, KPI mappings, and existing submission
+   *  answers stable across a republish even if the label changes or the
+   *  field moves. undefined (brand-new fields) falls back to toKey(label, index). */
   key?: string;
   label: string;
   helpText: string;
@@ -156,6 +157,19 @@ interface DraftField {
   /** UTM-style hidden field: '' = a normal, respondent-filled question. When set, this
    *  question is never shown — its value is read once from this query-string parameter. */
   capturedFromUrlParam: string;
+  /** KPI scoring link (optional, rating/nps/slider only) — mirrors a real
+   *  FormKpiMapping row 1:1, not a property on the field definition itself.
+   *  kpiId only narrows the evaluation-area picker; evaluationAreaId is what
+   *  actually drives mapping creation. kpiMappingId is set once a real
+   *  mapping exists (hydrated from an existing form, or just created) — its
+   *  presence is what "linked" means, not kpiId/evaluationAreaId alone. */
+  kpiId: string;
+  evaluationAreaId: string;
+  kpiMappingId: string;
+  /** Only meaningful when the form has more than one "person" field — which
+   *  one is the evaluatee for THIS question's link. With exactly one person
+   *  field, that field is used automatically and this stays empty. */
+  evaluateeFieldKey: string;
 }
 
 const emptyField = (): DraftField => ({
@@ -205,12 +219,22 @@ const emptyField = (): DraftField => ({
   gridSelection: 'single',
   gridRequireOnePerRow: false,
   capturedFromUrlParam: '',
+  kpiId: '',
+  evaluationAreaId: '',
+  kpiMappingId: '',
+  evaluateeFieldKey: '',
 });
 
 const toKey = (label: string, index: number) => {
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return /^[a-z]/.test(slug) ? slug : `field_${index + 1}${slug ? `_${slug}` : ''}`;
 };
+
+interface KpiOption {
+  id: string;
+  name: string;
+  evaluationAreas: Array<{ id: string; name: string; cadence: string; isActive: boolean }>;
+}
 
 interface KeyedField {
   key: string;
@@ -696,6 +720,12 @@ function NewFormPage() {
   // editSlug is set but the fetch hasn't resolved yet, "still loading").
   const [editingForm, setEditingForm] = useState<{ id: string; slug: string } | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(Boolean(editSlug));
+  const [kpis, setKpis] = useState<KpiOption[] | null>(null);
+  const [kpiLinkErrors, setKpiLinkErrors] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    api<KpiOption[]>('/v1/kpis?pageSize=100').then(setKpis).catch(() => setKpis([]));
+  }, []);
 
   useEffect(() => {
     if (!editSlug) return;
@@ -704,7 +734,7 @@ function NewFormPage() {
     api<{ form: { id: string; slug: string }; definition: FormDefinition }>(
       `/v1/forms/${encodeURIComponent(editSlug)}`,
     )
-      .then(({ form, definition }) => {
+      .then(async ({ form, definition }) => {
         if (cancelled) return;
         setEditingForm({ id: form.id, slug: form.slug });
         setTitle(definition.title);
@@ -713,6 +743,26 @@ function NewFormPage() {
         if (definition.sections && definition.sections.length > 0) {
           setSectionsEnabled(true);
           setSections(definition.sections.map(fromDefinitionSection));
+        }
+        // hydrate any existing per-question KPI links — best-effort, a
+        // failure here just means the inline pickers start unlinked instead
+        // of blocking the whole form load
+        try {
+          const mappings = await api<
+            Array<{ id: string; evaluationAreaId: string; scoreFieldKey: string; evaluationArea: { kpiId: string } }>
+          >(`/v1/forms/${form.id}/kpi-mappings`);
+          if (cancelled) return;
+          setFields((current) =>
+            current.map((f, i) => {
+              const key = f.key ?? toKey(f.label, i);
+              const match = mappings.find((m) => m.scoreFieldKey === key);
+              return match
+                ? { ...f, kpiId: match.evaluationArea.kpiId, evaluationAreaId: match.evaluationAreaId, kpiMappingId: match.id }
+                : f;
+            }),
+          );
+        } catch {
+          // non-fatal, see above
         }
       })
       .catch((cause) => {
@@ -737,6 +787,17 @@ function NewFormPage() {
   const unassignedFieldKeys = keyedFields
     .filter((f) => !sections.some((s) => s.fieldKeys.includes(f.key)))
     .map((f) => f.key);
+  const personFields = keyedFields.filter((f) => f.type === 'person');
+  const canLinkKpis = can(user, 'forms:manage') && can(user, 'kpis:write');
+
+  /** With exactly one person field, that's always the evaluatee — no need to
+   *  ask. With more than one, each question's own evaluateeFieldKey choice
+   *  (from the inline picker) decides. With none, there's nothing to link yet. */
+  function resolveEvaluateeFieldKey(field: DraftField): string | null {
+    if (personFields.length === 1) return personFields[0]!.key;
+    if (personFields.length > 1) return field.evaluateeFieldKey || null;
+    return null;
+  }
 
   function addSection() {
     setSections((current) => [...current, emptySection(current.length)]);
@@ -901,6 +962,83 @@ function NewFormPage() {
     setFields((current) => current.map((f, i) => (i === index ? { ...f, ...patch } : f)));
   }
 
+  /** Picking a KPI + evaluation area for a question. On an existing form
+   *  (formId already known) this creates/replaces the real FormKpiMapping
+   *  immediately — same as the settings-tab panel, just one click closer to
+   *  the question itself. On a brand-new form there's no formId yet, so the
+   *  choice is only staged locally; createPendingKpiLinks turns it into real
+   *  mappings right after the form is created (see onPublish). */
+  function setKpiLinkError(index: number, message: string | null) {
+    setKpiLinkErrors((current) => {
+      if (message === null) {
+        if (!(index in current)) return current;
+        const next = { ...current };
+        delete next[index];
+        return next;
+      }
+      return { ...current, [index]: message };
+    });
+  }
+
+  async function onLinkFieldToKpi(index: number, kpiId: string, evaluationAreaId: string) {
+    const field = fields[index];
+    const scoreFieldKey = keyedFields[index]?.key;
+    if (!field || !scoreFieldKey) return;
+    setKpiLinkError(index, null);
+
+    if (!editingForm) {
+      updateField(index, { kpiId, evaluationAreaId });
+      return;
+    }
+
+    // A question added (or retyped) since the form was last saved doesn't
+    // exist yet in the published definition the backend validates against —
+    // linking it now would 422 against a field it can't find.
+    if (!field.key) {
+      setKpiLinkError(index, 'save the form first, then link this question to a KPI');
+      return;
+    }
+
+    const evaluateeFieldKey = resolveEvaluateeFieldKey(field);
+    if (!evaluateeFieldKey) {
+      setKpiLinkError(
+        index,
+        personFields.length === 0
+          ? 'add a "person" field to this form first — a KPI link needs one to know who this score is about'
+          : 'choose which person field this question scores (above) first',
+      );
+      return;
+    }
+
+    try {
+      if (field.kpiMappingId) {
+        await api(`/v1/forms/${editingForm.id}/kpi-mappings/${field.kpiMappingId}`, { method: 'DELETE' });
+      }
+      const mapping = await api<{ id: string }>(`/v1/forms/${editingForm.id}/kpi-mappings`, {
+        method: 'POST',
+        body: JSON.stringify({ evaluationAreaId, evaluateeFieldKey, scoreFieldKey }),
+      });
+      updateField(index, { kpiId, evaluationAreaId, kpiMappingId: mapping.id });
+    } catch (cause) {
+      setKpiLinkError(index, cause instanceof Error ? cause.message : 'linking this question to a KPI failed');
+    }
+  }
+
+  async function onUnlinkFieldFromKpi(index: number) {
+    const field = fields[index];
+    if (!field) return;
+    setKpiLinkError(index, null);
+    if (field.kpiMappingId && editingForm) {
+      try {
+        await api(`/v1/forms/${editingForm.id}/kpi-mappings/${field.kpiMappingId}`, { method: 'DELETE' });
+      } catch (cause) {
+        setKpiLinkError(index, cause instanceof Error ? cause.message : 'removing the KPI link failed');
+        return;
+      }
+    }
+    updateField(index, { kpiId: '', evaluationAreaId: '', kpiMappingId: '' });
+  }
+
   function moveField(index: number, delta: number) {
     setFields((current) => {
       const target = index + delta;
@@ -922,9 +1060,16 @@ function NewFormPage() {
       const next = [...current];
       // strip the pinned key — a duplicate is a new field and must get its own
       // computed key, or it would collide with the original's stable key.
+      // Also strip the KPI link: it's a real FormKpiMapping row keyed to the
+      // ORIGINAL's scoreFieldKey — inheriting it here would silently point
+      // the duplicate at a mapping it was never actually linked to.
       next.splice(index + 1, 0, {
         ...current[index]!,
         key: undefined,
+        kpiId: '',
+        evaluationAreaId: '',
+        kpiMappingId: '',
+        evaluateeFieldKey: '',
       });
       return next;
     });
@@ -932,6 +1077,15 @@ function NewFormPage() {
   }
 
   function removeField(index: number) {
+    // A linked question's real FormKpiMapping row would otherwise outlive the
+    // question it scored — harmless (scoring just skips a field that no
+    // longer submits an answer) but orphaned, so clean it up too.
+    const linkedMappingId = fields[index]?.kpiMappingId;
+    if (linkedMappingId && editingForm) {
+      void api(`/v1/forms/${editingForm.id}/kpi-mappings/${linkedMappingId}`, { method: 'DELETE' }).catch(() => {
+        // best-effort — the field is coming out of the builder regardless
+      });
+    }
     setFields((current) => current.filter((_, i) => i !== index));
     setActiveFieldIndex((current) => {
       if (current === null || current === index) return null;
@@ -1031,6 +1185,10 @@ function NewFormPage() {
           gridSelection: 'single' as const,
           gridRequireOnePerRow: false,
           capturedFromUrlParam: '',
+          kpiId: '',
+          evaluationAreaId: '',
+          kpiMappingId: '',
+          evaluateeFieldKey: '',
         })),
       ]);
       setImportIssues(issues);
@@ -1126,6 +1284,31 @@ function NewFormPage() {
     });
   }
 
+  /** Turns every locally-staged (kpiId, evaluationAreaId) pair into a real
+   *  FormKpiMapping now that the form has a formId — only reachable on the
+   *  create-a-new-form path, since editing an existing form already creates
+   *  mappings immediately as they're picked (see onLinkFieldToKpi). Best-
+   *  effort per field: the form itself is already published by the time this
+   *  runs, so one failed link shouldn't block the redirect — it can always
+   *  be added from the form's settings tab afterward. */
+  async function createPendingKpiLinks(formId: string) {
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i]!;
+      if (!field.kpiId || !field.evaluationAreaId) continue;
+      const evaluateeFieldKey = resolveEvaluateeFieldKey(field);
+      const scoreFieldKey = keyedFields[i]?.key;
+      if (!evaluateeFieldKey || !scoreFieldKey) continue;
+      try {
+        await api(`/v1/forms/${formId}/kpi-mappings`, {
+          method: 'POST',
+          body: JSON.stringify({ evaluationAreaId: field.evaluationAreaId, evaluateeFieldKey, scoreFieldKey }),
+        });
+      } catch {
+        // best-effort, see above
+      }
+    }
+  }
+
   async function onPublish() {
     setError(null);
     const definition = {
@@ -1148,6 +1331,7 @@ function NewFormPage() {
         method: 'POST',
         body: JSON.stringify({ slug, definition }),
       });
+      await createPendingKpiLinks(form.id);
       setPublished({ slug: form.slug });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Publishing failed');
@@ -1933,6 +2117,45 @@ function NewFormPage() {
                   placeholder="extremely likely"
                 />
               </>
+            )}
+
+            {canLinkKpis && (
+              <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
+                <span className="muted" style={{ fontSize: 12 }}>link to KPI (optional)</span>
+                {personFields.length > 1 && (
+                  <>
+                    <label htmlFor={`field-evaluatee-${index}`}>who this scores (evaluatee field)</label>
+                    <Select
+                      value={field.evaluateeFieldKey || undefined}
+                      onValueChange={(v) => updateField(index, { evaluateeFieldKey: v })}
+                    >
+                      <SelectTrigger id={`field-evaluatee-${index}`}>
+                        <SelectValue placeholder="choose a person field…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {personFields.map((p) => (
+                          <SelectItem key={p.key} value={p.key}>
+                            {p.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
+                <label htmlFor={`field-kpi-${index}`}>KPI</label>
+                <KpiLinkCombobox
+                  kpis={kpis}
+                  kpiId={field.kpiId}
+                  evaluationAreaId={field.evaluationAreaId}
+                  onSelect={(kpiId, evaluationAreaId) => void onLinkFieldToKpi(index, kpiId, evaluationAreaId)}
+                  onClear={() => void onUnlinkFieldFromKpi(index)}
+                />
+                {kpiLinkErrors[index] && (
+                  <p role="alert" className="form-error" style={{ fontSize: 12, marginTop: 4 }}>
+                    {kpiLinkErrors[index]}
+                  </p>
+                )}
+              </div>
             )}
 
             {(field.type === 'short_text' || field.type === 'long_text') && (
