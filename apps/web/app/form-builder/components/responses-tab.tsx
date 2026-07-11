@@ -12,9 +12,11 @@ import { BarBreakdown, GridMatrix, PieBreakdown, ScaleBreakdown, TextSamples } f
 function SummaryCard({ summary }: { summary: FieldSummary }) {
   const { field } = summary;
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="font-medium">{field.title || 'Untitled question'}</h3>
-      <p className="mb-3 text-xs text-muted-foreground">{summary.answered} response(s)</p>
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div>
+        <h3 className="font-medium">{field.title || 'Untitled question'}</h3>
+        <p className="text-xs text-muted-foreground">{summary.answered} response(s)</p>
+      </div>
 
       {(field.type === 'multiple_choice' || field.type === 'dropdown') && summary.counts && (
         <PieBreakdown counts={summary.counts} />
@@ -41,7 +43,7 @@ function SummaryView() {
   const summaries = useMemo(() => summarizeForm(form, MOCK_SUBMISSIONS), [form]);
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <p className="text-3xl font-semibold tabular-nums">{MOCK_SUBMISSIONS.length}</p>
         <p className="text-sm text-muted-foreground">total responses (mock data)</p>
@@ -73,8 +75,8 @@ function IndividualView() {
   if (!submission) return <p className="text-sm text-muted-foreground">No responses yet.</p>;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           Response {index + 1} of {MOCK_SUBMISSIONS.length} · {new Date(submission.submittedAt).toLocaleString()}
         </p>
@@ -95,7 +97,7 @@ function IndividualView() {
         </div>
       </div>
 
-      <dl className="space-y-3">
+      <dl className="flex flex-col gap-3">
         {fields.map((field) => (
           <div key={field!.id} className="border-b border-border pb-2 last:border-0">
             <dt className="text-sm font-medium">{field!.title || 'Untitled question'}</dt>
@@ -109,8 +111,8 @@ function IndividualView() {
 
 export function ResponsesTab() {
   return (
-    <Tabs defaultValue="summary">
-      <TabsList className="mb-4">
+    <Tabs defaultValue="summary" className="gap-4">
+      <TabsList>
         <TabsTrigger value="summary">Summary</TabsTrigger>
         <TabsTrigger value="individual">Individual</TabsTrigger>
       </TabsList>

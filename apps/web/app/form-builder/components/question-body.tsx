@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,22 +56,34 @@ function BranchingRow({
   );
 }
 
+/** The option-row indicator glyph — matches the shape the respondent will
+ *  actually see: a circle for a single answer, a square for multiple. */
+function OptionMark({ type }: { type: 'multiple_choice' | 'checkboxes' | 'dropdown' }) {
+  if (type === 'dropdown') return null;
+  return (
+    <span
+      className={`size-4 shrink-0 border border-[#5f6368]/60 ${type === 'multiple_choice' ? 'rounded-full' : 'rounded-[3px]'}`}
+      aria-hidden
+    />
+  );
+}
+
 /** Shared editor for multiple_choice / checkboxes / dropdown: an option
  *  list, "Other" write-in toggle (multiple_choice + checkboxes only), and —
- *  for multiple_choice + dropdown only — per-option "go to section" branching. */
+ *  for multiple_choice + dropdown only — per-option "go to section" branching
+ *  (revealed via the card's ⋮ menu, controlled from there). */
 function OptionsEditor({
   field,
   section,
   allSections,
+  branchingOpen,
 }: {
   field: MultipleChoiceField | CheckboxesField | DropdownField;
   section: FormSection;
   allSections: FormSection[];
+  branchingOpen: boolean;
 }) {
   const updateField = useBuilderStore((s) => s.updateField);
-  const [branchingOpen, setBranchingOpen] = useState(
-    field.type !== 'checkboxes' && Object.keys(field.branching).length > 0,
-  );
   const supportsOther = field.type !== 'dropdown';
   const supportsBranching = field.type !== 'checkboxes';
 
@@ -90,15 +101,16 @@ function OptionsEditor({
   }
 
   return (
-    <div className="mt-3 space-y-2">
+    <div className="flex flex-col gap-2">
       {field.options.map((option, i) => (
         <div key={option.id} className="flex items-center gap-2">
-          <span className="size-4 shrink-0 rounded-full border border-muted-foreground/40" aria-hidden />
+          {field.type === 'dropdown' && <span className="w-4 shrink-0 text-sm text-[#5f6368]">{i + 1}.</span>}
+          <OptionMark type={field.type} />
           <Input
             value={option.value}
             onChange={(e) => setOptions(field.options.map((o) => (o.id === option.id ? { ...o, value: e.target.value } : o)))}
             placeholder={`Option ${i + 1}`}
-            className="h-9"
+            className="h-9 max-w-sm border-0 border-b border-[#e0e0e0] rounded-none px-0 shadow-none focus-visible:border-[#673ab7] focus-visible:ring-0"
           />
           {supportsBranching && branchingOpen && (
             <BranchingRow
@@ -116,44 +128,38 @@ function OptionsEditor({
             disabled={field.options.length <= 1}
             onClick={() => setOptions(field.options.filter((o) => o.id !== option.id))}
           >
-            <X className="size-4" />
+            <X className="size-4 text-[#5f6368]" />
           </Button>
         </div>
       ))}
 
-      <div className="flex flex-wrap items-center gap-3 pt-1">
-        <Button type="button" variant="ghost" size="sm" onClick={addOption}>
-          <Plus className="size-4" /> Add option
-        </Button>
+      <div className="flex flex-wrap items-center gap-1 pt-1 pl-6 text-sm">
+        <button type="button" className="text-[#5f6368] hover:text-[#202124]" onClick={addOption}>
+          Add option
+        </button>
         {supportsOther && !('allowOther' in field && field.allowOther) && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => updateField(field.id, { allowOther: true })}>
-            Add &quot;Other&quot;
-          </Button>
+          <>
+            <span className="text-[#5f6368]">or</span>
+            <button
+              type="button"
+              className="text-[#673ab7] hover:underline"
+              onClick={() => updateField(field.id, { allowOther: true })}
+            >
+              add &quot;Other&quot;
+            </button>
+          </>
         )}
       </div>
 
       {supportsOther && 'allowOther' in field && field.allowOther && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="size-4 shrink-0 rounded-full border border-muted-foreground/40" aria-hidden />
+        <div className="flex items-center gap-2 text-sm text-[#5f6368]">
+          <OptionMark type={field.type} />
           <span className="italic">Other…</span>
           <Button type="button" variant="ghost" size="sm" onClick={() => updateField(field.id, { allowOther: false })}>
             remove
           </Button>
         </div>
       )}
-
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-border pt-3">
-        <label className="flex items-center gap-2 text-sm">
-          <Switch checked={field.shuffleOptions} onCheckedChange={(v) => updateField(field.id, { shuffleOptions: v })} />
-          Shuffle option order
-        </label>
-        {supportsBranching && (
-          <label className="flex items-center gap-2 text-sm">
-            <Switch checked={branchingOpen} onCheckedChange={setBranchingOpen} />
-            Go to section based on answer
-          </label>
-        )}
-      </div>
     </div>
   );
 }
@@ -167,9 +173,9 @@ function ValidationEditor({ field }: { field: { id: string; validation: TextVali
   }
 
   return (
-    <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3 text-sm">
-      <div>
-        <Label className="mb-1 block text-xs text-muted-foreground">Response validation</Label>
+    <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3 text-sm">
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">Response validation</Label>
         <Select value={v.kind} onValueChange={(kind) => patch({ kind: kind as TextValidation['kind'] })}>
           <SelectTrigger className="h-9 w-40">
             <SelectValue />
@@ -219,7 +225,7 @@ function GridEditor({ field }: { field: GridField }) {
   function renderList(key: 'rows' | 'columns', label: string) {
     const list = field[key];
     return (
-      <div className="flex-1 space-y-2">
+      <div className="flex flex-1 flex-col gap-2">
         <Label className="text-xs text-muted-foreground">{label}</Label>
         {list.map((item, i) => (
           <div key={i} className="flex items-center gap-2">
@@ -233,7 +239,13 @@ function GridEditor({ field }: { field: GridField }) {
             </Button>
           </div>
         ))}
-        <Button type="button" variant="ghost" size="sm" onClick={() => setList(key, [...list, `${label.slice(0, -1)} ${list.length + 1}`])}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="self-start"
+          onClick={() => setList(key, [...list, `${label.slice(0, -1)} ${list.length + 1}`])}
+        >
           <Plus className="size-4" /> Add {label.toLowerCase().slice(0, -1)}
         </Button>
       </div>
@@ -241,7 +253,7 @@ function GridEditor({ field }: { field: GridField }) {
   }
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="flex flex-col gap-3">
       <div className="flex gap-6">
         {renderList('rows', 'Rows')}
         {renderList('columns', 'Columns')}
@@ -257,9 +269,9 @@ function GridEditor({ field }: { field: GridField }) {
 function LinearScaleEditor({ field }: { field: LinearScaleField }) {
   const updateField = useBuilderStore((s) => s.updateField);
   return (
-    <div className="mt-3 flex flex-wrap items-end gap-3">
-      <div>
-        <Label className="mb-1 block text-xs text-muted-foreground">From</Label>
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">From</Label>
         <Select value={String(field.min)} onValueChange={(v) => updateField(field.id, { min: Number(v) })}>
           <SelectTrigger className="h-9 w-20"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -268,8 +280,8 @@ function LinearScaleEditor({ field }: { field: LinearScaleField }) {
           </SelectContent>
         </Select>
       </div>
-      <div>
-        <Label className="mb-1 block text-xs text-muted-foreground">To</Label>
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">To</Label>
         <Select value={String(field.max)} onValueChange={(v) => updateField(field.id, { max: Number(v) })}>
           <SelectTrigger className="h-9 w-20"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -285,17 +297,31 @@ function LinearScaleEditor({ field }: { field: LinearScaleField }) {
   );
 }
 
-export function QuestionBody({ field, section, allSections }: { field: FormField; section: FormSection; allSections: FormSection[] }) {
+export function QuestionBody({
+  field,
+  section,
+  allSections,
+  showValidation,
+  branchingOpen,
+}: {
+  field: FormField;
+  section: FormSection;
+  allSections: FormSection[];
+  /** short_answer / paragraph: whether the ⋮ menu's "Response validation" item is checked */
+  showValidation: boolean;
+  /** multiple_choice / dropdown: whether the ⋮ menu's "Go to section based on answer" item is checked */
+  branchingOpen: boolean;
+}) {
   const updateField = useBuilderStore((s) => s.updateField);
 
   switch (field.type) {
     case 'short_answer':
     case 'paragraph':
-      return <ValidationEditor field={field} />;
+      return showValidation ? <ValidationEditor field={field} /> : null;
     case 'multiple_choice':
     case 'checkboxes':
     case 'dropdown':
-      return <OptionsEditor field={field} section={section} allSections={allSections} />;
+      return <OptionsEditor field={field} section={section} allSections={allSections} branchingOpen={branchingOpen} />;
     case 'linear_scale':
       return <LinearScaleEditor field={field} />;
     case 'multiple_choice_grid':
@@ -303,33 +329,33 @@ export function QuestionBody({ field, section, allSections }: { field: FormField
       return <GridEditor field={field} />;
     case 'file_upload':
       return (
-        <div className="mt-3 flex flex-wrap items-end gap-3 text-sm">
+        <div className="flex flex-wrap items-end gap-3 text-sm">
           <Input
             className="h-9 w-64"
             placeholder="allowed types, e.g. image, pdf"
             value={field.allowedTypes.join(', ')}
             onChange={(e) => updateField(field.id, { allowedTypes: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
           />
-          <div>
-            <Label className="mb-1 block text-xs text-muted-foreground">Max files</Label>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Max files</Label>
             <Input type="number" className="h-9 w-24" min={1} max={10} value={field.maxFiles} onChange={(e) => updateField(field.id, { maxFiles: Number(e.target.value) })} />
           </div>
-          <div>
-            <Label className="mb-1 block text-xs text-muted-foreground">Max size (MB)</Label>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Max size (MB)</Label>
             <Input type="number" className="h-9 w-24" min={1} max={100} value={field.maxSizeMb} onChange={(e) => updateField(field.id, { maxSizeMb: Number(e.target.value) })} />
           </div>
         </div>
       );
     case 'date':
       return (
-        <div className="mt-3 flex gap-6 text-sm">
+        <div className="flex gap-6 text-sm">
           <label className="flex items-center gap-2"><Checkbox checked={field.includeYear} onCheckedChange={(c) => updateField(field.id, { includeYear: c === true })} /> Include year</label>
           <label className="flex items-center gap-2"><Checkbox checked={field.includeTime} onCheckedChange={(c) => updateField(field.id, { includeTime: c === true })} /> Include time</label>
         </div>
       );
     case 'time':
       return (
-        <div className="mt-3 text-sm">
+        <div className="text-sm">
           <label className="flex items-center gap-2"><Checkbox checked={field.isDuration} onCheckedChange={(c) => updateField(field.id, { isDuration: c === true })} /> Duration, not time of day</label>
         </div>
       );

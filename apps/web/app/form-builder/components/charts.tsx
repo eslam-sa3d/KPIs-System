@@ -29,7 +29,7 @@ export function PieBreakdown({ counts }: { counts: Record<string, number> }) {
   const total = data.reduce((a, d) => a + d.count, 0);
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       <ChartFrame className="h-44 w-full">
         <PieChart>
           <Pie data={data} dataKey="count" nameKey="label" outerRadius={72}>
@@ -46,7 +46,7 @@ export function PieBreakdown({ counts }: { counts: Record<string, number> }) {
           />
         </PieChart>
       </ChartFrame>
-      <ul className="space-y-1">
+      <ul className="flex flex-col gap-1">
         {data.map((d, i) => (
           <li key={d.label} className="flex items-center gap-2 text-sm">
             <span className="size-2.5 shrink-0 rounded-full" style={{ background: chartSeries[i % chartSeries.length] }} />
@@ -85,7 +85,7 @@ export function ScaleBreakdown({ scaleCounts, average, min, max }: { scaleCounts
     return { label: value, count: scaleCounts[value] ?? 0 };
   });
   return (
-    <div className="space-y-1">
+    <div className="flex flex-col gap-1">
       <ChartFrame className="h-40 w-full">
         <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
           <CartesianGrid stroke={palette.secondary.silverLight} vertical={false} />
@@ -131,7 +131,7 @@ export function GridMatrix({ matrix }: { matrix: Record<string, Record<string, n
 export function TextSamples({ samples }: { samples: string[] }) {
   if (samples.length === 0) return <p className="text-sm text-muted-foreground">No responses yet.</p>;
   return (
-    <ul className="space-y-1.5">
+    <ul className="flex flex-col gap-1.5">
       {samples.map((s, i) => (
         <li key={i} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
           “{s}”

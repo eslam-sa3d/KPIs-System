@@ -48,7 +48,7 @@ export function FloatingToolbar({ sectionId, fieldId }: { sectionId: string; fie
     <>
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
       <div
-        className="absolute left-full top-2 ml-3 hidden w-11 flex-col gap-1 rounded-xl border border-border bg-card p-1.5 shadow-md md:flex"
+        className="absolute top-2 left-[calc(100%+12px)] z-10 hidden w-12 flex-col items-center gap-1 rounded-full border border-[#dadce0] bg-white py-2 shadow-md md:flex"
         role="menu"
         aria-label="Add to form"
       >
@@ -58,18 +58,19 @@ export function FloatingToolbar({ sectionId, fieldId }: { sectionId: string; fie
             type="button"
             variant="ghost"
             size="icon"
+            className="rounded-full hover:bg-[#f1f3f4]"
             title={label}
             aria-label={label}
             onClick={onClick}
           >
-            <Icon className="size-4" />
+            <Icon className="size-[18px] text-[#5f6368]" />
           </Button>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap gap-1 border-t border-border pt-3 md:hidden">
+      <div className="flex flex-wrap gap-1 border-t border-[#e0e0e0] pt-3 md:hidden">
         {actions.map(({ icon: Icon, label, onClick }) => (
           <Button key={label} type="button" variant="ghost" size="sm" onClick={onClick}>
-            <Icon className="size-4" />
+            <Icon className="size-4 text-[#5f6368]" />
             {label}
           </Button>
         ))}
