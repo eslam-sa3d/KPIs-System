@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, CheckCircle2 } from 'lucide-react';
 import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
 import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
@@ -349,8 +350,12 @@ export function FieldInput({
                 {labelOf(v)}
               </span>
               <span className="ranking-controls">
-                <Button type="button" variant="ghost" size="icon-sm" aria-label={`move ${labelOf(v)} up`} onClick={() => move(i, -1)}>↑</Button>
-                <Button type="button" variant="ghost" size="icon-sm" aria-label={`move ${labelOf(v)} down`} onClick={() => move(i, 1)}>↓</Button>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label={`move ${labelOf(v)} up`} onClick={() => move(i, -1)}>
+                  <ArrowUp size={14} aria-hidden="true" />
+                </Button>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label={`move ${labelOf(v)} down`} onClick={() => move(i, 1)}>
+                  <ArrowDown size={14} aria-hidden="true" />
+                </Button>
               </span>
             </li>
           ))}
@@ -462,7 +467,12 @@ export function FieldInput({
             disabled={uploadState.busy}
           />
           {uploadState.busy && <p className="muted">uploading…</p>}
-          {attachedName && !uploadState.busy && <p className="muted">✓ {attachedName}</p>}
+          {attachedName && !uploadState.busy && (
+            <p className="muted file-attached">
+              <CheckCircle2 size={14} aria-hidden="true" className="file-attached-icon" />
+              {attachedName}
+            </p>
+          )}
           {uploadState.error && (
             <Alert variant="destructive">
               <AlertDescription>{uploadState.error}</AlertDescription>
@@ -632,6 +642,8 @@ export function FormRenderer({
   const [submittedEditToken, setSubmittedEditToken] = useState<string | null>(null);
 
   const hasSections = Boolean(definition.sections && definition.sections.length > 0);
+  // the "* required" legend only means something if at least one question actually uses it
+  const hasRequiredField = definition.fields.some((f) => f.required);
 
   // page/block randomization: only coherent for pure linear multi-page forms — if any
   // page branches, the stored (unshuffled) order is what resolveSectionPath's forward-only
@@ -789,7 +801,7 @@ export function FormRenderer({
       <header className="msform-banner">
         <h1>{definition.title}</h1>
         {definition.description && <p>{definition.description}</p>}
-        {!submitted && !closed && !notYetOpen && <p className="msform-required-hint">* required</p>}
+        {!submitted && !closed && !notYetOpen && hasRequiredField && <p className="msform-required-hint">* required</p>}
       </header>
 
       {closed || notYetOpen ? (
@@ -803,6 +815,7 @@ export function FormRenderer({
         </div>
       ) : submitted ? (
         <div className="question-card msform-thanks">
+          <CheckCircle2 size={40} aria-hidden="true" className="msform-thanks-icon" />
           <h2>{settings.thankYouMessage}</h2>
           <p className="muted">your response was recorded.</p>
           {settings.quizMode && settings.showScoreToRespondent && submittedScore && (

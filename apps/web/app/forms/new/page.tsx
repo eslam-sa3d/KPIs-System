@@ -15,6 +15,17 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  MoreVertical,
+  SeparatorHorizontal,
+  Trash2,
+  X,
+} from 'lucide-react';
+import {
   CONDITION_OPERATORS,
   END_OF_FORM,
   SCORE_FIELD_TYPES,
@@ -1191,7 +1202,10 @@ function NewFormPage() {
   if (published) {
     return (
       <PortalShell user={user}>
-        <h1>published ✓</h1>
+        <h1 className="published-heading">
+          <CheckCircle2 size={26} aria-hidden="true" className="published-heading-icon" />
+          published
+        </h1>
         <p className="portal-subtitle">your form is live and accepting submissions.</p>
         <div className="page-title-row">
           <Link href={`/forms/view?slug=${encodeURIComponent(published.slug)}`} className="btn-primary">
@@ -1334,7 +1348,7 @@ function NewFormPage() {
                     aria-label={`remove page ${pageDisplayIndex + 1} — merges its questions into the previous page`}
                     onClick={() => removeSection(ownSection.id)}
                   >
-                    🗑
+                    <Trash2 size={14} aria-hidden="true" />
                   </Button>
                 )}
               </div>
@@ -1472,7 +1486,7 @@ function NewFormPage() {
                   aria-label="edit question"
                   onClick={() => setActiveFieldIndex(index)}
                 >
-                  ⌄
+                  <ChevronDown size={16} aria-hidden="true" />
                 </Button>
               )}
             </div>
@@ -1561,7 +1575,7 @@ function NewFormPage() {
                           updateField(index, { options: list.join(', '), optionGoTo });
                         }}
                       >
-                        ✕
+                        <X size={12} aria-hidden="true" />
                       </Button>
                     </div>
                   ))}
@@ -1578,7 +1592,7 @@ function NewFormPage() {
                         aria-label="remove other"
                         onClick={() => updateField(index, { allowOther: false })}
                       >
-                        ✕
+                        <X size={12} aria-hidden="true" />
                       </Button>
                     </div>
                   )}
@@ -1805,7 +1819,7 @@ function NewFormPage() {
             )}
 
             {canLinkKpis && canLinkKpiField && kpiOpen && (
-              <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
+              <div className="field-subpanel">
                 <span className="muted" style={{ fontSize: 12 }}>link to KPI (optional)</span>
                 {!kpiProducesLiveScore && (
                   <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
@@ -1830,7 +1844,7 @@ function NewFormPage() {
             )}
 
             {(field.type === 'short_text' || field.type === 'long_text') && (
-              <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
+              <div className="field-subpanel">
                 <span className="muted" style={{ fontSize: 12 }}>response validation (optional)</span>
                 <label htmlFor={`field-minlen-${index}`}>minimum length</label>
                 <Input
@@ -1892,7 +1906,7 @@ function NewFormPage() {
             )}
 
             {field.type === 'hot_spot' && (
-              <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
+              <div className="field-subpanel">
                 <label htmlFor={`field-hotspot-image-${index}`}>image</label>
                 <Input
                   id={`field-hotspot-image-${index}`}
@@ -1973,7 +1987,7 @@ function NewFormPage() {
             <div className="builder-field-actions">
               <div className="field-actions-primary">
                 <Button type="button" variant="ghost" size="icon-sm" title="duplicate" aria-label="duplicate question" onClick={() => duplicateField(index)}>
-                  ⧉
+                  <Copy size={14} aria-hidden="true" />
                 </Button>
                 <Button
                   type="button"
@@ -1983,7 +1997,7 @@ function NewFormPage() {
                   aria-label="remove field"
                   onClick={() => removeField(index)}
                 >
-                  🗑
+                  <Trash2 size={14} aria-hidden="true" />
                 </Button>
               </div>
 
@@ -2001,7 +2015,7 @@ function NewFormPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button type="button" className="field-kebab-summary" aria-label="more actions" title="more actions">
-                    ⋮
+                    <MoreVertical size={16} aria-hidden="true" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
@@ -2011,7 +2025,7 @@ function NewFormPage() {
                       moveField(index, -1);
                     }}
                   >
-                    ↑ move up
+                    <ArrowUp size={14} aria-hidden="true" /> move up
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={index === fields.length - 1}
@@ -2019,7 +2033,7 @@ function NewFormPage() {
                       moveField(index, 1);
                     }}
                   >
-                    ↓ move down
+                    <ArrowDown size={14} aria-hidden="true" /> move down
                   </DropdownMenuItem>
                   {sectionsEnabled && !isPageStart && (
                     <DropdownMenuItem
@@ -2027,7 +2041,7 @@ function NewFormPage() {
                         splitPageHere(index);
                       }}
                     >
-                      ⏎ split into a new page here
+                      <SeparatorHorizontal size={14} aria-hidden="true" /> split into a new page here
                     </DropdownMenuItem>
                   )}
                   {field.type === 'select' && sectionsEnabled && (

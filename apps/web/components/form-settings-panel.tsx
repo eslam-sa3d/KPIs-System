@@ -6,6 +6,8 @@ import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 
 const toLocalInputValue = (iso?: string) => (iso ? iso.slice(0, 16) : '');
 const toIso = (local: string) => (local ? new Date(local).toISOString() : undefined);
@@ -50,17 +52,17 @@ export function FormSettingsPanel({
     <form className="builder" onSubmit={onSave}>
       <h2 className="text-lg font-semibold mb-2">response settings</h2>
 
-      <label className="check-item">
-        <input
-          type="checkbox"
+      <span className="builder-required">
+        <Checkbox
+          id="fs-accepting"
           checked={draft.acceptingResponses}
-          onChange={(e) => setDraft((d) => ({ ...d, acceptingResponses: e.target.checked }))}
+          onCheckedChange={(checked) => setDraft((d) => ({ ...d, acceptingResponses: checked === true }))}
         />
-        accepting responses
-      </label>
+        <label htmlFor="fs-accepting">accepting responses</label>
+      </span>
 
       <label htmlFor="fs-opens">opens at (optional)</label>
-      <input
+      <Input
         id="fs-opens"
         type="datetime-local"
         value={toLocalInputValue(draft.opensAt)}
@@ -68,42 +70,46 @@ export function FormSettingsPanel({
       />
 
       <label htmlFor="fs-closes">closes at (optional)</label>
-      <input
+      <Input
         id="fs-closes"
         type="datetime-local"
         value={toLocalInputValue(draft.closesAt)}
         onChange={(e) => setDraft((d) => ({ ...d, closesAt: toIso(e.target.value) }))}
       />
 
-      <label className="check-item">
-        <input
-          type="checkbox"
+      <span className="builder-required">
+        <Checkbox
+          id="fs-one-per-user"
           checked={draft.oneResponsePerUser}
-          onChange={(e) => setDraft((d) => ({ ...d, oneResponsePerUser: e.target.checked }))}
+          onCheckedChange={(checked) => setDraft((d) => ({ ...d, oneResponsePerUser: checked === true }))}
         />
-        limit to one response per person (signed-in users by account, anonymous respondents by browser)
-      </label>
+        <label htmlFor="fs-one-per-user">
+          limit to one response per person (signed-in users by account, anonymous respondents by browser)
+        </label>
+      </span>
 
-      <label className="check-item">
-        <input
-          type="checkbox"
+      <span className="builder-required">
+        <Checkbox
+          id="fs-shuffle-questions"
           checked={draft.shuffleQuestions}
-          onChange={(e) => setDraft((d) => ({ ...d, shuffleQuestions: e.target.checked }))}
+          onCheckedChange={(checked) => setDraft((d) => ({ ...d, shuffleQuestions: checked === true }))}
         />
-        shuffle question order per respondent
-      </label>
+        <label htmlFor="fs-shuffle-questions">shuffle question order per respondent</label>
+      </span>
 
-      <label className="check-item">
-        <input
-          type="checkbox"
+      <span className="builder-required">
+        <Checkbox
+          id="fs-shuffle-sections"
           checked={draft.shuffleSections}
-          onChange={(e) => setDraft((d) => ({ ...d, shuffleSections: e.target.checked }))}
+          onCheckedChange={(checked) => setDraft((d) => ({ ...d, shuffleSections: checked === true }))}
         />
-        shuffle page order per respondent (only takes effect on forms whose pages have no branching rules)
-      </label>
+        <label htmlFor="fs-shuffle-sections">
+          shuffle page order per respondent (only takes effect on forms whose pages have no branching rules)
+        </label>
+      </span>
 
       <label htmlFor="fs-max-responses">stop accepting responses after (optional)</label>
-      <input
+      <Input
         id="fs-max-responses"
         type="number"
         min={1}
@@ -121,7 +127,7 @@ export function FormSettingsPanel({
       </p>
       {draft.quotas.map((quota, i) => (
         <div key={i} className="builder-required" style={{ flexWrap: 'wrap' }}>
-          <input
+          <Input
             aria-label="field key"
             value={quota.fieldKey}
             onChange={(e) =>
@@ -132,7 +138,7 @@ export function FormSettingsPanel({
             }
             placeholder="field key"
           />
-          <input
+          <Input
             aria-label="equals"
             value={quota.equals}
             onChange={(e) =>
@@ -143,7 +149,7 @@ export function FormSettingsPanel({
             }
             placeholder="answer value"
           />
-          <input
+          <Input
             aria-label="limit"
             type="number"
             min={1}
@@ -177,27 +183,29 @@ export function FormSettingsPanel({
         + add quota
       </Button>
 
-      <label className="check-item">
-        <input
-          type="checkbox"
+      <span className="builder-required">
+        <Checkbox
+          id="fs-allow-edit"
           checked={draft.allowRespondentEdit}
-          onChange={(e) => setDraft((d) => ({ ...d, allowRespondentEdit: e.target.checked }))}
+          onCheckedChange={(checked) => setDraft((d) => ({ ...d, allowRespondentEdit: checked === true }))}
         />
-        let respondents edit their own response via a link shown after submitting
-      </label>
+        <label htmlFor="fs-allow-edit">let respondents edit their own response via a link shown after submitting</label>
+      </span>
 
-      <label className="check-item">
-        <input
-          type="checkbox"
+      <span className="builder-required">
+        <Checkbox
+          id="fs-captcha"
           checked={draft.requireCaptcha}
-          onChange={(e) => setDraft((d) => ({ ...d, requireCaptcha: e.target.checked }))}
+          onCheckedChange={(checked) => setDraft((d) => ({ ...d, requireCaptcha: checked === true }))}
         />
-        require a CAPTCHA check on public link submissions (Cloudflare Turnstile — needs
-        TURNSTILE_SECRET_KEY / NEXT_PUBLIC_TURNSTILE_SITE_KEY configured to take effect)
-      </label>
+        <label htmlFor="fs-captcha">
+          require a CAPTCHA check on public link submissions (Cloudflare Turnstile — needs
+          TURNSTILE_SECRET_KEY / NEXT_PUBLIC_TURNSTILE_SITE_KEY configured to take effect)
+        </label>
+      </span>
 
       <label htmlFor="fs-webhook">webhook URL (optional)</label>
-      <input
+      <Input
         id="fs-webhook"
         type="url"
         value={draft.webhookUrl ?? ''}
@@ -209,19 +217,19 @@ export function FormSettingsPanel({
         delivery failures are logged and never block the submission.
       </p>
 
-      <label className="check-item">
-        <input
-          type="checkbox"
+      <span className="builder-required">
+        <Checkbox
+          id="fs-quiz-mode"
           checked={draft.quizMode}
-          onChange={(e) => setDraft((d) => ({ ...d, quizMode: e.target.checked }))}
+          onCheckedChange={(checked) => setDraft((d) => ({ ...d, quizMode: checked === true }))}
         />
-        quiz mode — score responses against each question's correct answer
-      </label>
+        <label htmlFor="fs-quiz-mode">quiz mode — score responses against each question's correct answer</label>
+      </span>
 
       {draft.quizMode && (
         <>
           <label htmlFor="fs-pass-threshold">pass threshold, % of points (optional)</label>
-          <input
+          <Input
             id="fs-pass-threshold"
             type="number"
             min={0}
@@ -236,19 +244,19 @@ export function FormSettingsPanel({
             placeholder="no threshold"
           />
 
-          <label className="check-item">
-            <input
-              type="checkbox"
+          <span className="builder-required">
+            <Checkbox
+              id="fs-show-score"
               checked={draft.showScoreToRespondent}
-              onChange={(e) => setDraft((d) => ({ ...d, showScoreToRespondent: e.target.checked }))}
+              onCheckedChange={(checked) => setDraft((d) => ({ ...d, showScoreToRespondent: checked === true }))}
             />
-            show the score to the respondent after they submit
-          </label>
+            <label htmlFor="fs-show-score">show the score to the respondent after they submit</label>
+          </span>
         </>
       )}
 
       <label htmlFor="fs-thanks">thank-you message</label>
-      <input
+      <Input
         id="fs-thanks"
         value={draft.thankYouMessage}
         maxLength={500}

@@ -136,6 +136,28 @@ h2 {
   line-height: var(--md-sys-typescale-title-large-line-height);
   font-weight: var(--font-weight-light);
 }
+
+.published-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.published-heading-icon {
+  color: var(--color-success);
+}
+
+.file-attached {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.file-attached-icon {
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
 h3 {
   font-size: var(--md-sys-typescale-title-medium-size);
   line-height: var(--md-sys-typescale-title-medium-line-height);
@@ -1621,6 +1643,13 @@ h3 {
   gap: var(--space-2);
 }
 
+/* the from/to date pair is one atomic flex item within .page-title-row's own
+   wrap — without its own wrap, a narrow viewport pushes the second date
+   picker past the edge of the screen instead of onto its own line. */
+.date-range-filter {
+  flex-wrap: wrap;
+}
+
 .check-group {
   display: flex;
   flex-direction: column;
@@ -1963,6 +1992,10 @@ h3 {
   padding: var(--space-12);
 }
 
+.msform-thanks-icon {
+  color: var(--color-success);
+}
+
 .quiz-score {
   font-size: var(--font-size-lg);
 }
@@ -2005,6 +2038,20 @@ h3 {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
   max-width: none;
+}
+
+/* A sub-section INSIDE an already-bordered .builder-field card (KPI link,
+   response validation, hot-spot image config) — reusing .admin-card's full
+   border + left-accent + shadow here reads as a card nested inside a card.
+   A plain top divider keeps the grouping visible without competing with the
+   outer card for attention. */
+.field-subpanel {
+  padding: var(--space-2) 0 0;
+  margin-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .admin-card h2 {
@@ -2658,7 +2705,17 @@ h3 {
 .hierarchy-title-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
+  min-width: 0;
+}
+
+/* flex children default to min-width:auto, which blocks the title text from
+   wrapping inside the row — on a narrow viewport that pushes the badge next
+   to it past the edge of the screen instead of onto its own line. */
+.hierarchy-title-row h1 {
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 /* Weight ring: a conic-gradient dial, same visual language as the mini-dial

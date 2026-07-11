@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, ClipboardList, Pencil } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Download, Pencil } from 'lucide-react';
 import type { FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
@@ -231,7 +231,7 @@ function FormView() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             />
-            <span className="builder-required">
+            <span className="builder-required date-range-filter">
               <label htmlFor="submissions-date-from" className="muted" style={{ fontSize: 12 }}>
                 from
               </label>
@@ -247,24 +247,27 @@ function FormView() {
               <Input id="submissions-date-to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </span>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export`, `${slug}.csv`)}
             >
+              <Download size={14} aria-hidden="true" />
               export CSV
             </Button>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.xlsx`, `${slug}.xlsx`)}
             >
+              <Download size={14} aria-hidden="true" />
               export xlsx
             </Button>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.pdf`, `${slug}-summary.pdf`)}
             >
+              <Download size={14} aria-hidden="true" />
               export PDF
             </Button>
             {canModerate &&
