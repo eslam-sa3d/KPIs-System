@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { PIPE_TAG_PATTERN, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
+import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
 import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
 import { Button } from '@/components/ui/button';
@@ -626,9 +626,50 @@ export function FormRenderer({
 }) {
   const [answers, setAnswers] = useState<SubmissionAnswers>(initialAnswers ?? {});
   const [error, setError] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [submittedScore, setSubmittedScore] = useState<SubmissionScore | null>(null);
   const [submittedEditToken, setSubmittedEditToken] = useState<string | null>(null);
+
+  const hasSections = Boolean(definition.sections && definition.sections.length > 0);
+
+  // page/block randomization: only coherent for pure linear multi-page forms — if any
+  // page branches, the stored (unshuffled) order is what resolveSectionPath's forward-only
+  // DAG check validates against, so shuffling would desync from it. Without branching, the
+  // *set* of reachable/required fields is order-independent, so this is safe client-side-only.
+  const shuffledSections = useMemo(() => {
+    const sections = definition.sections;
+    if (!sections || sections.length === 0) return sections;
+    if (!settings.shuffleSections) return sections;
+    const fieldByKey = new Map(definition.fields.map((f) => [f.key, f]));
+    const hasBranching = sections.some(
+      (s) =>
+        s.branching ||
+        (s.branchRules && s.branchRules.length > 0) ||
+        s.defaultGoTo !== undefined ||
+        s.fieldKeys.some((key) => {
+          const field = fieldByKey.get(key);
+          return field?.type === 'select' && field.optionGoTo && Object.keys(field.optionGoTo).length > 0;
+        }),
+    );
+    if (hasBranching) return sections;
+    return [...sections].sort(() => Math.random() - 0.5);
+  }, [definition, settings.shuffleSections]);
+
+  const renderDefinition = hasSections ? { ...definition, sections: shuffledSections } : definition;
+
+  const [currentSectionId, setCurrentSectionId] = useState<string | null>(
+    renderDefinition.sections?.[0]?.id ?? null,
+  );
+
+  // frozen per page: only re-resolved on explicit navigation (onNext/onBack), not on every
+  // answer change on the currently displayed page. Recomputing this live from `answers` let
+  // a branch rule resolve to "end of form" the instant its trigger field was answered, which
+  // silently swapped the "next →" button into a "submit" button in the same spot the
+  // respondent was about to click — submitting the form with no review step.
+  const [path, setPath] = useState<string[]>(() =>
+    hasSections ? resolveSectionPath(renderDefinition, initialAnswers ?? {}).visitedSectionIds : [],
+  );
 
   const shuffledQuestionOrder = useMemo(() => {
     if (!settings.shuffleQuestions) return definition.fields;
@@ -645,6 +686,17 @@ export function FormRenderer({
       }),
     [shuffledQuestionOrder],
   );
+
+  const currentIndex = currentSectionId ? Math.max(0, path.indexOf(currentSectionId)) : -1;
+  const currentSection = hasSections
+    ? (renderDefinition.sections!.find((s) => s.id === path[currentIndex]) ?? renderDefinition.sections![0])
+    : undefined;
+  const isLastPage = currentIndex === path.length - 1;
+  // filtered from the (possibly shuffled) orderedFields, not definition.fields
+  // directly, so shuffleQuestions also applies within a page — see orderedFields above
+  const pageFields = currentSection
+    ? orderedFields.filter((f) => currentSection.fieldKeys.includes(f.key))
+    : [];
 
   const now = Date.now();
   const notYetOpen = settings.opensAt && now < Date.parse(settings.opensAt);
@@ -664,17 +716,63 @@ export function FormRenderer({
     }
     if (Object.keys(captured).length > 0) {
       setAnswers((prev) => ({ ...captured, ...prev }));
+      if (hasSections) {
+        setPath(resolveSectionPath(renderDefinition, captured).visitedSectionIds);
+      }
     }
   }, [definition]);
 
+  function pageIsComplete(fields: FormField[]) {
+    return fields.every((field) => {
+      if (field.capturedFromUrlParam) return true;
+      if (!isVisible(field, answers)) return true;
+      if (!field.required) return true;
+      const value = answers[field.key];
+      return value !== undefined && value !== null && value !== '';
+    });
+  }
+
+  function onNext() {
+    if (!pageIsComplete(pageFields)) {
+      setPageError('please answer every required question on this page');
+      return;
+    }
+    setPageError(null);
+    // re-resolve now that this page's fields (including any branch trigger) are answered
+    const freshPath = resolveSectionPath(renderDefinition, answers).visitedSectionIds;
+    setPath(freshPath);
+    const idx = currentSectionId ? freshPath.indexOf(currentSectionId) : -1;
+    const next = freshPath[idx + 1];
+    // if branching resolved to end-of-form here, this click only reveals the submit button —
+    // it does not submit on the respondent's behalf.
+    if (next) setCurrentSectionId(next);
+  }
+
+  function onBack() {
+    setPageError(null);
+    const prev = path[currentIndex - 1];
+    if (prev) setCurrentSectionId(prev);
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (hasSections && !pageIsComplete(pageFields)) {
+      setPageError('please answer every required question on this page');
+      return;
+    }
     setError(null);
     try {
+      const reachable = hasSections ? resolveSectionPath(renderDefinition, answers).reachableFieldKeys : null;
       const visible = Object.fromEntries(
         Object.entries(answers).filter(([key, value]) => {
           const field = definition.fields.find((f) => f.key === key);
-          return field && isVisible(field, answers) && value !== null && value !== '';
+          return (
+            field &&
+            isVisible(field, answers) &&
+            (!reachable || reachable.has(key)) &&
+            value !== null &&
+            value !== ''
+          );
         }),
       );
       const result = await onSubmit(visible);
@@ -776,8 +874,18 @@ export function FormRenderer({
             }
           }}
         >
+          {hasSections && (
+            <div style={{ marginBottom: 8 }}>
+              <p className="muted" style={{ margin: 0 }}>
+                page {currentIndex + 1} of {path.length}
+                {currentSection?.title ? ` — ${currentSection.title}` : ''}
+              </p>
+              {currentSection?.description && <p className="muted">{currentSection.description}</p>}
+              {currentSection?.media && <FieldMedia media={currentSection.media} />}
+            </div>
+          )}
           {(() => {
-            const visibleFields = orderedFields.filter(
+            const visibleFields = (hasSections ? pageFields : orderedFields).filter(
               (field) => isVisible(field, answers) && !field.capturedFromUrlParam,
             );
             let questionNumber = 0;
@@ -807,14 +915,31 @@ export function FormRenderer({
               );
             });
           })()}
-          {error && (
+          {(pageError || error) && (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{pageError ?? error}</AlertDescription>
             </Alert>
           )}
-          {captchaSlot}
+          {(!hasSections || isLastPage) && captchaSlot}
           <div className="page-title-row">
-            <Button type="submit">submit</Button>
+            {hasSections && currentIndex > 0 && (
+              <Button type="button" variant="ghost" onClick={onBack}>
+                ← back
+              </Button>
+            )}
+            {hasSections && !isLastPage ? (
+              // Distinct `key`s force React to unmount/remount rather than mutate this
+              // button's type in place — reusing the same DOM node and flipping
+              // type="button" -> type="submit" as a side effect of THIS click's own
+              // handler let the browser's native default-action phase (which reads the
+              // button's type after React's synchronous re-render) submit the form on
+              // the very click that was only supposed to navigate to the next page.
+              <Button key="next" type="button" onClick={onNext}>
+                next →
+              </Button>
+            ) : (
+              <Button key="submit" type="submit">submit</Button>
+            )}
           </div>
         </form>
       )}
