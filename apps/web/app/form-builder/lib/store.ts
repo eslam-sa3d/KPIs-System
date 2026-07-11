@@ -6,10 +6,31 @@ import type { FieldType, FormDefinition, FormField, FormSection, FormTheme } fro
 
 export type EditorTab = 'questions' | 'responses';
 
+/** A brand-new form the way Google Forms starts one: no title, one empty
+ *  section, no questions yet — same theme defaults as the demo form. */
+function createBlankForm(): FormDefinition {
+  return {
+    id: makeId('form'),
+    title: '',
+    description: '',
+    theme: { headerImageUrl: null, primaryColor: '#673ab7', backgroundColor: '#ffffff', fontStyle: 'default' },
+    fields: {},
+    sections: [{ id: makeId('sec'), title: '', description: '', fieldIds: [] }],
+  };
+}
+
 interface BuilderState {
   form: FormDefinition;
   activeTab: EditorTab;
   activeFieldId: string | null;
+
+  /** Resets the editor to a blank form — used when opening /form-builder/edit
+   *  as "create new", as opposed to opening the existing demo form. */
+  newForm: () => void;
+  /** Resets the editor back to the demo form — opening /form-builder/edit
+   *  without "new" always lands here regardless of what was edited before,
+   *  since the store is a client-side singleton that outlives navigation. */
+  loadDemoForm: () => void;
 
   setActiveTab: (tab: EditorTab) => void;
   setActiveField: (id: string | null) => void;
@@ -56,6 +77,9 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   form: MOCK_FORM,
   activeTab: 'questions',
   activeFieldId: null,
+
+  newForm: () => set({ form: createBlankForm(), activeTab: 'questions', activeFieldId: null }),
+  loadDemoForm: () => set({ form: MOCK_FORM, activeTab: 'questions', activeFieldId: null }),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setActiveField: (id) => set({ activeFieldId: id }),

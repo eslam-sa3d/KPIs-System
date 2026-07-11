@@ -82,7 +82,7 @@ export default function FormBuilderHomePage() {
       <div className="page-title-row">
         <h1>form builder</h1>
         <Button asChild>
-          <Link href="/form-builder/edit">new form</Link>
+          <Link href="/form-builder/edit?new=1">new form</Link>
         </Button>
       </div>
       <p className="portal-subtitle">a Google-Forms-style prototype of the form editor</p>
