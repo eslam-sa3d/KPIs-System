@@ -30,14 +30,17 @@ services:
       pnpm --filter @pulse/api exec prisma generate &&
       pnpm --filter @pulse/api build
     # db:seed is idempotent (upserts) — running on boot replaces shell access,
-    # which the free tier doesn't include. Each `migrate resolve --rolled-back`
-    # before it is the same substitute for a one-off failed-migration fix: it
-    # only matters if that exact migration is still stuck in a failed state,
-    # so `|| true` makes it a safe no-op on every deploy after the first time
-    # it actually resolves something.
+    # which the free tier doesn't include. Each `migrate resolve` before it is
+    # the same substitute for a one-off failed-migration fix: it only matters
+    # if that exact migration is still stuck in a failed state, so `|| true`
+    # makes it a safe no-op on every deploy after the first time it actually
+    # resolves something. drop_form_kpi_mapping resolves as --applied (not
+    # --rolled-back): its DROP TABLE had already taken effect on the database
+    # despite Prisma recording the migration as failed, so retrying it as
+    # "rolled back" only re-fails forever against a table that's already gone.
     startCommand: >-
       pnpm --filter @pulse/api exec prisma migrate resolve --rolled-back 20260710110000_kpi_multi_rater_and_review_type || true &&
-      pnpm --filter @pulse/api exec prisma migrate resolve --rolled-back 20260711120038_drop_form_kpi_mapping || true &&
+      pnpm --filter @pulse/api exec prisma migrate resolve --applied 20260711120038_drop_form_kpi_mapping || true &&
       pnpm --filter @pulse/api exec prisma migrate deploy &&
       pnpm db:seed &&
       node apps/api/dist/main.js
