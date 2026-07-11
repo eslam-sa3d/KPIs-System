@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type FormTheme, type SubmissionAnswers } from '@pulse/contracts';
+import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
 import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
 import { Button } from '@/components/ui/button';
@@ -11,13 +11,6 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-
-/** Google Forms' three-way font choice, mapped to system stacks — no new font files/CDN loads. */
-const FONT_STACKS: Record<NonNullable<FormTheme['fontFamily']>, string | undefined> = {
-  default: undefined,
-  serif: 'Georgia, "Times New Roman", Times, serif',
-  casual: 'ui-rounded, "Segoe UI Rounded", "Trebuchet MS", sans-serif',
-};
 
 interface UserOption {
   id: string;
@@ -783,22 +776,9 @@ export function FormRenderer({
     }
   }
 
-  const theme = definition.theme;
-  const fontStack = theme?.fontFamily ? FONT_STACKS[theme.fontFamily] : undefined;
-  const accentStyle =
-    theme?.accentColor || theme?.backgroundColor || fontStack
-      ? ({
-          ...(theme?.accentColor ? { '--msform-accent': theme.accentColor } : {}),
-          ...(theme?.backgroundColor ? { backgroundColor: theme.backgroundColor } : {}),
-          ...(fontStack ? { '--msform-font-family': fontStack } : {}),
-        } as React.CSSProperties)
-      : undefined;
-  const bannerStyle = theme?.backgroundAssetId ? { backgroundImage: `url(${assetUrl(theme.backgroundAssetId)})` } : undefined;
-
   return (
-    <div className="msform" style={accentStyle}>
-      <header className={`msform-banner${theme?.backgroundAssetId ? ' msform-banner-image' : ''}`} style={bannerStyle}>
-        {theme?.logoAssetId && <img src={assetUrl(theme.logoAssetId)} alt="" className="msform-logo" />}
+    <div className="msform">
+      <header className="msform-banner">
         <h1>{definition.title}</h1>
         {definition.description && <p>{definition.description}</p>}
         {!submitted && !closed && !notYetOpen && <p className="msform-required-hint">* required</p>}

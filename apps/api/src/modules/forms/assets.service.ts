@@ -8,8 +8,8 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const ORPHAN_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Builder-uploaded design assets: option images, question/page media, and
- * theme background/logo. Distinct from FileUploadsService, which handles
+ * Builder-uploaded design assets: option images, question/page media.
+ * Distinct from FileUploadsService, which handles
  * RESPONDENT answer files. Uploaded while a form is still a draft — before
  * any Form row exists — so an asset starts orphaned (formId null) and is
  * claimed once the definition referencing it is actually published; the

@@ -395,7 +395,7 @@ export class FormsService {
   }
 }
 
-/** Every FormAsset id referenced anywhere in a definition — field/option media, page media, theme. */
+/** Every FormAsset id referenced anywhere in a definition — field/option media, page media. */
 function extractAssetIds(definition: FormDefinition): string[] {
   const ids = new Set<string>();
   for (const field of definition.fields) {
@@ -407,7 +407,5 @@ function extractAssetIds(definition: FormDefinition): string[] {
   for (const section of definition.sections ?? []) {
     if (section.media?.assetId) ids.add(section.media.assetId);
   }
-  if (definition.theme?.backgroundAssetId) ids.add(definition.theme.backgroundAssetId);
-  if (definition.theme?.logoAssetId) ids.add(definition.theme.logoAssetId);
   return [...ids];
 }

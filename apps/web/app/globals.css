@@ -1656,18 +1656,13 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  /* --msform-font-family is set inline per-form (FormRenderer) from
-     FormDefinition.theme.fontFamily; falls back to the app's own font stack. */
-  font-family: var(--msform-font-family, inherit);
 }
 
 .msform-banner {
-  /* --msform-accent is set inline per-form (FormRenderer) from FormDefinition.theme;
-     falls back to the fixed brand gradient when a form has no custom theme. */
   background: linear-gradient(
     135deg,
-    var(--msform-accent, var(--pulse-purple)) 0%,
-    color-mix(in srgb, var(--msform-accent, var(--pulse-purple)) 55%, white) 100%
+    var(--pulse-purple) 0%,
+    color-mix(in srgb, var(--pulse-purple) 55%, white) 100%
   );
   color: var(--pulse-air);
   border-radius: var(--radius-lg);
@@ -1675,17 +1670,6 @@ h3 {
   box-shadow: var(--shadow-card);
   background-size: cover;
   background-position: center;
-}
-
-.msform-banner-image {
-  background-blend-mode: multiply;
-}
-
-.msform-logo {
-  display: block;
-  max-height: 40px;
-  width: auto;
-  margin-bottom: var(--space-3);
 }
 
 .msform-banner h1 {
@@ -3248,23 +3232,9 @@ button.insight-card:focus-visible {
   background: color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 
-/* ── per-form theming: overrides scoped to .msform, never leaks to the rest of the portal ── */
-.msform .btn-primary {
-  background: var(--msform-accent, var(--color-primary));
-}
-
-.msform .btn-primary:hover {
-  background: color-mix(in srgb, var(--msform-accent, var(--color-primary)) 85%, black);
-}
-
-.msform .scale-pill-active {
-  background: var(--msform-accent, var(--color-primary));
-  border-color: var(--msform-accent, var(--color-primary));
-}
-
 .msform input[type='radio'],
 .msform input[type='checkbox'] {
-  accent-color: var(--msform-accent, var(--color-primary));
+  accent-color: var(--color-primary);
 }
 
 /* ── likert matrix ─────────────────────────────────────────────────── */
