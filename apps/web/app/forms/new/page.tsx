@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   KeyboardSensor,
@@ -251,6 +251,12 @@ interface KeyedField {
   likertScale: string[];
 }
 
+/** Google Forms model: a page has no independently-editable field list — it's
+ *  just "every question from `startFieldKey` up to the next page's start", in
+ *  the form's own question order. The very first page has `startFieldKey:
+ *  null` (it implicitly starts at the top). Dragging a question above/below a
+ *  page's start field moves it into that page automatically — no separate
+ *  bookkeeping required, matching how Google Forms' section breaks behave. */
 interface DraftSection {
   id: string;
   title: string;
@@ -259,22 +265,22 @@ interface DraftSection {
   mediaAssetId: string;
   mediaUrl: string;
   mediaAlt: string;
-  fieldKeys: string[];
+  startFieldKey: string | null;
   /** Google-Forms-style "after this page, go to..." — the page's own fallback
    *  once none of its `select` fields' own optionGoTo redirected elsewhere.
    *  '' = continue to the next page normally. */
   defaultGoTo: string;
 }
 
-const emptySection = (index: number): DraftSection => ({
-  id: `page_${index + 1}`,
+const emptySection = (id: string, startFieldKey: string | null): DraftSection => ({
+  id,
   title: '',
   description: '',
   mediaType: 'none',
   mediaAssetId: '',
   mediaUrl: '',
   mediaAlt: '',
-  fieldKeys: [],
+  startFieldKey,
   defaultGoTo: '',
 });
 
@@ -609,8 +615,11 @@ function fromDefinitionField(field: FormField): DraftField {
  *  FormSection. A section published under the previous (MS-Forms-style)
  *  `branching`/`branchRules` model reopens with no "after this page" default
  *  set here — same as any other legacy data the builder no longer edits;
- *  republishing preserves the original fields but writes the current model. */
-function fromDefinitionSection(section: FormSection): DraftSection {
+ *  republishing preserves the original fields but writes the current model.
+ *  `fieldKeys` collapses down to just its first entry (`startFieldKey`) — the
+ *  builder only ever writes contiguous pages, so this is lossless for
+ *  anything the current builder itself produced. */
+function fromDefinitionSection(section: FormSection, index: number): DraftSection {
   return {
     id: section.id,
     title: section.title ?? '',
@@ -619,7 +628,7 @@ function fromDefinitionSection(section: FormSection): DraftSection {
     mediaAssetId: section.media?.type === 'image' ? (section.media.assetId ?? '') : '',
     mediaUrl: section.media?.type === 'video' ? (section.media.url ?? '') : '',
     mediaAlt: section.media?.alt ?? '',
-    fieldKeys: section.fieldKeys,
+    startFieldKey: index === 0 ? null : (section.fieldKeys[0] ?? null),
     defaultGoTo: section.defaultGoTo ?? '',
   };
 }
@@ -756,77 +765,53 @@ function NewFormPage() {
     scale: f.scale,
     likertScale: parseList(f.likertScale),
   }));
-  const unassignedFieldKeys = keyedFields
-    .filter((f) => !sections.some((s) => s.fieldKeys.includes(f.key)))
-    .map((f) => f.key);
   const canLinkKpis = can(user, 'forms:manage') && can(user, 'kpis:write');
 
-  function addSection() {
-    setSections((current) => [...current, emptySection(current.length)]);
+  // Derives each page's actual field list from where it starts and where the NEXT page starts,
+  // in the form's own question order — a page is nothing but "everything between two breaks", so
+  // reordering/adding/removing questions keeps every page correct with zero manual bookkeeping.
+  // Sections also get re-sorted here by their resolved position: dragging a later page's first
+  // question above an earlier page's questions moves the break itself, exactly like Google Forms.
+  const resolvedSections = useMemo(() => {
+    if (!sectionsEnabled || sections.length === 0) return [];
+    const keys = keyedFields.map((f) => f.key);
+    const withStart = sections
+      .map((s, i) => ({ section: s, startIdx: i === 0 ? 0 : keys.indexOf(s.startFieldKey ?? '') }))
+      // a page whose start question was deleted merges into whichever page precedes it —
+      // removeField already drops these eagerly, this is just a defensive fallback
+      .filter((x) => x.startIdx !== -1)
+      .sort((a, b) => a.startIdx - b.startIdx);
+    return withStart.map(({ section }, i) => ({
+      ...section,
+      fieldKeys: keys.slice(i === 0 ? 0 : withStart[i]!.startIdx, withStart[i + 1]?.startIdx ?? keys.length),
+    }));
+  }, [sections, keyedFields, sectionsEnabled]);
+
+  const sectionIdSeq = useRef(1);
+  function freshSectionId() {
+    let id: string;
+    do {
+      id = `page_${sectionIdSeq.current++}`;
+    } while (sections.some((s) => s.id === id));
+    return id;
   }
 
-  /** Builder shortcut: put this question, plus every not-yet-assigned question after it, on a new page. */
+  /** Inserts a page break right before this question — it, and every question after it up to the
+   *  next break, becomes the new page. Position-based, so no other bookkeeping is needed. */
   function splitPageHere(fieldIndex: number) {
-    const fieldKey = keyedFields[fieldIndex]!.key;
-    const newFieldKeys = keyedFields
-      .slice(fieldIndex)
-      .map((f) => f.key)
-      .filter((k) => k === fieldKey || !sections.some((s) => s.fieldKeys.includes(k)));
-
-    setSections((current) => {
-      // pull the moved fields out of whatever page currently holds them, drop pages left empty
-      const cleaned = current
-        .map((s) => ({ ...s, fieldKeys: s.fieldKeys.filter((k) => !newFieldKeys.includes(k)) }))
-        .filter((s) => s.fieldKeys.length > 0);
-
-      // insert right after the page holding the field immediately before this one, if any
-      const priorFieldKey = fieldIndex > 0 ? keyedFields[fieldIndex - 1]!.key : null;
-      const priorPageIndex = priorFieldKey ? cleaned.findIndex((s) => s.fieldKeys.includes(priorFieldKey)) : -1;
-      const insertAt = priorPageIndex === -1 ? cleaned.length : priorPageIndex + 1;
-
-      const newSection: DraftSection = { ...emptySection(insertAt), fieldKeys: newFieldKeys };
-      return [...cleaned.slice(0, insertAt), newSection, ...cleaned.slice(insertAt)];
-    });
+    const fieldKey = keyedFields[fieldIndex]?.key;
+    if (!fieldKey) return;
+    setSections((current) => [...current, emptySection(freshSectionId(), fieldKey)]);
   }
 
-  function updateSection(index: number, patch: Partial<DraftSection>) {
-    setSections((current) => current.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+  function updateSection(id: string, patch: Partial<DraftSection>) {
+    setSections((current) => current.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
 
-  function moveSection(index: number, delta: number) {
-    setSections((current) => {
-      const target = index + delta;
-      if (target < 0 || target >= current.length) return current;
-      const next = [...current];
-      [next[index], next[target]] = [next[target]!, next[index]!];
-      return next;
-    });
-  }
-
-  function onSectionDragEnd({ active, over }: DragEndEvent) {
-    if (!over || active.id === over.id) return;
-    setSections((current) => {
-      const from = current.findIndex((s) => s.id === active.id);
-      const to = current.findIndex((s) => s.id === over.id);
-      if (from === -1 || to === -1) return current;
-      const next = [...current];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved!);
-      return next;
-    });
-  }
-
-  function toggleFieldInSection(sectionIndex: number, fieldKey: string) {
-    setSections((current) =>
-      current.map((s, i) => {
-        if (i === sectionIndex) {
-          const has = s.fieldKeys.includes(fieldKey);
-          return { ...s, fieldKeys: has ? s.fieldKeys.filter((k) => k !== fieldKey) : [...s.fieldKeys, fieldKey] };
-        }
-        // a field can only belong to one page — unassign it elsewhere when checked here
-        return s.fieldKeys.includes(fieldKey) ? { ...s, fieldKeys: s.fieldKeys.filter((k) => k !== fieldKey) } : s;
-      }),
-    );
+  /** Removes this page break — its questions merge into whichever page precedes it. The very
+   *  first page has no break to remove (disabled in the UI); guarded here too, defensively. */
+  function removeSection(id: string) {
+    setSections((current) => (current.length <= 1 ? current : current.filter((s) => s.id !== id)));
   }
 
   function updateField(index: number, patch: Partial<DraftField>) {
@@ -955,6 +940,12 @@ function NewFormPage() {
         // best-effort — the field is coming out of the builder regardless
       });
     }
+    // if this question started a page, that page break goes with it — its remaining
+    // questions merge into whichever page precedes it (handled by resolvedSections)
+    const removedKey = keyedFields[index]?.key;
+    if (removedKey) {
+      setSections((current) => current.filter((s) => s.startFieldKey !== removedKey));
+    }
     setFields((current) => current.filter((_, i) => i !== index));
     setActiveFieldIndex((current) => {
       if (current === null || current === index) return null;
@@ -1064,24 +1055,23 @@ function NewFormPage() {
 
       if (parsed.some((p) => p.page)) {
         const importedKeys = parsed.map((p, i) => toKey(p.label, baseIndex + i));
+        // the parser only ever groups ADJACENT rows under the same page name, so each
+        // group's first key is all a position-based page needs to anchor it
         const pageOrder: string[] = [];
-        const fieldKeysByPage = new Map<string, string[]>();
+        const firstKeyByPage = new Map<string, string>();
         parsed.forEach((p, i) => {
-          if (!p.page) return;
-          if (!fieldKeysByPage.has(p.page)) {
-            pageOrder.push(p.page);
-            fieldKeysByPage.set(p.page, []);
-          }
-          fieldKeysByPage.get(p.page)!.push(importedKeys[i]!);
+          if (!p.page || firstKeyByPage.has(p.page)) return;
+          pageOrder.push(p.page);
+          firstKeyByPage.set(p.page, importedKeys[i]!);
         });
 
         setSectionsEnabled(true);
         setSections((current) => [
-          ...current,
-          ...pageOrder.map((pageName, i) => ({
-            ...emptySection(current.length + i),
+          // anything already in the form before this import needs its own page too
+          ...(current.length === 0 ? [emptySection(freshSectionId(), null)] : current),
+          ...pageOrder.map((pageName) => ({
+            ...emptySection(freshSectionId(), firstKeyByPage.get(pageName)!),
             title: pageName,
-            fieldKeys: fieldKeysByPage.get(pageName)!,
           })),
         ]);
       }
@@ -1092,18 +1082,18 @@ function NewFormPage() {
     }
   }
 
-  async function onUploadSectionMedia(index: number, file: File) {
+  async function onUploadSectionMedia(id: string, file: File) {
     try {
       const uploaded = await uploadAsset<{ id: string }>(file);
-      updateSection(index, { mediaType: 'image', mediaAssetId: uploaded.id });
+      updateSection(id, { mediaType: 'image', mediaAssetId: uploaded.id });
     } catch {
       setError('image upload failed');
     }
   }
 
   function buildSectionsPayload() {
-    if (!sectionsEnabled || sections.length === 0) return undefined;
-    return sections.map((s) => ({
+    if (!sectionsEnabled || resolvedSections.length === 0) return undefined;
+    return resolvedSections.map((s) => ({
       id: s.id,
       ...(s.title.trim() ? { title: s.title.trim() } : {}),
       ...(s.description.trim() ? { description: s.description.trim() } : {}),
@@ -1278,12 +1268,18 @@ function NewFormPage() {
         <SortableContext items={fields.map((_, i) => i)} strategy={verticalListSortingStrategy}>
         {fields.map((field, index) => {
           const isActive = activeFieldIndex === index;
-          // "go to section based on answer" only makes sense once this question's
-          // own page is known and there's a LATER page to jump to.
+          const fieldKey = keyedFields[index]?.key ?? '';
+          // "go to section based on answer" only makes sense once there's a LATER page to jump to.
           const ownSectionIndex = sectionsEnabled
-            ? sections.findIndex((s) => s.fieldKeys.includes(keyedFields[index]?.key ?? ''))
+            ? resolvedSections.findIndex((s) => s.fieldKeys.includes(fieldKey))
             : -1;
-          const laterSectionsForField = ownSectionIndex >= 0 ? sections.slice(ownSectionIndex + 1) : [];
+          const ownSection = ownSectionIndex >= 0 ? resolvedSections[ownSectionIndex] : undefined;
+          const laterSectionsForField = ownSection ? resolvedSections.slice(ownSectionIndex + 1) : [];
+          // this question is literally where its page begins/ends — drives the inline page
+          // header/footer rendered around its card, and whether "split a new page here" is offered
+          const isPageStart = ownSection?.fieldKeys[0] === fieldKey;
+          const isPageEnd = ownSection ? ownSection.fieldKeys[ownSection.fieldKeys.length - 1] === fieldKey : false;
+          const pageDisplayIndex = ownSection ? resolvedSections.indexOf(ownSection) : -1;
           // Any answerable question can be linked to a KPI — section_header is the only
           // exclusion, since it has no answer at all. Whether the link actually produces a
           // live score depends on the field type; see kpiProducesLiveScore below.
@@ -1303,6 +1299,78 @@ function NewFormPage() {
             ? branchingPanelOverrides.get(index)!
             : Object.values(field.optionGoTo).some((v) => v);
           return (
+          <Fragment key={index}>
+          {isPageStart && ownSection && (
+            <div className="admin-card page-break-card" style={{ marginBottom: 12 }}>
+              <div className="page-title-row" style={{ marginBottom: 8 }}>
+                <span className="field-legend">
+                  page {pageDisplayIndex + 1} of {resolvedSections.length}
+                </span>
+                {pageDisplayIndex > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    title="remove this page break"
+                    aria-label={`remove page ${pageDisplayIndex + 1} — merges its questions into the previous page`}
+                    onClick={() => removeSection(ownSection.id)}
+                  >
+                    🗑
+                  </Button>
+                )}
+              </div>
+
+              <label htmlFor={`section-title-${ownSection.id}`}>page title (optional)</label>
+              <Input
+                id={`section-title-${ownSection.id}`}
+                value={ownSection.title}
+                onChange={(e) => updateSection(ownSection.id, { title: e.target.value })}
+                placeholder={ownSection.id}
+              />
+
+              <label htmlFor={`section-description-${ownSection.id}`}>page description (optional)</label>
+              <Input
+                id={`section-description-${ownSection.id}`}
+                value={ownSection.description}
+                onChange={(e) => updateSection(ownSection.id, { description: e.target.value })}
+                placeholder="shown under the page title"
+              />
+
+              <label htmlFor={`section-media-type-${ownSection.id}`}>page media (optional)</label>
+              <Select
+                value={ownSection.mediaType}
+                onValueChange={(v) => updateSection(ownSection.id, { mediaType: v as DraftSection['mediaType'] })}
+              >
+                <SelectTrigger id={`section-media-type-${ownSection.id}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">none</SelectItem>
+                  <SelectItem value="image">image</SelectItem>
+                  <SelectItem value="video">video (embed URL)</SelectItem>
+                </SelectContent>
+              </Select>
+              {ownSection.mediaType === 'image' && (
+                <>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => e.target.files?.[0] && onUploadSectionMedia(ownSection.id, e.target.files[0])}
+                  />
+                  {ownSection.mediaAssetId && (
+                    <img src={assetUrl(ownSection.mediaAssetId)} alt="" className="option-image" />
+                  )}
+                </>
+              )}
+              {ownSection.mediaType === 'video' && (
+                <Input
+                  value={ownSection.mediaUrl}
+                  onChange={(e) => updateSection(ownSection.id, { mediaUrl: e.target.value })}
+                  placeholder="https://www.youtube.com/embed/…"
+                />
+              )}
+            </div>
+          )}
           <SortableCard
             key={index}
             id={index}
@@ -1934,7 +2002,7 @@ function NewFormPage() {
                   >
                     ↓ move down
                   </DropdownMenuItem>
-                  {sectionsEnabled && (
+                  {sectionsEnabled && !isPageStart && (
                     <DropdownMenuItem
                       onSelect={() => {
                         splitPageHere(index);
@@ -1960,9 +2028,7 @@ function NewFormPage() {
                       </DropdownMenuCheckboxItem>
                     ) : (
                       <DropdownMenuItem disabled onSelect={(e) => e.preventDefault()}>
-                        {ownSectionIndex === -1
-                          ? 'assign this question to a page first'
-                          : 'no later page to route to'}
+                        no later page to route to
                       </DropdownMenuItem>
                     )
                   )}
@@ -1984,6 +2050,29 @@ function NewFormPage() {
           </>
           )}
           </SortableCard>
+          {isPageEnd && ownSection && laterSectionsForField.length > 0 && (
+            <div className="admin-card" style={{ marginTop: -8, marginBottom: 12 }}>
+              <label htmlFor={`section-default-${ownSection.id}`}>after this page, go to</label>
+              <Select
+                value={ownSection.defaultGoTo || '__none__'}
+                onValueChange={(v) => updateSection(ownSection.id, { defaultGoTo: v === '__none__' ? '' : v })}
+              >
+                <SelectTrigger id={`section-default-${ownSection.id}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">continue to the next page</SelectItem>
+                  {laterSectionsForField.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.title.trim() || t.id}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={END_OF_FORM}>submit form</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          </Fragment>
           );
         })}
         </SortableContext>
@@ -2007,184 +2096,17 @@ function NewFormPage() {
               checked={sectionsEnabled}
               onCheckedChange={(checked) => {
                 setSectionsEnabled(checked === true);
-                if (checked === true && sections.length === 0) setSections([emptySection(0)]);
+                if (checked === true && sections.length === 0) setSections([emptySection(freshSectionId(), null)]);
               }}
             />
             <label htmlFor="sections-toggle">split into pages, with branching</label>
           </span>
-
           {sectionsEnabled && (
-            <>
-              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                assign every question to a page. a "choice (one answer)" question can send each of its own
-                options to a specific later page (or submit the form early) — jumps only reach a LATER page.
-              </p>
-
-              {unassignedFieldKeys.length > 0 && (
-                <p className="form-error">
-                  not yet assigned to a page:{' '}
-                  {unassignedFieldKeys.map((k) => keyedFields.find((f) => f.key === k)?.label).join(', ')}
-                </p>
-              )}
-
-              <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={onSectionDragEnd}>
-              <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-              {sections.map((section, index) => {
-                const laterSections = sections.slice(index + 1);
-
-                return (
-                  <SortableCard key={section.id} id={section.id} className="question-card" style={{ marginBottom: 12 }}>
-                  {(drag) => (
-                  <>
-                    <legend className="field-legend">page {index + 1}</legend>
-
-                    <button
-                      type="button"
-                      className="field-drag-handle"
-                      title="drag to reorder"
-                      aria-label={`drag page ${index + 1} to reorder`}
-                      {...drag.attributes}
-                      {...drag.listeners}
-                    >
-                      <span className="field-drag-dots">
-                        <span /><span /><span /><span /><span /><span />
-                      </span>
-                    </button>
-
-                    <label htmlFor={`section-title-${index}`}>page title (optional)</label>
-                    <Input
-                      id={`section-title-${index}`}
-                      value={section.title}
-                      onChange={(e) => updateSection(index, { title: e.target.value })}
-                      placeholder={section.id}
-                    />
-
-                    <label htmlFor={`section-description-${index}`}>page description (optional)</label>
-                    <Input
-                      id={`section-description-${index}`}
-                      value={section.description}
-                      onChange={(e) => updateSection(index, { description: e.target.value })}
-                      placeholder="shown under the page title"
-                    />
-
-                    <label htmlFor={`section-media-type-${index}`}>page media (optional)</label>
-                    <Select
-                      value={section.mediaType}
-                      onValueChange={(v) => updateSection(index, { mediaType: v as DraftSection['mediaType'] })}
-                    >
-                      <SelectTrigger id={`section-media-type-${index}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">none</SelectItem>
-                        <SelectItem value="image">image</SelectItem>
-                        <SelectItem value="video">video (embed URL)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {section.mediaType === 'image' && (
-                      <>
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => e.target.files?.[0] && onUploadSectionMedia(index, e.target.files[0])}
-                        />
-                        {section.mediaAssetId && (
-                          <img src={assetUrl(section.mediaAssetId)} alt="" className="option-image" />
-                        )}
-                      </>
-                    )}
-                    {section.mediaType === 'video' && (
-                      <Input
-                        value={section.mediaUrl}
-                        onChange={(e) => updateSection(index, { mediaUrl: e.target.value })}
-                        placeholder="https://www.youtube.com/embed/…"
-                      />
-                    )}
-
-                    <label>questions on this page</label>
-                    <div className="perm-grid">
-                      {keyedFields.length === 0 && <span className="muted">add questions above first.</span>}
-                      {keyedFields.map((f) => (
-                        <span key={f.key} className="builder-required">
-                          <Checkbox
-                            id={`section-${index}-${f.key}`}
-                            checked={section.fieldKeys.includes(f.key)}
-                            onCheckedChange={() => toggleFieldInSection(index, f.key)}
-                          />
-                          <label htmlFor={`section-${index}-${f.key}`}>{f.label}</label>
-                        </span>
-                      ))}
-                    </div>
-
-                    {laterSections.length > 0 && (
-                      <>
-                        <label htmlFor={`section-default-${index}`}>after this page, go to</label>
-                        <Select
-                          value={section.defaultGoTo || '__none__'}
-                          onValueChange={(v) => updateSection(index, { defaultGoTo: v === '__none__' ? '' : v })}
-                        >
-                          <SelectTrigger id={`section-default-${index}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">continue to the next page</SelectItem>
-                            {laterSections.map((t) => (
-                              <SelectItem key={t.id} value={t.id}>
-                                {t.title.trim() || t.id}
-                              </SelectItem>
-                            ))}
-                            <SelectItem value={END_OF_FORM}>submit form</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </>
-                    )}
-
-                    <div className="builder-field-actions">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        title="move up"
-                        aria-label={`move page ${index + 1} up`}
-                        disabled={index === 0}
-                        onClick={() => moveSection(index, -1)}
-                      >
-                        ↑
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        title="move down"
-                        aria-label={`move page ${index + 1} down`}
-                        disabled={index === sections.length - 1}
-                        onClick={() => moveSection(index, 1)}
-                      >
-                        ↓
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        title="remove page"
-                        aria-label={`remove page ${index + 1}`}
-                        onClick={() => setSections((current) => current.filter((_, i) => i !== index))}
-                      >
-                        🗑
-                      </Button>
-                    </div>
-                  </>
-                  )}
-                  </SortableCard>
-                );
-              })}
-              </SortableContext>
-              </DndContext>
-
-              <Button type="button" variant="ghost" className="msform-add-field" onClick={addSection}>
-                + add page
-              </Button>
-            </>
+            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              open a question's ⋮ menu and choose "split into a new page here" — everything from that
+              question onward moves to the new page. a "choice (one answer)" question can also send each
+              of its own options to a specific later page (or submit the form early).
+            </p>
           )}
         </div>
 
@@ -2196,8 +2118,7 @@ function NewFormPage() {
               !title.trim() ||
               fields.length === 0 ||
               fields.some((f) => !f.label.trim()) ||
-              (sectionsEnabled &&
-                (unassignedFieldKeys.length > 0 || sections.some((s) => s.fieldKeys.length === 0)))
+              (sectionsEnabled && resolvedSections.some((s) => s.fieldKeys.length === 0))
             }
           >
             {editingForm ? 'save changes' : 'publish'}
