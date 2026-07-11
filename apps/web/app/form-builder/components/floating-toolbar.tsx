@@ -1,10 +1,11 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { FileText, Image as ImageIcon, ListPlus, PlusCircle, SeparatorHorizontal, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useBuilderStore } from '../lib/store';
+import { parseQaEvaluationDocx } from '../lib/import-docx';
 
 /** Google Forms' vertical icon rail beside the focused question card. Reads
  *  its position from the DOM (rendered inside the active card, positioned
@@ -15,7 +16,10 @@ export function FloatingToolbar({ sectionId, fieldId }: { sectionId: string; fie
   const addTitleBlock = useBuilderStore((s) => s.addTitleBlock);
   const addSection = useBuilderStore((s) => s.addSection);
   const updateField = useBuilderStore((s) => s.updateField);
+  const importSections = useBuilderStore((s) => s.importSections);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const docxInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
 
   function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -24,12 +28,40 @@ export function FloatingToolbar({ sectionId, fieldId }: { sectionId: string; fie
     updateField(fieldId, { media: { type: 'image', url: URL.createObjectURL(file) } });
   }
 
+  async function onPickDocx(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const mammoth = await import('mammoth');
+      const arrayBuffer = await file.arrayBuffer();
+      const { value: rawText } = await mammoth.extractRawText({ arrayBuffer });
+      const { title, description, sections, issues } = parseQaEvaluationDocx(rawText);
+
+      if (sections.length === 0) {
+        toast.error(issues[0] ?? 'no numbered questions found in this file');
+        return;
+      }
+
+      importSections(sections, title, description);
+      const questionCount = sections.reduce((n, s) => n + s.fields.length, 0);
+      toast.success(`Imported ${questionCount} question${questionCount === 1 ? '' : 's'} across ${sections.length} section${sections.length === 1 ? '' : 's'}.`);
+      if (issues.length > 0) toast.info(`${issues.length} line(s) couldn't be parsed and were skipped.`);
+    } catch {
+      toast.error('could not read this file — is it a valid .docx?');
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const actions = [
     { icon: PlusCircle, label: 'Add question', onClick: () => addField(sectionId, fieldId, 'short_answer') },
     {
       icon: ListPlus,
       label: 'Import questions',
-      onClick: () => toast.info('Importing questions is not wired up in this prototype module.'),
+      onClick: () => docxInputRef.current?.click(),
     },
     { icon: FileText, label: 'Add title and description', onClick: () => addTitleBlock(sectionId, fieldId) },
     { icon: ImageIcon, label: 'Add image', onClick: () => imageInputRef.current?.click() },
@@ -47,6 +79,7 @@ export function FloatingToolbar({ sectionId, fieldId }: { sectionId: string; fie
   return (
     <>
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
+      <input ref={docxInputRef} type="file" accept=".docx" className="hidden" onChange={onPickDocx} disabled={importing} />
       <div
         className="absolute top-2 left-[calc(100%+12px)] z-10 hidden w-12 flex-col items-center gap-1 rounded-full border border-[#dadce0] bg-white py-2 shadow-md md:flex"
         role="menu"
@@ -61,6 +94,7 @@ export function FloatingToolbar({ sectionId, fieldId }: { sectionId: string; fie
             className="rounded-full hover:bg-[#f1f3f4]"
             title={label}
             aria-label={label}
+            disabled={label === 'Import questions' && importing}
             onClick={onClick}
           >
             <Icon className="size-[18px] text-[#5f6368]" />
@@ -69,7 +103,7 @@ export function FloatingToolbar({ sectionId, fieldId }: { sectionId: string; fie
       </div>
       <div className="flex flex-wrap gap-1 border-t border-[#e0e0e0] pt-3 md:hidden">
         {actions.map(({ icon: Icon, label, onClick }) => (
-          <Button key={label} type="button" variant="ghost" size="sm" onClick={onClick}>
+          <Button key={label} type="button" variant="ghost" size="sm" disabled={label === 'Import questions' && importing} onClick={onClick}>
             <Icon className="size-4 text-[#5f6368]" />
             {label}
           </Button>

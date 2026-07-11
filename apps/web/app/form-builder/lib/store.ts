@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createField, createTitleBlock, makeId } from './field-defaults';
 import { MOCK_FORM } from './mock-data';
+import type { ImportedSection } from './import-docx';
 import type { FieldType, FormDefinition, FormField, FormSection, FormTheme } from './types';
 
 export type EditorTab = 'questions' | 'responses';
@@ -27,6 +28,9 @@ interface BuilderState {
   removeField: (id: string) => void;
   reorderFieldInSection: (sectionId: string, fromId: string, toId: string) => void;
 
+  /** Appends imported pages after the current ones; only fills in
+   *  title/description if they're still blank, never overwrites them. */
+  importSections: (imported: ImportedSection[], title?: string, description?: string) => void;
   addSection: (afterSectionId: string | null) => void;
   updateSection: (id: string, patch: Partial<Pick<FormSection, 'title' | 'description'>>) => void;
   removeSection: (id: string) => void;
@@ -128,6 +132,26 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
         }),
       },
     })),
+
+  importSections: (imported, title, description) =>
+    set((s) => {
+      const newSections: FormSection[] = imported.map((sec) => ({
+        id: makeId('sec'),
+        title: sec.title,
+        description: '',
+        fieldIds: sec.fields.map((f) => f.id),
+      }));
+      const newFields = Object.fromEntries(imported.flatMap((sec) => sec.fields).map((f) => [f.id, f]));
+      return {
+        form: {
+          ...s.form,
+          title: s.form.title.trim() ? s.form.title : (title ?? s.form.title),
+          description: s.form.description.trim() ? s.form.description : (description ?? s.form.description),
+          fields: { ...s.form.fields, ...newFields },
+          sections: [...s.form.sections, ...newSections],
+        },
+      };
+    }),
 
   addSection: (afterSectionId) =>
     set((s) => {
