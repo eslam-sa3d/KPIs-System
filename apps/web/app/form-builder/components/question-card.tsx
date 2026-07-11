@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Copy, GripVertical, MoreVertical, Trash2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Copy, GripHorizontal, Image as ImageIcon, MoreVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -35,6 +35,7 @@ export function QuestionCard({
   const duplicateField = useBuilderStore((s) => s.duplicateField);
   const removeField = useBuilderStore((s) => s.removeField);
   const isTitleBlock = field.type === 'title_block';
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const [showValidation, setShowValidation] = useState(
     (field.type === 'short_answer' || field.type === 'paragraph') && field.validation.kind !== 'none',
@@ -52,6 +53,13 @@ export function QuestionCard({
     updateField(field.id, { ...fresh, id: field.id, title: field.title, description: field.description, required: field.required });
     setShowValidation(false);
     setBranchingOpen(false);
+  }
+
+  function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    updateField(field.id, { media: { type: 'image', url: URL.createObjectURL(file) } });
   }
 
   const hasOverflowMenu =
@@ -80,19 +88,21 @@ export function QuestionCard({
             {...drag.attributes}
             {...drag.listeners}
           >
-            <GripVertical className="size-4 rotate-90" />
+            <GripHorizontal className="size-4" />
           </button>
 
           <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-start gap-3">
-            <div className="flex min-w-[200px] flex-1 flex-col gap-1">
+            <div className="flex min-w-[200px] flex-1 flex-col gap-2">
               <Input
                 value={field.title}
                 onChange={(e) => updateField(field.id, { title: e.target.value })}
-                placeholder={isTitleBlock ? 'Section title' : 'Question'}
-                className={`h-auto border-0 border-b px-0 shadow-none focus-visible:border-[#673ab7] focus-visible:ring-0 ${
-                  isTitleBlock ? 'text-xl font-medium border-transparent' : 'border-[#e0e0e0]'
-                }`}
+                placeholder={isTitleBlock ? 'Section title' : 'Untitled Question'}
+                className={
+                  isTitleBlock
+                    ? 'h-auto border-0 border-b border-transparent px-0 text-xl font-medium shadow-none focus-visible:border-[#673ab7] focus-visible:ring-0'
+                    : 'h-auto rounded-t-[4px] border-0 border-b border-[#c6c6c6] bg-[#f8f9fa] px-3 py-2.5 shadow-none focus-visible:border-b-2 focus-visible:border-[#673ab7] focus-visible:ring-0'
+                }
               />
               {(isActive || field.description) && (
                 <Input
@@ -105,7 +115,20 @@ export function QuestionCard({
             </div>
 
             {!isTitleBlock && (
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="flex shrink-0 items-center gap-2">
+                <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="border-[#dadce0]"
+                  aria-label="Add image"
+                  title="Add image"
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  <ImageIcon className="size-4 text-[#5f6368]" />
+                </Button>
+
                 <Select value={field.type} onValueChange={(v) => onTypeChange(v as FieldType)}>
                   <SelectTrigger className="h-9 w-60 border-[#dadce0]">
                     <SelectValue>
@@ -132,36 +155,6 @@ export function QuestionCard({
                     })}
                   </SelectContent>
                 </Select>
-
-                {hasOverflowMenu && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="ghost" size="icon" aria-label="More question options">
-                        <MoreVertical className="size-4 text-[#5f6368]" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {(field.type === 'short_answer' || field.type === 'paragraph') && (
-                        <DropdownMenuCheckboxItem checked={showValidation} onCheckedChange={setShowValidation}>
-                          Response validation
-                        </DropdownMenuCheckboxItem>
-                      )}
-                      {(field.type === 'multiple_choice' || field.type === 'checkboxes' || field.type === 'dropdown') && (
-                        <DropdownMenuCheckboxItem
-                          checked={field.shuffleOptions}
-                          onCheckedChange={(v) => updateField(field.id, { shuffleOptions: v })}
-                        >
-                          Shuffle option order
-                        </DropdownMenuCheckboxItem>
-                      )}
-                      {(field.type === 'multiple_choice' || field.type === 'dropdown') && (
-                        <DropdownMenuCheckboxItem checked={branchingOpen} onCheckedChange={setBranchingOpen}>
-                          Go to section based on answer
-                        </DropdownMenuCheckboxItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
               </div>
             )}
           </div>
@@ -207,6 +200,38 @@ export function QuestionCard({
                 <span className="text-sm text-[#5f6368]">Required</span>
                 <Switch checked={field.required} onCheckedChange={(v) => updateField(field.id, { required: v })} />
               </div>
+              {hasOverflowMenu && (
+                <>
+                  <div className="h-6 w-px bg-[#e0e0e0]" />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="ghost" size="icon" aria-label="More question options">
+                        <MoreVertical className="size-4 text-[#5f6368]" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {(field.type === 'short_answer' || field.type === 'paragraph') && (
+                        <DropdownMenuCheckboxItem checked={showValidation} onCheckedChange={setShowValidation}>
+                          Response validation
+                        </DropdownMenuCheckboxItem>
+                      )}
+                      {(field.type === 'multiple_choice' || field.type === 'checkboxes' || field.type === 'dropdown') && (
+                        <DropdownMenuCheckboxItem
+                          checked={field.shuffleOptions}
+                          onCheckedChange={(v) => updateField(field.id, { shuffleOptions: v })}
+                        >
+                          Shuffle option order
+                        </DropdownMenuCheckboxItem>
+                      )}
+                      {(field.type === 'multiple_choice' || field.type === 'dropdown') && (
+                        <DropdownMenuCheckboxItem checked={branchingOpen} onCheckedChange={setBranchingOpen}>
+                          Go to section based on answer
+                        </DropdownMenuCheckboxItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
             </div>
           )}
           {isTitleBlock && (

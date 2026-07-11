@@ -140,7 +140,7 @@ export const MOCK_FORM: FormDefinition = {
   theme: {
     headerImageUrl: null,
     primaryColor: '#4f008c',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f0ebf8',
     fontStyle: 'default',
   },
   fields: fieldsById,

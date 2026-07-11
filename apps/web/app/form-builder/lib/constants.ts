@@ -1,4 +1,4 @@
-import { AlignLeft, Calendar, CheckSquare, ChevronDown, Circle, Clock, Grid3x3, SlidersHorizontal, Table2, Type, Upload } from 'lucide-react';
+import { AlignLeft, Calendar, CheckSquare, ChevronDown, CircleDot, Clock, Grid3x3, SlidersHorizontal, Table2, Type, Upload } from 'lucide-react';
 import type { FieldType } from './types';
 
 /** Google Forms' own editor chrome color — fixed here regardless of a
@@ -12,7 +12,7 @@ export const CANVAS_WASH = '#f0ebf8';
 export const FIELD_TYPE_ICONS: Record<FieldType, typeof Type> = {
   short_answer: Type,
   paragraph: AlignLeft,
-  multiple_choice: Circle,
+  multiple_choice: CircleDot,
   checkboxes: CheckSquare,
   dropdown: ChevronDown,
   file_upload: Upload,

@@ -62,7 +62,7 @@ function OptionMark({ type }: { type: 'multiple_choice' | 'checkboxes' | 'dropdo
   if (type === 'dropdown') return null;
   return (
     <span
-      className={`size-4 shrink-0 border border-[#5f6368]/60 ${type === 'multiple_choice' ? 'rounded-full' : 'rounded-[3px]'}`}
+      className={`size-5 shrink-0 border-2 border-[#5f6368]/70 ${type === 'multiple_choice' ? 'rounded-full' : 'rounded-[3px]'}`}
       aria-hidden
     />
   );
