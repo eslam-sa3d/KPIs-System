@@ -56,7 +56,6 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'slider', label: 'slider' },
   { value: 'contact_info', label: 'contact info (name / email / phone)' },
   { value: 'hot_spot', label: 'hot spot (click a region on an image)' },
-  { value: 'person', label: 'person (search & select a user — for KPI scoring)' },
 ];
 
 const FIELD_TYPE_ICON: Record<FieldType, string> = {
@@ -1223,32 +1222,10 @@ function NewFormPage() {
     }
   }
 
-  async function onUploadFieldMedia(index: number, file: File) {
-    try {
-      const uploaded = await uploadAsset<{ id: string }>(file);
-      updateField(index, { mediaType: 'image', mediaAssetId: uploaded.id });
-    } catch {
-      setError('image upload failed');
-    }
-  }
-
   async function onUploadSectionMedia(index: number, file: File) {
     try {
       const uploaded = await uploadAsset<{ id: string }>(file);
       updateSection(index, { mediaType: 'image', mediaAssetId: uploaded.id });
-    } catch {
-      setError('image upload failed');
-    }
-  }
-
-  async function onUploadOptionImage(index: number, optionValue: string, file: File) {
-    try {
-      const uploaded = await uploadAsset<{ id: string }>(file);
-      setFields((current) =>
-        current.map((f, i) =>
-          i === index ? { ...f, optionImages: { ...f.optionImages, [optionValue]: uploaded.id } } : f,
-        ),
-      );
     } catch {
       setError('image upload failed');
     }
@@ -1390,19 +1367,11 @@ function NewFormPage() {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="tell respondents what this form is for"
           />
-          <p className="msform-required-hint">
-            questions render exactly as respondents will see them
-          </p>
         </header>
 
         <div className="builder msform-body">
         <div className="admin-card" style={{ marginBottom: 16 }}>
           <label>import questions from a file</label>
-          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Excel/CSV columns: question (required), type, required, options, help text, page. unrecognized
-            types default to short text. Word (.docx): one question per line, optionally ending in a type
-            hint like "how satisfied are you? (rating)".
-          </p>
           <Input
             ref={fileInputRef}
             id="excel-import-input"
@@ -1501,21 +1470,6 @@ function NewFormPage() {
                   placeholder="untitled question"
                 />
               </div>
-              {field.type !== 'section_header' && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className={`field-image-btn${field.mediaType === 'image' ? ' is-on' : ''}`}
-                  title="add image"
-                  aria-label="add image to question"
-                  onClick={() => {
-                    setActiveFieldIndex(index);
-                    updateField(index, { mediaType: field.mediaType === 'image' ? 'none' : 'image' });
-                  }}
-                >
-                  🖼
-                </Button>
-              )}
               <div className="field-type-group">
                 <label htmlFor={`field-type-${index}`}>field type</label>
                 <DropdownMenu>
@@ -1578,136 +1532,6 @@ function NewFormPage() {
                     </code>
                   ))}
               </p>
-            )}
-
-            {field.type !== 'section_header' && (
-              <>
-                <label htmlFor={`field-media-type-${index}`}>question media (optional)</label>
-                <Select
-                  value={field.mediaType}
-                  onValueChange={(v) => updateField(index, { mediaType: v as DraftField['mediaType'] })}
-                >
-                  <SelectTrigger id={`field-media-type-${index}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">none</SelectItem>
-                    <SelectItem value="image">image</SelectItem>
-                    <SelectItem value="video">video (embed URL)</SelectItem>
-                  </SelectContent>
-                </Select>
-                {field.mediaType === 'image' && (
-                  <>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => e.target.files?.[0] && onUploadFieldMedia(index, e.target.files[0])}
-                    />
-                    {field.mediaAssetId && (
-                      <img src={assetUrl(field.mediaAssetId)} alt="" className="option-image" />
-                    )}
-                  </>
-                )}
-                {field.mediaType === 'video' && (
-                  <Input
-                    value={field.mediaUrl}
-                    onChange={(e) => updateField(index, { mediaUrl: e.target.value })}
-                    placeholder="https://www.youtube.com/embed/…"
-                  />
-                )}
-              </>
-            )}
-
-            {(() => {
-              const earlierFields = keyedFields.slice(0, index).filter((f) => f.type !== 'section_header');
-              const visibleWhenTarget = earlierFields.find((f) => f.key === field.visibleWhenFieldKey);
-              return (
-                <>
-                  <label htmlFor={`field-visible-field-${index}`}>show only if (optional)</label>
-                  <Select
-                    value={field.visibleWhenFieldKey || '__none__'}
-                    onValueChange={(v) =>
-                      updateField(index, { visibleWhenFieldKey: v === '__none__' ? '' : v, visibleWhenValue: '' })
-                    }
-                    disabled={earlierFields.length === 0}
-                  >
-                    <SelectTrigger id={`field-visible-field-${index}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">always visible</SelectItem>
-                      {earlierFields.map((f) => (
-                        <SelectItem key={f.key} value={f.key}>
-                          {f.label} ({f.type})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {field.visibleWhenFieldKey && (
-                    <>
-                      <label htmlFor={`field-visible-op-${index}`}>condition</label>
-                      <Select
-                        value={field.visibleWhenOperator}
-                        onValueChange={(v) => updateField(index, { visibleWhenOperator: v as ConditionOperator })}
-                      >
-                        <SelectTrigger id={`field-visible-op-${index}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CONDITION_OPERATORS.map((op) => (
-                            <SelectItem key={op} value={op}>
-                              {op.replace('_', ' ')}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      <label htmlFor={`field-visible-value-${index}`}>value</label>
-                      {visibleWhenTarget?.type === 'boolean' ? (
-                        <Select
-                          value={field.visibleWhenValue || '__none__'}
-                          onValueChange={(v) =>
-                            updateField(index, { visibleWhenValue: v === '__none__' ? '' : v })
-                          }
-                        >
-                          <SelectTrigger id={`field-visible-value-${index}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">choose…</SelectItem>
-                            <SelectItem value="true">yes</SelectItem>
-                            <SelectItem value="false">no</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          id={`field-visible-value-${index}`}
-                          value={field.visibleWhenValue}
-                          onChange={(e) => updateField(index, { visibleWhenValue: e.target.value })}
-                          placeholder={
-                            visibleWhenTarget?.type === 'select' || visibleWhenTarget?.type === 'multi_select'
-                              ? 'exact option value'
-                              : 'exact value to match'
-                          }
-                        />
-                      )}
-                    </>
-                  )}
-                </>
-              );
-            })()}
-
-            {field.type !== 'section_header' && (
-              <>
-                <label htmlFor={`field-captured-param-${index}`}>capture from URL parameter (optional)</label>
-                <Input
-                  id={`field-captured-param-${index}`}
-                  value={field.capturedFromUrlParam}
-                  onChange={(e) => updateField(index, { capturedFromUrlParam: e.target.value })}
-                  placeholder="e.g. utm_source — never shown to the respondent when set"
-                />
-              </>
             )}
 
             {(field.type === 'select' || field.type === 'multi_select' || field.type === 'ranking') && (
@@ -1804,24 +1628,6 @@ function NewFormPage() {
                     {field.type === 'ranking' ? 'randomize starting order' : 'shuffle option order per respondent'}
                   </label>
                 </span>
-                {parseList(field.options).length > 0 && (
-                  <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
-                    <span className="muted" style={{ fontSize: 12 }}>option images (optional)</span>
-                    {parseList(field.options).map((optionValue) => (
-                      <div key={optionValue} className="builder-required" style={{ marginTop: 4 }}>
-                        <span style={{ minWidth: 100, display: 'inline-block' }}>{optionValue}</span>
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => e.target.files?.[0] && onUploadOptionImage(index, optionValue, e.target.files[0])}
-                        />
-                        {field.optionImages[optionValue] && (
-                          <img src={assetUrl(field.optionImages[optionValue]!)} alt="" className="option-image" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </>
             )}
 
@@ -1841,120 +1647,6 @@ function NewFormPage() {
                   </SelectContent>
                 </Select>
               </>
-            )}
-
-            {(field.type === 'select' ||
-              field.type === 'multi_select' ||
-              field.type === 'boolean' ||
-              field.type === 'short_text' ||
-              field.type === 'number') && (
-              <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
-                <span className="muted" style={{ fontSize: 12 }}>quiz: correct answer (optional)</span>
-
-                {field.type === 'select' && (
-                  <>
-                    <label htmlFor={`field-correct-${index}`}>correct option</label>
-                    <Select
-                      value={field.correctValue || '__none__'}
-                      onValueChange={(v) => updateField(index, { correctValue: v === '__none__' ? '' : v })}
-                    >
-                      <SelectTrigger id={`field-correct-${index}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">not graded</SelectItem>
-                        {parseList(field.options).map((o) => (
-                          <SelectItem key={o} value={o}>
-                            {o}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </>
-                )}
-
-                {field.type === 'multi_select' && (
-                  <>
-                    <label htmlFor={`field-correct-${index}`}>correct options (comma-separated, exact set)</label>
-                    <Input
-                      id={`field-correct-${index}`}
-                      value={field.correctValues}
-                      onChange={(e) => updateField(index, { correctValues: e.target.value })}
-                      placeholder="leave blank for not graded"
-                    />
-                  </>
-                )}
-
-                {field.type === 'boolean' && (
-                  <>
-                    <label htmlFor={`field-correct-${index}`}>correct answer</label>
-                    <Select
-                      value={field.correctValue || '__none__'}
-                      onValueChange={(v) => updateField(index, { correctValue: v === '__none__' ? '' : v })}
-                    >
-                      <SelectTrigger id={`field-correct-${index}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">not graded</SelectItem>
-                        <SelectItem value="true">yes</SelectItem>
-                        <SelectItem value="false">no</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </>
-                )}
-
-                {field.type === 'short_text' && (
-                  <>
-                    <label htmlFor={`field-correct-${index}`}>accepted answers (comma-separated, case-insensitive)</label>
-                    <Input
-                      id={`field-correct-${index}`}
-                      value={field.correctAnswers}
-                      onChange={(e) => updateField(index, { correctAnswers: e.target.value })}
-                      placeholder="leave blank for not graded"
-                    />
-                  </>
-                )}
-
-                {field.type === 'number' && (
-                  <>
-                    <label htmlFor={`field-correct-${index}`}>correct value</label>
-                    <Input
-                      id={`field-correct-${index}`}
-                      type="number"
-                      value={field.correctValue}
-                      onChange={(e) => updateField(index, { correctValue: e.target.value })}
-                      placeholder="leave blank for not graded"
-                    />
-                  </>
-                )}
-
-                <label htmlFor={`field-points-${index}`}>points</label>
-                <Input
-                  id={`field-points-${index}`}
-                  type="number"
-                  min={0}
-                  value={field.points || ''}
-                  onChange={(e) => updateField(index, { points: e.target.value === '' ? 0 : Number(e.target.value) })}
-                  placeholder="0"
-                />
-
-                <label htmlFor={`field-feedback-correct-${index}`}>feedback if correct (optional)</label>
-                <Input
-                  id={`field-feedback-correct-${index}`}
-                  value={field.feedbackCorrect}
-                  onChange={(e) => updateField(index, { feedbackCorrect: e.target.value })}
-                  placeholder="shown on the thank-you screen's feedback section"
-                />
-
-                <label htmlFor={`field-feedback-incorrect-${index}`}>feedback if incorrect (optional)</label>
-                <Input
-                  id={`field-feedback-incorrect-${index}`}
-                  value={field.feedbackIncorrect}
-                  onChange={(e) => updateField(index, { feedbackIncorrect: e.target.value })}
-                  placeholder="shown on the thank-you screen's feedback section"
-                />
-              </div>
             )}
 
             {field.type === 'likert' && (
@@ -2119,7 +1811,7 @@ function NewFormPage() {
               </>
             )}
 
-            {canLinkKpis && (
+            {canLinkKpis && field.type !== 'section_header' && (
               <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
                 <span className="muted" style={{ fontSize: 12 }}>link to KPI (optional)</span>
                 {personFields.length > 1 && (
