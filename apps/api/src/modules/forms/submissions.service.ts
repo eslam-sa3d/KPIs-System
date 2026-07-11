@@ -289,7 +289,7 @@ export class SubmissionsService {
     const evaluateeId = mapping.evaluateeFieldKey ? answers[mapping.evaluateeFieldKey] : enteredById;
     if (typeof evaluateeId !== 'string') return false;
     const rawScore = answers[mapping.scoreFieldKey];
-    if (typeof rawScore !== 'number') return false;
+    if (rawScore === undefined || rawScore === null) return false;
 
     const scoreField = fieldsByKey.get(mapping.scoreFieldKey);
     if (!scoreField) return false;
@@ -733,18 +733,57 @@ export class SubmissionsService {
 /** Normalizes a raw rating/nps/slider answer to a 0-5 KPI score using that
  *  field's own configured range. Returns null for any other field type or a
  *  degenerate (zero-width) range — the caller skips the mapping in that case. */
-function normalizeScore(field: FormField, raw: number): number | null {
+/** Normalizes a raw answer to a 0-5 KPI score using that field's own configured
+ *  range/options. Returns null for a degenerate (zero-width, single-option) range,
+ *  an answer shape that doesn't match the field type, an unrecognized option value
+ *  (including a free-text "other:" answer — no fixed position to score), or a field
+ *  type with no well-defined numeric interpretation at all (short_text, long_text,
+ *  date, time, file, contact_info, hot_spot, person, ranking, grid, section_header). */
+function normalizeScore(field: FormField, raw: SubmissionAnswers[string]): number | null {
   switch (field.type) {
     case 'rating': {
-      if (field.scale <= 1) return null;
+      if (typeof raw !== 'number' || field.scale <= 1) return null;
       return clamp(((raw - 1) / (field.scale - 1)) * 5, 0, 5);
     }
     case 'nps':
+      if (typeof raw !== 'number') return null;
       return clamp((raw / 10) * 5, 0, 5);
     case 'slider': {
+      if (typeof raw !== 'number') return null;
       const range = field.max - field.min;
       if (range <= 0) return null;
       return clamp(((raw - field.min) / range) * 5, 0, 5);
+    }
+    case 'number': {
+      if (typeof raw !== 'number') return null;
+      // With a configured range, normalize against it like a slider; without one,
+      // treat the raw value as already meant to sit on a 0-5 scale and just clamp.
+      if (field.min !== undefined && field.max !== undefined) {
+        const range = field.max - field.min;
+        if (range <= 0) return null;
+        return clamp(((raw - field.min) / range) * 5, 0, 5);
+      }
+      return clamp(raw, 0, 5);
+    }
+    case 'boolean':
+      if (typeof raw !== 'boolean') return null;
+      return raw ? 5 : 0;
+    case 'select': {
+      if (typeof raw !== 'string' || raw.startsWith('other:') || field.options.length <= 1) return null;
+      const index = field.options.findIndex((o) => o.value === raw);
+      if (index === -1) return null;
+      return clamp((index / (field.options.length - 1)) * 5, 0, 5);
+    }
+    case 'multi_select': {
+      if (!Array.isArray(raw) || field.options.length === 0) return null;
+      return clamp((raw.length / field.options.length) * 5, 0, 5);
+    }
+    case 'likert': {
+      if (raw === null || typeof raw !== 'object' || Array.isArray(raw) || field.scale.length <= 1) return null;
+      const indices = Object.values(raw).filter((v): v is number => typeof v === 'number');
+      if (indices.length === 0) return null;
+      const average = indices.reduce((sum, v) => sum + v, 0) / indices.length;
+      return clamp((average / (field.scale.length - 1)) * 5, 0, 5);
     }
     default:
       return null;

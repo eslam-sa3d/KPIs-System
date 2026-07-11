@@ -126,7 +126,7 @@ describe('FormKpiMappingsService.create', () => {
     });
   });
 
-  it('rejects when scoreFieldKey does not reference a rating/nps/slider field', async () => {
+  it('rejects when scoreFieldKey does not reference a scoreable field', async () => {
     const service = new FormKpiMappingsService(prisma as never, forms as never);
     await expect(
       service.create('form-1', { ...validInput, scoreFieldKey: 'notes' }, 'admin-1'),
@@ -248,7 +248,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
     expect(result.skipped).toEqual([{ evaluationAreaId: 'ghost-area', reason: 'evaluation area not found' }]);
   });
 
-  it('skips a row whose scoreFieldKey is not a rating/nps/slider field', async () => {
+  it('skips a row whose scoreFieldKey is not a scoreable field', async () => {
     const prisma = makeBulkPrismaStub();
     const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
 
@@ -260,7 +260,10 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
     expect(result.created).toHaveLength(0);
     expect(result.skipped).toEqual([
-      { evaluationAreaId: 'area-1', reason: '"notes" must be a rating, nps, or slider field' },
+      {
+        evaluationAreaId: 'area-1',
+        reason: '"notes" must be a scoreable field (rating, nps, slider, number, boolean, select, multi_select, likert)',
+      },
     ]);
   });
 

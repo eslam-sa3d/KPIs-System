@@ -558,6 +558,114 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
     ).resolves.toMatchObject({ id: 'sub-new' });
   });
 
+  describe('normalizeScore — non-rating/nps/slider scoreable types', () => {
+    function makeService(scoreField: object) {
+      const prisma = makePrismaStub();
+      prisma.formKpiMapping.findMany.mockResolvedValue([mapping]);
+      prisma.user.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', isActive: true });
+      const forms = makeKpiFormsStub();
+      forms.getLatestVersion.mockResolvedValue({
+        form: activeForm,
+        version: { id: 'version-1' },
+        definition: formDefinitionSchema.parse({
+          title: 'peer review',
+          fields: [
+            { key: 'evaluatee', label: 'Who are you reviewing?', type: 'person', required: true },
+            { key: 'score', label: 'Score', required: true, ...scoreField },
+          ],
+        }),
+        settings: formSettingsSchema.parse({}),
+      });
+      return { prisma, service: new SubmissionsService(prisma as never, forms as never, turnstileStub as never) };
+    }
+
+    it('boolean: no scores 0, yes scores 5', async () => {
+      const { prisma, service } = makeService({ type: 'boolean' });
+      await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: false }, 'evaluator-1');
+      expect(prisma.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBe(0);
+
+      const { prisma: prisma2, service: service2 } = makeService({ type: 'boolean' });
+      await service2.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: true }, 'evaluator-1');
+      expect(prisma2.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBe(5);
+    });
+
+    it('select: scores by the chosen option\'s position in the list', async () => {
+      const { prisma, service } = makeService({
+        type: 'select',
+        options: [{ value: 'a', label: 'Poor' }, { value: 'b', label: 'Fair' }, { value: 'c', label: 'Great' }],
+      });
+      await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 'b' }, 'evaluator-1');
+      expect(prisma.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBeCloseTo(2.5); // 1/(3-1)*5
+    });
+
+    it('select: a free-text "other:" answer has no fixed position, so it is skipped', async () => {
+      const { prisma, service } = makeService({
+        type: 'select',
+        options: [{ value: 'a', label: 'Poor' }, { value: 'b', label: 'Fair' }],
+        allowOther: true,
+      });
+      await service.submit(
+        'demo',
+        { evaluatee: '11111111-1111-4111-8111-111111111111', score: 'other:something' },
+        'evaluator-1',
+      );
+      expect(prisma.evaluationAreaEntry.upsert).not.toHaveBeenCalled();
+    });
+
+    it('multi_select: scores by the fraction of options selected', async () => {
+      const { prisma, service } = makeService({
+        type: 'multi_select',
+        options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }, { value: 'c', label: 'C' }, { value: 'd', label: 'D' }],
+      });
+      await service.submit(
+        'demo',
+        { evaluatee: '11111111-1111-4111-8111-111111111111', score: ['a', 'b'] },
+        'evaluator-1',
+      );
+      expect(prisma.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBeCloseTo(2.5); // 2/4*5
+    });
+
+    it('number: normalizes against a configured min/max range like a slider', async () => {
+      const { prisma, service } = makeService({ type: 'number', min: 0, max: 10 });
+      await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 5 }, 'evaluator-1');
+      expect(prisma.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBeCloseTo(2.5); // (5-0)/10*5
+    });
+
+    it('number: without a configured range, clamps the raw value directly to 0-5', async () => {
+      const { prisma, service } = makeService({ type: 'number' });
+      await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 3 }, 'evaluator-1');
+      expect(prisma.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBeCloseTo(3);
+
+      const { prisma: prisma2, service: service2 } = makeService({ type: 'number' });
+      await service2.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 99 }, 'evaluator-1');
+      expect(prisma2.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBe(5); // clamped
+    });
+
+    it('likert: scores by the average statement position across the shared scale', async () => {
+      const { prisma, service } = makeService({
+        type: 'likert',
+        statements: [{ value: 's1', label: 'Communication' }, { value: 's2', label: 'Punctuality' }],
+        scale: ['never', 'rarely', 'sometimes', 'always'],
+      });
+      await service.submit(
+        'demo',
+        { evaluatee: '11111111-1111-4111-8111-111111111111', score: { s1: 1, s2: 3 } },
+        'evaluator-1',
+      );
+      expect(prisma.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBeCloseTo(10 / 3); // avg(1,3)=2, 2/3*5
+    });
+
+    it('a type with no numeric interpretation (short_text) is never scored', async () => {
+      const { prisma, service } = makeService({ type: 'short_text' });
+      await service.submit(
+        'demo',
+        { evaluatee: '11111111-1111-4111-8111-111111111111', score: 'great job' },
+        'evaluator-1',
+      );
+      expect(prisma.evaluationAreaEntry.upsert).not.toHaveBeenCalled();
+    });
+  });
+
   describe('backfillMapping', () => {
     it('scores every existing submission on the form against the mapping, into its own createdAt period', async () => {
       const prisma = makePrismaStub();

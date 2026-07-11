@@ -44,7 +44,7 @@ export class FormKpiMappingsService {
     const scoreField = definition.fields.find((f) => f.key === input.scoreFieldKey);
     if (!scoreField || !(SCORE_FIELD_TYPES as readonly string[]).includes(scoreField.type)) {
       throw AppError.validation([
-        { path: 'scoreFieldKey', message: 'must reference a rating, nps, or slider field on this form' },
+        { path: 'scoreFieldKey', message: `must reference a scoreable field on this form (${SCORE_FIELD_TYPES.join(', ')})` },
       ]);
     }
     this.validateExtraFieldKeys(definition, input.contextFieldKey, input.commentFieldKey);
@@ -130,7 +130,7 @@ export class FormKpiMappingsService {
       if (!scoreField || !(SCORE_FIELD_TYPES as readonly string[]).includes(scoreField.type)) {
         result.skipped.push({
           evaluationAreaId: row.evaluationAreaId,
-          reason: `"${row.scoreFieldKey}" must be a rating, nps, or slider field`,
+          reason: `"${row.scoreFieldKey}" must be a scoreable field (${SCORE_FIELD_TYPES.join(', ')})`,
         });
         continue;
       }

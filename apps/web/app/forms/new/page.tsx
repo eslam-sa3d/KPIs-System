@@ -17,6 +17,7 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   CONDITION_OPERATORS,
   END_OF_FORM,
+  SCORE_FIELD_TYPES,
   type FieldType,
   type FormDefinition,
   type FormField,
@@ -1277,9 +1278,9 @@ function NewFormPage() {
             ? sections.findIndex((s) => s.fieldKeys.includes(keyedFields[index]?.key ?? ''))
             : -1;
           const laterSectionsForField = ownSectionIndex >= 0 ? sections.slice(ownSectionIndex + 1) : [];
-          // Only rating/nps/slider answers have a well-defined numeric range to normalize to
-          // 0-5 (see FormKpiMappingsService) — the backend rejects any other field type.
-          const canScoreKpi = field.type === 'rating' || field.type === 'nps' || field.type === 'slider';
+          // Only field types with a well-defined 0-5 normalization can score a KPI — see
+          // SCORE_FIELD_TYPES and submissions.service.ts's normalizeScore for the full list.
+          const canScoreKpi = (SCORE_FIELD_TYPES as readonly string[]).includes(field.type);
           // "link to KPI" panel visibility: an explicit toggle (via the ⋮ menu) overrides the
           // default of "open if already linked" — so an existing link stays visible without
           // requiring the toggle, but can still be tucked away once reviewed.

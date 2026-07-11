@@ -1,24 +1,29 @@
 import { z } from 'zod';
 
 /**
- * Maps a form to a KPI Evaluation Area: one field supplies the score
- * (rating/nps/slider — the only types with a well-defined numeric range to
- * normalize to 0-5). On every submission, SubmissionsService normalizes the
- * score field's answer and upserts an EvaluationAreaEntry — this is the
- * bridge that lets a QA evaluation survey actually produce KPI scores
- * instead of sitting next to them unconnected.
+ * Maps a form to a KPI Evaluation Area: one field supplies the score. On
+ * every submission, SubmissionsService normalizes that field's answer to
+ * 0-5 and upserts an EvaluationAreaEntry — this is the bridge that lets a
+ * QA evaluation survey actually produce KPI scores instead of sitting next
+ * to them unconnected. Every type in SCORE_FIELD_TYPES has a well-defined
+ * normalization (see submissions.service.ts's normalizeScore):
+ * rating/nps/slider/number scale by their own configured range, boolean is
+ * no=0/yes=5, select scores by the chosen option's position in the list,
+ * multi_select by the fraction of options selected, and likert by the
+ * average statement position. Every other type (short_text, long_text,
+ * date, time, file, contact_info, hot_spot, person, ranking, grid,
+ * section_header) has no numeric interpretation and can't be a score field.
  *
  * `evaluateeFieldKey` optionally names a field whose answer is the
  * evaluatee's user id (a 'person' field, from an older form that still has
  * one). Omitted — the normal case now — means self-assessment: the
  * submitter scores themselves.
  *
- * Deliberately out of scope for this pass: 'likert'/'number' as score fields
- * (no well-defined bounds to normalize against), and more than one mapping
- * per (form, evaluationArea) pair.
+ * Deliberately out of scope for this pass: more than one mapping per
+ * (form, evaluationArea) pair.
  */
 
-export const SCORE_FIELD_TYPES = ['rating', 'nps', 'slider'] as const;
+export const SCORE_FIELD_TYPES = ['rating', 'nps', 'slider', 'number', 'boolean', 'select', 'multi_select', 'likert'] as const;
 export type ScoreFieldType = (typeof SCORE_FIELD_TYPES)[number];
 
 /** Who a mapping's scores come from, relative to the evaluatee. Drives the
