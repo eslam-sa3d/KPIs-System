@@ -84,8 +84,10 @@ export const formSectionSchema = z.object({
   title: z.string().max(200).optional(),
   description: z.string().max(1000).optional(),
   media: mediaSchema.optional(),
-  /** every field belonging to this page, in display order */
-  fieldKeys: z.array(z.string().min(1).max(64)).min(1).max(50),
+  /** every field belonging to this page, in display order — capped at the
+   *  form's own max field count (100), since a section can hold every
+   *  field in the form. */
+  fieldKeys: z.array(z.string().min(1).max(64)).min(1).max(100),
   /**
    * @deprecated superseded by `branchRules` (an ordered list — one rule can
    * only key off a single field, so a page needing more than one independent
