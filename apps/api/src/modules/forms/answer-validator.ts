@@ -1,4 +1,4 @@
-import { FormDefinition, FormField, SubmissionAnswers, resolveSectionPath } from '@pulse/contracts';
+import { FormDefinition, FormField, SubmissionAnswers } from '@pulse/contracts';
 import { z, ZodTypeAny } from 'zod';
 
 /**
@@ -16,12 +16,8 @@ export function compileAnswerValidator(definition: FormDefinition) {
     validate(raw: SubmissionAnswers): SubmissionAnswers {
       const issues: z.ZodIssue[] = [];
       const cleaned: SubmissionAnswers = {};
-      // fields on a section the branch path skipped are treated like a
-      // hidden visibleWhen field: dropped, never required.
-      const { reachableFieldKeys } = resolveSectionPath(definition, raw);
 
       for (const field of definition.fields) {
-        if (definition.sections && !reachableFieldKeys.has(field.key)) continue;
         if (!isVisible(field, raw)) continue; // hidden answers are dropped, never stored
         const value = raw[field.key];
 

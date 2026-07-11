@@ -2,7 +2,7 @@ import { readSheet } from 'read-excel-file/browser';
 import type { FieldType } from '@pulse/contracts';
 
 /**
- * Shape the "new form" builder maps 1:1 onto its DraftField/DraftSection state
+ * Shape the "new form" builder maps 1:1 onto its DraftField state
  * (see apps/web/app/forms/new/page.tsx) after an import.
  */
 export interface ParsedFormField {
@@ -17,8 +17,6 @@ export interface ParsedFormField {
   highLabel: string;
   acceptedMimeTypes: string;
   maxSizeMb: number;
-  /** page/section column value, or '' if the source didn't group questions into pages */
-  page: string;
 }
 
 export interface ParsedFormWorkbook {
@@ -43,7 +41,6 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   highLabel: ['high label', 'high-end label', 'max label'],
   acceptedMimeTypes: ['accepted file types', 'file types', 'mime types'],
   maxSizeMb: ['max size mb', 'max file size', 'max file size mb'],
-  page: ['page', 'section', 'page title'],
 };
 
 const TYPE_ALIASES: Record<string, FieldType> = {
@@ -70,7 +67,6 @@ const DEFAULT_FIELD = {
   highLabel: '',
   acceptedMimeTypes: 'application/pdf, image/png, image/jpeg',
   maxSizeMb: 10,
-  page: '',
 };
 
 function normalizeHeader(cell: unknown): string {
@@ -147,7 +143,6 @@ function mapRowsToFields(rows: unknown[][]): ParsedFormWorkbook {
       highLabel: cellToString(at('highLabel', row)),
       acceptedMimeTypes: cellToString(at('acceptedMimeTypes', row)) || DEFAULT_FIELD.acceptedMimeTypes,
       maxSizeMb: cellToNumber(at('maxSizeMb', row), 10, 1, 25),
-      page: cellToString(at('page', row)),
     });
   }
 
@@ -259,7 +254,6 @@ function parseDocxLines(rawText: string): ParsedFormWorkbook {
   let currentCategory: string | null = null;
   let currentStatements: string[] = [];
   let currentScale: string[] = [];
-  let seenAnySection = false;
 
   function flushCurrentCategory() {
     if (currentCategory && currentStatements.length > 0) {
@@ -270,7 +264,6 @@ function parseDocxLines(rawText: string): ParsedFormWorkbook {
         required: false,
         options: currentStatements.join(', '),
         likertScale: currentScale.join(', '),
-        page: currentCategory,
       });
     }
     currentCategory = null;
@@ -307,7 +300,6 @@ function parseDocxLines(rawText: string): ParsedFormWorkbook {
       if (category !== currentCategory) flushCurrentCategory();
       currentCategory = category;
       currentScale = options;
-      seenAnySection = true;
       currentStatements.push(sectionHeader[2]!.trim());
       continue;
     }
@@ -329,7 +321,6 @@ function parseDocxLines(rawText: string): ParsedFormWorkbook {
       type: options.length >= 2 ? 'select' : 'short_text',
       required: false,
       options: options.join(', '),
-      page: seenAnySection ? 'Comments' : 'Overview',
     });
   }
 

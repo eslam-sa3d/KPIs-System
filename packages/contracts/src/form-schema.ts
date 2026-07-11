@@ -1,16 +1,5 @@
 import { z } from 'zod';
 import { mediaSchema } from './form-media';
-import { END_OF_FORM, FormSection, SectionBranchRule, formSectionSchema, sectionId } from './form-sections';
-
-/** Field types with an exact-match-comparable answer — everything except
- *  ranking (an ordered permutation), file (an opaque upload id), grid (one
- *  answer per row, not a single value), and section_header (never has an
- *  answer). Shared with the builder UI so the trigger-field picker and the
- *  validator never drift apart. */
-export const BRANCH_TRIGGER_TYPES: FieldType[] = [
-  'select', 'multi_select', 'rating', 'likert', 'boolean', 'nps', 'short_text', 'long_text', 'number', 'date',
-  'slider', 'hot_spot', 'time',
-];
 
 /**
  * Form Builder contract — the schema-of-schemas.
@@ -152,11 +141,6 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     points: z.number().positive().optional(),
     feedbackCorrect: z.string().max(500).optional(),
     feedbackIncorrect: z.string().max(500).optional(),
-    /** Google-Forms-style "go to section based on answer": option value →
-     *  target section id, or "end" to submit immediately. An option with no
-     *  entry here falls through to the section's own `defaultGoTo` (see
-     *  form-sections.ts). Only meaningful when the form has sections. */
-    optionGoTo: z.record(z.string(), z.union([sectionId, z.literal(END_OF_FORM)])).optional(),
   }),
   baseField.extend({
     type: z.literal('multi_select'),
@@ -209,8 +193,7 @@ export const formFieldSchema = z.discriminatedUnion('type', [
    *  Forms ships this as two separate types (multiple choice grid / checkbox
    *  grid) that differ only in whether a row takes one answer or several —
    *  modeled here as one type with a selection switch instead of duplicating
-   *  rows/columns/validation twice. Not a BRANCH_TRIGGER_TYPES member: a
-   *  per-row answer set isn't a single exact-match-comparable value. */
+   *  rows/columns/validation twice. */
   baseField.extend({
     type: z.literal('grid'),
     rows: z.array(optionItem).min(1).max(30),
@@ -323,8 +306,6 @@ export const formDefinitionSchema = z
     title: z.string().min(1).max(200),
     description: z.string().max(2000).optional(),
     fields: z.array(formFieldSchema).min(1).max(100),
-    /** optional multi-page layout with forward-only branching between pages */
-    sections: z.array(formSectionSchema).min(1).max(50).optional(),
   })
   .superRefine((form, ctx) => {
     const keys = new Set<string>();
@@ -363,165 +344,7 @@ export const formDefinitionSchema = z
         }
       }
     });
-
-    if (!form.sections) return;
-    validateSections(form.fields, form.sections, ctx);
   });
-
-function validateSections(
-  fields: FormField[],
-  sections: FormSection[],
-  ctx: z.RefinementCtx,
-): void {
-  const fieldByKey = new Map(fields.map((f) => [f.key, f]));
-  const sectionIds = new Set(sections.map((s) => s.id));
-  const sectionIndexById = new Map(sections.map((s, i) => [s.id, i]));
-  const assignedFieldKeys = new Set<string>();
-
-  const duplicateSectionIds = sections
-    .map((s) => s.id)
-    .filter((id, index, all) => all.indexOf(id) !== index);
-  if (duplicateSectionIds.length) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['sections'],
-      message: `duplicate section id(s): ${[...new Set(duplicateSectionIds)].join(', ')}`,
-    });
-  }
-
-  sections.forEach((section, sectionIndex) => {
-    for (const key of section.fieldKeys) {
-      if (!fieldByKey.has(key)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['sections', sectionIndex, 'fieldKeys'],
-          message: `section "${section.id}" references unknown field "${key}"`,
-        });
-        continue;
-      }
-      if (assignedFieldKeys.has(key)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['sections', sectionIndex, 'fieldKeys'],
-          message: `field "${key}" is assigned to more than one section`,
-        });
-      }
-      assignedFieldKeys.add(key);
-    }
-
-    const validateRule = (rule: SectionBranchRule, path: (string | number)[]) => {
-      if (rule.onFieldKey) {
-        const trigger = fieldByKey.get(rule.onFieldKey);
-        if (!trigger) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: [...path, 'onFieldKey'],
-            message: `branching references unknown field "${rule.onFieldKey}"`,
-          });
-        } else {
-          if (!BRANCH_TRIGGER_TYPES.includes(trigger.type)) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: [...path, 'onFieldKey'],
-              message: `branching can only key off a ${BRANCH_TRIGGER_TYPES.map((t) => `"${t}"`).join(', ')} field (got "${trigger.type}")`,
-            });
-          }
-          if (!section.fieldKeys.includes(rule.onFieldKey)) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: [...path, 'onFieldKey'],
-              message: `branching field "${rule.onFieldKey}" must belong to section "${section.id}"`,
-            });
-          }
-          if (trigger.type === 'likert') {
-            if (!rule.onStatement) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: [...path, 'onStatement'],
-                message: 'onStatement is required when branching keys off a "likert" field',
-              });
-            } else if (!trigger.statements.some((s) => s.value === rule.onStatement)) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: [...path, 'onStatement'],
-                message: `"${rule.onStatement}" is not a statement on likert field "${rule.onFieldKey}"`,
-              });
-            }
-          } else if (rule.onStatement) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: [...path, 'onStatement'],
-              message: 'onStatement is only valid when branching keys off a "likert" field',
-            });
-          }
-        }
-      }
-
-      const targets = [...rule.cases.map((c) => c.goTo), ...(rule.defaultGoTo ? [rule.defaultGoTo] : [])];
-      targets.forEach((target, targetIndex) => {
-        if (target === END_OF_FORM) return;
-        if (!sectionIds.has(target)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: [...path, 'cases', targetIndex],
-            message: `branching target "${target}" is not a section id`,
-          });
-          return;
-        }
-        // forward-only: a section may only jump to one that comes AFTER it
-        if (sectionIndexById.get(target)! <= sectionIndex) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: [...path, 'cases', targetIndex],
-            message: `branching target "${target}" must come after section "${section.id}" — only forward jumps are allowed`,
-          });
-        }
-      });
-    };
-
-    if (section.branching) validateRule(section.branching, ['sections', sectionIndex, 'branching']);
-    section.branchRules?.forEach((rule, ruleIndex) =>
-      validateRule(rule, ['sections', sectionIndex, 'branchRules', ruleIndex]),
-    );
-
-    const validateTarget = (target: string, path: (string | number)[]) => {
-      if (target === END_OF_FORM) return;
-      if (!sectionIds.has(target)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path, message: `"go to section" target "${target}" is not a section id` });
-        return;
-      }
-      if (sectionIndexById.get(target)! <= sectionIndex) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path,
-          message: `"go to section" target "${target}" must come after section "${section.id}" — only forward jumps are allowed`,
-        });
-      }
-    };
-
-    for (const key of section.fieldKeys) {
-      const field = fieldByKey.get(key);
-      if (field?.type !== 'select' || !field.optionGoTo) continue;
-      const fieldIndex = fields.indexOf(field);
-      Object.entries(field.optionGoTo).forEach(([optionValue, target]) =>
-        validateTarget(target, ['fields', fieldIndex, 'optionGoTo', optionValue]),
-      );
-    }
-
-    if (section.defaultGoTo !== undefined) {
-      validateTarget(section.defaultGoTo, ['sections', sectionIndex, 'defaultGoTo']);
-    }
-  });
-
-  const unassigned = fields.map((f) => f.key).filter((key) => !assignedFieldKeys.has(key));
-  if (unassigned.length) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['sections'],
-      message: `field(s) not assigned to any section: ${unassigned.join(', ')}`,
-    });
-  }
-}
 
 export type FormField = z.infer<typeof formFieldSchema>;
 export type FormDefinition = z.infer<typeof formDefinitionSchema>;
