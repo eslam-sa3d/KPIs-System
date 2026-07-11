@@ -1277,6 +1277,9 @@ function NewFormPage() {
             ? sections.findIndex((s) => s.fieldKeys.includes(keyedFields[index]?.key ?? ''))
             : -1;
           const laterSectionsForField = ownSectionIndex >= 0 ? sections.slice(ownSectionIndex + 1) : [];
+          // Only rating/nps/slider answers have a well-defined numeric range to normalize to
+          // 0-5 (see FormKpiMappingsService) — the backend rejects any other field type.
+          const canScoreKpi = field.type === 'rating' || field.type === 'nps' || field.type === 'slider';
           // "link to KPI" panel visibility: an explicit toggle (via the ⋮ menu) overrides the
           // default of "open if already linked" — so an existing link stays visible without
           // requiring the toggle, but can still be tucked away once reviewed.
@@ -1698,7 +1701,7 @@ function NewFormPage() {
               </>
             )}
 
-            {canLinkKpis && field.type !== 'section_header' && kpiOpen && (
+            {canLinkKpis && canScoreKpi && kpiOpen && (
               <div className="admin-card" style={{ padding: 8, marginTop: 4 }}>
                 <span className="muted" style={{ fontSize: 12 }}>link to KPI (optional)</span>
                 <label htmlFor={`field-kpi-${index}`}>KPI</label>
@@ -1918,7 +1921,7 @@ function NewFormPage() {
                       ⏎ split into a new page here
                     </DropdownMenuItem>
                   )}
-                  {canLinkKpis && field.type !== 'section_header' && (
+                  {canLinkKpis && canScoreKpi && (
                     <DropdownMenuCheckboxItem
                       checked={kpiOpen}
                       onCheckedChange={(checked) => toggleKpiPanel(index, checked === true)}
