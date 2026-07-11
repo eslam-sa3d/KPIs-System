@@ -692,6 +692,8 @@ function NewFormPage() {
   const [kpiLinkErrors, setKpiLinkErrors] = useState<Record<number, string>>({});
   // Explicit ⋮-menu overrides for the "link to KPI" panel's open/closed state — see kpiOpen below.
   const [kpiPanelOverrides, setKpiPanelOverrides] = useState<Map<number, boolean>>(new Map());
+  // Explicit ⋮-menu overrides for "go to section based on answer" — see branchingOpen below.
+  const [branchingPanelOverrides, setBranchingPanelOverrides] = useState<Map<number, boolean>>(new Map());
 
   useEffect(() => {
     api<KpiOption[]>('/v1/kpis?pageSize=100').then(setKpis).catch(() => setKpis([]));
@@ -833,6 +835,10 @@ function NewFormPage() {
 
   function toggleKpiPanel(index: number, open: boolean) {
     setKpiPanelOverrides((current) => new Map(current).set(index, open));
+  }
+
+  function toggleBranchingPanel(index: number, open: boolean) {
+    setBranchingPanelOverrides((current) => new Map(current).set(index, open));
   }
 
   /** Picking a KPI + evaluation area for a question. On an existing form
@@ -1291,6 +1297,11 @@ function NewFormPage() {
           const kpiOpen = kpiPanelOverrides.has(index)
             ? kpiPanelOverrides.get(index)!
             : Boolean(field.kpiId);
+          // "go to section based on answer" panel visibility — same explicit-toggle-with-
+          // default-open-if-already-set pattern as kpiOpen above.
+          const branchingOpen = branchingPanelOverrides.has(index)
+            ? branchingPanelOverrides.get(index)!
+            : Object.values(field.optionGoTo).some((v) => v);
           return (
           <SortableCard
             key={index}
@@ -1424,7 +1435,7 @@ function NewFormPage() {
                         }}
                         placeholder={`Option ${optionIndex + 1}`}
                       />
-                      {field.type === 'select' && laterSectionsForField.length > 0 && (
+                      {field.type === 'select' && laterSectionsForField.length > 0 && branchingOpen && (
                         <Select
                           value={field.optionGoTo[optionValue] || '__none__'}
                           onValueChange={(v) =>
@@ -1931,6 +1942,21 @@ function NewFormPage() {
                     >
                       ⏎ split into a new page here
                     </DropdownMenuItem>
+                  )}
+                  {field.type === 'select' && laterSectionsForField.length > 0 && (
+                    <DropdownMenuCheckboxItem
+                      checked={branchingOpen}
+                      onCheckedChange={(checked) => {
+                        toggleBranchingPanel(index, checked === true);
+                        // Unchecking is the actual off switch, not just a UI collapse — clear
+                        // every option's jump so a respondent's flow really does go back to
+                        // normal, rather than leaving stale jumps active behind a hidden panel.
+                        if (checked !== true) updateField(index, { optionGoTo: {} });
+                      }}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      go to section based on answer
+                    </DropdownMenuCheckboxItem>
                   )}
                   {canLinkKpis && canLinkKpiField && (
                     <DropdownMenuCheckboxItem
