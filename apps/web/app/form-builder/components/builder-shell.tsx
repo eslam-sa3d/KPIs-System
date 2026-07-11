@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowLeft, Eye, MoreVertical, Paintbrush } from 'lucide-react';
+import { ArrowLeft, Eye, MoreVertical, Paintbrush, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -50,6 +50,16 @@ export function BuilderShell() {
           <span className="min-w-0 shrink-0 truncate text-[15px] font-medium text-[#202124]">
             {title || 'Untitled form'}
           </span>
+
+          <Link
+            href="/form-builder"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden shrink-0 items-center gap-1.5 rounded-full border border-[#dadce0] px-3 py-1.5 text-sm text-[#5f6368] hover:bg-[#f1f3f4] sm:flex"
+          >
+            <Plus className="size-4" />
+            New form
+          </Link>
 
           <div className="hidden flex-1 justify-center sm:flex">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as EditorTab)}>
