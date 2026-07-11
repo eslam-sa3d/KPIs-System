@@ -357,18 +357,6 @@ export default function DashboardPage() {
     setSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
   }
 
-  function onExportCsv() {
-    const header = ['name', 'evaluation_areas', 'latest', 'status', 'last_updated'];
-    const rows = tableData.map((k) => [
-      k.name,
-      String(k.areas.length),
-      k.latestValue ?? '',
-      STATUS_LABEL[k.status],
-      k.lastUpdated ?? '',
-    ]);
-    downloadCsv('kpi-dashboard-export.csv', [header, ...rows]);
-  }
-
   const selected = kpis?.find((k) => k.id === selectedId) ?? null;
   const drawerKpi: DrawerKpi | null = selected
     ? {
@@ -407,11 +395,6 @@ export default function DashboardPage() {
               {levelLabel} · click any card or row for details
             </p>
           </div>
-          <span className="builder-field-actions">
-            <Button variant="outline" size="sm" onClick={onExportCsv}>
-              Export CSV
-            </Button>
-          </span>
         </div>
 
         {kpis && (
