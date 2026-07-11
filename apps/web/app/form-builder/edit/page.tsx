@@ -2,8 +2,10 @@
 
 import { Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { PortalShell } from '../../../components/portal-shell';
 import { BuilderShell } from '../components/builder-shell';
 import { useBuilderStore } from '../lib/store';
+import { useSession } from '../../../lib/use-session';
 
 /**
  * Standalone Google-Forms-parity prototype. Local state + mock data only —
@@ -14,8 +16,14 @@ import { useBuilderStore } from '../lib/store';
  * whatever was left over from a previous visit: ?new=1 (the list page's
  * "new form"/"blank" links) starts a blank form; opening this route any
  * other way (a title row on the list) loads the demo form.
+ *
+ * Wrapped in the regular PortalShell (fullBleedMain, so BuilderShell keeps
+ * its edge-to-edge Google Forms look) — every other authenticated page in
+ * the app keeps the pulse header visible, and this one shouldn't be the
+ * one exception.
  */
 function FormBuilderEditContent() {
+  const user = useSession();
   const isNew = useSearchParams().get('new') === '1';
   const newForm = useBuilderStore((s) => s.newForm);
   const loadDemoForm = useBuilderStore((s) => s.loadDemoForm);
@@ -28,7 +36,11 @@ function FormBuilderEditContent() {
     }
   }, [isNew]);
 
-  return <BuilderShell />;
+  return (
+    <PortalShell user={user} fullBleedMain>
+      <BuilderShell />
+    </PortalShell>
+  );
 }
 
 export default function FormBuilderEditPage() {

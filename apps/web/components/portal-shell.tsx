@@ -13,7 +13,6 @@ import { ThemeToggle } from './theme-toggle';
 const NAV_ITEMS: Array<{ href: string; label: string; permission?: string }> = [
   { href: '/dashboard', label: 'dashboard' },
   { href: '/forms', label: 'forms' },
-  { href: '/form-builder', label: 'form builder' },
   { href: '/admin/kpis', label: 'KPIs', permission: 'kpis:write' },
   { href: '/admin/users', label: 'users', permission: 'users:read' },
   { href: '/admin/roles', label: 'roles', permission: 'roles:read' },
@@ -27,9 +26,14 @@ export const can = (user: AuthenticatedUser | null, permission: string): boolean
 export function PortalShell({
   user,
   children,
+  fullBleedMain = false,
 }: {
   user: AuthenticatedUser | null;
   children: React.ReactNode;
+  /** Skips .portal-main's max-width/padding for pages that need to render
+   *  edge-to-edge below the header (e.g. the form-builder's Google-Forms-
+   *  style editor) instead of sitting in the usual centered column. */
+  fullBleedMain?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -120,7 +124,7 @@ export function PortalShell({
         </div>
       </nav>
 
-      <main className="portal-main">{children}</main>
+      <main className={fullBleedMain ? undefined : 'portal-main'}>{children}</main>
     </div>
   );
 }
