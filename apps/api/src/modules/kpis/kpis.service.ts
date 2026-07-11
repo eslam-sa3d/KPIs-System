@@ -268,19 +268,22 @@ export class KpisService {
   }
 
   /**
-   * Org-wide team roster for the dashboard's admin view: every active user
-   * with whether an active KPI covers their role/department at all (the
-   * same matching myAssignmentFilter uses for a single caller, just run for
-   * everyone at once), plus a final score blended the same way computeKpi
-   * does client-side — each of the person's evaluation areas contributes
-   * its own latest-period average, then those area averages are themselves
-   * averaged. finalScore stays null (not zero) for anyone never scored, so
-   * the dashboard can tell "pending" apart from "scored a 0".
+   * Org-wide team roster for the dashboard's admin view: every active,
+   * KPI-applicable user (User.isKpiApplicable — set at creation, editable
+   * after; excludes people who shouldn't be tracked at all regardless of
+   * role/department) with whether an active KPI covers their role/department
+   * on top of that (the same matching myAssignmentFilter uses for a single
+   * caller, just run for everyone at once), plus a final score blended the
+   * same way computeKpi does client-side — each of the person's evaluation
+   * areas contributes its own latest-period average, then those area
+   * averages are themselves averaged. finalScore stays null (not zero) for
+   * anyone never scored, so the dashboard can tell "pending" apart from
+   * "scored a 0".
    */
   async getTeamOverview() {
     const [users, kpis, entries] = await Promise.all([
       this.prisma.user.findMany({
-        where: { isActive: true },
+        where: { isActive: true, isKpiApplicable: true },
         select: {
           id: true,
           displayName: true,

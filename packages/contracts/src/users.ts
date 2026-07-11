@@ -6,6 +6,10 @@ export const createUserSchema = z.object({
   password: z.string().min(8).max(128),
   departmentId: z.string().uuid().optional(),
   roleIds: z.array(z.string().uuid()).max(20).default([]),
+  /** Whether this person should be scored/tracked by the KPI system at all —
+   *  false excludes them from the dashboard's team overview regardless of
+   *  whether their role/department has a KPI mapped to it. */
+  isKpiApplicable: z.boolean().default(true),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
@@ -19,6 +23,7 @@ export const updateUserSchema = z.object({
   email: z.string().email().max(254).optional(),
   displayName: z.string().min(2).max(120).optional(),
   departmentId: z.string().uuid().nullable().optional(),
+  isKpiApplicable: z.boolean().optional(),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

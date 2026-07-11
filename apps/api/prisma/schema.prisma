@@ -13,15 +13,19 @@ datasource db {
 // ─────────────────────────── Identity & Dynamic RBAC ───────────────────────────
 
 model User {
-  id           String      @id @default(uuid())
-  email        String      @unique
-  passwordHash String
-  displayName  String
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  isActive     Boolean     @default(true)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id              String      @id @default(uuid())
+  email           String      @unique
+  passwordHash    String
+  displayName     String
+  departmentId    String?
+  department      Department? @relation(fields: [departmentId], references: [id])
+  isActive        Boolean     @default(true)
+  /// Whether this person should be scored/tracked by the KPI system at all —
+  /// set at creation, editable after. When false, they're excluded from the
+  /// dashboard's team overview regardless of role/department KPI mappings.
+  isKpiApplicable Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   roles                   UserRole[]
   sessions                Session[]

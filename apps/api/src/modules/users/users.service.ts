@@ -41,6 +41,7 @@ export class UsersService {
           email: true,
           displayName: true,
           isActive: true,
+          isKpiApplicable: true,
           createdAt: true,
           department: { select: { id: true, name: true } },
           roles: { select: { role: { select: { id: true, name: true } } } },
@@ -64,9 +65,10 @@ export class UsersService {
           displayName: input.displayName,
           passwordHash,
           departmentId: input.departmentId,
+          isKpiApplicable: input.isKpiApplicable,
           roles: { create: input.roleIds.map((roleId) => ({ roleId })) },
         },
-        select: { id: true, email: true, displayName: true, isActive: true },
+        select: { id: true, email: true, displayName: true, isActive: true, isKpiApplicable: true },
       });
       await tx.auditLog.create({
         data: {
@@ -97,12 +99,14 @@ export class UsersService {
         ...(input.email !== undefined ? { email: input.email } : {}),
         ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
         ...(input.departmentId !== undefined ? { departmentId: input.departmentId } : {}),
+        ...(input.isKpiApplicable !== undefined ? { isKpiApplicable: input.isKpiApplicable } : {}),
       },
       select: {
         id: true,
         email: true,
         displayName: true,
         isActive: true,
+        isKpiApplicable: true,
         department: { select: { id: true, name: true } },
       },
     });

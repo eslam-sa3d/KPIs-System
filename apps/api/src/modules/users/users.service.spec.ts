@@ -41,6 +41,7 @@ describe('UsersService', () => {
         displayName: 'New User',
         password: 'S3cretPass!',
         roleIds: ['role-1'],
+        isKpiApplicable: true,
       },
       'admin-1',
     );
@@ -58,7 +59,7 @@ describe('UsersService', () => {
     prisma.user.findUnique.mockResolvedValue({ id: 'existing' });
     await expect(
       service.create(
-        { email: 'dup@pulse.local', displayName: 'Dup', password: 'S3cretPass!', roleIds: [] },
+        { email: 'dup@pulse.local', displayName: 'Dup', password: 'S3cretPass!', roleIds: [], isKpiApplicable: true },
         'admin-1',
       ),
     ).rejects.toMatchObject({ code: 'CONFLICT' });

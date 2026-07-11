@@ -689,7 +689,9 @@ describe('KpisService', () => {
       const { totalActiveUsers } = await service.getTeamOverview();
 
       expect(totalActiveUsers).toBe(2);
-      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true } }));
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { isActive: true, isKpiApplicable: true } }),
+      );
     });
   });
 });

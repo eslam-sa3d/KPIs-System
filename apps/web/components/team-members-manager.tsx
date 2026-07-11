@@ -18,6 +18,7 @@ interface UserRow {
   email: string;
   displayName: string;
   isActive: boolean;
+  isKpiApplicable: boolean;
   department: { id: string; name: string } | null;
   roles: Array<{ id: string; name: string }>;
 }
@@ -44,7 +45,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   const [pendingRoleIds, setPendingRoleIds] = useState<Set<string>>(new Set());
   const [savingRoles, setSavingRoles] = useState(false);
   const [editingInfoId, setEditingInfoId] = useState<string | null>(null);
-  const [infoDraft, setInfoDraft] = useState({ displayName: '', email: '', departmentId: '' });
+  const [infoDraft, setInfoDraft] = useState({ displayName: '', email: '', departmentId: '', isKpiApplicable: true });
   const [savingInfo, setSavingInfo] = useState(false);
 
   const reload = useCallback(() => api<UserRow[]>('/v1/users?pageSize=100').then(setUsers), []);
@@ -70,6 +71,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
           password: form.get('password'),
           departmentId: form.get('departmentId') || undefined,
           roleIds: form.getAll('roleIds'),
+          isKpiApplicable: form.get('isKpiApplicable') === 'on',
         }),
       });
       (event.target as HTMLFormElement).reset();
@@ -136,7 +138,12 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   function onStartEditInfo(row: UserRow) {
     setError(null);
     setEditingInfoId(row.id);
-    setInfoDraft({ displayName: row.displayName, email: row.email, departmentId: row.department?.id ?? '' });
+    setInfoDraft({
+      displayName: row.displayName,
+      email: row.email,
+      departmentId: row.department?.id ?? '',
+      isKpiApplicable: row.isKpiApplicable,
+    });
   }
 
   function onCancelEditInfo() {
@@ -153,6 +160,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
           displayName: infoDraft.displayName,
           email: infoDraft.email,
           departmentId: infoDraft.departmentId || null,
+          isKpiApplicable: infoDraft.isKpiApplicable,
         }),
       });
       setEditingInfoId(null);
@@ -211,6 +219,11 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                   </span>
                 </>
               )}
+              <span className="check-group">
+                <label className="check-item">
+                  <Checkbox name="isKpiApplicable" defaultChecked /> KPI applicable
+                </label>
+              </span>
               <Button type="submit">create user</Button>
               {notice && (
                 <Alert>
@@ -243,6 +256,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
               <TableHead>department</TableHead>
               <TableHead>roles</TableHead>
               <TableHead>status</TableHead>
+              <TableHead>KPI applicable</TableHead>
               {(can(user, 'users:manage') || can(user, 'users:write') || canEditRoles) && <TableHead />}
             </TableRow>
           </TableHeader>
@@ -312,6 +326,19 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                   )}
                 </TableCell>
                 <TableCell>{row.isActive ? 'active' : 'deactivated'}</TableCell>
+                <TableCell>
+                  {editingInfoId === row.id ? (
+                    <Checkbox
+                      aria-label="KPI applicable"
+                      checked={infoDraft.isKpiApplicable}
+                      onCheckedChange={(v) => setInfoDraft((d) => ({ ...d, isKpiApplicable: v === true }))}
+                    />
+                  ) : row.isKpiApplicable ? (
+                    'yes'
+                  ) : (
+                    'no'
+                  )}
+                </TableCell>
                 {(can(user, 'users:manage') || can(user, 'users:write') || canEditRoles) && (
                   <TableCell>
                     <span className="builder-field-actions">
