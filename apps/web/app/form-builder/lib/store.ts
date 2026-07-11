@@ -6,16 +6,22 @@ import type { FieldType, FormDefinition, FormField, FormSection, FormTheme } fro
 
 export type EditorTab = 'questions' | 'responses';
 
-/** A brand-new form the way Google Forms starts one: no title, one empty
- *  section, no questions yet — same theme defaults as the demo form. */
-function createBlankForm(): FormDefinition {
+/** A brand-new form the way Google Forms starts one: no title, one default
+ *  "Untitled Question" multiple-choice question (active, so it opens
+ *  expanded with its floating toolbar showing) — same theme defaults as
+ *  the demo form. */
+function createBlankForm(): { form: FormDefinition; activeFieldId: string } {
+  const field = createField('multiple_choice');
   return {
-    id: makeId('form'),
-    title: '',
-    description: '',
-    theme: { headerImageUrl: null, primaryColor: '#673ab7', backgroundColor: '#ffffff', fontStyle: 'default' },
-    fields: {},
-    sections: [{ id: makeId('sec'), title: '', description: '', fieldIds: [] }],
+    form: {
+      id: makeId('form'),
+      title: '',
+      description: '',
+      theme: { headerImageUrl: null, primaryColor: '#673ab7', backgroundColor: '#ffffff', fontStyle: 'default' },
+      fields: { [field.id]: field },
+      sections: [{ id: makeId('sec'), title: '', description: '', fieldIds: [field.id] }],
+    },
+    activeFieldId: field.id,
   };
 }
 
@@ -78,7 +84,10 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   activeTab: 'questions',
   activeFieldId: null,
 
-  newForm: () => set({ form: createBlankForm(), activeTab: 'questions', activeFieldId: null }),
+  newForm: () => {
+    const { form, activeFieldId } = createBlankForm();
+    set({ form, activeTab: 'questions', activeFieldId });
+  },
   loadDemoForm: () => set({ form: MOCK_FORM, activeTab: 'questions', activeFieldId: null }),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
