@@ -55,10 +55,10 @@ export function BuilderShell() {
             href="/form-builder"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden shrink-0 items-center gap-1.5 rounded-full border border-[#dadce0] px-3 py-1.5 text-sm text-[#5f6368] hover:bg-[#f1f3f4] sm:flex"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#dadce0] px-3 py-1.5 text-sm text-[#5f6368] hover:bg-[#f1f3f4]"
           >
             <Plus className="size-4" />
-            New form
+            <span className="hidden sm:inline">New form</span>
           </Link>
 
           <div className="hidden flex-1 justify-center sm:flex">
