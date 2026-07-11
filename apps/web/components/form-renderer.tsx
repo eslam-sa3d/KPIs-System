@@ -641,8 +641,16 @@ export function FormRenderer({
     const sections = definition.sections;
     if (!sections || sections.length === 0) return sections;
     if (!settings.shuffleSections) return sections;
+    const fieldByKey = new Map(definition.fields.map((f) => [f.key, f]));
     const hasBranching = sections.some(
-      (s) => s.branching || (s.branchRules && s.branchRules.length > 0),
+      (s) =>
+        s.branching ||
+        (s.branchRules && s.branchRules.length > 0) ||
+        s.defaultGoTo !== undefined ||
+        s.fieldKeys.some((key) => {
+          const field = fieldByKey.get(key);
+          return field?.type === 'select' && field.optionGoTo && Object.keys(field.optionGoTo).length > 0;
+        }),
     );
     if (hasBranching) return sections;
     return [...sections].sort(() => Math.random() - 0.5);
@@ -920,11 +928,17 @@ export function FormRenderer({
               </Button>
             )}
             {hasSections && !isLastPage ? (
-              <Button type="button" onClick={onNext}>
+              // Distinct `key`s force React to unmount/remount rather than mutate this
+              // button's type in place — reusing the same DOM node and flipping
+              // type="button" -> type="submit" as a side effect of THIS click's own
+              // handler let the browser's native default-action phase (which reads the
+              // button's type after React's synchronous re-render) submit the form on
+              // the very click that was only supposed to navigate to the next page.
+              <Button key="next" type="button" onClick={onNext}>
                 next →
               </Button>
             ) : (
-              <Button type="submit">submit</Button>
+              <Button key="submit" type="submit">submit</Button>
             )}
           </div>
         </form>

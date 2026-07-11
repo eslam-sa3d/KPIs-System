@@ -15,7 +15,6 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  BRANCH_TRIGGER_TYPES,
   CONDITION_OPERATORS,
   END_OF_FORM,
   type FieldType,
@@ -110,6 +109,10 @@ interface DraftField {
   maxFiles: number;
   /** option value -> uploaded FormAsset id, for select/multi_select/ranking "image choice" options */
   optionImages: Record<string, string>;
+  /** select only, Google-Forms-style "go to section based on answer": option
+   *  value -> target page id, or "end". A missing/'' entry for an option
+   *  means "continue to the next page". */
+  optionGoTo: Record<string, string>;
   mediaType: 'none' | 'image' | 'video';
   mediaAssetId: string;
   /** video: an external embed URL (e.g. YouTube) */
@@ -188,6 +191,7 @@ const emptyField = (): DraftField => ({
   maxSizeMb: 10,
   maxFiles: 1,
   optionImages: {},
+  optionGoTo: {},
   mediaType: 'none',
   mediaAssetId: '',
   mediaUrl: '',
@@ -251,46 +255,6 @@ interface KeyedField {
   likertScale: string[];
 }
 
-/** The fixed set of possible answers for a trigger field, or null when the domain isn't enumerable
- *  (short_text/long_text/number/date — the admin must type an exact value to match instead). */
-function caseKeysFor(trigger: KeyedField | undefined): string[] | null {
-  if (!trigger) return null;
-  switch (trigger.type) {
-    case 'rating':
-      return Array.from({ length: trigger.scale }, (_, i) => String(i + 1));
-    case 'nps':
-      return Array.from({ length: 11 }, (_, i) => String(i));
-    case 'boolean':
-      return ['true', 'false'];
-    case 'likert':
-      return trigger.likertScale.map((_, i) => String(i));
-    case 'select':
-    case 'multi_select':
-      return trigger.options;
-    default:
-      return null;
-  }
-}
-
-function caseLabelOf(trigger: KeyedField | undefined, key: string): string {
-  if (trigger?.type === 'likert') return trigger.likertScale[Number(key)] ?? key;
-  if (trigger?.type === 'boolean') return key === 'true' ? 'yes' : 'no';
-  return key;
-}
-
-interface DraftBranchRule {
-  /** the field this rule branches on */
-  fieldKey: string;
-  /** only used when fieldKey names a likert field: which statement drives the branch */
-  statement: string;
-  /** answer (or stringified rating/nps/boolean/likert-index) -> target page id / "end" */
-  cases: Array<{ equals: string; goTo: string }>;
-  /** unconditional/fallback target page id or "end"; '' = continue to the next page normally */
-  defaultGoTo: string;
-}
-
-const emptyBranchRule = (): DraftBranchRule => ({ fieldKey: '', statement: '', cases: [], defaultGoTo: '' });
-
 interface DraftSection {
   id: string;
   title: string;
@@ -300,8 +264,10 @@ interface DraftSection {
   mediaUrl: string;
   mediaAlt: string;
   fieldKeys: string[];
-  /** every page can carry more than one independent branch rule (MS-Forms parity) */
-  branchRules: DraftBranchRule[];
+  /** Google-Forms-style "after this page, go to..." — the page's own fallback
+   *  once none of its `select` fields' own optionGoTo redirected elsewhere.
+   *  '' = continue to the next page normally. */
+  defaultGoTo: string;
 }
 
 const emptySection = (index: number): DraftSection => ({
@@ -313,7 +279,7 @@ const emptySection = (index: number): DraftSection => ({
   mediaUrl: '',
   mediaAlt: '',
   fieldKeys: [],
-  branchRules: [],
+  defaultGoTo: '',
 });
 
 /** Coerces the builder's always-string visibleWhen value to match its target field's answer shape
@@ -357,7 +323,13 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
   };
   switch (draft.type) {
     case 'select': {
-      const options = withImages(parseList(draft.options));
+      const optionValues = parseList(draft.options);
+      const options = withImages(optionValues);
+      const optionGoTo = Object.fromEntries(
+        optionValues
+          .map((v): [string, string] => [v, draft.optionGoTo[v] ?? ''])
+          .filter(([, goTo]) => goTo !== ''),
+      );
       return {
         ...base,
         type: draft.type,
@@ -365,6 +337,7 @@ function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedF
         layout: draft.layout,
         allowOther: draft.allowOther,
         shuffleOptions: draft.shuffleOptions,
+        ...(Object.keys(optionGoTo).length > 0 ? { optionGoTo } : {}),
         ...(draft.points > 0 && draft.correctValue
           ? { correctValue: draft.correctValue, ...quizPoints, ...quizFeedback }
           : {}),
@@ -531,6 +504,7 @@ function fromDefinitionField(field: FormField): DraftField {
       draft.layout = field.layout;
       draft.allowOther = field.allowOther;
       draft.shuffleOptions = field.shuffleOptions;
+      draft.optionGoTo = field.optionGoTo ?? {};
       if (field.correctValue !== undefined) {
         draft.correctValue = field.correctValue;
         draft.points = field.points ?? 0;
@@ -636,14 +610,11 @@ function fromDefinitionField(field: FormField): DraftField {
 }
 
 /** Reverses buildSectionsPayload: rebuilds a DraftSection from a saved
- *  FormSection, folding the deprecated singular `branching` field into
- *  `branchRules` when a legacy definition has no `branchRules` of its own. */
+ *  FormSection. A section published under the previous (MS-Forms-style)
+ *  `branching`/`branchRules` model reopens with no "after this page" default
+ *  set here — same as any other legacy data the builder no longer edits;
+ *  republishing preserves the original fields but writes the current model. */
 function fromDefinitionSection(section: FormSection): DraftSection {
-  const rules = section.branchRules && section.branchRules.length > 0
-    ? section.branchRules
-    : section.branching
-      ? [section.branching]
-      : [];
   return {
     id: section.id,
     title: section.title ?? '',
@@ -653,12 +624,7 @@ function fromDefinitionSection(section: FormSection): DraftSection {
     mediaUrl: section.media?.type === 'video' ? (section.media.url ?? '') : '',
     mediaAlt: section.media?.alt ?? '',
     fieldKeys: section.fieldKeys,
-    branchRules: rules.map((r) => ({
-      fieldKey: r.onFieldKey ?? '',
-      statement: r.onStatement ?? '',
-      cases: r.cases.map(({ equals, goTo }) => ({ equals, goTo })),
-      defaultGoTo: r.defaultGoTo ?? '',
-    })),
+    defaultGoTo: section.defaultGoTo ?? '',
   };
 }
 
@@ -873,97 +839,6 @@ function NewFormPage() {
     );
   }
 
-  function addBranchRule(sectionIndex: number) {
-    setSections((current) =>
-      current.map((s, i) => (i === sectionIndex ? { ...s, branchRules: [...s.branchRules, emptyBranchRule()] } : s)),
-    );
-  }
-
-  function removeBranchRule(sectionIndex: number, ruleIndex: number) {
-    setSections((current) =>
-      current.map((s, i) =>
-        i === sectionIndex ? { ...s, branchRules: s.branchRules.filter((_, ri) => ri !== ruleIndex) } : s,
-      ),
-    );
-  }
-
-  function updateBranchRule(sectionIndex: number, ruleIndex: number, patch: Partial<DraftBranchRule>) {
-    setSections((current) =>
-      current.map((s, i) =>
-        i === sectionIndex
-          ? { ...s, branchRules: s.branchRules.map((r, ri) => (ri === ruleIndex ? { ...r, ...patch } : r)) }
-          : s,
-      ),
-    );
-  }
-
-  function onTriggerFieldChange(sectionIndex: number, ruleIndex: number, fieldKey: string, keys: string[] | null) {
-    updateBranchRule(sectionIndex, ruleIndex, {
-      fieldKey,
-      statement: '',
-      cases: keys ? keys.map((k) => ({ equals: k, goTo: '' })) : [],
-    });
-  }
-
-  function onStatementChange(sectionIndex: number, ruleIndex: number, statement: string, likertScale: string[]) {
-    updateBranchRule(sectionIndex, ruleIndex, {
-      statement,
-      cases: likertScale.map((_, i) => ({ equals: String(i), goTo: '' })),
-    });
-  }
-
-  function updateCase(
-    sectionIndex: number,
-    ruleIndex: number,
-    caseIndex: number,
-    patch: Partial<{ equals: string; goTo: string }>,
-  ) {
-    setSections((current) =>
-      current.map((s, i) =>
-        i === sectionIndex
-          ? {
-              ...s,
-              branchRules: s.branchRules.map((r, ri) =>
-                ri === ruleIndex
-                  ? { ...r, cases: r.cases.map((c, ci) => (ci === caseIndex ? { ...c, ...patch } : c)) }
-                  : r,
-              ),
-            }
-          : s,
-      ),
-    );
-  }
-
-  function addManualCase(sectionIndex: number, ruleIndex: number) {
-    setSections((current) =>
-      current.map((s, i) =>
-        i === sectionIndex
-          ? {
-              ...s,
-              branchRules: s.branchRules.map((r, ri) =>
-                ri === ruleIndex ? { ...r, cases: [...r.cases, { equals: '', goTo: '' }] } : r,
-              ),
-            }
-          : s,
-      ),
-    );
-  }
-
-  function removeCase(sectionIndex: number, ruleIndex: number, caseIndex: number) {
-    setSections((current) =>
-      current.map((s, i) =>
-        i === sectionIndex
-          ? {
-              ...s,
-              branchRules: s.branchRules.map((r, ri) =>
-                ri === ruleIndex ? { ...r, cases: r.cases.filter((_, ci) => ci !== caseIndex) } : r,
-              ),
-            }
-          : s,
-      ),
-    );
-  }
-
   function updateField(index: number, patch: Partial<DraftField>) {
     setFields((current) => current.map((f, i) => (i === index ? { ...f, ...patch } : f)));
   }
@@ -1161,6 +1036,7 @@ function NewFormPage() {
           maxSizeMb: p.maxSizeMb,
           maxFiles: 1,
           optionImages: {},
+          optionGoTo: {},
           mediaType: 'none' as const,
           mediaAssetId: '',
           mediaUrl: '',
@@ -1240,32 +1116,18 @@ function NewFormPage() {
 
   function buildSectionsPayload() {
     if (!sectionsEnabled || sections.length === 0) return undefined;
-    return sections.map((s) => {
-      const branchRules = s.branchRules
-        .map((r) => {
-          const cases = r.cases.filter((c) => c.equals && c.goTo).map(({ equals, goTo }) => ({ equals, goTo }));
-          if (cases.length === 0 && !r.defaultGoTo) return null; // empty rule — drop it
-          return {
-            ...(r.fieldKey ? { onFieldKey: r.fieldKey } : {}),
-            ...(r.statement ? { onStatement: r.statement } : {}),
-            cases,
-            ...(r.defaultGoTo ? { defaultGoTo: r.defaultGoTo } : {}),
-          };
-        })
-        .filter((r): r is NonNullable<typeof r> => r !== null);
-      return {
-        id: s.id,
-        ...(s.title.trim() ? { title: s.title.trim() } : {}),
-        ...(s.description.trim() ? { description: s.description.trim() } : {}),
-        ...(s.mediaType === 'image' && s.mediaAssetId
-          ? { media: { type: 'image' as const, assetId: s.mediaAssetId, ...(s.mediaAlt ? { alt: s.mediaAlt } : {}) } }
-          : s.mediaType === 'video' && s.mediaUrl
-            ? { media: { type: 'video' as const, url: s.mediaUrl, ...(s.mediaAlt ? { alt: s.mediaAlt } : {}) } }
-            : {}),
-        fieldKeys: s.fieldKeys,
-        ...(branchRules.length > 0 ? { branchRules } : {}),
-      };
-    });
+    return sections.map((s) => ({
+      id: s.id,
+      ...(s.title.trim() ? { title: s.title.trim() } : {}),
+      ...(s.description.trim() ? { description: s.description.trim() } : {}),
+      ...(s.mediaType === 'image' && s.mediaAssetId
+        ? { media: { type: 'image' as const, assetId: s.mediaAssetId, ...(s.mediaAlt ? { alt: s.mediaAlt } : {}) } }
+        : s.mediaType === 'video' && s.mediaUrl
+          ? { media: { type: 'video' as const, url: s.mediaUrl, ...(s.mediaAlt ? { alt: s.mediaAlt } : {}) } }
+          : {}),
+      fieldKeys: s.fieldKeys,
+      ...(s.defaultGoTo ? { defaultGoTo: s.defaultGoTo } : {}),
+    }));
   }
 
   /** Turns every locally-staged (kpiId, evaluationAreaId) pair into a real
@@ -1430,6 +1292,12 @@ function NewFormPage() {
         <SortableContext items={fields.map((_, i) => i)} strategy={verticalListSortingStrategy}>
         {fields.map((field, index) => {
           const isActive = activeFieldIndex === index;
+          // "go to section based on answer" only makes sense once this question's
+          // own page is known and there's a LATER page to jump to.
+          const ownSectionIndex = sectionsEnabled
+            ? sections.findIndex((s) => s.fieldKeys.includes(keyedFields[index]?.key ?? ''))
+            : -1;
+          const laterSectionsForField = ownSectionIndex >= 0 ? sections.slice(ownSectionIndex + 1) : [];
           return (
           <SortableCard
             key={index}
@@ -1558,11 +1426,50 @@ function NewFormPage() {
                         value={optionValue}
                         onChange={(e) => {
                           const list = parseList(field.options);
+                          const previous = list[optionIndex]!;
                           list[optionIndex] = e.target.value;
-                          updateField(index, { options: list.join(', ') });
+                          updateField(index, {
+                            options: list.join(', '),
+                            // keep this option's "go to" mapping keyed to its (possibly renamed) value
+                            ...(previous !== e.target.value && previous in field.optionGoTo
+                              ? {
+                                  optionGoTo: Object.fromEntries(
+                                    Object.entries(field.optionGoTo).map(([k, v]) =>
+                                      k === previous ? [e.target.value, v] : [k, v],
+                                    ),
+                                  ),
+                                }
+                              : {}),
+                          });
                         }}
                         placeholder={`Option ${optionIndex + 1}`}
                       />
+                      {field.type === 'select' && laterSectionsForField.length > 0 && (
+                        <Select
+                          value={field.optionGoTo[optionValue] || '__none__'}
+                          onValueChange={(v) =>
+                            updateField(index, {
+                              optionGoTo: { ...field.optionGoTo, [optionValue]: v === '__none__' ? '' : v },
+                            })
+                          }
+                        >
+                          <SelectTrigger
+                            className="option-row-goto"
+                            aria-label={`go to section after "${optionValue}"`}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">continue to next section</SelectItem>
+                            {laterSectionsForField.map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                go to {t.title.trim() || t.id}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value={END_OF_FORM}>submit form</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                       <Button
                         type="button"
                         variant="ghost"
@@ -1572,7 +1479,8 @@ function NewFormPage() {
                         aria-label={`remove option ${optionIndex + 1}`}
                         onClick={() => {
                           const list = parseList(field.options).filter((_, i) => i !== optionIndex);
-                          updateField(index, { options: list.join(', ') });
+                          const { [optionValue]: _removed, ...optionGoTo } = field.optionGoTo;
+                          updateField(index, { options: list.join(', '), optionGoTo });
                         }}
                       >
                         ✕
@@ -2099,8 +2007,8 @@ function NewFormPage() {
           {sectionsEnabled && (
             <>
               <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                assign every question to a page. optionally, branch a page's ending on a "choice" question's
-                answer — jumps only reach a LATER page, or end the form early.
+                assign every question to a page. a "choice (one answer)" question can send each of its own
+                options to a specific later page (or submit the form early) — jumps only reach a LATER page.
               </p>
 
               {unassignedFieldKeys.length > 0 && (
@@ -2114,9 +2022,6 @@ function NewFormPage() {
               <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
               {sections.map((section, index) => {
                 const laterSections = sections.slice(index + 1);
-                const triggerCandidates = keyedFields.filter(
-                  (f) => BRANCH_TRIGGER_TYPES.includes(f.type) && section.fieldKeys.includes(f.key),
-                );
 
                 return (
                   <SortableCard key={section.id} id={section.id} className="question-card" style={{ marginBottom: 12 }}>
@@ -2204,178 +2109,24 @@ function NewFormPage() {
 
                     {laterSections.length > 0 && (
                       <>
-                        <label>branch rules (optional — a page can have more than one)</label>
-                        {section.branchRules.map((rule, ruleIndex) => {
-                          const trigger = triggerCandidates.find((f) => f.key === rule.fieldKey);
-                          const enumerable = caseKeysFor(trigger) !== null;
-                          return (
-                            <div key={ruleIndex} className="admin-card" style={{ padding: 10, marginTop: 8 }}>
-                              <label htmlFor={`section-trigger-${index}-${ruleIndex}`}>branch on</label>
-                              <Select
-                                value={rule.fieldKey || '__none__'}
-                                onValueChange={(v) => {
-                                  const fieldKey = v === '__none__' ? '' : v;
-                                  const next = triggerCandidates.find((f) => f.key === fieldKey);
-                                  onTriggerFieldChange(index, ruleIndex, fieldKey, caseKeysFor(next));
-                                }}
-                              >
-                                <SelectTrigger id={`section-trigger-${index}-${ruleIndex}`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">choose a question</SelectItem>
-                                  {triggerCandidates.map((f) => (
-                                    <SelectItem key={f.key} value={f.key}>
-                                      {f.label} ({f.type})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-
-                              {trigger?.type === 'likert' && (
-                                <>
-                                  <label htmlFor={`section-statement-${index}-${ruleIndex}`}>
-                                    which statement drives the branch
-                                  </label>
-                                  <Select
-                                    value={rule.statement || '__none__'}
-                                    onValueChange={(v) =>
-                                      onStatementChange(index, ruleIndex, v === '__none__' ? '' : v, trigger.likertScale)
-                                    }
-                                  >
-                                    <SelectTrigger id={`section-statement-${index}-${ruleIndex}`}>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__none__">choose a statement</SelectItem>
-                                      {trigger.options.map((st) => (
-                                        <SelectItem key={st} value={st}>
-                                          {st}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </>
-                              )}
-
-                              {trigger && (trigger.type !== 'likert' || rule.statement) && (
-                                enumerable ? (
-                                  rule.cases.map((c, ci) => (
-                                    <div key={c.equals}>
-                                      <label htmlFor={`section-case-${index}-${ruleIndex}-${ci}`}>
-                                        if {trigger.type === 'multi_select' ? 'selections include' : 'answer is'} "
-                                        {caseLabelOf(trigger, c.equals)}" go to
-                                      </label>
-                                      <Select
-                                        value={c.goTo || '__none__'}
-                                        onValueChange={(v) =>
-                                          updateCase(index, ruleIndex, ci, { goTo: v === '__none__' ? '' : v })
-                                        }
-                                      >
-                                        <SelectTrigger id={`section-case-${index}-${ruleIndex}-${ci}`}>
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="__none__">continue normally</SelectItem>
-                                          {laterSections.map((t) => (
-                                            <SelectItem key={t.id} value={t.id}>
-                                              {t.title.trim() || t.id}
-                                            </SelectItem>
-                                          ))}
-                                          <SelectItem value={END_OF_FORM}>end the form</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <>
-                                    {rule.cases.map((c, ci) => (
-                                      <div key={ci} className="builder-required">
-                                        <Input
-                                          value={c.equals}
-                                          onChange={(e) => updateCase(index, ruleIndex, ci, { equals: e.target.value })}
-                                          placeholder="exact answer to match"
-                                        />
-                                        <Select
-                                          value={c.goTo || '__none__'}
-                                          onValueChange={(v) =>
-                                            updateCase(index, ruleIndex, ci, { goTo: v === '__none__' ? '' : v })
-                                          }
-                                        >
-                                          <SelectTrigger>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="__none__">go to…</SelectItem>
-                                            {laterSections.map((t) => (
-                                              <SelectItem key={t.id} value={t.id}>
-                                                {t.title.trim() || t.id}
-                                              </SelectItem>
-                                            ))}
-                                            <SelectItem value={END_OF_FORM}>end the form</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          onClick={() => removeCase(index, ruleIndex, ci)}
-                                        >
-                                          remove case
-                                        </Button>
-                                      </div>
-                                    ))}
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      onClick={() => addManualCase(index, ruleIndex)}
-                                    >
-                                      + add case
-                                    </Button>
-                                  </>
-                                )
-                              )}
-
-                              <label htmlFor={`section-default-${index}-${ruleIndex}`}>
-                                {trigger ? 'if none of the above match' : 'always jump to (unconditional)'}
-                              </label>
-                              <Select
-                                value={rule.defaultGoTo || '__none__'}
-                                onValueChange={(v) =>
-                                  updateBranchRule(index, ruleIndex, { defaultGoTo: v === '__none__' ? '' : v })
-                                }
-                              >
-                                <SelectTrigger id={`section-default-${index}-${ruleIndex}`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">continue to the next page</SelectItem>
-                                  {laterSections.map((t) => (
-                                    <SelectItem key={t.id} value={t.id}>
-                                      {t.title.trim() || t.id}
-                                    </SelectItem>
-                                  ))}
-                                  <SelectItem value={END_OF_FORM}>end the form</SelectItem>
-                                </SelectContent>
-                              </Select>
-
-                              <div className="builder-field-actions">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  title="remove this rule"
-                                  aria-label="remove this rule"
-                                  onClick={() => removeBranchRule(index, ruleIndex)}
-                                >
-                                  🗑
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        <Button type="button" variant="ghost" onClick={() => addBranchRule(index)}>
-                          + add branch rule
-                        </Button>
+                        <label htmlFor={`section-default-${index}`}>after this page, go to</label>
+                        <Select
+                          value={section.defaultGoTo || '__none__'}
+                          onValueChange={(v) => updateSection(index, { defaultGoTo: v === '__none__' ? '' : v })}
+                        >
+                          <SelectTrigger id={`section-default-${index}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">continue to the next page</SelectItem>
+                            {laterSections.map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.title.trim() || t.id}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value={END_OF_FORM}>submit form</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </>
                     )}
 

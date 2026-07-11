@@ -3,17 +3,28 @@ import { mediaSchema } from './form-media';
 import type { FormDefinition, FormField, SubmissionAnswers } from './form-schema';
 
 /**
- * Page/section branching (MS-Forms parity): a form can be split into ordered
- * pages ("sections"). Each section can branch to a LATER section — or end
- * the form early — based on the answer to one choice field within it.
- * Forward-only by design (enforced in formDefinitionSchema's superRefine):
- * it keeps the model a DAG, so there is no cycle/loop to detect or guard
- * against at fill time.
+ * Page/section branching (Google-Forms parity): a form can be split into
+ * ordered pages ("sections"). The CURRENT model puts branching where Google
+ * Forms puts it — on the individual `select` question ("go to section based
+ * on answer", one target per option) — plus a single per-section "after this
+ * section, go to..." fallback for when no option-level jump applies. See
+ * `FormField.optionGoTo` (form-schema.ts) and `FormSection.defaultGoTo`.
+ *
+ * `sectionBranchRuleSchema`/`FormSection.branching`/`FormSection.branchRules`
+ * below are the PREVIOUS (MS-Forms-style) model — one or more rules per
+ * section, each keying off any single field of a broad set of types with an
+ * explicit list of value→target "cases". Kept only so already-published
+ * FormVersion JSON keeps validating and rendering; the builder no longer
+ * writes them.
+ *
+ * Both models are forward-only by design (enforced in formDefinitionSchema's
+ * superRefine): it keeps the model a DAG, so there is no cycle/loop to detect
+ * or guard against at fill time.
  */
 
 export const END_OF_FORM = 'end' as const;
 
-const sectionId = z
+export const sectionId = z
   .string()
   .min(1)
   .max(64)
@@ -86,8 +97,14 @@ export const formSectionSchema = z.object({
   /** Every rule is tried in array order; the first one that matches (by a
    *  case, or its own defaultGoTo) wins. Lets a page branch on more than one
    *  question, and — since a page can hold just one field — effectively
-   *  gives per-question routing without a separate graph model. */
+   *  gives per-question routing without a separate graph model.
+   *  @deprecated see `optionGoTo`/`defaultGoTo` above the model comment at
+   *  the top of this file — this is the previous (MS-Forms-style) model. */
   branchRules: z.array(sectionBranchRuleSchema).max(10).optional(),
+  /** Google-Forms-style "after this section, go to..." — applied once none
+   *  of this section's own fields' `optionGoTo` redirected elsewhere.
+   *  Omitted = fall through to the next section in array order. */
+  defaultGoTo: z.union([sectionId, z.literal(END_OF_FORM)]).optional(),
 });
 
 export type FormSection = z.infer<typeof formSectionSchema>;
@@ -134,25 +151,47 @@ function findMatchedCase(
   return rule.cases.find((c) => c.equals === answer);
 }
 
-/** Runs a page's branch rules in order; the first one that produces a target (via a
- *  matched case or its own defaultGoTo) wins. Falls back to the legacy singular
- *  `branching` field when a section has no `branchRules` (old published definitions). */
+/**
+ * Resolves where a section sends the respondent next. A section uses EITHER
+ * the legacy rule list (`branchRules`, or singular `branching` for older
+ * definitions) OR the current Google-Forms-style model — never a mix, so an
+ * old published section keeps behaving exactly as it always has.
+ *
+ * Current model: each of the section's own `select` fields (Google Forms
+ * only ever branches off single-choice questions) can map its own answer to
+ * a target via `optionGoTo`; the first such field (in section field order)
+ * whose current answer has an entry wins. Falling through all of them lands
+ * on the section's own `defaultGoTo` ("after this section, go to...").
+ */
 function resolveBranchTarget(
   section: FormSection,
   fieldByKey: Map<string, FormField>,
   answers: SubmissionAnswers,
 ): string | undefined {
-  const rules = section.branchRules && section.branchRules.length > 0
+  const legacyRules = section.branchRules && section.branchRules.length > 0
     ? section.branchRules
     : section.branching
       ? [section.branching]
       : [];
-  for (const rule of rules) {
-    const matched = findMatchedCase(rule, fieldByKey, answers);
-    const target = matched?.goTo ?? rule.defaultGoTo;
+  if (legacyRules.length > 0) {
+    for (const rule of legacyRules) {
+      const matched = findMatchedCase(rule, fieldByKey, answers);
+      const target = matched?.goTo ?? rule.defaultGoTo;
+      if (target !== undefined) return target;
+    }
+    return undefined;
+  }
+
+  for (const key of section.fieldKeys) {
+    const field = fieldByKey.get(key);
+    if (!field || field.type !== 'select' || !field.optionGoTo) continue;
+    const raw = answers[key];
+    if (typeof raw !== 'string') continue;
+    const target = field.optionGoTo[raw];
     if (target !== undefined) return target;
   }
-  return undefined;
+
+  return section.defaultGoTo;
 }
 
 /**

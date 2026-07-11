@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { mediaSchema } from './form-media';
-import { END_OF_FORM, FormSection, SectionBranchRule, formSectionSchema } from './form-sections';
+import { END_OF_FORM, FormSection, SectionBranchRule, formSectionSchema, sectionId } from './form-sections';
 
 /** Field types with an exact-match-comparable answer — everything except
  *  ranking (an ordered permutation), file (an opaque upload id), grid (one
@@ -141,7 +141,7 @@ export const formFieldSchema = z.discriminatedUnion('type', [
   baseField.extend({
     type: z.literal('select'),
     options: z.array(optionItem).min(1).max(200),
-    /** radio buttons (MS Forms default) or a dropdown */
+    /** radio buttons or a dropdown */
     layout: z.enum(['dropdown', 'radio']).default('dropdown'),
     /** append a free-text "Other" option */
     allowOther: z.boolean().default(false),
@@ -152,6 +152,11 @@ export const formFieldSchema = z.discriminatedUnion('type', [
     points: z.number().positive().optional(),
     feedbackCorrect: z.string().max(500).optional(),
     feedbackIncorrect: z.string().max(500).optional(),
+    /** Google-Forms-style "go to section based on answer": option value →
+     *  target section id, or "end" to submit immediately. An option with no
+     *  entry here falls through to the section's own `defaultGoTo` (see
+     *  form-sections.ts). Only meaningful when the form has sections. */
+    optionGoTo: z.record(z.string(), z.union([sectionId, z.literal(END_OF_FORM)])).optional(),
   }),
   baseField.extend({
     type: z.literal('multi_select'),
@@ -478,6 +483,34 @@ function validateSections(
     section.branchRules?.forEach((rule, ruleIndex) =>
       validateRule(rule, ['sections', sectionIndex, 'branchRules', ruleIndex]),
     );
+
+    const validateTarget = (target: string, path: (string | number)[]) => {
+      if (target === END_OF_FORM) return;
+      if (!sectionIds.has(target)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path, message: `"go to section" target "${target}" is not a section id` });
+        return;
+      }
+      if (sectionIndexById.get(target)! <= sectionIndex) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path,
+          message: `"go to section" target "${target}" must come after section "${section.id}" — only forward jumps are allowed`,
+        });
+      }
+    };
+
+    for (const key of section.fieldKeys) {
+      const field = fieldByKey.get(key);
+      if (field?.type !== 'select' || !field.optionGoTo) continue;
+      const fieldIndex = fields.indexOf(field);
+      Object.entries(field.optionGoTo).forEach(([optionValue, target]) =>
+        validateTarget(target, ['fields', fieldIndex, 'optionGoTo', optionValue]),
+      );
+    }
+
+    if (section.defaultGoTo !== undefined) {
+      validateTarget(section.defaultGoTo, ['sections', sectionIndex, 'defaultGoTo']);
+    }
   });
 
   const unassigned = fields.map((f) => f.key).filter((key) => !assignedFieldKeys.has(key));

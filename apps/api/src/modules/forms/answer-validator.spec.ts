@@ -624,6 +624,81 @@ describe('section branching off a multi_select field (includes semantics)', () =
   });
 });
 
+describe('section branching, Google-Forms style (per-option goTo + section defaultGoTo)', () => {
+  const branchedDefinition: FormDefinition = formDefinitionSchema.parse({
+    title: 'branching survey (new model)',
+    fields: [
+      {
+        key: 'segment',
+        label: 'Which segment are you in?',
+        type: 'select',
+        options: [
+          { value: 'enterprise', label: 'Enterprise' },
+          { value: 'smb', label: 'SMB' },
+        ],
+        optionGoTo: { enterprise: 'enterprise_path', smb: 'smb_path' },
+      },
+      { key: 'seats', label: 'Seat count', type: 'number', required: true },
+      { key: 'budget', label: 'Monthly budget', type: 'number', required: true },
+      { key: 'name', label: 'Your name', type: 'short_text', required: true },
+    ],
+    sections: [
+      { id: 'intro', fieldKeys: ['segment'] },
+      // enterprise_path unconditionally jumps past smb_path straight to outro
+      { id: 'enterprise_path', fieldKeys: ['seats'], defaultGoTo: 'outro' },
+      // smb_path has no defaultGoTo — falls through to the next section in array order (outro)
+      { id: 'smb_path', fieldKeys: ['budget'] },
+      { id: 'outro', fieldKeys: ['name'] },
+    ],
+  });
+
+  const validator = compileAnswerValidator(branchedDefinition);
+
+  it('requires only the fields on the branch path actually taken', () => {
+    const cleaned = validator.validate({ segment: 'enterprise', seats: 50, name: 'Ada' });
+    expect(cleaned).toEqual({ segment: 'enterprise', seats: 50, name: 'Ada' });
+  });
+
+  it('drops answers smuggled in for a section the branch skipped, without requiring them', () => {
+    const cleaned = validator.validate({
+      segment: 'enterprise',
+      seats: 50,
+      name: 'Ada',
+      budget: 999, // smb_path was never reached — must be dropped, not required elsewhere
+    });
+    expect(cleaned).not.toHaveProperty('budget');
+  });
+
+  it('requires the field on the OTHER branch when that path is taken instead', () => {
+    expect(() => validator.validate({ segment: 'smb', name: 'Bo' })).toThrow(ZodError);
+    const cleaned = validator.validate({ segment: 'smb', budget: 200, name: 'Bo' });
+    expect(cleaned).toEqual({ segment: 'smb', budget: 200, name: 'Bo' });
+  });
+
+  it('ends the form immediately when an option maps to "end"', () => {
+    const endsEarly: FormDefinition = formDefinitionSchema.parse({
+      title: 'quick exit',
+      fields: [
+        {
+          key: 'satisfied',
+          label: 'Are you satisfied?',
+          type: 'select',
+          options: [
+            { value: 'yes', label: 'Yes' },
+            { value: 'no', label: 'No' },
+          ],
+          optionGoTo: { no: END_OF_FORM },
+        },
+        { key: 'why_not', label: 'Why not?', type: 'short_text', required: true },
+      ],
+      sections: [{ id: 'intro', fieldKeys: ['satisfied'] }, { id: 'followup', fieldKeys: ['why_not'] }],
+    });
+    const v = compileAnswerValidator(endsEarly);
+    const cleaned = v.validate({ satisfied: 'no' });
+    expect(cleaned).not.toHaveProperty('why_not');
+  });
+});
+
 describe('formDefinitionSchema (builder-side validation)', () => {
   it('rejects duplicate field keys', () => {
     const result = formDefinitionSchema.safeParse({
@@ -666,6 +741,30 @@ describe('formDefinitionSchema (builder-side validation)', () => {
     const result = formDefinitionSchema.safeParse({
       title: 'bad piped form',
       fields: [{ key: 'greeting', label: 'Nice to meet you, {{ghost}}!', type: 'boolean' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a select field\'s optionGoTo pointing backward', () => {
+    const result = formDefinitionSchema.safeParse({
+      title: 'bad branching form',
+      fields: [
+        { key: 'choice', label: 'Pick one', type: 'select', options: [{ value: 'a', label: 'A' }], optionGoTo: { a: 'intro' } },
+        { key: 'name', label: 'Name', type: 'short_text' },
+      ],
+      sections: [
+        { id: 'intro', fieldKeys: ['choice'] },
+        { id: 'later', fieldKeys: ['name'] },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a section's defaultGoTo pointing at an unknown section", () => {
+    const result = formDefinitionSchema.safeParse({
+      title: 'bad branching form',
+      fields: [{ key: 'name', label: 'Name', type: 'short_text' }],
+      sections: [{ id: 'intro', fieldKeys: ['name'], defaultGoTo: 'ghost_section' }],
     });
     expect(result.success).toBe(false);
   });
