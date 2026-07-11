@@ -1943,20 +1943,28 @@ function NewFormPage() {
                       ⏎ split into a new page here
                     </DropdownMenuItem>
                   )}
-                  {field.type === 'select' && laterSectionsForField.length > 0 && (
-                    <DropdownMenuCheckboxItem
-                      checked={branchingOpen}
-                      onCheckedChange={(checked) => {
-                        toggleBranchingPanel(index, checked === true);
-                        // Unchecking is the actual off switch, not just a UI collapse — clear
-                        // every option's jump so a respondent's flow really does go back to
-                        // normal, rather than leaving stale jumps active behind a hidden panel.
-                        if (checked !== true) updateField(index, { optionGoTo: {} });
-                      }}
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      go to section based on answer
-                    </DropdownMenuCheckboxItem>
+                  {field.type === 'select' && sectionsEnabled && (
+                    laterSectionsForField.length > 0 ? (
+                      <DropdownMenuCheckboxItem
+                        checked={branchingOpen}
+                        onCheckedChange={(checked) => {
+                          toggleBranchingPanel(index, checked === true);
+                          // Unchecking is the actual off switch, not just a UI collapse — clear
+                          // every option's jump so a respondent's flow really does go back to
+                          // normal, rather than leaving stale jumps active behind a hidden panel.
+                          if (checked !== true) updateField(index, { optionGoTo: {} });
+                        }}
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        go to section based on answer
+                      </DropdownMenuCheckboxItem>
+                    ) : (
+                      <DropdownMenuItem disabled onSelect={(e) => e.preventDefault()}>
+                        {ownSectionIndex === -1
+                          ? 'assign this question to a page first'
+                          : 'no later page to route to'}
+                      </DropdownMenuItem>
+                    )
                   )}
                   {canLinkKpis && canLinkKpiField && (
                     <DropdownMenuCheckboxItem
