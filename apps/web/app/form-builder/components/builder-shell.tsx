@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowLeft, Eye, MoreVertical, Paintbrush, Plus } from 'lucide-react';
+import { Eye, MoreVertical, Paintbrush, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -43,16 +43,15 @@ export function BuilderShell() {
     <div className="min-h-screen" style={{ background: CANVAS_WASH }}>
       <header className="sticky top-0 z-40 flex justify-center border-b border-black/10 bg-white">
         <div className="flex h-16 w-full max-w-5xl items-center gap-3 px-4">
-          <Link href="/" className="text-muted-foreground hover:text-foreground" aria-label="Back">
-            <ArrowLeft className="size-5" />
+          <Link href="/form-builder" aria-label="Go to your forms">
+            <AppMark />
           </Link>
-          <AppMark />
           <span className="min-w-0 shrink-0 truncate text-[15px] font-medium text-[#202124]">
             {title || 'Untitled form'}
           </span>
 
           <Link
-            href="/form-builder"
+            href="/form-builder/edit"
             target="_blank"
             rel="noopener noreferrer"
             className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#dadce0] px-3 py-1.5 text-sm text-[#5f6368] hover:bg-[#f1f3f4]"
