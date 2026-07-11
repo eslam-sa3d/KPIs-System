@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Copy, GripHorizontal, Image as ImageIcon, MoreVertical, Trash2 } from 'lucide-react';
+import { Copy, GripHorizontal, Image as ImageIcon, Link2, MoreVertical, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,9 +12,11 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { KpiLinkCombobox } from '@/components/kpi-link-combobox';
 import { useBuilderStore } from '../lib/store';
 import { createField, FIELD_TYPE_LABELS } from '../lib/field-defaults';
 import { FIELD_TYPE_ICONS } from '../lib/constants';
+import { MOCK_KPIS } from '../lib/mock-kpis';
 import { FIELD_TYPES, type FieldType, type FormField, type FormSection } from '../lib/types';
 import { SortableItem } from './sortable-item';
 import { QuestionBody } from './question-body';
@@ -43,6 +45,7 @@ export function QuestionCard({
   const [branchingOpen, setBranchingOpen] = useState(
     (field.type === 'multiple_choice' || field.type === 'dropdown') && Object.keys(field.branching).length > 0,
   );
+  const [showKpiLink, setShowKpiLink] = useState(Boolean(field.kpiLink));
 
   // Switching type re-derives type-specific defaults (a fresh option list,
   // scale, etc.) while keeping the universal props — Google Forms only
@@ -62,12 +65,12 @@ export function QuestionCard({
     updateField(field.id, { media: { type: 'image', url: URL.createObjectURL(file) } });
   }
 
-  const hasOverflowMenu =
-    field.type === 'short_answer' ||
-    field.type === 'paragraph' ||
-    field.type === 'multiple_choice' ||
-    field.type === 'checkboxes' ||
-    field.type === 'dropdown';
+  // "Link to KPI" applies to every answerable type, so the menu itself is
+  // always available now — the type-specific items inside it (validation,
+  // shuffle, branching) still only render for the types they apply to.
+  const hasOverflowMenu = !isTitleBlock;
+  const linkedKpi = field.kpiLink ? MOCK_KPIS.find((k) => k.id === field.kpiLink!.kpiId) : undefined;
+  const linkedArea = linkedKpi?.evaluationAreas.find((a) => a.id === field.kpiLink!.evaluationAreaId);
 
   return (
     <SortableItem id={field.id}>
