@@ -55,7 +55,16 @@ test.describe('form builder → submission → list (happy path)', () => {
     // and a newly-added field auto-expands, so its "field label"/"required"
     // controls are visible without an extra click.
     await page.goto('/forms/new');
-    await page.getByLabel('form title').fill(formTitle);
+    // WebKit under dev-mode hydration can be slow enough that an immediate
+    // .fill() lands before React attaches its onChange handler, so the value
+    // gets silently dropped on hydration — wait for the network (and thus
+    // the client bundle) to settle before interacting with anything.
+    await page.waitForLoadState('networkidle');
+    const titleInput = page.getByLabel('form title');
+    await titleInput.waitFor({ state: 'visible' });
+    await expect(titleInput).toBeEnabled();
+    await titleInput.fill(formTitle);
+    await expect(titleInput).toHaveValue(formTitle);
     await page.getByRole('button', { name: 'add field' }).click();
     await page.getByLabel('field label').fill('Team');
     await page.locator('.field-type-summary').first().click();
@@ -135,21 +144,24 @@ test.describe('KPI module (create → evaluation area → score via a mapped for
     await page.getByRole('button', { name: 'add', exact: true }).click();
     await expect(page.getByText(areaName)).toBeVisible();
 
-    // build a form with a "person" field (the evaluatee) and a "rating"
-    // field (the score) — the Forms→KPI bridge scores an Evaluation Area
-    // from these two fields on every submission, there's no direct
-    // record-a-score control on the KPI page itself any more.
+    // build a form with a "rating" field (the score) — a KPI mapping with no
+    // evaluatee field is a self-assessment: the submitter scores themselves,
+    // no "person" field needed. There's no direct record-a-score control on
+    // the KPI page itself any more.
     await page.goto('/forms/new');
-    await page.getByLabel('form title').fill(formTitle);
+    // WebKit under dev-mode hydration can be slow enough that an immediate
+    // .fill() lands before React attaches its onChange handler, so the value
+    // gets silently dropped on hydration — wait for the network (and thus
+    // the client bundle) to settle before interacting with anything.
+    await page.waitForLoadState('networkidle');
+    const titleInput = page.getByLabel('form title');
+    await titleInput.waitFor({ state: 'visible' });
+    await expect(titleInput).toBeEnabled();
+    await titleInput.fill(formTitle);
+    await expect(titleInput).toHaveValue(formTitle);
 
     await page.getByRole('button', { name: 'add field' }).click();
-    const whoField = page.locator('.builder-field').nth(0);
-    await whoField.getByLabel('field label').fill('Who');
-    await whoField.locator('.field-type-summary').click();
-    await page.getByRole('menuitem', { name: 'person' }).click();
-
-    await page.getByRole('button', { name: 'add field' }).click();
-    const scoreField = page.locator('.builder-field').nth(1);
+    const scoreField = page.locator('.builder-field').nth(0);
     await scoreField.getByLabel('field label').fill('Score');
     await scoreField.locator('.field-type-summary').click();
     await page.getByRole('menuitem', { name: 'rating' }).click();
@@ -158,23 +170,19 @@ test.describe('KPI module (create → evaluation area → score via a mapped for
     await expect(page.getByText(/published/i)).toBeVisible();
     await page.getByRole('link', { name: 'open form' }).click();
 
-    // map "Who"/"Score" to the evaluation area we just created
+    // map "Score" to the evaluation area we just created — self-assessment, no evaluatee field
     await page.getByRole('tab', { name: 'settings' }).click();
     await page.getByLabel('add a mapping').click();
     await page.getByRole('option', { name: kpiName }).click();
     await page.getByLabel('evaluation area').click();
     await page.getByRole('option', { name: areaName }).click();
-    await page.getByLabel('evaluatee field').click();
-    await page.getByRole('option', { name: 'Who' }).click();
     await page.getByLabel('score field').click();
     await page.getByRole('option', { name: 'Score' }).click();
     await page.getByRole('button', { name: 'add mapping' }).click();
     await expect(page.getByText(/no KPI mapping yet/i)).toHaveCount(0);
 
-    // submit the form for the admin's own account (a real, always-present user)
+    // submit the form for the admin's own account — self-assessment scores the submitter
     await page.getByRole('tab', { name: 'form' }).click();
-    await page.getByLabel('Who search').fill(ADMIN.email.split('@')[0]!);
-    await page.getByRole('listbox', { name: 'Who matches' }).getByRole('option').first().click();
     await page.getByLabel('Score').getByRole('radio', { name: '4', exact: true }).click();
     await page.getByRole('button', { name: 'submit' }).click();
     await expect(page.getByText(/thank you/i)).toBeVisible();
