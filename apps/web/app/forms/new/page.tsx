@@ -224,9 +224,16 @@ const emptyField = (): DraftField => ({
   evaluateeFieldKey: '',
 });
 
+// fieldKey is capped at 64 chars server-side (packages/contracts/src/form-schema.ts) — long
+// question labels (common in imported QA evaluation forms) must be truncated, not rejected.
 const toKey = (label: string, index: number) => {
-  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-  return /^[a-z]/.test(slug) ? slug : `field_${index + 1}${slug ? `_${slug}` : ''}`;
+  const slug = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 50)
+    .replace(/_+$/, '');
+  return (/^[a-z]/.test(slug) ? slug : `field_${index + 1}${slug ? `_${slug}` : ''}`).slice(0, 64);
 };
 
 interface KpiOption {
