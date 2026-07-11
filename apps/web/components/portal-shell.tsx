@@ -13,6 +13,7 @@ import { ThemeToggle } from './theme-toggle';
 const NAV_ITEMS: Array<{ href: string; label: string; permission?: string }> = [
   { href: '/dashboard', label: 'dashboard' },
   { href: '/forms', label: 'forms' },
+  { href: '/form-builder', label: 'form builder' },
   { href: '/admin/kpis', label: 'KPIs', permission: 'kpis:write' },
   { href: '/admin/users', label: 'users', permission: 'users:read' },
   { href: '/admin/roles', label: 'roles', permission: 'roles:read' },
