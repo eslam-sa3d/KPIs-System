@@ -5,10 +5,12 @@ import {
   PageQuery,
   SetUserStatusInput,
   UpdateDepartmentInput,
+  UpdateUserInput,
   createDepartmentSchema,
   createUserSchema,
   setUserStatusSchema,
   updateDepartmentSchema,
+  updateUserSchema,
 } from '@pulse/contracts';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
@@ -33,6 +35,16 @@ export class UsersController {
     @Req() req: AuthedRequest,
   ) {
     return this.users.create(input, req.user.id);
+  }
+
+  @Patch(':userId')
+  @RequirePermissions('users:write')
+  update(
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(updateUserSchema)) input: UpdateUserInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.users.update(userId, input, req.user.id);
   }
 
   @Patch(':userId/status')

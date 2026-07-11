@@ -5,6 +5,7 @@ import {
   PAGE_DEFAULTS,
   PageQuery,
   UpdateDepartmentInput,
+  UpdateUserInput,
   buildPaginationMeta,
 } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
@@ -79,6 +80,36 @@ export class UsersService {
       return created;
     });
     return user;
+  }
+
+  async update(userId: string, input: UpdateUserInput, actorId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw AppError.notFound('User', userId);
+
+    if (input.email && input.email !== user.email) {
+      const existing = await this.prisma.user.findUnique({ where: { email: input.email } });
+      if (existing) throw new AppError('CONFLICT', `A user with email "${input.email}" already exists`);
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(input.email !== undefined ? { email: input.email } : {}),
+        ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+        ...(input.departmentId !== undefined ? { departmentId: input.departmentId } : {}),
+      },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        isActive: true,
+        department: { select: { id: true, name: true } },
+      },
+    });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'user.updated', entity: 'User', entityId: userId, detail: input },
+    });
+    return updated;
   }
 
   /** Deactivation kills access immediately: permission cache is invalidated and

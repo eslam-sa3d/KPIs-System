@@ -13,6 +13,16 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
 export const setUserStatusSchema = z.object({ isActive: z.boolean() });
 export type SetUserStatusInput = z.infer<typeof setUserStatusSchema>;
 
+/** Every field optional (a caller only sends what changed); `departmentId: null`
+ *  clears the department, `undefined`/omitted leaves it untouched. */
+export const updateUserSchema = z.object({
+  email: z.string().email().max(254).optional(),
+  displayName: z.string().min(2).max(120).optional(),
+  departmentId: z.string().uuid().nullable().optional(),
+});
+
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
 export const createDepartmentSchema = z.object({ name: z.string().min(2).max(120) });
 export type CreateDepartmentInput = z.infer<typeof createDepartmentSchema>;
 

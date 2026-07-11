@@ -43,6 +43,9 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [pendingRoleIds, setPendingRoleIds] = useState<Set<string>>(new Set());
   const [savingRoles, setSavingRoles] = useState(false);
+  const [editingInfoId, setEditingInfoId] = useState<string | null>(null);
+  const [infoDraft, setInfoDraft] = useState({ displayName: '', email: '', departmentId: '' });
+  const [savingInfo, setSavingInfo] = useState(false);
 
   const reload = useCallback(() => api<UserRow[]>('/v1/users?pageSize=100').then(setUsers), []);
 
@@ -130,6 +133,37 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
     }
   }
 
+  function onStartEditInfo(row: UserRow) {
+    setError(null);
+    setEditingInfoId(row.id);
+    setInfoDraft({ displayName: row.displayName, email: row.email, departmentId: row.department?.id ?? '' });
+  }
+
+  function onCancelEditInfo() {
+    setEditingInfoId(null);
+  }
+
+  async function onSaveInfo(row: UserRow) {
+    setError(null);
+    setSavingInfo(true);
+    try {
+      await api(`/v1/users/${row.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          displayName: infoDraft.displayName,
+          email: infoDraft.email,
+          departmentId: infoDraft.departmentId || null,
+        }),
+      });
+      setEditingInfoId(null);
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Updating the user failed');
+    } finally {
+      setSavingInfo(false);
+    }
+  }
+
   const canEditRoles = can(user, 'roles:manage') && can(user, 'users:write');
 
   return (
@@ -209,15 +243,57 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
               <TableHead>department</TableHead>
               <TableHead>roles</TableHead>
               <TableHead>status</TableHead>
-              {(can(user, 'users:manage') || canEditRoles) && <TableHead />}
+              {(can(user, 'users:manage') || can(user, 'users:write') || canEditRoles) && <TableHead />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.map((row) => (
               <TableRow key={row.id}>
-                <TableCell>{row.displayName}</TableCell>
-                <TableCell>{row.email}</TableCell>
-                <TableCell>{row.department?.name ?? '—'}</TableCell>
+                <TableCell>
+                  {editingInfoId === row.id ? (
+                    <Input
+                      aria-label="display name"
+                      value={infoDraft.displayName}
+                      onChange={(e) => setInfoDraft((d) => ({ ...d, displayName: e.target.value }))}
+                    />
+                  ) : (
+                    row.displayName
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingInfoId === row.id ? (
+                    <Input
+                      aria-label="email"
+                      type="email"
+                      value={infoDraft.email}
+                      onChange={(e) => setInfoDraft((d) => ({ ...d, email: e.target.value }))}
+                    />
+                  ) : (
+                    row.email
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingInfoId === row.id ? (
+                    <Select
+                      value={infoDraft.departmentId || '__none__'}
+                      onValueChange={(v) => setInfoDraft((d) => ({ ...d, departmentId: v === '__none__' ? '' : v }))}
+                    >
+                      <SelectTrigger aria-label="department" size="sm" className="w-[160px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— none —</SelectItem>
+                        {departments.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>
+                            {d.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    row.department?.name ?? '—'
+                  )}
+                </TableCell>
                 <TableCell>
                   {editingUserId === row.id ? (
                     <span className="check-group">
@@ -236,9 +312,24 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                   )}
                 </TableCell>
                 <TableCell>{row.isActive ? 'active' : 'deactivated'}</TableCell>
-                {(can(user, 'users:manage') || canEditRoles) && (
+                {(can(user, 'users:manage') || can(user, 'users:write') || canEditRoles) && (
                   <TableCell>
                     <span className="builder-field-actions">
+                      {can(user, 'users:write') &&
+                        (editingInfoId === row.id ? (
+                          <>
+                            <Button size="sm" disabled={savingInfo} onClick={() => onSaveInfo(row)}>
+                              save info
+                            </Button>
+                            <Button variant="ghost" size="sm" disabled={savingInfo} onClick={onCancelEditInfo}>
+                              cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => onStartEditInfo(row)}>
+                            edit
+                          </Button>
+                        ))}
                       {can(user, 'users:manage') && (
                         <Button variant="ghost" size="sm" onClick={() => onToggleStatus(row)}>
                           {row.isActive ? 'deactivate' : 'activate'}
