@@ -808,10 +808,27 @@ function NewFormPage() {
     setSections((current) => current.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
 
+  /** A page id can be a jump target from two places — a field's per-option `optionGoTo`, and
+   *  another page's own `defaultGoTo`. Both need clearing whenever that page stops existing, or
+   *  publish fails validation with a dangling "go to section" target. */
+  function clearGoToTarget(id: string) {
+    setFields((current) =>
+      current.map((f) => {
+        if (!Object.values(f.optionGoTo).includes(id)) return f;
+        return {
+          ...f,
+          optionGoTo: Object.fromEntries(Object.entries(f.optionGoTo).map(([k, v]) => [k, v === id ? '' : v])),
+        };
+      }),
+    );
+    setSections((current) => current.map((s) => (s.defaultGoTo === id ? { ...s, defaultGoTo: '' } : s)));
+  }
+
   /** Removes this page break — its questions merge into whichever page precedes it. The very
    *  first page has no break to remove (disabled in the UI); guarded here too, defensively. */
   function removeSection(id: string) {
     setSections((current) => (current.length <= 1 ? current : current.filter((s) => s.id !== id)));
+    clearGoToTarget(id);
   }
 
   function updateField(index: number, patch: Partial<DraftField>) {
@@ -944,7 +961,9 @@ function NewFormPage() {
     // questions merge into whichever page precedes it (handled by resolvedSections)
     const removedKey = keyedFields[index]?.key;
     if (removedKey) {
+      const droppedSectionIds = sections.filter((s) => s.startFieldKey === removedKey).map((s) => s.id);
       setSections((current) => current.filter((s) => s.startFieldKey !== removedKey));
+      droppedSectionIds.forEach(clearGoToTarget);
     }
     setFields((current) => current.filter((_, i) => i !== index));
     setActiveFieldIndex((current) => {
