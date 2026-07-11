@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Copy, GripHorizontal, Image as ImageIcon, Link2, MoreVertical, Trash2, X } from 'lucide-react';
+import { Copy, GripHorizontal, Image as ImageIcon, MoreVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,14 +10,11 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { KpiLinkCombobox } from '@/components/kpi-link-combobox';
 import { useBuilderStore } from '../lib/store';
 import { createField, FIELD_TYPE_LABELS } from '../lib/field-defaults';
 import { FIELD_TYPE_ICONS } from '../lib/constants';
-import { MOCK_KPIS } from '../lib/mock-kpis';
 import { FIELD_TYPES, type FieldType, type FormField, type FormSection } from '../lib/types';
 import { SortableItem } from './sortable-item';
 import { QuestionBody } from './question-body';
@@ -46,7 +43,6 @@ export function QuestionCard({
   const [branchingOpen, setBranchingOpen] = useState(
     (field.type === 'multiple_choice' || field.type === 'dropdown') && Object.keys(field.branching).length > 0,
   );
-  const [showKpiLink, setShowKpiLink] = useState(Boolean(field.kpiLink));
 
   // Switching type re-derives type-specific defaults (a fresh option list,
   // scale, etc.) while keeping the universal props — Google Forms only
@@ -66,12 +62,12 @@ export function QuestionCard({
     updateField(field.id, { media: { type: 'image', url: URL.createObjectURL(file) } });
   }
 
-  // "Link to KPI" applies to every answerable type, so the menu itself is
-  // always available now — the type-specific items inside it (validation,
-  // shuffle, branching) still only render for the types they apply to.
-  const hasOverflowMenu = !isTitleBlock;
-  const linkedKpi = field.kpiLink ? MOCK_KPIS.find((k) => k.id === field.kpiLink!.kpiId) : undefined;
-  const linkedArea = linkedKpi?.evaluationAreas.find((a) => a.id === field.kpiLink!.evaluationAreaId);
+  const hasOverflowMenu =
+    field.type === 'short_answer' ||
+    field.type === 'paragraph' ||
+    field.type === 'multiple_choice' ||
+    field.type === 'checkboxes' ||
+    field.type === 'dropdown';
 
   return (
     <SortableItem id={field.id}>
@@ -189,38 +185,6 @@ export function QuestionCard({
             />
           )}
 
-          {isActive && !isTitleBlock && showKpiLink && (
-            <div className="flex flex-col gap-1 border-t border-[#e0e0e0] pt-3">
-              <span className="text-xs text-muted-foreground">Linked KPI (optional)</span>
-              <KpiLinkCombobox
-                kpis={MOCK_KPIS}
-                kpiId={field.kpiLink?.kpiId ?? ''}
-                evaluationAreaId={field.kpiLink?.evaluationAreaId ?? ''}
-                onSelect={(kpiId, evaluationAreaId) => updateField(field.id, { kpiLink: { kpiId, evaluationAreaId } })}
-                onClear={() => updateField(field.id, { kpiLink: undefined })}
-              />
-            </div>
-          )}
-
-          {!isTitleBlock && linkedKpi && linkedArea && (
-            <div className="flex items-center gap-1.5 self-start rounded-full border border-[#673ab7]/30 bg-[#673ab7]/5 py-1 pr-2 pl-2.5 text-xs text-[#673ab7]">
-              <Link2 className="size-3" />
-              {linkedKpi.name} — {linkedArea.name}
-              <button
-                type="button"
-                aria-label="Unlink KPI"
-                className="rounded-full p-0.5 hover:bg-[#673ab7]/10"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  updateField(field.id, { kpiLink: undefined });
-                  setShowKpiLink(false);
-                }}
-              >
-                <X className="size-3" />
-              </button>
-            </div>
-          )}
-
           {!isTitleBlock && (
             <div className="flex items-center justify-end gap-3 border-t border-[#e0e0e0] pt-3">
               <div className="flex items-center gap-1">
@@ -264,20 +228,6 @@ export function QuestionCard({
                           Go to section based on answer
                         </DropdownMenuCheckboxItem>
                       )}
-                      {(field.type === 'short_answer' ||
-                        field.type === 'paragraph' ||
-                        field.type === 'multiple_choice' ||
-                        field.type === 'checkboxes' ||
-                        field.type === 'dropdown') && <DropdownMenuSeparator />}
-                      <DropdownMenuCheckboxItem
-                        checked={showKpiLink}
-                        onCheckedChange={(v) => {
-                          setShowKpiLink(v);
-                          if (!v) updateField(field.id, { kpiLink: undefined });
-                        }}
-                      >
-                        Link to KPI
-                      </DropdownMenuCheckboxItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>

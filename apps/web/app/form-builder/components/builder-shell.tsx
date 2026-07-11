@@ -2,16 +2,14 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Eye, MoreVertical, Paintbrush, Plus } from 'lucide-react';
+import { Eye, MoreVertical, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useBuilderStore, type EditorTab } from '../lib/store';
 import { CANVAS_WASH, GOOGLE_PURPLE } from '../lib/constants';
 import { QuestionsPanel } from './questions-panel';
 import { ResponsesTab } from './responses-tab';
-import { ThemePanel } from './theme-panel';
 import { PreviewDialog } from './preview-dialog';
 
 /** A generic document-with-a-checkmark glyph standing in for a "Forms" app
@@ -36,7 +34,6 @@ export function BuilderShell() {
   const setActiveTab = useBuilderStore((s) => s.setActiveTab);
   const title = useBuilderStore((s) => s.form.title);
   const theme = useBuilderStore((s) => s.form.theme);
-  const [themeOpen, setThemeOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
@@ -77,9 +74,6 @@ export function BuilderShell() {
             <Button type="button" variant="ghost" size="icon" className="rounded-full" title="Preview" aria-label="Preview" onClick={() => setPreviewOpen(true)}>
               <Eye className="size-5 text-[#5f6368]" />
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="rounded-full" title="Customize theme" aria-label="Customize theme" onClick={() => setThemeOpen(true)}>
-              <Paintbrush className="size-5 text-[#5f6368]" />
-            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -114,18 +108,6 @@ export function BuilderShell() {
           {activeTab === 'questions' ? <QuestionsPanel /> : <ResponsesTab />}
         </main>
       </div>
-
-      <Sheet open={themeOpen} onOpenChange={setThemeOpen}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle>Theme</SheetTitle>
-            <SheetDescription>Header image, colors, and font — carried with the form when it&apos;s duplicated.</SheetDescription>
-          </SheetHeader>
-          <div className="px-4 pb-4">
-            <ThemePanel />
-          </div>
-        </SheetContent>
-      </Sheet>
 
       <PreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} />
     </div>

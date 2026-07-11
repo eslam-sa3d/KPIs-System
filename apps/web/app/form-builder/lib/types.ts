@@ -50,10 +50,6 @@ interface BaseField {
   /** the floating toolbar's "Add image" / "Add video" attach to whichever
    *  question is currently active, rather than inserting a separate block. */
   media?: { type: 'image' | 'video'; url: string };
-  /** optional tag linking this question's answer to a KPI evaluation area —
-   *  mirrors the real Forms→KPI bridge (see components/kpi-link-combobox.tsx),
-   *  against a local mock KPI list since this module has no live API. */
-  kpiLink?: { kpiId: string; evaluationAreaId: string };
 }
 
 export interface ShortAnswerField extends BaseField {
