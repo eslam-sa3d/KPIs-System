@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { KpiLinkCombobox } from '@/components/kpi-link-combobox';
@@ -188,6 +189,38 @@ export function QuestionCard({
             />
           )}
 
+          {isActive && !isTitleBlock && showKpiLink && (
+            <div className="flex flex-col gap-1 border-t border-[#e0e0e0] pt-3">
+              <span className="text-xs text-muted-foreground">Linked KPI (optional)</span>
+              <KpiLinkCombobox
+                kpis={MOCK_KPIS}
+                kpiId={field.kpiLink?.kpiId ?? ''}
+                evaluationAreaId={field.kpiLink?.evaluationAreaId ?? ''}
+                onSelect={(kpiId, evaluationAreaId) => updateField(field.id, { kpiLink: { kpiId, evaluationAreaId } })}
+                onClear={() => updateField(field.id, { kpiLink: undefined })}
+              />
+            </div>
+          )}
+
+          {!isTitleBlock && linkedKpi && linkedArea && (
+            <div className="flex items-center gap-1.5 self-start rounded-full border border-[#673ab7]/30 bg-[#673ab7]/5 py-1 pr-2 pl-2.5 text-xs text-[#673ab7]">
+              <Link2 className="size-3" />
+              {linkedKpi.name} — {linkedArea.name}
+              <button
+                type="button"
+                aria-label="Unlink KPI"
+                className="rounded-full p-0.5 hover:bg-[#673ab7]/10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateField(field.id, { kpiLink: undefined });
+                  setShowKpiLink(false);
+                }}
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          )}
+
           {!isTitleBlock && (
             <div className="flex items-center justify-end gap-3 border-t border-[#e0e0e0] pt-3">
               <div className="flex items-center gap-1">
@@ -231,6 +264,20 @@ export function QuestionCard({
                           Go to section based on answer
                         </DropdownMenuCheckboxItem>
                       )}
+                      {(field.type === 'short_answer' ||
+                        field.type === 'paragraph' ||
+                        field.type === 'multiple_choice' ||
+                        field.type === 'checkboxes' ||
+                        field.type === 'dropdown') && <DropdownMenuSeparator />}
+                      <DropdownMenuCheckboxItem
+                        checked={showKpiLink}
+                        onCheckedChange={(v) => {
+                          setShowKpiLink(v);
+                          if (!v) updateField(field.id, { kpiLink: undefined });
+                        }}
+                      >
+                        Link to KPI
+                      </DropdownMenuCheckboxItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
