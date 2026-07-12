@@ -29,6 +29,7 @@ function makePrismaStub() {
     },
     user: { findUnique: vi.fn() },
     evaluationAreaEntry: { upsert: vi.fn() },
+    performanceLevel: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(async (arg: unknown) => (Array.isArray(arg) ? Promise.all(arg) : (arg as () => unknown)())),
   };
@@ -680,6 +681,33 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
         'evaluator-1',
       );
       expect(prisma.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBeCloseTo(10 / 3); // avg(1,3)=2, 2/3*5
+    });
+
+    it('performance_level: scores by the midpoint of the chosen level\'s configured range', async () => {
+      const { prisma, service } = makeService({ type: 'performance_level' });
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: '22222222-2222-4222-8222-222222222222', minScore: 4, maxScore: 5 },
+        { id: '33333333-3333-4333-8333-333333333333', minScore: 0, maxScore: 1 },
+      ]);
+      await service.submit(
+        'demo',
+        { evaluatee: '11111111-1111-4111-8111-111111111111', score: '22222222-2222-4222-8222-222222222222' },
+        'evaluator-1',
+      );
+      expect(prisma.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBe(4.5);
+    });
+
+    it('performance_level: an id matching no configured level is skipped', async () => {
+      const { prisma, service } = makeService({ type: 'performance_level' });
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: '22222222-2222-4222-8222-222222222222', minScore: 4, maxScore: 5 },
+      ]);
+      await service.submit(
+        'demo',
+        { evaluatee: '11111111-1111-4111-8111-111111111111', score: '44444444-4444-4444-8444-444444444444' },
+        'evaluator-1',
+      );
+      expect(prisma.evaluationAreaEntry.upsert).not.toHaveBeenCalled();
     });
 
     it('a type with no numeric interpretation (short_text) is never scored', async () => {

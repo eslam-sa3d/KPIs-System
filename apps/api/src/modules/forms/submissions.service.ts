@@ -303,7 +303,17 @@ export class SubmissionsService {
 
     const scoreField = fieldsByKey.get(mapping.scoreFieldKey);
     if (!scoreField) return false;
-    const value = normalizeScore(scoreField, rawScore);
+    // Only fetched when actually needed — every other score field type
+    // normalizes from the field definition alone, no DB round-trip required.
+    const performanceLevels =
+      scoreField.type === 'performance_level'
+        ? (await this.prisma.performanceLevel.findMany()).map((l) => ({
+            id: l.id,
+            minScore: Number(l.minScore),
+            maxScore: Number(l.maxScore),
+          }))
+        : undefined;
+    const value = normalizeScore(scoreField, rawScore, performanceLevels);
     if (value === null) return false;
 
     const evaluatee = await this.prisma.user.findUnique({ where: { id: evaluateeId } });
@@ -752,16 +762,22 @@ export class SubmissionsService {
   }
 }
 
-/** Normalizes a raw rating/nps/slider answer to a 0-5 KPI score using that
- *  field's own configured range. Returns null for any other field type or a
- *  degenerate (zero-width) range — the caller skips the mapping in that case. */
 /** Normalizes a raw answer to a 0-5 KPI score using that field's own configured
  *  range/options. Returns null for a degenerate (zero-width, single-option) range,
  *  an answer shape that doesn't match the field type, an unrecognized option value
- *  (including a free-text "other:" answer — no fixed position to score), or a field
- *  type with no well-defined numeric interpretation at all (short_text, long_text,
- *  date, time, file, contact_info, hot_spot, person, ranking, grid, section_header). */
-function normalizeScore(field: FormField, raw: SubmissionAnswers[string]): number | null {
+ *  (including a free-text "other:" answer — no fixed position to score), an
+ *  unrecognized performance_level id, or a field type with no well-defined
+ *  numeric interpretation at all (short_text, long_text, date, time, file,
+ *  contact_info, hot_spot, person, ranking, grid, section_header).
+ *
+ *  `performanceLevels` is only needed (and only fetched by the caller) when
+ *  `field.type === 'performance_level'` — every other case normalizes purely
+ *  from the field definition. */
+function normalizeScore(
+  field: FormField,
+  raw: SubmissionAnswers[string],
+  performanceLevels?: Array<{ id: string; minScore: number; maxScore: number }>,
+): number | null {
   switch (field.type) {
     case 'rating': {
       if (typeof raw !== 'number' || field.scale <= 1) return null;
@@ -806,6 +822,12 @@ function normalizeScore(field: FormField, raw: SubmissionAnswers[string]): numbe
       if (indices.length === 0) return null;
       const average = indices.reduce((sum, v) => sum + v, 0) / indices.length;
       return clamp((average / (field.scale.length - 1)) * 5, 0, 5);
+    }
+    case 'performance_level': {
+      if (typeof raw !== 'string' || !performanceLevels) return null;
+      const level = performanceLevels.find((l) => l.id === raw);
+      if (!level) return null;
+      return clamp((level.minScore + level.maxScore) / 2, 0, 5);
     }
     default:
       return null;

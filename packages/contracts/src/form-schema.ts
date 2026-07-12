@@ -21,6 +21,7 @@ export const BRANCH_TRIGGER_TYPES: FieldType[] = [
   'slider',
   'hot_spot',
   'time',
+  'performance_level',
 ];
 
 /**
@@ -64,6 +65,14 @@ export const FIELD_TYPES = [
    *  per row. `selection: 'single'` is a "multiple choice grid" (one column
    *  per row); `'multiple'` is a "checkbox grid" (any columns per row). */
   'grid',
+  /** Single choice among the live-configured Performance Levels (Configuration
+   *  page → Performance Levels tab), e.g. "Outstanding" / "Meets Expectations".
+   *  Like 'person', the choices aren't stored on the field — they're resolved
+   *  against the PerformanceLevel table at render and submit time, so editing
+   *  a level's label/range updates every form using it without republishing.
+   *  Its answer normalizes to the midpoint of the chosen level's own range —
+   *  see SCORE_FIELD_TYPES. */
+  'performance_level',
 ] as const;
 
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -279,6 +288,11 @@ export const formFieldSchema = z.discriminatedUnion('type', [
    *  time, the same trust-boundary split as 'file' (structural shape here,
    *  referential integrity in the service layer). */
   baseField.extend({ type: z.literal('person') }),
+  /** Single choice among the live Performance Levels — the answer is a
+   *  PerformanceLevel id, not free text. No extra config needed beyond the
+   *  base field; the option list and each level's score range are resolved
+   *  at render/submit time, the same live-lookup split as 'person'. */
+  baseField.extend({ type: z.literal('performance_level') }),
 ]);
 
 /** Per-form collection settings (MS-Forms parity). */

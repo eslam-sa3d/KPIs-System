@@ -111,7 +111,9 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [bulkSelections, setBulkSelections] = useState<Record<string, string>>({});
   const [bulkResult, setBulkResult] = useState<BulkMappingResult | null>(null);
 
-  const scoreFields = definition.fields.filter((f) => f.type === 'rating' || f.type === 'nps' || f.type === 'slider');
+  const scoreFields = definition.fields.filter(
+    (f) => f.type === 'rating' || f.type === 'nps' || f.type === 'slider' || f.type === 'performance_level',
+  );
 
   function reload() {
     api<MappingRow[]>(`/v1/forms/${formId}/kpi-mappings`)

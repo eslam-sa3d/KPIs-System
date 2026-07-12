@@ -10,10 +10,12 @@ import { EvaluationAreaCadence } from './kpi';
  * normalization (see submissions.service.ts's normalizeScore):
  * rating/nps/slider/number scale by their own configured range, boolean is
  * no=0/yes=5, select scores by the chosen option's position in the list,
- * multi_select by the fraction of options selected, and likert by the
- * average statement position. Every other type (short_text, long_text,
- * date, time, file, contact_info, hot_spot, person, ranking, grid,
- * section_header) has no numeric interpretation and can't be a score field.
+ * multi_select by the fraction of options selected, likert by the average
+ * statement position, and performance_level by the midpoint of the chosen
+ * level's own configured score range. Every other type (short_text,
+ * long_text, date, time, file, contact_info, hot_spot, person, ranking,
+ * grid, section_header) has no numeric interpretation and can't be a score
+ * field.
  *
  * `evaluateeFieldKey` optionally names a field whose answer is the
  * evaluatee's user id (a 'person' field, from an older form that still has
@@ -33,6 +35,7 @@ export const SCORE_FIELD_TYPES = [
   'select',
   'multi_select',
   'likert',
+  'performance_level',
 ] as const;
 export type ScoreFieldType = (typeof SCORE_FIELD_TYPES)[number];
 
