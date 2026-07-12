@@ -1,18 +1,21 @@
-import { Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+"use client"
 
-/** The app's one loading indicator — an animated ring in the pulse purple,
- *  used everywhere instead of skeleton placeholders (which pulled from the
- *  tertiary/coral token and read as off-brand). */
-function Spinner({ className, ...props }: React.ComponentProps<typeof Loader2>) {
+import AtlaskitSpinner, { type SpinnerProps as AtlaskitSpinnerProps } from "@atlaskit/spinner"
+
+type SpinnerProps = AtlaskitSpinnerProps
+
+/** The app's one loading indicator — pulse purple, used everywhere instead of
+ *  skeleton placeholders (which pulled from the tertiary/coral token and read
+ *  as off-brand). Atlaskit's Spinner inherits `color: currentColor` rather
+ *  than taking an explicit color prop, so the brand color comes from this
+ *  wrapping span rather than a Spinner prop. */
+function Spinner({ label = "loading", ...props }: SpinnerProps) {
   return (
-    <Loader2
-      data-slot="spinner"
-      className={cn('animate-spin text-primary', className)}
-      aria-hidden="true"
-      {...props}
-    />
-  );
+    <span style={{ color: "var(--md-sys-color-primary)" }}>
+      <AtlaskitSpinner label={label} {...props} />
+    </span>
+  )
 }
 
-export { Spinner };
+export { Spinner }
+export type { SpinnerProps }

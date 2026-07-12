@@ -1,64 +1,89 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
+"use client"
 
-import { cn } from "@/lib/utils"
+import AtlaskitButton, {
+  IconButton as AtlaskitIconButton,
+  LinkButton as AtlaskitLinkButton,
+  LinkIconButton as AtlaskitLinkIconButton,
+  type ButtonProps as AtlaskitButtonProps,
+  type IconButtonProps as AtlaskitIconButtonProps,
+  type LinkButtonProps as AtlaskitLinkButtonProps,
+  type LinkIconButtonProps as AtlaskitLinkIconButtonProps,
+  type Appearance as ButtonAppearance,
+  type Spacing as ButtonSpacing,
+} from "@atlaskit/button/new"
 
-const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40",
-        outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-        icon: "size-9",
-        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-8",
-        "icon-lg": "size-10",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-)
+/** This app's variant vocabulary, mapped onto Atlaskit's `appearance`. There's
+ *  no 1:1 match for "outline" or "ghost" (Atlaskit has no bordered-transparent
+ *  or fully-transparent button appearance) — both land on "subtle", the
+ *  closest low-emphasis appearance Atlaskit ships. */
+export type ButtonVariant =
+  | "default"
+  | "destructive"
+  | "outline"
+  | "secondary"
+  | "ghost"
+  | "link"
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  asChild = false,
-  ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-  }) {
-  const Comp = asChild ? Slot.Root : "button"
+/** This app's size vocabulary, mapped onto Atlaskit's two-tier `spacing`
+ *  ("compact" | "default" — no xs/sm/lg granularity). */
+export type ButtonSize = "default" | "xs" | "sm" | "lg"
 
-  return (
-    <Comp
-      data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
+const VARIANT_TO_APPEARANCE: Record<ButtonVariant, ButtonAppearance> = {
+  default: "primary",
+  destructive: "danger",
+  outline: "default",
+  secondary: "default",
+  ghost: "subtle",
+  link: "default",
 }
 
-export { Button, buttonVariants }
+const SIZE_TO_SPACING: Record<ButtonSize, ButtonSpacing> = {
+  default: "default",
+  xs: "compact",
+  sm: "compact",
+  lg: "default",
+}
+
+/** Icon-only buttons don't take a `variant`/`size` — Atlaskit's IconButton
+ *  appearance vocabulary is deliberately smaller (no primary/danger, since an
+ *  icon-only affordance is rarely the primary action) and spacing is just
+ *  "default" | "compact". Use this for what used to be
+ *  `<Button size="icon"|"icon-xs"|"icon-sm"|"icon-lg">`. */
+export type IconButtonSize = "default" | "compact"
+
+type ButtonProps = Omit<AtlaskitButtonProps, "appearance" | "spacing"> & {
+  variant?: ButtonVariant
+  size?: ButtonSize
+}
+
+function Button({ variant = "default", size = "default", ...props }: ButtonProps) {
+  return <AtlaskitButton appearance={VARIANT_TO_APPEARANCE[variant]} spacing={SIZE_TO_SPACING[size]} {...props} />
+}
+
+type LinkButtonProps = Omit<AtlaskitLinkButtonProps, "appearance" | "spacing"> & {
+  variant?: ButtonVariant
+  size?: ButtonSize
+}
+
+function LinkButton({ variant = "default", size = "default", ...props }: LinkButtonProps) {
+  return <AtlaskitLinkButton appearance={VARIANT_TO_APPEARANCE[variant]} spacing={SIZE_TO_SPACING[size]} {...props} />
+}
+
+type IconButtonProps = Omit<AtlaskitIconButtonProps, "appearance" | "spacing"> & {
+  size?: IconButtonSize
+}
+
+function IconButton({ size = "default", ...props }: IconButtonProps) {
+  return <AtlaskitIconButton spacing={size} {...props} />
+}
+
+type LinkIconButtonProps = Omit<AtlaskitLinkIconButtonProps, "appearance" | "spacing"> & {
+  size?: IconButtonSize
+}
+
+function LinkIconButton({ size = "default", ...props }: LinkIconButtonProps) {
+  return <AtlaskitLinkIconButton spacing={size} {...props} />
+}
+
+export { Button, LinkButton, IconButton, LinkIconButton }
+export type { ButtonProps, LinkButtonProps, IconButtonProps, LinkIconButtonProps }

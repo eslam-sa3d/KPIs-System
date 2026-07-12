@@ -1,56 +1,31 @@
 "use client"
 
-import * as React from "react"
-import { Tooltip as TooltipPrimitive } from "radix-ui"
+import type { ReactElement, ReactNode } from "react"
 
-import { cn } from "@/lib/utils"
+/** @atlaskit/tooltip also depends on the broken @atlaskit/portal (see
+ *  components/ui/dialog.tsx's header comment) — unused anywhere in the app
+ *  today (confirmed during the original audit), fixed proactively here so
+ *  the same trap doesn't resurface the next time this gets used. Pure CSS
+ *  hover/focus (`.pulse-tooltip-trigger:hover + .pulse-tooltip-content`,
+ *  see globals.css) needs no portal and no JS state at all for the simple
+ *  show-on-hover case this app's call sites would need. */
+function TooltipProvider({ children }: { children?: ReactNode }) {
+  return <>{children}</>
+}
 
-function TooltipProvider({
-  delayDuration = 0,
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
+function Tooltip({ children }: { children?: ReactNode }) {
+  return <span style={{ position: "relative", display: "inline-block" }}>{children}</span>
+}
+
+function TooltipTrigger({ children }: { children: ReactElement }) {
+  return <span className="pulse-tooltip-trigger">{children}</span>
+}
+
+function TooltipContent({ children }: { children?: ReactNode }) {
   return (
-    <TooltipPrimitive.Provider
-      data-slot="tooltip-provider"
-      delayDuration={delayDuration}
-      {...props}
-    />
-  )
-}
-
-function Tooltip({
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
-}
-
-function TooltipTrigger({
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
-}
-
-function TooltipContent({
-  className,
-  sideOffset = 0,
-  children,
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
-  return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Content
-        data-slot="tooltip-content"
-        sideOffset={sideOffset}
-        className={cn(
-          "z-50 w-fit origin-(--radix-tooltip-content-transform-origin) animate-in rounded-md bg-foreground px-3 py-1.5 text-xs text-balance text-background fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
-          className
-        )}
-        {...props}
-      >
-        {children}
-        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
-      </TooltipPrimitive.Content>
-    </TooltipPrimitive.Portal>
+    <span role="tooltip" className="pulse-tooltip-content">
+      {children}
+    </span>
   )
 }
 

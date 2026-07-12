@@ -1,12 +1,12 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, EyeOff, FolderPlus, Layers, ListPlus, Pencil, Plus, Search, Target } from 'lucide-react';
+import { ArrowLeft, Check, EyeOff, FolderPlus, Layers, ListPlus, Pencil, Plus, Search, Target, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, IconButton } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
@@ -90,34 +90,36 @@ function WeightRing({ value, size = 'md' }: { value: number; size?: 'md' | 'sm' 
 function StatusPill({
   isActive,
   onToggle,
-  size,
 }: {
   isActive: boolean;
   onToggle: () => void;
   size?: 'sm';
 }) {
   return (
-    <Badge
-      asChild
-      variant="outline"
-      className={size === 'sm' ? 'gap-1.5 py-0.5 text-xs' : 'gap-1.5 py-1'}
-    >
-      <button type="button" onClick={onToggle} className={isActive ? '' : 'text-muted-foreground'}>
+    <button type="button" onClick={onToggle} style={{ all: 'unset', cursor: 'pointer' }}>
+      <Badge variant="outline">
         <span
-          className="size-[7px] shrink-0 rounded-full"
-          style={{ background: isActive ? 'var(--color-success)' : 'var(--color-text-muted)' }}
+          style={{
+            width: 7,
+            height: 7,
+            flexShrink: 0,
+            borderRadius: '50%',
+            background: isActive ? 'var(--color-success)' : 'var(--color-text-muted)',
+            display: 'inline-block',
+            marginRight: 6,
+          }}
           aria-hidden="true"
         />
         {isActive ? 'active' : 'inactive'}
-      </button>
-    </Badge>
+      </Badge>
+    </button>
   );
 }
 
 function LoadingRows() {
   return (
-    <div className="rounded-md border bg-card mt-4 mb-6 p-6" style={{ display: 'flex', justifyContent: 'center' }}>
-      <Spinner className="size-6" />
+    <div className="loading-placeholder">
+      <Spinner size="medium" />
     </div>
   );
 }
@@ -399,7 +401,7 @@ export default function KpisAdminPage() {
       <p className="portal-subtitle">define KPIs, evaluation areas, and sub-criteria</p>
 
       {error && (
-        <Alert variant="destructive" className="mb-4">
+        <Alert variant="destructive" style={{ marginBottom: 16 }}>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -428,7 +430,6 @@ export default function KpisAdminPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
                 onClick={() => setCreatingKpi(true)}
               >
                 <Plus size={16} aria-hidden="true" />
@@ -493,13 +494,17 @@ export default function KpisAdminPage() {
           </div>
 
           <div className="kpi-search">
-            <Search size={16} aria-hidden="true" />
             <Input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="search KPIs by name…"
               aria-label="search KPIs"
+              elemBeforeInput={
+                <span className="search-field-icon">
+                  <Search size={16} aria-hidden="true" />
+                </span>
+              }
             />
           </div>
 
@@ -520,7 +525,6 @@ export default function KpisAdminPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
                     onClick={() => setCreatingKpi(true)}
                   >
                     <Plus size={16} aria-hidden="true" />
@@ -555,8 +559,14 @@ export default function KpisAdminPage() {
                         <span className="kpi-list-item-meta">
                           {!kpi.isActive && (
                             <span
-                              className="size-[7px] shrink-0 rounded-full"
-                              style={{ background: 'var(--color-text-muted)' }}
+                              style={{
+                                width: 7,
+                                height: 7,
+                                flexShrink: 0,
+                                borderRadius: '50%',
+                                display: 'inline-block',
+                                background: 'var(--color-text-muted)',
+                              }}
                               aria-hidden="true"
                             />
                           )}
@@ -577,16 +587,17 @@ export default function KpisAdminPage() {
                 </div>
               ) : (
                 <article>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="kpi-back-to-list"
-                    onClick={() => setSelectedKpiId(null)}
-                  >
-                    <ArrowLeft size={16} aria-hidden="true" />
-                    back to KPIs
-                  </Button>
+                  <span className="kpi-back-to-list">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedKpiId(null)}
+                    >
+                      <ArrowLeft size={16} aria-hidden="true" />
+                      back to KPIs
+                    </Button>
+                  </span>
 
                   {renamingKpiId === selectedKpi.id ? (
                     <form className="inline-form" onSubmit={(e) => onRenameKpi(selectedKpi.id, e)}>
@@ -620,15 +631,12 @@ export default function KpisAdminPage() {
                         )}
                         <h2>{selectedKpi.name}</h2>
                         {canWrite && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`rename ${selectedKpi.name}`}
+                          <IconButton
+                            icon={Pencil}
+                            size="compact"
+                            label={`rename ${selectedKpi.name}`}
                             onClick={() => setRenamingKpiId(selectedKpi.id)}
-                          >
-                            <Pencil size={15} aria-hidden="true" />
-                          </Button>
+                          />
                         )}
                       </div>
                       {canWrite && (
@@ -645,7 +653,6 @@ export default function KpisAdminPage() {
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  className="text-primary hover:text-primary"
                                   onClick={() => setConfirmDeleteKpiId(null)}
                                 >
                                   cancel
@@ -664,7 +671,6 @@ export default function KpisAdminPage() {
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  className="text-primary hover:text-primary"
                                   onClick={() => setForceDeleteKpiId(null)}
                                 >
                                   cancel
@@ -673,9 +679,8 @@ export default function KpisAdminPage() {
                             ) : (
                               <Button
                                 type="button"
-                                variant="ghost"
+                                variant="destructive"
                                 size="sm"
-                                className="text-destructive hover:text-destructive"
                                 onClick={() => setConfirmDeleteKpiId(selectedKpi.id)}
                               >
                                 delete
@@ -696,42 +701,33 @@ export default function KpisAdminPage() {
                     ) : (
                       <span className="row-actions">
                         {selectedKpi.assignments.map((a) => (
-                          <Badge key={a.id} variant="outline" className="gap-1.5 py-0.5 text-xs">
-                            {assignmentLabel(a)}
+                          <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <Badge variant="outline">{assignmentLabel(a)}</Badge>
                             {canManage &&
                               (confirmUnassignId === a.id ? (
                                 <>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    aria-label="confirm remove"
+                                  <IconButton
+                                    icon={Check}
+                                    size="compact"
+                                    label="confirm remove"
                                     onClick={() => onUnassignKpi(selectedKpi.id, a.id)}
-                                  >
-                                    ✓
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    aria-label="cancel remove"
+                                  />
+                                  <IconButton
+                                    icon={X}
+                                    size="compact"
+                                    label="cancel remove"
                                     onClick={() => setConfirmUnassignId(null)}
-                                  >
-                                    ✕
-                                  </Button>
+                                  />
                                 </>
                               ) : (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  aria-label={`remove ${assignmentLabel(a)} assignment`}
+                                <IconButton
+                                  icon={X}
+                                  size="compact"
+                                  label={`remove ${assignmentLabel(a)} assignment`}
                                   onClick={() => setConfirmUnassignId(a.id)}
-                                >
-                                  ✕
-                                </Button>
+                                />
                               ))}
-                          </Badge>
+                          </span>
                         ))}
                       </span>
                     )}
@@ -753,7 +749,7 @@ export default function KpisAdminPage() {
                           <Button
                             type="button"
                             variant="ghost"
-                            disabled={!assignTarget}
+                            isDisabled={!assignTarget}
                             onClick={() => onAssignKpi(selectedKpi.id)}
                           >
                             assign
@@ -773,7 +769,6 @@ export default function KpisAdminPage() {
                         <Button
                           type="button"
                           variant="outline"
-                          className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
                           onClick={() => setAssigningKpiId(selectedKpi.id)}
                         >
                           <Plus size={14} aria-hidden="true" />
@@ -813,15 +808,12 @@ export default function KpisAdminPage() {
                             </div>
                             {canWrite && (
                               <span className="hover-actions">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  aria-label={`rename ${area.name}`}
+                                <IconButton
+                                  icon={Pencil}
+                                  size="compact"
+                                  label={`rename ${area.name}`}
                                   onClick={() => setRenamingAreaId(area.id)}
-                                >
-                                  <Pencil size={14} aria-hidden="true" />
-                                </Button>
+                                />
                                 <StatusPill
                                   isActive={area.isActive}
                                   onToggle={() => onToggleAreaActive(selectedKpi.id, area)}
@@ -838,7 +830,6 @@ export default function KpisAdminPage() {
                                         type="button"
                                         variant="ghost"
                                         size="sm"
-                                        className="text-primary hover:text-primary"
                                         onClick={() => setConfirmDeleteAreaId(null)}
                                       >
                                         cancel
@@ -847,9 +838,8 @@ export default function KpisAdminPage() {
                                   ) : (
                                     <Button
                                       type="button"
-                                      variant="ghost"
+                                      variant="destructive"
                                       size="sm"
-                                      className="text-destructive hover:text-destructive"
                                       onClick={() => setConfirmDeleteAreaId(area.id)}
                                     >
                                       delete
@@ -890,15 +880,12 @@ export default function KpisAdminPage() {
                                 </span>
                                 {canWrite && (
                                   <span className="hover-actions">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon-sm"
-                                      aria-label={`rename ${sub.name}`}
+                                    <IconButton
+                                      icon={Pencil}
+                                      size="compact"
+                                      label={`rename ${sub.name}`}
                                       onClick={() => setRenamingSubCriteriaId(sub.id)}
-                                    >
-                                      <Pencil size={13} aria-hidden="true" />
-                                    </Button>
+                                    />
                                     {canManage &&
                                       (confirmDeleteSubCriteriaId === sub.id ? (
                                         <>
@@ -915,7 +902,6 @@ export default function KpisAdminPage() {
                                             type="button"
                                             variant="ghost"
                                             size="sm"
-                                            className="text-primary hover:text-primary"
                                             onClick={() => setConfirmDeleteSubCriteriaId(null)}
                                           >
                                             cancel
@@ -924,9 +910,8 @@ export default function KpisAdminPage() {
                                       ) : (
                                         <Button
                                           type="button"
-                                          variant="ghost"
+                                          variant="destructive"
                                           size="sm"
-                                          className="text-destructive hover:text-destructive"
                                           onClick={() => setConfirmDeleteSubCriteriaId(sub.id)}
                                         >
                                           delete
@@ -963,7 +948,6 @@ export default function KpisAdminPage() {
                               <Button
                                 type="button"
                                 variant="outline"
-                                className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
                                 onClick={() => setAddingSubCriteriaForAreaId(area.id)}
                               >
                                 <Plus size={14} aria-hidden="true" />
@@ -990,7 +974,6 @@ export default function KpisAdminPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
                         onClick={() => setAddingAreaForKpiId(selectedKpi.id)}
                       >
                         <FolderPlus size={16} aria-hidden="true" />

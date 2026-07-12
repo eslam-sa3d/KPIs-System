@@ -46,10 +46,9 @@ export const STATUS_COLOR: Record<StatusKey, string> = {
   pending: '#8e9aa0', // silver
 };
 
-/** Inline style for a status Badge — bypasses Tailwind's utilities layer
- *  (which would otherwise win over any plain CSS class) so the real
- *  per-status brand color always renders regardless of cascade order. */
-export function statusBadgeStyle(status: StatusKey): { color: string; background: string } {
+/** Inline style for a status Badge (Lozenge's `style` prop only accepts
+ *  `backgroundColor`/`color`, not the `background` shorthand). */
+export function statusBadgeStyle(status: StatusKey): { color: string; backgroundColor: string } {
   const color = STATUS_COLOR[status];
-  return { color, background: `color-mix(in srgb, ${color} 12%, transparent)` };
+  return { color, backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)` };
 }

@@ -78,9 +78,11 @@ export function PortalShell({
           <Link href="/account" className="portal-user portal-user-desktop">
             {user?.displayName}
           </Link>
-          <Button variant="ghost" size="sm" className="portal-signout-desktop" onClick={onSignOut}>
-            sign out
-          </Button>
+          <span className="portal-signout-desktop">
+            <Button variant="ghost" size="sm" onClick={onSignOut}>
+              sign out
+            </Button>
+          </span>
           <button
             type="button"
             className="nav-toggle"

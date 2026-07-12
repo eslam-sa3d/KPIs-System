@@ -1,13 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, ClipboardList, Pencil } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Download, Pencil } from 'lucide-react';
 import type { FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
-import { Button } from '@/components/ui/button';
+import { Button, LinkButton } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
@@ -165,12 +164,11 @@ function FormView() {
 
   return (
     <PortalShell user={user}>
-      <Button asChild variant="ghost" size="sm" className="mb-2">
-        <Link href="/forms">
-          <ArrowLeft size={16} aria-hidden="true" />
+      <span style={{ display: 'inline-block', marginBottom: 8 }}>
+        <LinkButton href="/forms" variant="ghost" size="sm" iconBefore={ArrowLeft}>
           back to forms
-        </Link>
-      </Button>
+        </LinkButton>
+      </span>
       <div className="page-title-row">
         <div className="hierarchy-title-row">
           <span className="hierarchy-icon hierarchy-icon-lg">
@@ -181,13 +179,10 @@ function FormView() {
         </div>
         {canManage && (
           <span className="row-actions">
-            <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary">
-              <Link href={`/forms/new?edit=${encodeURIComponent(slug)}`}>
-                <Pencil size={13} aria-hidden="true" />
-                edit form
-              </Link>
-            </Button>
-            <Button type="button" variant="ghost" size="sm" className="text-primary hover:text-primary" onClick={onDuplicate}>
+            <LinkButton href={`/forms/new?edit=${encodeURIComponent(slug)}`} variant="ghost" size="sm" iconBefore={Pencil}>
+              edit form
+            </LinkButton>
+            <Button type="button" variant="ghost" size="sm" onClick={onDuplicate}>
               duplicate form
             </Button>
           </span>
@@ -231,7 +226,7 @@ function FormView() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             />
-            <span className="builder-required">
+            <span className="builder-required date-range-filter">
               <label htmlFor="submissions-date-from" className="muted" style={{ fontSize: 12 }}>
                 from
               </label>
@@ -247,24 +242,27 @@ function FormView() {
               <Input id="submissions-date-to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </span>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export`, `${slug}.csv`)}
             >
+              <Download size={14} aria-hidden="true" />
               export CSV
             </Button>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.xlsx`, `${slug}.xlsx`)}
             >
+              <Download size={14} aria-hidden="true" />
               export xlsx
             </Button>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.pdf`, `${slug}-summary.pdf`)}
             >
+              <Download size={14} aria-hidden="true" />
               export PDF
             </Button>
             {canModerate &&
@@ -348,7 +346,7 @@ function FormView() {
                     })}
                     <TableCell>
                       <span className="row-actions">
-                        <Button variant="ghost" size="sm" className="text-primary hover:text-primary" onClick={() => setSelectedRowId(row.id)}>
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedRowId(row.id)}>
                           view
                         </Button>
                         {canModerate &&
@@ -357,12 +355,12 @@ function FormView() {
                               <Button variant="destructive" size="sm" onClick={() => onDelete(row.id)}>
                                 confirm
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-primary hover:text-primary" onClick={() => setConfirmDeleteRowId(null)}>
+                              <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteRowId(null)}>
                                 cancel
                               </Button>
                             </>
                           ) : (
-                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setConfirmDeleteRowId(row.id)}>
+                            <Button variant="destructive" size="sm" onClick={() => setConfirmDeleteRowId(row.id)}>
                               delete
                             </Button>
                           ))}

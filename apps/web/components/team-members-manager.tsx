@@ -178,9 +178,9 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
     <>
       {can(user, 'users:write') && (
         <Card>
-          <CardContent className="pt-6">
+          <CardContent style={{ paddingTop: 24 }}>
             <form className="builder" onSubmit={onCreate}>
-              <h2 className="text-lg font-semibold mb-2">new user</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: 8 }}>new user</h2>
               <label htmlFor="u-email">email</label>
               <Input id="u-email" name="email" type="email" required />
               <label htmlFor="u-name">display name</label>
@@ -288,22 +288,24 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                 </TableCell>
                 <TableCell>
                   {editingInfoId === row.id ? (
-                    <Select
-                      value={infoDraft.departmentId || '__none__'}
-                      onValueChange={(v) => setInfoDraft((d) => ({ ...d, departmentId: v === '__none__' ? '' : v }))}
-                    >
-                      <SelectTrigger aria-label="department" size="sm" className="w-[160px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— none —</SelectItem>
-                        {departments.map((d) => (
-                          <SelectItem key={d.id} value={d.id}>
-                            {d.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div style={{ width: 160 }}>
+                      <Select
+                        value={infoDraft.departmentId || '__none__'}
+                        onValueChange={(v) => setInfoDraft((d) => ({ ...d, departmentId: v === '__none__' ? '' : v }))}
+                      >
+                        <SelectTrigger aria-label="department">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— none —</SelectItem>
+                          {departments.map((d) => (
+                            <SelectItem key={d.id} value={d.id}>
+                              {d.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   ) : (
                     row.department?.name ?? '—'
                   )}
@@ -345,10 +347,10 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                       {can(user, 'users:write') &&
                         (editingInfoId === row.id ? (
                           <>
-                            <Button size="sm" disabled={savingInfo} onClick={() => onSaveInfo(row)}>
+                            <Button size="sm" isDisabled={savingInfo} onClick={() => onSaveInfo(row)}>
                               save info
                             </Button>
-                            <Button variant="ghost" size="sm" disabled={savingInfo} onClick={onCancelEditInfo}>
+                            <Button variant="ghost" size="sm" isDisabled={savingInfo} onClick={onCancelEditInfo}>
                               cancel
                             </Button>
                           </>
@@ -365,10 +367,10 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                       {canEditRoles &&
                         (editingUserId === row.id ? (
                           <>
-                            <Button size="sm" disabled={savingRoles} onClick={() => onSaveRoles(row)}>
+                            <Button size="sm" isDisabled={savingRoles} onClick={() => onSaveRoles(row)}>
                               save roles
                             </Button>
-                            <Button variant="ghost" size="sm" disabled={savingRoles} onClick={onCancelEditRoles}>
+                            <Button variant="ghost" size="sm" isDisabled={savingRoles} onClick={onCancelEditRoles}>
                               cancel
                             </Button>
                           </>

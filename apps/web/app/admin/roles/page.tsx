@@ -119,9 +119,9 @@ export default function RolesAdminPage() {
 
       {can(user, 'roles:manage') && catalog && (
         <Card>
-          <CardContent className="pt-6">
+          <CardContent style={{ paddingTop: 24 }}>
             <form className="builder" onSubmit={onCreate}>
-              <h2 className="text-lg font-semibold mb-2">new role</h2>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: 8 }}>new role</h2>
               <label htmlFor="r-name">role name</label>
               <Input id="r-name" name="name" required minLength={2} />
               <label htmlFor="r-desc">description</label>

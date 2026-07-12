@@ -1,190 +1,137 @@
 "use client"
 
-import * as React from "react"
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
-import { Select as SelectPrimitive } from "radix-ui"
+import AtlaskitSelect from "@atlaskit/select"
+import { Children, isValidElement, useId, type ReactNode } from "react"
 
-import { cn } from "@/lib/utils"
+/** Atlaskit's Select is react-select-based — one component driven by an
+ *  `options` array + `value`/`onChange`, not composed `<SelectItem>`
+ *  children like Radix's Select. This wrapper walks the composed children
+ *  (same traversal technique as Tabs/RadioGroup/DropdownMenu) to build that
+ *  options array, so call sites didn't need to change shape.
+ *
+ *  Uncontrolled usage (`<Select name="x">` with no value/onValueChange, for
+ *  native FormData submission — see admin/kpis/page.tsx's AssignToField)
+ *  still works: passing `name` through to react-select with no `value` lets
+ *  it self-manage selection and emit its own hidden `<input name>` in sync,
+ *  the same native-form-participation behavior the old Radix Select
+ *  documented at that call site. */
 
-function Select({
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" {...props} />
+type Option = { value: string; label: ReactNode }
+
+function collectOptions(children: ReactNode): Option[] {
+  const options: Option[] = []
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return
+    const props = child.props as { value?: string; children?: ReactNode }
+    if (child.type === SelectContent) {
+      options.push(...collectOptions(props.children))
+    } else if (child.type === SelectItem && typeof props.value === "string") {
+      options.push({ value: props.value, label: props.children })
+    }
+  })
+  return options
 }
 
-function SelectGroup({
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Group>) {
-  return <SelectPrimitive.Group data-slot="select-group" {...props} />
+/** Extracts SelectTrigger's `id`/`aria-label` and SelectValue's
+ *  `placeholder` — the trigger itself isn't rendered (Atlaskit's Select
+ *  renders its own control), but its id/label still need to reach the real
+ *  focusable element for <label htmlFor> associations to keep working. */
+function findTriggerMeta(children: ReactNode): { id?: string; ariaLabel?: string; placeholder?: string } {
+  let meta: { id?: string; ariaLabel?: string; placeholder?: string } = {}
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return
+    const props = child.props as { children?: ReactNode; placeholder?: string; id?: string; "aria-label"?: string }
+    if (child.type === SelectTrigger) {
+      meta = { ...findTriggerMeta(props.children), id: props.id, ariaLabel: props["aria-label"] }
+    } else if (child.type === SelectValue && typeof props.placeholder === "string") {
+      meta.placeholder = props.placeholder
+    }
+  })
+  return meta
 }
 
-function SelectValue({
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Value>) {
-  return <SelectPrimitive.Value data-slot="select-value" {...props} />
+type SelectProps = {
+  value?: string
+  onValueChange?: (value: string) => void
+  name?: string
+  disabled?: boolean
+  children?: ReactNode
 }
 
+function Select({ value, onValueChange, name, disabled, children }: SelectProps) {
+  // react-select generates internal element ids from an auto-incrementing
+  // counter unless given a stable instanceId — without one, server and
+  // client render passes can land on different counter values (order of
+  // Select instances mounted differs), producing a hydration mismatch.
+  // useId() is React's own SSR-safe stable-id primitive.
+  const instanceId = useId()
+  const options = collectOptions(children)
+  const { id, ariaLabel, placeholder } = findTriggerMeta(children)
+  const selected = value !== undefined ? options.find((o) => o.value === value) ?? null : undefined
+
+  return (
+    <AtlaskitSelect
+      instanceId={instanceId}
+      inputId={id}
+      aria-label={ariaLabel}
+      name={name}
+      options={options}
+      value={selected}
+      placeholder={placeholder}
+      isDisabled={disabled}
+      formatOptionLabel={(option: Option) => option.label}
+      getOptionValue={(option: Option) => option.value}
+      onChange={(option: Option | null) => {
+        if (option) onValueChange?.(option.value)
+      }}
+    />
+  )
+}
+
+/** Markers consumed by Select's traversal above — not rendered directly. */
 function SelectTrigger({
-  className,
-  size = "default",
   children,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
+}: {
+  children?: ReactNode
+  className?: string
   size?: "sm" | "default"
+  id?: string
+  "aria-label"?: string
 }) {
-  return (
-    <SelectPrimitive.Trigger
-      data-slot="select-trigger"
-      data-size={size}
-      className={cn(
-        "flex w-fit items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-[placeholder]:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
-        className
-      )}
-      {...props}
-    >
-      {children}
-      <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="size-4 opacity-50" />
-      </SelectPrimitive.Icon>
-    </SelectPrimitive.Trigger>
-  )
+  return <>{children}</>
 }
 
-function SelectContent({
-  className,
-  children,
-  position = "item-aligned",
-  align = "center",
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
-  return (
-    <SelectPrimitive.Portal>
-      <SelectPrimitive.Content
-        data-slot="select-content"
-        className={cn(
-          "relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
-          position === "popper" &&
-            "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
-          className
-        )}
-        position={position}
-        align={align}
-        {...props}
-      >
-        <SelectScrollUpButton />
-        <SelectPrimitive.Viewport
-          className={cn(
-            "p-1",
-            position === "popper" &&
-              "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] scroll-my-1"
-          )}
-        >
-          {children}
-        </SelectPrimitive.Viewport>
-        <SelectScrollDownButton />
-      </SelectPrimitive.Content>
-    </SelectPrimitive.Portal>
-  )
+function SelectValue(_props: { placeholder?: string; children?: ReactNode }) {
+  return null
 }
 
-function SelectLabel({
-  className,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Label>) {
-  return (
-    <SelectPrimitive.Label
-      data-slot="select-label"
-      className={cn("px-2 py-1.5 text-xs text-muted-foreground", className)}
-      {...props}
-    />
-  )
+function SelectContent({ children }: { children?: ReactNode }) {
+  return <>{children}</>
 }
 
-function SelectItem({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Item>) {
-  return (
-    <SelectPrimitive.Item
-      data-slot="select-item"
-      className={cn(
-        "relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
-        className
-      )}
-      {...props}
-    >
-      <span
-        data-slot="select-item-indicator"
-        className="absolute right-2 flex size-3.5 items-center justify-center"
-      >
-        <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="size-4" />
-        </SelectPrimitive.ItemIndicator>
-      </span>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
-    </SelectPrimitive.Item>
-  )
+function SelectItem({ children }: { value: string; children?: ReactNode }) {
+  return <>{children}</>
 }
 
-function SelectSeparator({
-  className,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Separator>) {
-  return (
-    <SelectPrimitive.Separator
-      data-slot="select-separator"
-      className={cn("pointer-events-none -mx-1 my-1 h-px bg-border", className)}
-      {...props}
-    />
-  )
+function SelectGroup({ children }: { children?: ReactNode }) {
+  return <>{children}</>
 }
 
-function SelectScrollUpButton({
-  className,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.ScrollUpButton>) {
-  return (
-    <SelectPrimitive.ScrollUpButton
-      data-slot="select-scroll-up-button"
-      className={cn(
-        "flex cursor-default items-center justify-center py-1",
-        className
-      )}
-      {...props}
-    >
-      <ChevronUpIcon className="size-4" />
-    </SelectPrimitive.ScrollUpButton>
-  )
+function SelectLabel({ children }: { children?: ReactNode }) {
+  return <>{children}</>
 }
 
-function SelectScrollDownButton({
-  className,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.ScrollDownButton>) {
-  return (
-    <SelectPrimitive.ScrollDownButton
-      data-slot="select-scroll-down-button"
-      className={cn(
-        "flex cursor-default items-center justify-center py-1",
-        className
-      )}
-      {...props}
-    >
-      <ChevronDownIcon className="size-4" />
-    </SelectPrimitive.ScrollDownButton>
-  )
+function SelectSeparator() {
+  return null
 }
 
 export {
   Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectScrollDownButton,
-  SelectScrollUpButton,
-  SelectSeparator,
   SelectTrigger,
   SelectValue,
+  SelectContent,
+  SelectItem,
+  SelectGroup,
+  SelectLabel,
+  SelectSeparator,
 }

@@ -1,24 +1,23 @@
 "use client"
 
-import * as React from "react"
-import { Label as LabelPrimitive } from "radix-ui"
+import { Label as AtlaskitLabel } from "@atlaskit/form"
+import type { ReactNode } from "react"
 
-import { cn } from "@/lib/utils"
+type LabelProps = {
+  htmlFor?: string
+  children: ReactNode
+  className?: string
+}
 
-function Label({
-  className,
-  ...props
-}: React.ComponentProps<typeof LabelPrimitive.Root>) {
-  return (
-    <LabelPrimitive.Root
-      data-slot="label"
-      className={cn(
-        "flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
-        className
-      )}
-      {...props}
-    />
-  )
+/** @atlaskit/form's Label requires `htmlFor` (it's a real form-control
+ *  label, not just styled caption text) — every current call site uses this
+ *  purely as a section caption with no associated control id, so those fall
+ *  back to a plain span with the same styling rather than forcing a
+ *  semantically-wrong htmlFor onto an unrelated element. */
+function Label({ htmlFor, className, children }: LabelProps) {
+  if (htmlFor) return <AtlaskitLabel htmlFor={htmlFor}>{children}</AtlaskitLabel>
+  return <span className={className}>{children}</span>
 }
 
 export { Label }
+export type { LabelProps }

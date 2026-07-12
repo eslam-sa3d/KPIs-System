@@ -59,7 +59,7 @@ function Delta({ latest, previous }: { latest: number | null; previous: number |
 export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClose: () => void }) {
   return (
     <Sheet open={kpi !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-[480px]">
+      <SheetContent>
         {kpi && (
           <>
             <SheetHeader className="p-drawer-header">
@@ -69,7 +69,7 @@ export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClo
                 {kpi.areas.length} evaluation area{kpi.areas.length === 1 ? '' : 's'}
               </div>
               <div style={{ marginTop: 8 }}>
-                <Badge className="border-transparent" style={statusBadgeStyle(kpi.status)}>
+                <Badge style={statusBadgeStyle(kpi.status)}>
                   {STATUS_LABEL[kpi.status]}
                 </Badge>
               </div>

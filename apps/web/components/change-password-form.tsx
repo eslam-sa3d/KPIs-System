@@ -37,15 +37,16 @@ export function ChangePasswordForm() {
         <Alert>
           <AlertDescription>password changed. sign in again to continue.</AlertDescription>
         </Alert>
-        <Button
-          className="mt-4"
-          onClick={async () => {
-            await logout();
-            window.location.href = '/login';
-          }}
-        >
-          sign in again
-        </Button>
+        <div style={{ marginTop: 16 }}>
+          <Button
+            onClick={async () => {
+              await logout();
+              window.location.href = '/login';
+            }}
+          >
+            sign in again
+          </Button>
+        </div>
       </>
     );
   }
@@ -88,7 +89,7 @@ export function ChangePasswordForm() {
         </Alert>
       )}
 
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" isDisabled={pending}>
         {pending ? 'changing…' : 'change password'}
       </Button>
     </form>

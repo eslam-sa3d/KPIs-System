@@ -5,7 +5,7 @@ import type { AuthenticatedUser } from '@pulse/contracts';
 import { Building2, Pencil } from 'lucide-react';
 import { can } from './portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Button, IconButton } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
@@ -79,18 +79,18 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
     <>
       {canManage && (
         <Card>
-          <CardContent className="pt-6">
+          <CardContent style={{ paddingTop: 24 }}>
             <form className="inline-form" onSubmit={onCreate}>
               <Input name="name" required minLength={2} placeholder="new department name" aria-label="department name" />
               <Button type="submit">create department</Button>
             </form>
             {notice && (
-              <Alert className="mt-4">
+              <Alert style={{ marginTop: 16 }}>
                 <AlertDescription>{notice}</AlertDescription>
               </Alert>
             )}
             {error && (
-              <Alert variant="destructive" className="mt-4">
+              <Alert variant="destructive" style={{ marginTop: 16 }}>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
@@ -138,15 +138,12 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
                   <TableCell>
                     {renamingId !== d.id && (
                       <span className="row-actions">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`rename ${d.name}`}
+                        <IconButton
+                          icon={Pencil}
+                          size="compact"
+                          label={`rename ${d.name}`}
                           onClick={() => setRenamingId(d.id)}
-                        >
-                          <Pencil size={14} aria-hidden="true" />
-                        </Button>
+                        />
                         {confirmDeleteId === d.id ? (
                           <>
                             <span className="muted">delete?</span>
@@ -165,9 +162,8 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
                         ) : (
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="destructive"
                             size="sm"
-                            className="text-destructive hover:text-destructive"
                             onClick={() => setConfirmDeleteId(d.id)}
                           >
                             delete

@@ -3,7 +3,7 @@
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, IconButton } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useBuilderStore } from '../lib/store';
 import type { FormSection } from '../lib/types';
@@ -45,46 +45,41 @@ export function SectionEditor({
   );
 
   return (
-    <div className={`group flex flex-col gap-4 ${isDragging ? 'opacity-40' : ''}`}>
-      <div className="overflow-hidden rounded-lg border border-[#dadce0] border-t-8 border-t-[#673ab7] bg-white shadow-sm">
+    <div className={`fb-section-group${isDragging ? ' is-dragging' : ''}`}>
+      <div style={{ overflow: 'hidden', borderRadius: 'var(--radius-lg)', border: '1px solid #dadce0', borderTop: '8px solid #673ab7', background: 'white', boxShadow: 'var(--shadow-card)' }}>
         <button
           type="button"
-          className="flex h-4 w-full cursor-grab items-center justify-center text-[#dadce0] opacity-0 transition-opacity hover:text-[#5f6368] active:cursor-grabbing group-hover:opacity-100"
+          className="fb-section-drag-handle"
           aria-label={`Drag to reorder section ${index + 1}`}
           {...drag.attributes}
           {...drag.listeners}
         >
-          <GripVertical className="size-4 rotate-90" />
+          <GripVertical size={16} style={{ transform: 'rotate(90deg)' }} />
         </button>
-        <div className="flex flex-col gap-1 px-6 pb-4">
-          <p className="text-xs font-medium text-[#673ab7]">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 24px 16px' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 500, color: '#673ab7' }}>
             Section {index + 1} of {total}
           </p>
           <Input
             value={section.title}
             onChange={(e) => updateSection(section.id, { title: e.target.value })}
             placeholder={`Section ${index + 1}`}
-            className="h-auto border-0 border-b border-[#e0e0e0] px-0 text-xl font-normal text-[#202124] shadow-none focus-visible:border-[#673ab7] focus-visible:ring-0"
+            className="fb-section-title-input"
           />
           <Input
             value={section.description}
             onChange={(e) => updateSection(section.id, { description: e.target.value })}
             placeholder="Description (optional)"
-            className="h-auto border-0 px-0 text-sm text-[#5f6368] shadow-none focus-visible:ring-0"
+            className="fb-section-description-input"
           />
         </div>
-        <div className="flex items-center justify-end border-t border-[#e0e0e0] bg-[#faf9fb] px-3 py-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Delete section"
-            disabled={total <= 1}
-            title={total <= 1 ? 'a form always keeps at least one section' : 'Delete section'}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', borderTop: '1px solid #e0e0e0', background: '#faf9fb', padding: '8px 12px' }}>
+          <IconButton
+            icon={Trash2}
+            label={total <= 1 ? 'a form always keeps at least one section' : 'Delete section'}
+            isDisabled={total <= 1}
             onClick={() => removeSection(section.id)}
-          >
-            <Trash2 className="size-4 text-[#5f6368]" />
-          </Button>
+          />
         </div>
       </div>
 
@@ -97,7 +92,7 @@ export function SectionEditor({
         }}
       >
         <SortableContext items={section.fieldIds} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col gap-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {section.fieldIds.map((fieldId) => {
               const field = fields[fieldId];
               return field ? (
@@ -109,10 +104,10 @@ export function SectionEditor({
       </DndContext>
 
       {section.fieldIds.length === 0 && (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-[#dadce0] bg-white py-8 text-center text-sm text-[#5f6368]">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, borderRadius: 'var(--radius-lg)', border: '1px dashed #dadce0', background: 'white', padding: '32px 0', textAlign: 'center', fontSize: '0.875rem', color: '#5f6368' }}>
           <p>No questions in this section yet.</p>
-          <Button type="button" variant="outline" size="sm" onClick={() => addField(section.id, null, 'short_answer')}>
-            <Plus className="size-4" /> Add question
+          <Button type="button" variant="outline" size="sm" iconBefore={Plus} onClick={() => addField(section.id, null, 'short_answer')}>
+            Add question
           </Button>
         </div>
       )}

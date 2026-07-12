@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Copy, GripHorizontal, Image as ImageIcon, MoreVertical, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, IconButton } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -73,99 +73,101 @@ export function QuestionCard({
     <SortableItem id={field.id}>
       {(drag, isDragging) => (
         <div
-          className={`group relative rounded-lg border bg-white p-6 shadow-sm transition-shadow ${
-            isActive ? 'border-[#dadce0] border-l-4 border-l-[#673ab7] shadow-md' : 'border-[#dadce0]'
-          } ${isDragging ? 'opacity-40' : ''}`}
+          className={`fb-question-card${isActive ? ' is-active' : ''}${isDragging ? ' is-dragging' : ''}`}
           onFocus={() => setActiveField(field.id)}
           onClick={() => setActiveField(field.id)}
         >
           <button
             type="button"
-            className={`absolute inset-x-0 -top-1 flex h-4 w-full cursor-grab items-center justify-center text-[#dadce0] opacity-0 transition-opacity hover:text-[#5f6368] active:cursor-grabbing group-hover:opacity-100 ${
-              isActive ? 'opacity-100' : ''
-            }`}
+            className={`fb-drag-handle${isActive ? ' is-active' : ''}`}
             aria-label="Drag to reorder"
             {...drag.attributes}
             {...drag.listeners}
           >
-            <GripHorizontal className="size-4" />
+            <GripHorizontal size={16} />
           </button>
 
-          <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-start gap-3">
-            <div className="flex min-w-[200px] flex-1 flex-col gap-2">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ display: 'flex', minWidth: 200, flex: 1, flexDirection: 'column', gap: 8 }}>
               <Input
                 value={field.title}
                 onChange={(e) => updateField(field.id, { title: e.target.value })}
                 placeholder={isTitleBlock ? 'Section title' : 'Untitled Question'}
-                className={
-                  isTitleBlock
-                    ? 'h-auto border-0 border-b border-transparent px-0 text-xl font-medium shadow-none focus-visible:border-[#673ab7] focus-visible:ring-0'
-                    : 'h-auto rounded-t-[4px] border-0 border-b border-[#c6c6c6] bg-[#f8f9fa] px-3 py-2.5 shadow-none focus-visible:border-b-2 focus-visible:border-[#673ab7] focus-visible:ring-0'
-                }
+                className={isTitleBlock ? 'fb-title-input' : 'fb-question-title-input'}
               />
               {(isActive || field.description) && (
                 <Input
                   value={field.description}
                   onChange={(e) => updateField(field.id, { description: e.target.value })}
                   placeholder={isTitleBlock ? 'Description (optional)' : 'Help text (optional)'}
-                  className="h-auto border-0 px-0 text-sm text-[#5f6368] shadow-none focus-visible:ring-0"
+                  className="fb-description-input"
                 />
               )}
             </div>
 
             {!isTitleBlock && (
-              <div className="flex shrink-0 items-center gap-2">
-                <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="border-[#dadce0]"
-                  aria-label="Add image"
-                  title="Add image"
+              <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 8 }}>
+                <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onPickImage} />
+                <IconButton
+                  icon={ImageIcon}
+                  label="Add image"
                   onClick={() => imageInputRef.current?.click()}
-                >
-                  <ImageIcon className="size-4 text-[#5f6368]" />
-                </Button>
+                />
 
-                <Select value={field.type} onValueChange={(v) => onTypeChange(v as FieldType)}>
-                  <SelectTrigger className="h-9 w-60 border-[#dadce0]">
-                    <SelectValue>
-                      <span className="flex items-center gap-2">
-                        {(() => {
-                          const Icon = FIELD_TYPE_ICONS[field.type];
-                          return <Icon className="size-4 text-[#5f6368]" />;
-                        })()}
-                        {FIELD_TYPE_LABELS[field.type]}
-                      </span>
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FIELD_TYPES.map((type) => {
-                      const Icon = FIELD_TYPE_ICONS[type];
-                      return (
-                        <SelectItem key={type} value={type}>
-                          <span className="flex items-center gap-2">
-                            <Icon className="size-4 text-[#5f6368]" />
-                            {FIELD_TYPE_LABELS[type]}
-                          </span>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <div style={{ width: 240 }}>
+                  <Select value={field.type} onValueChange={(v) => onTypeChange(v as FieldType)}>
+                    <SelectTrigger>
+                      <SelectValue>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {(() => {
+                            const Icon = FIELD_TYPE_ICONS[field.type];
+                            return <Icon size={16} color="#5f6368" />;
+                          })()}
+                          {FIELD_TYPE_LABELS[field.type]}
+                        </span>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FIELD_TYPES.map((type) => {
+                        const Icon = FIELD_TYPE_ICONS[type];
+                        return (
+                          <SelectItem key={type} value={type}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <Icon size={16} color="#5f6368" />
+                              {FIELD_TYPE_LABELS[type]}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
           </div>
 
           {field.media && (
-            <div className="flex flex-col gap-1">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {field.media.type === 'image' ? (
                 // eslint-disable-next-line @next/next/no-img-element -- locally-picked object URL, not an optimizable remote asset
-                <img src={field.media.url} alt="" className="max-h-52 rounded-lg border border-border object-cover" />
+                <img
+                  src={field.media.url}
+                  alt=""
+                  style={{ maxHeight: 208, borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', objectFit: 'cover' }}
+                />
               ) : (
-                <div className="break-all rounded-lg border border-border bg-muted p-3 text-xs text-muted-foreground">
+                <div
+                  style={{
+                    wordBreak: 'break-all',
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px solid var(--color-border)',
+                    background: 'var(--color-surface)',
+                    padding: 12,
+                    fontSize: '0.75rem',
+                    color: 'var(--color-text-muted)',
+                  }}
+                >
                   video: {field.media.url}
                 </div>
               )}
@@ -186,28 +188,22 @@ export function QuestionCard({
           )}
 
           {!isTitleBlock && (
-            <div className="flex items-center justify-end gap-3 border-t border-[#e0e0e0] pt-3">
-              <div className="flex items-center gap-1">
-                <Button type="button" variant="ghost" size="icon" aria-label="Duplicate" onClick={() => duplicateField(field.id)}>
-                  <Copy className="size-4 text-[#5f6368]" />
-                </Button>
-                <Button type="button" variant="ghost" size="icon" aria-label="Delete" onClick={() => removeField(field.id)}>
-                  <Trash2 className="size-4 text-[#5f6368]" />
-                </Button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, borderTop: '1px solid #e0e0e0', paddingTop: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <IconButton icon={Copy} label="Duplicate" onClick={() => duplicateField(field.id)} />
+                <IconButton icon={Trash2} label="Delete" onClick={() => removeField(field.id)} />
               </div>
-              <div className="h-6 w-px bg-[#e0e0e0]" />
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-[#5f6368]">Required</span>
+              <div style={{ height: 24, width: 1, background: '#e0e0e0' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '0.875rem', color: '#5f6368' }}>Required</span>
                 <Switch checked={field.required} onCheckedChange={(v) => updateField(field.id, { required: v })} />
               </div>
               {hasOverflowMenu && (
                 <>
-                  <div className="h-6 w-px bg-[#e0e0e0]" />
+                  <div style={{ height: 24, width: 1, background: '#e0e0e0' }} />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="ghost" size="icon" aria-label="More question options">
-                        <MoreVertical className="size-4 text-[#5f6368]" />
-                      </Button>
+                      <IconButton icon={MoreVertical} label="More question options" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       {(field.type === 'short_answer' || field.type === 'paragraph') && (
@@ -235,10 +231,8 @@ export function QuestionCard({
             </div>
           )}
           {isTitleBlock && (
-            <div className="flex justify-end">
-              <Button type="button" variant="ghost" size="icon" aria-label="Delete block" onClick={() => removeField(field.id)}>
-                <Trash2 className="size-4 text-[#5f6368]" />
-              </Button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <IconButton icon={Trash2} label="Delete block" onClick={() => removeField(field.id)} />
             </div>
           )}
 

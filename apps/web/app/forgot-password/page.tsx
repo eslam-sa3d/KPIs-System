@@ -1,10 +1,9 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Button, LinkButton } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { forgotPassword } from '../../lib/api-client';
 import { asset } from '../../lib/asset';
@@ -39,9 +38,9 @@ export default function ForgotPasswordPage() {
               60 minutes.
             </AlertDescription>
           </Alert>
-          <Button asChild variant="ghost" className="w-full">
-            <Link href="/login">back to sign in</Link>
-          </Button>
+          <LinkButton href="/login" variant="ghost" shouldFitContainer>
+            back to sign in
+          </LinkButton>
         </div>
       ) : (
         <form className="login-card" onSubmit={onSubmit} aria-busy={pending}>
@@ -52,12 +51,12 @@ export default function ForgotPasswordPage() {
           <label htmlFor="email">email</label>
           <Input id="email" name="email" type="email" autoComplete="email" required />
 
-          <Button type="submit" disabled={pending} className="w-full">
+          <Button type="submit" isDisabled={pending} shouldFitContainer>
             {pending ? 'sending…' : 'send reset link'}
           </Button>
-          <Button asChild variant="ghost" className="w-full">
-            <Link href="/login">back to sign in</Link>
-          </Button>
+          <LinkButton href="/login" variant="ghost" shouldFitContainer>
+            back to sign in
+          </LinkButton>
         </form>
       )}
     </main>

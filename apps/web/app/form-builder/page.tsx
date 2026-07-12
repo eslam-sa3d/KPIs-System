@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Search, Share2 } from 'lucide-react';
 import { PortalShell } from '../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
-import { Button } from '@/components/ui/button';
+import { Button, LinkButton } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -81,15 +82,13 @@ export default function FormBuilderHomePage() {
     <PortalShell user={user}>
       <div className="page-title-row">
         <h1>form builder</h1>
-        <Button asChild>
-          <Link href="/form-builder/edit?new=1">new form</Link>
-        </Button>
+        <LinkButton href="/form-builder/edit?new=1">new form</LinkButton>
       </div>
       <p className="portal-subtitle">a Google-Forms-style prototype of the form editor</p>
 
       {forms === null ? (
-        <div className="rounded-md border bg-card mt-4 mb-6 p-6" style={{ display: 'flex', justifyContent: 'center' }}>
-          <Spinner className="size-6" />
+        <div className="loading-placeholder">
+          <Spinner size="medium" />
         </div>
       ) : forms.length === 0 ? (
         <div className="empty-state">
@@ -134,13 +133,17 @@ export default function FormBuilderHomePage() {
           )}
 
           <div className="kpi-search">
-            <Search size={16} aria-hidden="true" />
-            <input
+            <Input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="search forms by title…"
               aria-label="search forms"
+              elemBeforeInput={
+                <span className="search-field-icon">
+                  <Search size={16} aria-hidden="true" />
+                </span>
+              }
             />
           </div>
 
@@ -149,11 +152,12 @@ export default function FormBuilderHomePage() {
               <label htmlFor="form-builder-folder-filter" className="muted" style={{ fontSize: 13 }}>
                 folder
               </label>
+              <div style={{ width: 180 }}>
               <Select
                 value={folderFilter || '__all__'}
                 onValueChange={(v) => setFolderFilter(v === '__all__' ? '' : v)}
               >
-                <SelectTrigger id="form-builder-folder-filter" size="sm" className="w-[180px]">
+                <SelectTrigger id="form-builder-folder-filter">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -165,6 +169,7 @@ export default function FormBuilderHomePage() {
                   ))}
                 </SelectContent>
               </Select>
+              </div>
             </div>
           )}
 
@@ -224,7 +229,6 @@ export default function FormBuilderHomePage() {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="text-primary hover:text-primary"
                           onClick={() => {
                             setEditingFolderId(form.id);
                             setFolderDraft(form.folder ?? '');

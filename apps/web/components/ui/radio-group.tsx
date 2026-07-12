@@ -1,44 +1,43 @@
 "use client"
 
-import * as React from "react"
-import { CircleIcon } from "lucide-react"
-import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
+import { Radio as AtlaskitRadio } from "@atlaskit/radio"
+import { createContext, useContext, useId, type ReactNode } from "react"
 
-import { cn } from "@/lib/utils"
+type RadioGroupContextValue = { value?: string; onValueChange?: (value: string) => void; name: string }
+const RadioGroupContext = createContext<RadioGroupContextValue | null>(null)
 
+/** Atlaskit's own RadioGroup takes an `options` array, not composed
+ *  `<RadioGroupItem>` children — this app's call sites build each item's
+ *  content individually (icon/label composition, not just plain text), so
+ *  this wrapper uses individual `Radio` elements sharing a `name` instead,
+ *  same shape as the Tabs value-bridge context. */
 function RadioGroup({
-  className,
-  ...props
-}: React.ComponentProps<typeof RadioGroupPrimitive.Root>) {
+  value,
+  onValueChange,
+  children,
+}: {
+  value?: string
+  onValueChange?: (value: string) => void
+  children?: ReactNode
+}) {
+  const name = useId()
   return (
-    <RadioGroupPrimitive.Root
-      data-slot="radio-group"
-      className={cn("grid gap-3", className)}
-      {...props}
-    />
+    <RadioGroupContext.Provider value={{ value, onValueChange, name }}>
+      <div style={{ display: "grid", gap: 12 }}>{children}</div>
+    </RadioGroupContext.Provider>
   )
 }
 
-function RadioGroupItem({
-  className,
-  ...props
-}: React.ComponentProps<typeof RadioGroupPrimitive.Item>) {
+function RadioGroupItem({ value }: { value: string; id?: string }) {
+  const ctx = useContext(RadioGroupContext)
+  if (!ctx) throw new Error("<RadioGroupItem> must be used inside <RadioGroup>")
   return (
-    <RadioGroupPrimitive.Item
-      data-slot="radio-group-item"
-      className={cn(
-        "aspect-square size-4 shrink-0 rounded-full border border-input text-primary shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:bg-input/30 dark:aria-invalid:ring-destructive/40",
-        className
-      )}
-      {...props}
-    >
-      <RadioGroupPrimitive.Indicator
-        data-slot="radio-group-indicator"
-        className="relative flex items-center justify-center"
-      >
-        <CircleIcon className="absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 fill-primary" />
-      </RadioGroupPrimitive.Indicator>
-    </RadioGroupPrimitive.Item>
+    <AtlaskitRadio
+      name={ctx.name}
+      value={value}
+      isChecked={ctx.value === value}
+      onChange={() => ctx.onValueChange?.(value)}
+    />
   )
 }
 

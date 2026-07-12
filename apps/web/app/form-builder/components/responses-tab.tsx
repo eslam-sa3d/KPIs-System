@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { IconButton } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MOCK_SUBMISSIONS } from '../lib/mock-data';
 import { summarizeForm, type FieldSummary } from '../lib/summarize';
@@ -12,10 +12,10 @@ import { BarBreakdown, GridMatrix, PieBreakdown, ScaleBreakdown, TextSamples } f
 function SummaryCard({ summary }: { summary: FieldSummary }) {
   const { field } = summary;
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', background: 'var(--color-bg)', padding: 16, boxShadow: 'var(--shadow-card)' }}>
       <div>
-        <h3 className="font-medium">{field.title || 'Untitled question'}</h3>
-        <p className="text-xs text-muted-foreground">{summary.answered} response(s)</p>
+        <h3 style={{ fontWeight: 500 }}>{field.title || 'Untitled question'}</h3>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{summary.answered} response(s)</p>
       </div>
 
       {(field.type === 'multiple_choice' || field.type === 'dropdown') && summary.counts && (
@@ -43,10 +43,10 @@ function SummaryView() {
   const summaries = useMemo(() => summarizeForm(form, MOCK_SUBMISSIONS), [form]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-        <p className="text-3xl font-semibold tabular-nums">{MOCK_SUBMISSIONS.length}</p>
-        <p className="text-sm text-muted-foreground">total responses (mock data)</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', background: 'var(--color-bg)', padding: 16, boxShadow: 'var(--shadow-card)' }}>
+        <p style={{ fontSize: '1.875rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{MOCK_SUBMISSIONS.length}</p>
+        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>total responses (mock data)</p>
       </div>
       {summaries.map((summary) => (
         <SummaryCard key={summary.field.id} summary={summary} />
@@ -72,36 +72,38 @@ function IndividualView() {
   const submission = MOCK_SUBMISSIONS[index];
   const fields = form.sections.flatMap((s) => s.fieldIds).map((id) => form.fields[id]).filter((f) => f && f.type !== 'title_block');
 
-  if (!submission) return <p className="text-sm text-muted-foreground">No responses yet.</p>;
+  if (!submission) return <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>No responses yet.</p>;
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', background: 'var(--color-bg)', padding: 16, boxShadow: 'var(--shadow-card)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
           Response {index + 1} of {MOCK_SUBMISSIONS.length} · {new Date(submission.submittedAt).toLocaleString()}
         </p>
-        <div className="flex gap-1">
-          <Button type="button" variant="ghost" size="icon" aria-label="Previous response" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Next response"
-            disabled={index === MOCK_SUBMISSIONS.length - 1}
+        <div style={{ display: 'flex', gap: 4 }}>
+          <IconButton
+            icon={ChevronLeft}
+            label="Previous response"
+            isDisabled={index === 0}
+            onClick={() => setIndex((i) => i - 1)}
+          />
+          <IconButton
+            icon={ChevronRight}
+            label="Next response"
+            isDisabled={index === MOCK_SUBMISSIONS.length - 1}
             onClick={() => setIndex((i) => i + 1)}
-          >
-            <ChevronRight className="size-4" />
-          </Button>
+          />
         </div>
       </div>
 
-      <dl className="flex flex-col gap-3">
-        {fields.map((field) => (
-          <div key={field!.id} className="border-b border-border pb-2 last:border-0">
-            <dt className="text-sm font-medium">{field!.title || 'Untitled question'}</dt>
-            <dd className="text-sm text-muted-foreground">{formatAnswer(submission.answers[field!.id])}</dd>
+      <dl style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {fields.map((field, i) => (
+          <div
+            key={field!.id}
+            style={i === fields.length - 1 ? { paddingBottom: 8 } : { borderBottom: '1px solid var(--color-border)', paddingBottom: 8 }}
+          >
+            <dt style={{ fontSize: '0.875rem', fontWeight: 500 }}>{field!.title || 'Untitled question'}</dt>
+            <dd style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{formatAnswer(submission.answers[field!.id])}</dd>
           </div>
         ))}
       </dl>
@@ -111,7 +113,7 @@ function IndividualView() {
 
 export function ResponsesTab() {
   return (
-    <Tabs defaultValue="summary" className="gap-4">
+    <Tabs defaultValue="summary" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <TabsList>
         <TabsTrigger value="summary">Summary</TabsTrigger>
         <TabsTrigger value="individual">Individual</TabsTrigger>

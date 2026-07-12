@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { FileText, Image as ImageIcon, ListPlus, PlusCircle, SeparatorHorizontal, Video } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { Button, IconButton } from '@/components/ui/button';
 import { useBuilderStore } from '../lib/store';
 import { parseQaEvaluationDocx } from '../lib/import-docx';
 
@@ -78,33 +78,30 @@ export function FloatingToolbar({ sectionId, fieldId }: { sectionId: string; fie
 
   return (
     <>
-      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
-      <input ref={docxInputRef} type="file" accept=".docx" className="hidden" onChange={onPickDocx} disabled={importing} />
-      <div
-        className="absolute top-2 left-[calc(100%+12px)] z-10 hidden w-12 flex-col items-center gap-1 rounded-full border border-[#dadce0] bg-white py-2 shadow-md md:flex"
-        role="menu"
-        aria-label="Add to form"
-      >
+      <input ref={imageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onPickImage} />
+      <input ref={docxInputRef} type="file" accept=".docx" style={{ display: 'none' }} onChange={onPickDocx} disabled={importing} />
+      <div className="fb-toolbar-rail" role="menu" aria-label="Add to form">
+        {actions.map(({ icon: Icon, label, onClick }) => (
+          <IconButton
+            key={label}
+            icon={Icon}
+            label={label}
+            isDisabled={label === 'Import questions' && importing}
+            onClick={onClick}
+          />
+        ))}
+      </div>
+      <div className="fb-toolbar-row">
         {actions.map(({ icon: Icon, label, onClick }) => (
           <Button
             key={label}
             type="button"
             variant="ghost"
-            size="icon"
-            className="rounded-full hover:bg-[#f1f3f4]"
-            title={label}
-            aria-label={label}
-            disabled={label === 'Import questions' && importing}
+            size="sm"
+            iconBefore={Icon}
+            isDisabled={label === 'Import questions' && importing}
             onClick={onClick}
           >
-            <Icon className="size-[18px] text-[#5f6368]" />
-          </Button>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-1 border-t border-[#e0e0e0] pt-3 md:hidden">
-        {actions.map(({ icon: Icon, label, onClick }) => (
-          <Button key={label} type="button" variant="ghost" size="sm" disabled={label === 'Import questions' && importing} onClick={onClick}>
-            <Icon className="size-4 text-[#5f6368]" />
             {label}
           </Button>
         ))}

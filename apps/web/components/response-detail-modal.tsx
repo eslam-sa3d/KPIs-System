@@ -65,9 +65,9 @@ export function ResponseDetailModal({
   }, [submission]);
 
   useEffect(() => {
-    // Escape-to-close is now Radix Dialog's own responsibility (see
-    // onEscapeKeyDown below, which still respects the same `editing` guard);
-    // this listener only owns the arrow-key pagination Radix doesn't provide.
+    // Escape-to-close is the Dialog's own responsibility (see
+    // shouldCloseOnEscapePress below, which still respects the same
+    // `editing` guard); this listener only owns arrow-key pagination.
     function onKey(e: KeyboardEvent) {
       if (editing) return; // don't hijack arrow keys while correcting an answer
       if (e.key === 'ArrowLeft' && onPrev) onPrev();
@@ -96,12 +96,7 @@ export function ResponseDetailModal({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className="flex max-h-[85vh] flex-col sm:max-w-2xl"
-        onEscapeKeyDown={(e) => {
-          if (editing) e.preventDefault(); // don't hijack escape while correcting an answer
-        }}
-      >
+      <DialogContent width="large" shouldCloseOnEscapePress={!editing}>
         <DialogHeader>
           <DialogTitle>response {index + 1} of {total}</DialogTitle>
           <p className="muted" style={{ margin: '4px 0 0' }}>
@@ -121,12 +116,12 @@ export function ResponseDetailModal({
             </p>
           )}
           {canEdit && !editing && (
-            <Button variant="ghost" size="sm" className="w-fit" onClick={() => setEditing(true)}>
+            <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
               edit
             </Button>
           )}
         </DialogHeader>
-        <div className="response-modal-body min-h-0 flex-1">
+        <div className="response-modal-body">
           {editing ? (
             <div className="builder">
               {definition.fields
@@ -198,16 +193,16 @@ export function ResponseDetailModal({
               >
                 cancel
               </Button>
-              <Button disabled={saving} onClick={onSave}>
+              <Button isDisabled={saving} onClick={onSave}>
                 {saving ? 'saving…' : 'save'}
               </Button>
             </>
           ) : (
             <>
-              <Button variant="ghost" onClick={() => onPrev?.()} disabled={!onPrev}>
+              <Button variant="ghost" onClick={() => onPrev?.()} isDisabled={!onPrev}>
                 ← previous
               </Button>
-              <Button variant="ghost" onClick={() => onNext?.()} disabled={!onNext}>
+              <Button variant="ghost" onClick={() => onNext?.()} isDisabled={!onNext}>
                 next →
               </Button>
             </>

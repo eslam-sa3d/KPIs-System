@@ -31,7 +31,13 @@ export default function LoginPage() {
 
   return (
     <main className="login-screen" data-surface="purple">
-      <form className="login-card" onSubmit={onSubmit} aria-busy={pending}>
+      <form
+        className="login-card"
+        onSubmit={onSubmit}
+        aria-busy={pending}
+        data-theme="light"
+        data-color-mode="light"
+      >
         <Image src={asset('/brand/pulse-pos.svg')} alt="pulse by solutions" width={120} height={52} priority />
         <h1>welcome back</h1>
 
@@ -57,7 +63,7 @@ export default function LoginPage() {
           </Alert>
         )}
 
-        <Button type="submit" disabled={pending} className="w-full">
+        <Button type="submit" isDisabled={pending} shouldFitContainer>
           {pending ? 'signing in…' : 'sign in'}
         </Button>
       </form>

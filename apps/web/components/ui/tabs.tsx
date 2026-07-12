@@ -1,91 +1,118 @@
 "use client"
 
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { Tabs as TabsPrimitive } from "radix-ui"
+import AtlaskitTabs, { TabList, Tab } from "@atlaskit/tabs"
+import {
+  Children,
+  createContext,
+  isValidElement,
+  useContext,
+  useId,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react"
 
-import { cn } from "@/lib/utils"
+type TabsContextValue = { value: string; onValueChange: (value: string) => void }
+const TabsContext = createContext<TabsContextValue | null>(null)
 
-function Tabs({
-  className,
-  orientation = "horizontal",
-  ...props
-}: React.ComponentProps<typeof TabsPrimitive.Root>) {
-  return (
-    <TabsPrimitive.Root
-      data-slot="tabs"
-      data-orientation={orientation}
-      orientation={orientation}
-      className={cn(
-        "group/tabs flex gap-2 data-[orientation=horizontal]:flex-col",
-        className
-      )}
-      {...props}
-    />
-  )
+function useTabsContext(component: string): TabsContextValue {
+  const ctx = useContext(TabsContext)
+  if (!ctx) throw new Error(`<${component}> must be used inside <Tabs>`)
+  return ctx
 }
 
-const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-[orientation=horizontal]/tabs:h-9 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col data-[variant=line]:rounded-none",
-  {
-    variants: {
-      variant: {
-        default: "bg-muted",
-        line: "gap-1 bg-transparent",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
+/** Atlaskit's Tabs is index-based (`selected: number`), not value-based like
+ *  the app's existing `value`/`onValueChange` call sites — this wrapper
+ *  keeps the value-based API by deriving an index from the ordered list of
+ *  `<TabsTrigger value>` children found inside `<TabsList>`, matching
+ *  React's own conditional-child-filtering (`{cond && <TabsTrigger .../>}`)
+ *  via `Children.forEach`, which the caller already relies on being
+ *  consistent between its TabsList and TabsContent conditionals. */
+function collectTriggerValues(children: ReactNode): string[] {
+  const values: string[] = []
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return
+    const props = child.props as { value?: string; children?: ReactNode }
+    if (child.type === TabsList) {
+      values.push(...collectTriggerValues(props.children))
+    } else if (typeof props.value === "string") {
+      values.push(props.value)
+    }
+  })
+  return values
+}
+
+type TabsProps = {
+  children: ReactNode
+  className?: string
+  style?: CSSProperties
+} & (
+  | { value: string; onValueChange: (value: string) => void; defaultValue?: undefined }
+  | { value?: undefined; onValueChange?: undefined; defaultValue: string }
 )
 
-function TabsList({
-  className,
-  variant = "default",
-  ...props
-}: React.ComponentProps<typeof TabsPrimitive.List> &
-  VariantProps<typeof tabsListVariants>) {
-  return (
-    <TabsPrimitive.List
-      data-slot="tabs-list"
-      data-variant={variant}
-      className={cn(tabsListVariants({ variant }), className)}
-      {...props}
-    />
+function Tabs({ className, style, children, ...controlProps }: TabsProps) {
+  const id = useId()
+  const [uncontrolledValue, setUncontrolledValue] = useState(
+    controlProps.defaultValue ?? controlProps.value ?? "",
   )
-}
+  const value = controlProps.value ?? uncontrolledValue
+  const onValueChange = controlProps.onValueChange ?? setUncontrolledValue
 
-function TabsTrigger({
-  className,
-  ...props
-}: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+  const orderedValues = collectTriggerValues(children)
+  const selected = Math.max(0, orderedValues.indexOf(value))
+
+  const tabs = (
+    <AtlaskitTabs
+      id={id}
+      selected={selected}
+      onChange={(index) => {
+        const next = orderedValues[index]
+        if (next !== undefined) onValueChange(next)
+      }}
+    >
+      {children}
+    </AtlaskitTabs>
+  )
+
   return (
-    <TabsPrimitive.Trigger
-      data-slot="tabs-trigger"
-      className={cn(
-        "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-sm group-data-[variant=line]/tabs-list:data-[state=active]:shadow-none dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent dark:group-data-[variant=line]/tabs-list:data-[state=active]:border-transparent dark:group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent",
-        "data-[state=active]:bg-background data-[state=active]:text-foreground dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 dark:data-[state=active]:text-foreground",
-        "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
-        className
+    <TabsContext.Provider value={{ value, onValueChange }}>
+      {className || style ? (
+        <div className={className} style={style}>
+          {tabs}
+        </div>
+      ) : (
+        tabs
       )}
-      {...props}
-    />
+    </TabsContext.Provider>
   )
 }
 
-function TabsContent({
-  className,
-  ...props
-}: React.ComponentProps<typeof TabsPrimitive.Content>) {
+function TabsList({ children }: { variant?: "default" | "line"; "aria-label"?: string; children: ReactNode }) {
+  return <TabList>{children}</TabList>
+}
+
+/** Tab has no selection prop of its own — Atlaskit derives it from the tab's
+ *  position among TabList's rendered children matching Tabs' `selected`
+ *  index, which lines up with `value` here because both this component and
+ *  the `selected` index above are derived from the same ordered child list.
+ *  Tab also has no className — a per-trigger color override at one call
+ *  site is dropped in favor of Atlaskit's own active-tab styling. */
+function TabsTrigger({ children }: { value: string; className?: string; children: ReactNode }) {
+  return <Tab>{children}</Tab>
+}
+
+/** Deliberately not Atlaskit's TabPanel (which is positionally matched to
+ *  Tab index, not value) — plain conditional rendering keyed off the same
+ *  value/context the trigger uses, avoiding any positional-mismatch risk. */
+function TabsContent({ value, children }: { value: string; children: ReactNode }) {
+  const ctx = useTabsContext("TabsContent")
+  if (ctx.value !== value) return null
   return (
-    <TabsPrimitive.Content
-      data-slot="tabs-content"
-      className={cn("flex-1 outline-none", className)}
-      {...props}
-    />
+    <div role="tabpanel" style={{ flex: 1 }}>
+      {children}
+    </div>
   )
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants }
+export { Tabs, TabsList, TabsTrigger, TabsContent }

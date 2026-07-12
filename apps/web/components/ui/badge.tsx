@@ -1,48 +1,35 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
+"use client"
 
-import { cn } from "@/lib/utils"
+import AtlaskitLozenge from "@atlaskit/lozenge"
+import type { CSSProperties, ReactNode } from "react"
 
-const badgeVariants = cva(
-  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
-        secondary:
-          "bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
-        destructive:
-          "bg-destructive text-white focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40 [a&]:hover:bg-destructive/90",
-        outline:
-          "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
-        ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 [a&]:hover:underline",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
+/** This app's variant vocabulary, mapped onto Lozenge's fixed appearance set
+ *  (default/inprogress/moved/new/removed/success — no brand-purple option),
+ *  plus a `style` override for the brand-colored "default" variant. Lozenge
+ *  has no onClick/polymorphism — for a clickable pill, wrap this in a real
+ *  `<button>` (see admin/kpis/page.tsx's StatusPill for the pattern). */
+export type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | "ghost"
 
-function Badge({
-  className,
-  variant = "default",
-  asChild = false,
-  ...props
-}: React.ComponentProps<"span"> &
-  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : "span"
-
-  return (
-    <Comp
-      data-slot="badge"
-      data-variant={variant}
-      className={cn(badgeVariants({ variant }), className)}
-      {...props}
-    />
-  )
+const VARIANT_STYLE: Record<BadgeVariant, { backgroundColor: string; color: string } | undefined> = {
+  default: { backgroundColor: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" },
+  secondary: { backgroundColor: "var(--md-sys-color-secondary-container)", color: "var(--md-sys-color-on-secondary-container)" },
+  destructive: undefined,
+  outline: { backgroundColor: "transparent", color: "var(--color-text)" },
+  ghost: { backgroundColor: "transparent", color: "var(--color-text)" },
 }
 
-export { Badge, badgeVariants }
+type BadgeProps = {
+  variant?: BadgeVariant
+  children?: ReactNode
+  testId?: string
+  /** Only `backgroundColor`/`color` are honored — Lozenge's own constraint. */
+  style?: Pick<CSSProperties, "backgroundColor" | "color">
+}
+
+function Badge({ variant = "default", style, ...props }: BadgeProps) {
+  const appearance = variant === "destructive" ? "removed" : "default"
+  return <AtlaskitLozenge appearance={appearance} style={style ?? VARIANT_STYLE[variant]} {...props} />
+}
+
+export { Badge }
+export type { BadgeProps }

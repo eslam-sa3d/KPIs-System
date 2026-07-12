@@ -7,14 +7,17 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./tokens.css": "./src/tokens.css"
+    "./tokens.css": "./src/tokens.css",
+    "./atlaskit-scheme.css": "./src/atlaskit-scheme.css"
   },
   "scripts": {
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "generate:m3": "node scripts/generate-m3-tokens.mjs"
+    "generate:m3": "node scripts/generate-m3-tokens.mjs",
+    "generate:atlaskit-theme": "node scripts/generate-atlaskit-theme.mjs"
   },
   "devDependencies": {
-    "@material/material-color-utilities": "^0.4.0"
+    "@material/material-color-utilities": "^0.4.0",
+    "@atlaskit/tokens": "^15.5.0"
   }
 }

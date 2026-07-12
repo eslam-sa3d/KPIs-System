@@ -5,7 +5,7 @@ import { Spinner } from '@/components/ui/spinner';
 export function LoadingState({ label = 'loading…' }: { label?: string }) {
   return (
     <p className="muted" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <Spinner className="size-4" />
+      <Spinner size="small" />
       {label}
     </p>
   );

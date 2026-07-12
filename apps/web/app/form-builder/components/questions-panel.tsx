@@ -25,28 +25,39 @@ export function QuestionsPanel() {
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="overflow-hidden rounded-lg border-t-8 border border-border bg-white shadow-sm" style={{ borderTopColor: theme.primaryColor }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div
+        style={{
+          overflow: 'hidden',
+          borderRadius: 'var(--radius-lg)',
+          borderLeft: '1px solid var(--color-border)',
+          borderRight: '1px solid var(--color-border)',
+          borderBottom: '1px solid var(--color-border)',
+          borderTop: `8px solid ${theme.primaryColor}`,
+          background: 'white',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
         {theme.headerImageUrl && (
           // eslint-disable-next-line @next/next/no-img-element -- locally-picked object URL preview
-          <img src={theme.headerImageUrl} alt="" className="h-40 w-full object-cover" />
+          <img src={theme.headerImageUrl} alt="" style={{ height: 160, width: '100%', objectFit: 'cover' }} />
         )}
-        <div className="flex flex-col gap-2 p-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 24 }}>
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Untitled form"
-            className="h-auto border-none px-0 text-[28px] font-normal text-[#202124] shadow-none focus-visible:ring-0"
+            className="fb-form-title-input"
           />
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Form description"
-            className="h-auto border-none px-0 text-sm text-[#5f6368] shadow-none focus-visible:ring-0"
+            className="fb-form-description-input"
           />
         </div>
-        <div className="h-px bg-border" />
-        <p className="px-6 py-2 text-xs text-red-600">* Indicates required question</p>
+        <div style={{ height: 1, background: 'var(--color-border)' }} />
+        <p style={{ padding: '8px 24px', fontSize: '0.75rem', color: '#dc2626' }}>* Indicates required question</p>
       </div>
 
       <DndContext
@@ -58,7 +69,7 @@ export function QuestionsPanel() {
         }}
       >
         <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col gap-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {sections.map((section, i) => (
               <SortableItem key={section.id} id={section.id}>
                 {(drag, isDragging) => (
@@ -77,9 +88,11 @@ export function QuestionsPanel() {
         </SortableContext>
       </DndContext>
 
-      <Button type="button" variant="outline" className="self-start bg-white" onClick={() => addSection(sections[sections.length - 1]?.id ?? null)}>
-        <Plus className="size-4" /> Add section
-      </Button>
+      <span style={{ alignSelf: 'flex-start' }}>
+        <Button type="button" variant="outline" iconBefore={Plus} onClick={() => addSection(sections[sections.length - 1]?.id ?? null)}>
+          Add section
+        </Button>
+      </span>
     </div>
   );
 }

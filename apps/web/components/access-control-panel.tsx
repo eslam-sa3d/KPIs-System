@@ -5,6 +5,8 @@ import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
 
 interface UserOption {
@@ -122,20 +124,20 @@ export function AccessControlPanel({
         </Alert>
       )}
 
-      <label className="check-item">
-        <input
-          type="checkbox"
+      <span className="builder-required">
+        <Checkbox
+          id="ac-restricted"
           checked={restricted}
           disabled={busy}
-          onChange={(e) => toggleRestricted(e.target.checked)}
+          onCheckedChange={(checked) => toggleRestricted(checked === true)}
         />
-        restrict to specific people
-      </label>
+        <label htmlFor="ac-restricted">restrict to specific people</label>
+      </span>
 
       {restricted && (
         <>
           <label htmlFor="ac-filter">invite someone</label>
-          <input
+          <Input
             id="ac-filter"
             value={filter}
             onChange={(e) => {
@@ -145,7 +147,7 @@ export function AccessControlPanel({
             placeholder="search by name or email"
           />
           {filter && candidates.length > 0 && (
-            <div role="listbox" aria-label="matching users" className="max-h-48 overflow-y-auto rounded-md border">
+            <div role="listbox" aria-label="matching users" className="user-picker-list">
               {candidates.map((u) => (
                 <button
                   key={u.id}
@@ -153,7 +155,7 @@ export function AccessControlPanel({
                   role="option"
                   aria-selected={pickUserId === u.id}
                   onClick={() => setPickUserId(u.id)}
-                  className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-accent aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  className="user-picker-option"
                 >
                   {u.displayName} ({u.email})
                 </button>
@@ -161,27 +163,25 @@ export function AccessControlPanel({
             </div>
           )}
           <span className="builder-required">
-            <input
+            <Checkbox
               id="ac-can-manage"
-              type="checkbox"
               checked={pickCanManage}
-              onChange={(e) => setPickCanManage(e.target.checked)}
+              onCheckedChange={(checked) => setPickCanManage(checked === true)}
             />
             <label htmlFor="ac-can-manage">co-owner (can also edit and manage this form)</label>
           </span>
           <span className="builder-required">
-            <input
+            <Checkbox
               id="ac-can-view-responses"
-              type="checkbox"
               checked={pickCanViewResponses}
               disabled={pickCanManage}
-              onChange={(e) => setPickCanViewResponses(e.target.checked)}
+              onCheckedChange={(checked) => setPickCanViewResponses(checked === true)}
             />
             <label htmlFor="ac-can-view-responses">
               can view responses (without editing the form — implied by co-owner)
             </label>
           </span>
-          <Button type="button" variant="ghost" size="sm" disabled={!pickUserId || busy} onClick={invite}>
+          <Button type="button" variant="ghost" size="sm" isDisabled={!pickUserId || busy} onClick={invite}>
             invite
           </Button>
 
@@ -199,7 +199,7 @@ export function AccessControlPanel({
                   {confirmRemoveUserId === c.userId ? (
                     <>
                       <span className="muted">remove access?</span>{' '}
-                      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => remove(c.userId)}>
+                      <Button type="button" variant="ghost" size="sm" isDisabled={busy} onClick={() => remove(c.userId)}>
                         confirm remove
                       </Button>{' '}
                       <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmRemoveUserId(null)}>
@@ -211,7 +211,7 @@ export function AccessControlPanel({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      disabled={busy}
+                      isDisabled={busy}
                       onClick={() => setConfirmRemoveUserId(c.userId)}
                     >
                       remove

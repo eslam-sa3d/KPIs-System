@@ -6,7 +6,8 @@ import { ClipboardList, FolderOpen, Pencil, Search, Share2 } from 'lucide-react'
 import { PortalShell, can } from '../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Button, LinkButton, LinkIconButton } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -101,9 +102,7 @@ export default function FormsPage() {
     <PortalShell user={user}>
       <div className="page-title-row">
         <h1>forms</h1>
-        <Button asChild>
-          <Link href="/forms/new">new form</Link>
-        </Button>
+        <LinkButton href="/forms/new">new form</LinkButton>
       </div>
       <p className="portal-subtitle">collect data with custom forms, then aggregate and export it</p>
       {error && (
@@ -113,8 +112,8 @@ export default function FormsPage() {
       )}
 
       {forms === null ? (
-        <div className="rounded-md border bg-card mt-4 mb-6 p-6" style={{ display: 'flex', justifyContent: 'center' }}>
-          <Spinner className="size-6" />
+        <div className="loading-placeholder">
+          <Spinner size="medium" />
         </div>
       ) : forms.length === 0 ? (
         <div className="empty-state">
@@ -170,13 +169,17 @@ export default function FormsPage() {
           )}
 
           <div className="kpi-search">
-            <Search size={16} aria-hidden="true" />
-            <input
+            <Input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="search forms by title…"
               aria-label="search forms"
+              elemBeforeInput={
+                <span className="search-field-icon">
+                  <Search size={16} aria-hidden="true" />
+                </span>
+              }
             />
           </div>
 
@@ -185,22 +188,24 @@ export default function FormsPage() {
               <label htmlFor="forms-folder-filter" className="muted" style={{ fontSize: 13 }}>
                 folder
               </label>
-              <Select
-                value={folderFilter || '__all__'}
-                onValueChange={(v) => setFolderFilter(v === '__all__' ? '' : v)}
-              >
-                <SelectTrigger id="forms-folder-filter" size="sm" className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">all folders</SelectItem>
-                  {folders.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {f}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div style={{ width: 180 }}>
+                <Select
+                  value={folderFilter || '__all__'}
+                  onValueChange={(v) => setFolderFilter(v === '__all__' ? '' : v)}
+                >
+                  <SelectTrigger id="forms-folder-filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">all folders</SelectItem>
+                    {folders.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 
@@ -261,7 +266,6 @@ export default function FormsPage() {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="text-primary hover:text-primary"
                           onClick={() => {
                             setEditingFolderId(form.id);
                             setFolderDraft(form.folder ?? '');
@@ -274,11 +278,12 @@ export default function FormsPage() {
                     <TableCell>
                       <span className="row-actions hover-actions">
                         {can(user, 'forms:write') && (
-                          <Button asChild variant="ghost" size="icon-sm" aria-label={`edit ${form.title}`}>
-                            <Link href={`/forms/new?edit=${encodeURIComponent(form.slug)}`}>
-                              <Pencil size={14} aria-hidden="true" />
-                            </Link>
-                          </Button>
+                          <LinkIconButton
+                            href={`/forms/new?edit=${encodeURIComponent(form.slug)}`}
+                            icon={Pencil}
+                            label={`edit ${form.title}`}
+                            size="compact"
+                          />
                         )}
                         {can(user, 'forms:manage') && (
                           <>
@@ -286,7 +291,6 @@ export default function FormsPage() {
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="text-primary hover:text-primary"
                               onClick={() => onArchiveToggle(form)}
                             >
                               {form.status === 'archived' ? 'unarchive' : 'archive'}
@@ -301,7 +305,6 @@ export default function FormsPage() {
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  className="text-primary hover:text-primary"
                                   onClick={() => setConfirmDeleteId(null)}
                                 >
                                   cancel
@@ -310,9 +313,8 @@ export default function FormsPage() {
                             ) : (
                               <Button
                                 type="button"
-                                variant="ghost"
+                                variant="destructive"
                                 size="sm"
-                                className="text-destructive hover:text-destructive"
                                 onClick={() => setConfirmDeleteId(form.id)}
                               >
                                 delete

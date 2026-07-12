@@ -163,6 +163,18 @@ ${darkLines.map((l) => `  ${l}`).join('\n')}
 :root[data-theme='dark'] {
 ${darkLines.join('\n')}
 }
+
+/* Non-root variants of the two blocks above — lets a nested element (not
+ * just <html>) pin itself to light or dark regardless of the page-wide
+ * theme, e.g. the form-builder's Google-Forms-style "paper" surface, which
+ * stays light even when the rest of the app is in dark mode. */
+[data-theme='light'] {
+${lightLines.join('\n')}
+}
+
+[data-theme='dark'] {
+${darkLines.join('\n')}
+}
 `;
 
 writeFileSync(OUT_FILE, css);

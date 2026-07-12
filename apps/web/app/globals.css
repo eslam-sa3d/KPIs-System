@@ -1,89 +1,38 @@
 /* Single source of truth for all styling primitives. */
-@import 'tailwindcss';
 @import '@pulse/theme/tokens.css';
-/* Tailwind's zero-config content detection only scans the CSS file's own
-   directory tree (app/) — components/ and lib/ are siblings, not
-   descendants, so they're invisible to it without this. Confirmed via a
-   compiled-output check: without it, not a single shadcn-authored utility
-   class (bg-primary, has-[>svg], aria-invalid:*, ...) was emitted at all,
-   even though the components themselves reference them correctly. */
-@source '../components';
-@source '../lib';
+/* @atlaskit/tokens' default theme + pulse's brand overrides for --ds-* —
+   see packages/theme/scripts/generate-atlaskit-theme.mjs. Scoped to
+   [data-color-mode], set alongside [data-theme] by theme-toggle.tsx and
+   layout.tsx's THEME_INIT_SCRIPT. */
+@import '@pulse/theme/atlaskit-scheme.css';
 
-/* Every shadcn variable aliases onto the existing --color-* / --md-sys-color-*
-   chain (packages/theme) — nothing here is a new hardcoded color. inline
-   keeps these as live var() references rather than baking a static value at
-   build time, so they keep following the same light/dark/system swap the
-   rest of the app already does.
-
-   --color-primary/--color-accent/--color-border below reference
-   --md-sys-color-* directly, not the same-named --color-primary/
-   --color-accent/--color-border alias one layer up in tokens.css — aliasing
-   a @theme var onto a CSS custom property of the exact same name is
-   circular (the property ends up referencing itself) and silently resolves
-   to nothing, so bg-primary etc. rendered invisible everywhere outside the
-   one page that happens to redefine --color-primary itself
-   ([data-surface=purple], see globals.css below). Found via a Badge
-   default-variant screenshot showing no fill at all.
-
-   IMPORTANT: no comments INSIDE the @theme block below, between properties —
-   Tailwind v4.3.2's @theme parser silently fails on that (passes the whole
-   block through as unprocessed raw text, so NONE of these variables take
-   effect, with no build error). Confirmed by bisection. Comments before/
-   after the block are fine; put any future notes here instead. */
-@theme inline {
-  --color-background: var(--color-bg);
-  --color-foreground: var(--color-text);
-  --color-card: var(--color-surface);
-  --color-card-foreground: var(--color-text);
-  --color-popover: var(--md-sys-color-surface-container-high);
-  --color-popover-foreground: var(--color-text);
-  --color-primary: var(--md-sys-color-primary);
-  --color-primary-foreground: var(--color-on-primary);
-  --color-secondary: var(--md-sys-color-secondary-container);
-  --color-secondary-foreground: var(--md-sys-color-on-secondary-container);
-  --color-muted: var(--md-sys-color-surface-container-high);
-  --color-muted-foreground: var(--color-text-muted);
-  --color-accent: var(--md-sys-color-tertiary);
-  --color-accent-foreground: var(--md-sys-color-on-tertiary);
-  --color-destructive: var(--color-danger);
-  --color-destructive-foreground: var(--md-sys-color-on-error);
-  --color-border: var(--md-sys-color-outline-variant);
-  --color-input: var(--color-border);
-  --color-ring: var(--color-primary);
-
-  --color-chart-1: var(--pulse-purple);
-  --color-chart-2: var(--pulse-coral);
-  --color-chart-3: var(--pulse-chart-oasis);
-  --color-chart-4: var(--pulse-chart-sunset);
-  --color-chart-5: var(--pulse-chart-sea);
-
-  --font-sans: var(--font-family-base);
-
+/* --radius-* aliases used throughout components/ui/* and hand-written CSS
+   below — kept as plain custom properties now that Tailwind's @theme (which
+   used to generate these) is gone. */
+:root {
   --radius-sm: var(--md-sys-shape-corner-small);
   --radius-md: var(--md-sys-shape-corner-medium);
   --radius-lg: var(--md-sys-shape-corner-large);
   --radius-xl: var(--md-sys-shape-corner-extra-large);
   --radius: var(--md-sys-shape-corner-medium);
+
+  /* @atlaskit/tokens ships no themeable radius artifact (unlike color/
+     spacing/motion/typography) — every Atlaskit component (Button,
+     Textfield, Select, Lozenge, ...) falls back to its own hardcoded
+     default (3-4px) unless these are set. Bumped for a slightly rounder,
+     more modern feel, consistent everywhere at once. */
+  --ds-radius-small: 6px;
+  --ds-radius-medium: 8px;
+  /* Atlaskit's new Button defaults this to a full pill (9999px) while
+     IconButton/Textfield/Select/Lozenge use --ds-radius-small/-medium —
+     mismatched shape language across otherwise-identical controls. Pinned
+     to the same family as -medium so every control reads as one consistent
+     rounded-rectangle system; Lozenge/Badge don't use this token at all
+     (they're --ds-radius-small already), so status pills keep their shape. */
+  --ds-radius-full: 8px;
 }
 
 @layer base, legacy-base, legacy-components, components, utilities;
-
-/* theme-toggle.tsx sets/removes data-theme on <html> (never a class) — three
-   states: explicit light, explicit dark, or absent ("system", OS-driven).
-   This mirrors that exact same three-way logic so shadcn's literal `dark:`
-   utilities (a handful inside its own component source) stay correct in all
-   three states, matching how m3-scheme.css already resolves --md-sys-color-*. */
-@custom-variant dark {
-  &:where([data-theme=dark], [data-theme=dark] *) {
-    @slot;
-  }
-  @media (prefers-color-scheme: dark) {
-    &:where(:not([data-theme=light]):not([data-theme=dark]), :not([data-theme=light]):not([data-theme=dark]) *) {
-      @slot;
-    }
-  }
-}
 
 @layer legacy-base {
 
@@ -136,11 +85,69 @@ h2 {
   line-height: var(--md-sys-typescale-title-large-line-height);
   font-weight: var(--font-weight-light);
 }
+
+.published-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.published-heading-icon {
+  color: var(--color-success);
+}
+
+.file-attached {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.file-attached-icon {
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
 h3 {
   font-size: var(--md-sys-typescale-title-medium-size);
   line-height: var(--md-sys-typescale-title-medium-line-height);
   letter-spacing: var(--md-sys-typescale-title-medium-tracking);
   font-weight: var(--font-weight-light);
+}
+
+/* Plain, unstyled <a>/<Link> (e.g. a table row's title link) would otherwise
+   fall back to the browser's default link blue — every anchor gets the
+   brand color by default; anything that needs different styling (nav links,
+   buttons rendered as <a>) already carries a more specific selector that
+   wins over this one. */
+a {
+  color: var(--color-primary);
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Table headers should never wrap — @atlaskit/table's default auto layout
+   can squeeze a short header (e.g. "members") down to near-zero width when
+   a sibling column's content is much wider, wrapping it one character per
+   line. Cell content still wraps normally; only headers are pinned. */
+th {
+  white-space: nowrap;
+}
+
+/* A trailing header with no label (an actions-only column, e.g. <TableHead
+   />) would otherwise stretch to soak up whatever width the other columns
+   don't need under table-layout:auto's 100%-wide default — width:1% is the
+   standard trick that instead shrinks it to its cell content and lets the
+   labeled columns take that space. */
+th:empty {
+  width: 1%;
+}
+
+.ak-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 }
 
@@ -215,6 +222,48 @@ h3 {
   color: var(--color-text-muted);
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pulse-tooltip-trigger {
+  display: inline-block;
+}
+
+.pulse-tooltip-content {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-bg);
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.pulse-tooltip-trigger:hover + .pulse-tooltip-content,
+.pulse-tooltip-trigger:focus-within + .pulse-tooltip-content {
+  opacity: 1;
+}
+
+.loading-placeholder {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-4) 0 var(--space-6);
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
 /* ── login ─────────────────────────────────────────────────────── */
 .login-screen {
   min-height: 100vh;
@@ -244,23 +293,6 @@ h3 {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   margin-top: var(--space-2);
-}
-
-/* M3 outlined text field: a visible border at rest, thickening to 2px in the
-   primary color on focus (rather than a filled background + underline —
-   the better fit for this app's existing always-bordered input convention). */
-.login-card input {
-  font: inherit;
-  padding: var(--space-3);
-  border: 1px solid var(--md-sys-color-outline);
-  border-radius: var(--radius-sm);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.login-card input:focus-visible {
-  border-color: var(--color-primary);
-  box-shadow: inset 0 0 0 1px var(--color-primary);
-  outline: none;
 }
 
 .login-card .btn-primary {
@@ -324,10 +356,19 @@ h3 {
   color: var(--color-text);
 }
 
+/* The header is always on the solid-purple [data-surface] regardless of
+   theme — Atlaskit's "default"/"subtle" Button appearances use low-contrast
+   neutral-gray text + a translucent-black border (--ds-text-subtle,
+   --ds-border), tuned for a plain page background, so the theme toggle and
+   "sign out" buttons were nearly invisible here. Buttons can't take a
+   className, so this repoints those two tokens for every button in this
+   subtree instead — safe because nothing else lives in the header actions. */
 .portal-header-actions {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  --ds-text-subtle: var(--pulse-air);
+  --ds-border: color-mix(in srgb, var(--pulse-air) 55%, transparent);
 }
 
 @media (min-width: 880px) {
@@ -1621,6 +1662,34 @@ h3 {
   gap: var(--space-2);
 }
 
+.user-picker-list {
+  max-height: 12rem;
+  overflow-y: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.user-picker-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-size: var(--font-size-sm);
+}
+
+.user-picker-option:hover,
+.user-picker-option[aria-selected='true'] {
+  background: var(--color-surface);
+}
+
+/* the from/to date pair is one atomic flex item within .page-title-row's own
+   wrap — without its own wrap, a narrow viewport pushes the second date
+   picker past the edge of the screen instead of onto its own line. */
+.date-range-filter {
+  flex-wrap: wrap;
+}
+
 .check-group {
   display: flex;
   flex-direction: column;
@@ -1963,6 +2032,10 @@ h3 {
   padding: var(--space-12);
 }
 
+.msform-thanks-icon {
+  color: var(--color-success);
+}
+
 .quiz-score {
   font-size: var(--font-size-lg);
 }
@@ -2005,6 +2078,20 @@ h3 {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
   max-width: none;
+}
+
+/* A sub-section INSIDE an already-bordered .builder-field card (KPI link,
+   response validation, hot-spot image config) — reusing .admin-card's full
+   border + left-accent + shadow here reads as a card nested inside a card.
+   A plain top divider keeps the grouping visible without competing with the
+   outer card for attention. */
+.field-subpanel {
+  padding: var(--space-2) 0 0;
+  margin-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .admin-card h2 {
@@ -2658,7 +2745,17 @@ h3 {
 .hierarchy-title-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
+  min-width: 0;
+}
+
+/* flex children default to min-width:auto, which blocks the title text from
+   wrapping inside the row — on a narrow viewport that pushes the badge next
+   to it past the edge of the screen instead of onto its own line. */
+.hierarchy-title-row h1 {
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 /* Weight ring: a conic-gradient dial, same visual language as the mini-dial
@@ -2704,35 +2801,20 @@ h3 {
 
 /* Search */
 .kpi-search {
-  position: relative;
   max-width: 320px;
   margin-bottom: var(--space-6);
 }
 
-.kpi-search svg {
-  position: absolute;
-  left: var(--space-3);
-  top: 50%;
-  transform: translateY(-50%);
+/* elemBeforeInput's own wrapper: Atlaskit lays this out as a flex sibling
+   ahead of the actual <input>, so the icon and placeholder text can never
+   overlap the way they did when the icon was absolutely positioned over a
+   raw <input> that Atlaskit's own textfield markup no longer matches. */
+.search-field-icon {
+  display: flex;
+  align-items: center;
+  padding-inline-start: var(--space-3);
   color: var(--color-text-muted);
   pointer-events: none;
-}
-
-.kpi-search input {
-  width: 100%;
-  padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-3) * 2 + 16px);
-  border: 1px solid var(--md-sys-color-outline);
-  border-radius: var(--md-sys-shape-corner-full);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.kpi-search input:focus-visible {
-  border-color: var(--color-primary);
-  box-shadow: inset 0 0 0 1px var(--color-primary);
-  outline: none;
 }
 
 /* ── KPI module: master-detail workspace ──────────────────────────────
@@ -2773,15 +2855,15 @@ h3 {
 
 .insight-card {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: var(--space-3);
+  max-width: 280px;
   padding: var(--space-5);
   border: none;
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--ic, var(--pulse-moon-light)) 12%, transparent);
   font: inherit;
-  text-align: center;
+  text-align: left;
   transition: transform var(--transition-fast);
 }
 
@@ -3603,6 +3685,8 @@ button.insight-card:focus-visible {
 .response-modal-body {
   padding: var(--space-5) var(--space-6);
   overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 0%;
 }
 
 .response-modal-qa {
@@ -3729,5 +3813,322 @@ button.insight-card:focus-visible {
 .kpi-bulk-mapping-table select {
   width: 100%;
   max-width: 320px;
+}
+
+/* KPI mapping "add a mapping" / bulk-mapping selects: a same-weight stack of
+   6+ dropdowns reads as a form with no structure — group them two-up instead
+   so related choices (KPI/area, score field/review type, context/comment)
+   sit next to each other. */
+.kpi-mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (max-width: 640px) {
+  .kpi-mapping-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── form-builder shell (Google-Forms-parity prototype) ───────────── */
+.fb-new-form-link {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid #dadce0;
+  padding: 6px 12px;
+  font-size: 0.875rem;
+  color: #5f6368;
+}
+
+.fb-new-form-link:hover {
+  background: #f1f3f4;
+}
+
+.fb-new-form-label {
+  display: none;
+}
+
+.fb-desktop-tabs {
+  display: none;
+  flex: 1;
+  justify-content: center;
+}
+
+.fb-header-actions {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.fb-mobile-tabbar {
+  border-bottom: 1px solid rgb(0 0 0 / 0.1);
+  background: white;
+  padding: 4px 16px;
+}
+
+@media (min-width: 640px) {
+  .fb-new-form-label {
+    display: inline;
+  }
+  .fb-desktop-tabs {
+    display: flex;
+  }
+  .fb-header-actions {
+    flex: none;
+  }
+  .fb-mobile-tabbar {
+    display: none;
+  }
+}
+
+.fb-toolbar-rail {
+  position: absolute;
+  top: 8px;
+  left: calc(100% + 12px);
+  z-index: 10;
+  display: none;
+  width: 48px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid #dadce0;
+  background: white;
+  padding: 8px 0;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+.fb-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-top: 1px solid #e0e0e0;
+  padding-top: 12px;
+}
+
+@media (min-width: 768px) {
+  .fb-toolbar-rail {
+    display: flex;
+  }
+  .fb-toolbar-row {
+    display: none;
+  }
+}
+
+.fb-question-card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  border: 1px solid #dadce0;
+  background: white;
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.15s ease;
+}
+
+.fb-question-card.is-active {
+  border-color: #dadce0;
+  border-left: 4px solid #673ab7;
+  box-shadow: var(--md-sys-elevation-level2);
+}
+
+.fb-question-card.is-dragging {
+  opacity: 0.4;
+}
+
+.fb-drag-handle {
+  position: absolute;
+  inset-inline: 0;
+  top: -4px;
+  display: flex;
+  height: 16px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  color: #dadce0;
+  opacity: 0;
+  cursor: grab;
+  transition: opacity 0.15s ease;
+}
+
+.fb-drag-handle:hover {
+  color: #5f6368;
+}
+
+.fb-drag-handle:active {
+  cursor: grabbing;
+}
+
+.fb-question-card:hover .fb-drag-handle,
+.fb-drag-handle.is-active {
+  opacity: 1;
+}
+
+.fb-title-input {
+  height: auto !important;
+  border: 0 !important;
+  border-bottom: 1px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.fb-title-input input {
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.fb-title-input:focus-within {
+  border-bottom-color: #673ab7 !important;
+  box-shadow: none !important;
+}
+
+.fb-question-title-input {
+  height: auto !important;
+  border: 0 !important;
+  border-bottom: 1px solid #c6c6c6 !important;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0 !important;
+  background: #f8f9fa !important;
+  padding: 10px 12px !important;
+  box-shadow: none !important;
+}
+
+.fb-question-title-input:focus-within {
+  border-bottom: 2px solid #673ab7 !important;
+  box-shadow: none !important;
+}
+
+.fb-description-input {
+  height: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.fb-description-input input {
+  font-size: 0.875rem;
+  color: #5f6368;
+}
+
+.fb-description-input:focus-within {
+  box-shadow: none !important;
+}
+
+.fb-form-title-input {
+  height: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.fb-form-title-input input {
+  font-size: 28px;
+  font-weight: 400;
+  color: #202124;
+}
+
+.fb-form-title-input:focus-within {
+  box-shadow: none !important;
+}
+
+.fb-form-description-input {
+  height: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.fb-form-description-input input {
+  font-size: 0.875rem;
+  color: #5f6368;
+}
+
+.fb-form-description-input:focus-within {
+  box-shadow: none !important;
+}
+
+.fb-section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fb-section-group.is-dragging {
+  opacity: 0.4;
+}
+
+.fb-section-drag-handle {
+  display: flex;
+  height: 16px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  color: #dadce0;
+  opacity: 0;
+  cursor: grab;
+  transition: opacity 0.15s ease;
+}
+
+.fb-section-drag-handle:hover {
+  color: #5f6368;
+}
+
+.fb-section-drag-handle:active {
+  cursor: grabbing;
+}
+
+.fb-section-group:hover .fb-section-drag-handle {
+  opacity: 1;
+}
+
+.fb-section-title-input {
+  height: auto !important;
+  border: 0 !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.fb-section-title-input input {
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: #202124;
+}
+
+.fb-section-title-input:focus-within {
+  border-bottom-color: #673ab7 !important;
+  box-shadow: none !important;
+}
+
+.fb-section-description-input {
+  height: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.fb-section-description-input input {
+  font-size: 0.875rem;
+  color: #5f6368;
+}
+
+.fb-section-description-input:focus-within {
+  box-shadow: none !important;
 }
 }

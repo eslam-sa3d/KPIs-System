@@ -11,8 +11,10 @@ const NEXT: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'lig
 function applyTheme(theme: Theme) {
   if (theme === 'system') {
     document.documentElement.removeAttribute('data-theme');
+    document.documentElement.removeAttribute('data-color-mode');
   } else {
     document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-color-mode', theme);
   }
 }
 
@@ -49,7 +51,6 @@ export function ThemeToggle() {
       type="button"
       variant="outline"
       size="sm"
-      className="rounded-full"
       onClick={cycle}
       aria-label={`theme: ${label} — click to change`}
     >

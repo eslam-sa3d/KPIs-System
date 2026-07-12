@@ -1,18 +1,14 @@
-import * as React from "react"
+"use client"
 
-import { cn } from "@/lib/utils"
+import AtlaskitTextArea, { type TextAreaProps } from "@atlaskit/textarea"
 
-function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
-  return (
-    <textarea
-      data-slot="textarea"
-      className={cn(
-        "flex field-sizing-content min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:aria-invalid:ring-destructive/40",
-        className
-      )}
-      {...props}
-    />
-  )
+type TextareaProps = Omit<TextAreaProps, "isDisabled"> & {
+  disabled?: boolean
+}
+
+function Textarea({ disabled, ...props }: TextareaProps) {
+  return <AtlaskitTextArea isDisabled={disabled} {...props} />
 }
 
 export { Textarea }
+export type { TextareaProps }

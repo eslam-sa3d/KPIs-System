@@ -117,7 +117,7 @@ export function ShareLinkPanel({
       )}
 
       {!token ? (
-        <Button onClick={() => toggle(true)} disabled={busy}>
+        <Button onClick={() => toggle(true)} isDisabled={busy}>
           {busy ? 'creating…' : 'create public link'}
         </Button>
       ) : (
@@ -138,13 +138,13 @@ export function ShareLinkPanel({
           )}
 
           <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
-            <Button variant="ghost" size="sm" onClick={() => toggle(true)} disabled={busy}>
+            <Button variant="ghost" size="sm" onClick={() => toggle(true)} isDisabled={busy}>
               rotate link
             </Button>
             {confirmDisable ? (
               <>
                 <span className="muted">disable the public link?</span>
-                <Button variant="ghost" size="sm" onClick={() => toggle(false)} disabled={busy}>
+                <Button variant="ghost" size="sm" onClick={() => toggle(false)} isDisabled={busy}>
                   confirm disable
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(false)}>
@@ -152,7 +152,7 @@ export function ShareLinkPanel({
                 </Button>
               </>
             ) : (
-              <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(true)} disabled={busy}>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(true)} isDisabled={busy}>
                 disable
               </Button>
             )}
@@ -167,7 +167,7 @@ export function ShareLinkPanel({
         itself is the access control, so treat it like a password.
       </p>
       {!xToken ? (
-        <Button onClick={() => toggleExportLink(true)} disabled={xBusy}>
+        <Button onClick={() => toggleExportLink(true)} isDisabled={xBusy}>
           {xBusy ? 'creating…' : 'create live export link'}
         </Button>
       ) : (
@@ -177,13 +177,13 @@ export function ShareLinkPanel({
             <Button variant="ghost" size="sm" onClick={copyExportUrl}>{xCopied ? 'copied!' : 'copy'}</Button>
           </div>
           <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
-            <Button variant="ghost" size="sm" onClick={() => toggleExportLink(true)} disabled={xBusy}>
+            <Button variant="ghost" size="sm" onClick={() => toggleExportLink(true)} isDisabled={xBusy}>
               rotate link
             </Button>
             {confirmDisableExport ? (
               <>
                 <span className="muted">disable the live export link?</span>
-                <Button variant="ghost" size="sm" onClick={() => toggleExportLink(false)} disabled={xBusy}>
+                <Button variant="ghost" size="sm" onClick={() => toggleExportLink(false)} isDisabled={xBusy}>
                   confirm disable
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(false)}>
@@ -191,7 +191,7 @@ export function ShareLinkPanel({
                 </Button>
               </>
             ) : (
-              <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(true)} disabled={xBusy}>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(true)} isDisabled={xBusy}>
                 disable
               </Button>
             )}

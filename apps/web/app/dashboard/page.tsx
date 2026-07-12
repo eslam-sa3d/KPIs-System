@@ -399,22 +399,22 @@ export default function DashboardPage() {
 
         {kpis && (
           <div className="p-filter-pills" style={{ marginBottom: 20 }}>
-            <Badge asChild variant={level === 'all' ? 'default' : 'outline'} className="cursor-pointer py-1">
-              <button onClick={() => setLevel('all')}>all levels ({kpis.length})</button>
-            </Badge>
+            <button onClick={() => setLevel('all')} style={{ all: 'unset', cursor: 'pointer' }}>
+              <Badge variant={level === 'all' ? 'default' : 'outline'}>all levels ({kpis.length})</Badge>
+            </button>
             {levels.map((l) => (
-              <Badge key={l} asChild variant={level === l ? 'default' : 'outline'} className="cursor-pointer py-1">
-                <button onClick={() => setLevel(l)}>
+              <button key={l} onClick={() => setLevel(l)} style={{ all: 'unset', cursor: 'pointer' }}>
+                <Badge variant={level === l ? 'default' : 'outline'}>
                   {CADENCE_LABEL[l] ?? l} ({kpis.filter((k) => k.areas.some((a) => a.cadence === l)).length})
-                </button>
-              </Badge>
+                </Badge>
+              </button>
             ))}
           </div>
         )}
 
         {kpis === null ? (
-          <div className="rounded-md border bg-card mt-4 mb-6 p-6" style={{ display: 'flex', justifyContent: 'center' }}>
-            <Spinner className="size-6" />
+          <div className="loading-placeholder">
+            <Spinner size="medium" />
           </div>
         ) : (
           <>
@@ -457,7 +457,7 @@ export default function DashboardPage() {
               {reviewMixTotal > 0 && (
                 <div className="p-legend-row">
                   {Object.entries(reviewMix).map(([type, count]) => (
-                    <Badge key={type} variant="outline" className="py-1">
+                    <Badge key={type} variant="outline">
                       {REVIEW_TYPE_LABEL[type] ?? type}: {count}
                     </Badge>
                   ))}
@@ -554,9 +554,11 @@ export default function DashboardPage() {
               <div className="p-table-header">
                 <div className="p-filter-pills">
                   {(['all', ...STATUS_ORDER] as const).map((s) => (
-                    <Badge key={s} asChild variant={statusFilter === s ? 'default' : 'outline'} className="cursor-pointer py-1">
-                      <button onClick={() => setStatusFilter(s)}>{s === 'all' ? 'All' : STATUS_LABEL[s]}</button>
-                    </Badge>
+                    <button key={s} onClick={() => setStatusFilter(s)} style={{ all: 'unset', cursor: 'pointer' }}>
+                      <Badge variant={statusFilter === s ? 'default' : 'outline'}>
+                        {s === 'all' ? 'All' : STATUS_LABEL[s]}
+                      </Badge>
+                    </button>
                   ))}
                 </div>
                 <span className="muted" style={{ fontSize: 11 }}>
@@ -604,21 +606,7 @@ export default function DashboardPage() {
                     </TableRow>
                   ) : (
                     tableData.map((k) => (
-                      <TableRow
-                        key={k.id}
-                        tabIndex={0}
-                        role="button"
-                        aria-label={`view ${k.name}`}
-                        onClick={() => setSelectedId(k.id)}
-                        onKeyDown={(e) => {
-                          if (e.target !== e.currentTarget) return;
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setSelectedId(k.id);
-                          }
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
+                      <TableRow key={k.id}>
                         <TableCell style={{ fontWeight: 500 }}>{k.name}</TableCell>
                         <TableCell className="muted">{k.areas.length}</TableCell>
                         <TableCell>
@@ -627,7 +615,7 @@ export default function DashboardPage() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          <Badge className="border-transparent" style={statusBadgeStyle(k.status)}>
+                          <Badge style={statusBadgeStyle(k.status)}>
                             {STATUS_LABEL[k.status]}
                           </Badge>
                         </TableCell>
@@ -666,14 +654,11 @@ export default function DashboardPage() {
                 <div className="p-table-header">
                   <div className="p-filter-pills">
                     {(['all', ...STATUS_ORDER] as const).map((s) => (
-                      <Badge
-                        key={s}
-                        asChild
-                        variant={memberStatusFilter === s ? 'default' : 'outline'}
-                        className="cursor-pointer py-1"
-                      >
-                        <button onClick={() => setMemberStatusFilter(s)}>{s === 'all' ? 'All' : STATUS_LABEL[s]}</button>
-                      </Badge>
+                      <button key={s} onClick={() => setMemberStatusFilter(s)} style={{ all: 'unset', cursor: 'pointer' }}>
+                        <Badge variant={memberStatusFilter === s ? 'default' : 'outline'}>
+                          {s === 'all' ? 'All' : STATUS_LABEL[s]}
+                        </Badge>
+                      </button>
                     ))}
                   </div>
                   <span className="muted" style={{ fontSize: 11 }}>
@@ -766,7 +751,7 @@ export default function DashboardPage() {
                             </TableCell>
                             <TableCell>
                               {m.hasKpi ? (
-                                <Badge className="border-transparent" style={statusBadgeStyle(status)}>
+                                <Badge style={statusBadgeStyle(status)}>
                                   {STATUS_LABEL[status]}
                                 </Badge>
                               ) : (

@@ -12,10 +12,12 @@ import { chartSeries, palette } from '@pulse/theme';
  *  clipped half-circle; <Bar> just looks shorter, easy to miss). Mounting
  *  the chart one tick after the wrapping <div> has already painted sidesteps
  *  the race entirely instead of chasing resize-event timing. */
-function ChartFrame({ className, children }: { className: string; children: React.ReactElement }) {
+function ChartFrame({ height, children }: { height: number; children: React.ReactElement }) {
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
-  return <div className={className}>{ready && <ResponsiveContainer>{children}</ResponsiveContainer>}</div>;
+  return (
+    <div style={{ height, width: '100%' }}>{ready && <ResponsiveContainer>{children}</ResponsiveContainer>}</div>
+  );
 }
 
 /** Mutually-exclusive single-answer breakdown (multiple_choice / dropdown):
@@ -29,8 +31,8 @@ export function PieBreakdown({ counts }: { counts: Record<string, number> }) {
   const total = data.reduce((a, d) => a + d.count, 0);
 
   return (
-    <div className="flex flex-col gap-2">
-      <ChartFrame className="h-44 w-full">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <ChartFrame height={176}>
         <PieChart>
           <Pie data={data} dataKey="count" nameKey="label" outerRadius={72}>
             {data.map((d, i) => (
@@ -46,12 +48,14 @@ export function PieBreakdown({ counts }: { counts: Record<string, number> }) {
           />
         </PieChart>
       </ChartFrame>
-      <ul className="flex flex-col gap-1">
+      <ul style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {data.map((d, i) => (
-          <li key={d.label} className="flex items-center gap-2 text-sm">
-            <span className="size-2.5 shrink-0 rounded-full" style={{ background: chartSeries[i % chartSeries.length] }} />
-            <span className="flex-1 truncate">{d.label}</span>
-            <span className="text-xs text-muted-foreground">
+          <li key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.875rem' }}>
+            <span
+              style={{ width: 10, height: 10, flexShrink: 0, borderRadius: '50%', background: chartSeries[i % chartSeries.length] }}
+            />
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.label}</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
               {d.count} ({total ? Math.round((d.count / total) * 100) : 0}%)
             </span>
           </li>
@@ -67,7 +71,7 @@ export function BarBreakdown({ counts }: { counts: Record<string, number> }) {
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const data = entries.map(([label, count]) => ({ label, count }));
   return (
-    <ChartFrame className="h-44 w-full">
+    <ChartFrame height={176}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
         <CartesianGrid stroke={palette.secondary.silverLight} vertical={false} />
         <XAxis dataKey="label" tick={{ fill: palette.secondary.silver, fontSize: 11 }} tickLine={false} axisLine={{ stroke: palette.secondary.silverLight }} interval={0} angle={-15} textAnchor="end" height={48} />
@@ -85,8 +89,8 @@ export function ScaleBreakdown({ scaleCounts, average, min, max }: { scaleCounts
     return { label: value, count: scaleCounts[value] ?? 0 };
   });
   return (
-    <div className="flex flex-col gap-1">
-      <ChartFrame className="h-40 w-full">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <ChartFrame height={160}>
         <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
           <CartesianGrid stroke={palette.secondary.silverLight} vertical={false} />
           <XAxis dataKey="label" tick={{ fill: palette.secondary.silver, fontSize: 11 }} tickLine={false} axisLine={{ stroke: palette.secondary.silverLight }} />
@@ -95,30 +99,34 @@ export function ScaleBreakdown({ scaleCounts, average, min, max }: { scaleCounts
           <Bar dataKey="count" fill={palette.primary.purple} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ChartFrame>
-      {average !== undefined && <p className="text-sm text-muted-foreground">average {average.toFixed(1)}</p>}
+      {average !== undefined && (
+        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>average {average.toFixed(1)}</p>
+      )}
     </div>
   );
 }
 
 export function GridMatrix({ matrix }: { matrix: Record<string, Record<string, number>> }) {
   const columns = Array.from(new Set(Object.values(matrix).flatMap((row) => Object.keys(row))));
+  const headCellStyle: React.CSSProperties = { padding: '4px 12px 4px 0', fontWeight: 500 };
+  const dataHeadCellStyle: React.CSSProperties = { padding: '4px 8px', fontWeight: 500 };
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', fontSize: '0.875rem' }}>
         <thead>
-          <tr className="border-b border-border text-left text-xs text-muted-foreground">
-            <th className="py-1 pr-3 font-medium" />
+          <tr style={{ borderBottom: '1px solid var(--color-border)', textAlign: 'left', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            <th style={headCellStyle} />
             {columns.map((c) => (
-              <th key={c} className="px-2 py-1 font-medium">{c}</th>
+              <th key={c} style={dataHeadCellStyle}>{c}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {Object.entries(matrix).map(([row, dist]) => (
-            <tr key={row} className="border-b border-border last:border-0">
-              <td className="py-1.5 pr-3 font-medium">{row}</td>
+          {Object.entries(matrix).map(([row, dist], i, arr) => (
+            <tr key={row} style={{ borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--color-border)' }}>
+              <td style={{ padding: '6px 12px 6px 0', fontWeight: 500 }}>{row}</td>
               {columns.map((c) => (
-                <td key={c} className="px-2 py-1.5 tabular-nums">{dist[c] ?? 0}</td>
+                <td key={c} style={{ padding: '6px 8px', fontVariantNumeric: 'tabular-nums' }}>{dist[c] ?? 0}</td>
               ))}
             </tr>
           ))}
@@ -129,11 +137,22 @@ export function GridMatrix({ matrix }: { matrix: Record<string, Record<string, n
 }
 
 export function TextSamples({ samples }: { samples: string[] }) {
-  if (samples.length === 0) return <p className="text-sm text-muted-foreground">No responses yet.</p>;
+  if (samples.length === 0) {
+    return <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>No responses yet.</p>;
+  }
   return (
-    <ul className="flex flex-col gap-1.5">
+    <ul style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {samples.map((s, i) => (
-        <li key={i} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+        <li
+          key={i}
+          style={{
+            borderRadius: 8,
+            border: '1px solid var(--color-border)',
+            background: 'color-mix(in srgb, var(--color-surface) 30%, transparent)',
+            padding: '8px 12px',
+            fontSize: '0.875rem',
+          }}
+        >
           “{s}”
         </li>
       ))}

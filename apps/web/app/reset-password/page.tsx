@@ -1,11 +1,10 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, Suspense, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Button, LinkButton } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { resetPassword } from '../../lib/api-client';
 import { asset } from '../../lib/asset';
@@ -47,9 +46,9 @@ function ResetPasswordForm() {
             this reset link is missing its token — copy the full link from your email, or request a new one.
           </AlertDescription>
         </Alert>
-        <Button asChild variant="ghost" className="w-full">
-          <Link href="/forgot-password">request a new link</Link>
-        </Button>
+        <LinkButton href="/forgot-password" variant="ghost" shouldFitContainer>
+          request a new link
+        </LinkButton>
       </div>
     );
   }
@@ -62,7 +61,7 @@ function ResetPasswordForm() {
         <Alert>
           <AlertDescription>your password has been changed — sign in with your new password.</AlertDescription>
         </Alert>
-        <Button className="w-full" onClick={() => router.push('/login')}>
+        <Button shouldFitContainer onClick={() => router.push('/login')}>
           go to sign in
         </Button>
       </div>
@@ -93,7 +92,7 @@ function ResetPasswordForm() {
         </Alert>
       )}
 
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button type="submit" isDisabled={pending} shouldFitContainer>
         {pending ? 'resetting…' : 'reset password'}
       </Button>
     </form>

@@ -1,66 +1,42 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
+"use client"
 
-import { cn } from "@/lib/utils"
+import AtlaskitSectionMessage from "@atlaskit/section-message"
+import type { ReactNode, CSSProperties } from "react"
 
-const alertVariants = cva(
-  "relative grid w-full grid-cols-[0_1fr] items-start gap-y-0.5 rounded-lg border px-4 py-3 text-sm has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] has-[>svg]:gap-x-3 [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current",
-  {
-    variants: {
-      variant: {
-        default: "bg-card text-card-foreground",
-        destructive:
-          "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 [&>svg]:text-current",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
+export type AlertVariant = "default" | "destructive"
 
-function Alert({
-  className,
-  variant,
-  ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof alertVariants>) {
+const VARIANT_TO_APPEARANCE: Record<AlertVariant, "information" | "error"> = {
+  default: "information",
+  destructive: "error",
+}
+
+type AlertProps = {
+  variant?: AlertVariant
+  children?: ReactNode
+  className?: string
+  style?: CSSProperties
+}
+
+function Alert({ variant = "default", className, style, children }: AlertProps) {
+  const message = <AtlaskitSectionMessage appearance={VARIANT_TO_APPEARANCE[variant]}>{children}</AtlaskitSectionMessage>
+  if (!className && !style) return message
   return (
-    <div
-      data-slot="alert"
-      role="alert"
-      className={cn(alertVariants({ variant }), className)}
-      {...props}
-    />
+    <div className={className} style={style}>
+      {message}
+    </div>
   )
 }
 
-function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="alert-title"
-      className={cn(
-        "col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight",
-        className
-      )}
-      {...props}
-    />
-  )
+/** SectionMessage has no separate title/description sub-slots the way the
+ *  old shadcn Alert did — every current call site only uses
+ *  AlertDescription (no AlertTitle usage in the app), so this just passes
+ *  children straight through as Alert's own children. */
+function AlertDescription({ children }: { children?: ReactNode }) {
+  return <>{children}</>
 }
 
-function AlertDescription({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="alert-description"
-      className={cn(
-        "col-start-2 grid justify-items-start gap-1 text-sm text-muted-foreground [&_p]:leading-relaxed",
-        className
-      )}
-      {...props}
-    />
-  )
+function AlertTitle({ children }: { children?: ReactNode }) {
+  return <strong>{children}</strong>
 }
 
 export { Alert, AlertTitle, AlertDescription }

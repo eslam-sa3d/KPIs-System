@@ -305,7 +305,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     type="button"
                     variant="ghost"
                     size="sm"
-                    disabled={backfillingId === m.id}
+                    isDisabled={backfillingId === m.id}
                     onClick={() => onBackfill(m.id, m.evaluationArea.name)}
                     title="score every existing submission against this mapping too"
                   >
@@ -314,7 +314,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                   {confirmDeleteId === m.id ? (
                     <>
                       <span className="muted">remove this mapping?</span>{' '}
-                      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onDelete(m.id)}>
+                      <Button type="button" variant="ghost" size="sm" isDisabled={busy} onClick={() => onDelete(m.id)}>
                         confirm remove
                       </Button>{' '}
                       <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
@@ -326,7 +326,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                       type="button"
                       variant="ghost"
                       size="sm"
-                      disabled={busy}
+                      isDisabled={busy}
                       onClick={() => setConfirmDeleteId(m.id)}
                     >
                       remove
@@ -338,100 +338,102 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
           )}
 
           <label htmlFor="kpi-mapping-kpi">add a mapping</label>
-          <Select
-            value={kpiId}
-            onValueChange={(v) => {
-              setKpiId(v);
-              setEvaluationAreaId('');
-            }}
-          >
-            <SelectTrigger id="kpi-mapping-kpi">
-              <SelectValue placeholder="choose a KPI…" />
-            </SelectTrigger>
-            <SelectContent>
-              {kpis?.map((k) => (
-                <SelectItem key={k.id} value={k.id}>
-                  {k.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={evaluationAreaId} onValueChange={setEvaluationAreaId} disabled={!kpiId}>
-            <SelectTrigger aria-label="evaluation area">
-              <SelectValue placeholder="choose an evaluation area…" />
-            </SelectTrigger>
-            <SelectContent>
-              {kpiAreas.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={scoreFieldKey} onValueChange={setScoreFieldKey}>
-            <SelectTrigger aria-label="score field">
-              <SelectValue placeholder="which field supplies the score…" />
-            </SelectTrigger>
-            <SelectContent>
-              {scoreFields.map((f) => (
-                <SelectItem key={f.key} value={f.key}>
-                  {f.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={reviewType} onValueChange={(v) => setReviewType(v as ReviewType)}>
-            <SelectTrigger aria-label="review type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {REVIEW_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {REVIEW_TYPE_LABEL[t]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="kpi-mapping-grid">
+            <Select
+              value={kpiId}
+              onValueChange={(v) => {
+                setKpiId(v);
+                setEvaluationAreaId('');
+              }}
+            >
+              <SelectTrigger id="kpi-mapping-kpi">
+                <SelectValue placeholder="choose a KPI…" />
+              </SelectTrigger>
+              <SelectContent>
+                {kpis?.map((k) => (
+                  <SelectItem key={k.id} value={k.id}>
+                    {k.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={evaluationAreaId} onValueChange={setEvaluationAreaId} disabled={!kpiId}>
+              <SelectTrigger aria-label="evaluation area">
+                <SelectValue placeholder="choose an evaluation area…" />
+              </SelectTrigger>
+              <SelectContent>
+                {kpiAreas.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={scoreFieldKey} onValueChange={setScoreFieldKey}>
+              <SelectTrigger aria-label="score field">
+                <SelectValue placeholder="which field supplies the score…" />
+              </SelectTrigger>
+              <SelectContent>
+                {scoreFields.map((f) => (
+                  <SelectItem key={f.key} value={f.key}>
+                    {f.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={reviewType} onValueChange={(v) => setReviewType(v as ReviewType)}>
+              <SelectTrigger aria-label="review type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {REVIEW_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {REVIEW_TYPE_LABEL[t]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={contextFieldKey || NONE}
+              onValueChange={(v) => setContextFieldKey(v === NONE ? '' : v)}
+            >
+              <SelectTrigger aria-label="context field (optional)">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>no context field</SelectItem>
+                {definition.fields.map((f) => (
+                  <SelectItem key={f.key} value={f.key}>
+                    context: {f.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={commentFieldKey || NONE}
+              onValueChange={(v) => setCommentFieldKey(v === NONE ? '' : v)}
+            >
+              <SelectTrigger aria-label="comment field (optional)">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>no comment field</SelectItem>
+                {definition.fields.map((f) => (
+                  <SelectItem key={f.key} value={f.key}>
+                    comment: {f.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <label className="check-item">
             <Checkbox checked={anonymous} onCheckedChange={(checked) => setAnonymous(checked === true)} />
             keep the evaluator anonymous
           </label>
-          <Select
-            value={contextFieldKey || NONE}
-            onValueChange={(v) => setContextFieldKey(v === NONE ? '' : v)}
-          >
-            <SelectTrigger aria-label="context field (optional)">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>no context field</SelectItem>
-              {definition.fields.map((f) => (
-                <SelectItem key={f.key} value={f.key}>
-                  context: {f.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={commentFieldKey || NONE}
-            onValueChange={(v) => setCommentFieldKey(v === NONE ? '' : v)}
-          >
-            <SelectTrigger aria-label="comment field (optional)">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>no comment field</SelectItem>
-              {definition.fields.map((f) => (
-                <SelectItem key={f.key} value={f.key}>
-                  comment: {f.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Button
             type="button"
             variant="ghost"
-            disabled={busy || !evaluationAreaId || !scoreFieldKey}
+            isDisabled={busy || !evaluationAreaId || !scoreFieldKey}
             onClick={onCreate}
           >
             add mapping
@@ -456,54 +458,56 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     bulk-map the {unmappedScoreFields.length} remaining unmapped question
                     {unmappedScoreFields.length === 1 ? '' : 's'}
                   </label>
-                  <Select value={bulkReviewType} onValueChange={(v) => setBulkReviewType(v as ReviewType)}>
-                    <SelectTrigger aria-label="review type for this batch">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {REVIEW_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {REVIEW_TYPE_LABEL[t]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="kpi-mapping-grid">
+                    <Select value={bulkReviewType} onValueChange={(v) => setBulkReviewType(v as ReviewType)}>
+                      <SelectTrigger aria-label="review type for this batch">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REVIEW_TYPES.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {REVIEW_TYPE_LABEL[t]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={bulkContextFieldKey || NONE}
+                      onValueChange={(v) => setBulkContextFieldKey(v === NONE ? '' : v)}
+                    >
+                      <SelectTrigger aria-label="context field for this batch (optional)">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE}>no context field</SelectItem>
+                        {definition.fields.map((f) => (
+                          <SelectItem key={f.key} value={f.key}>
+                            context: {f.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={bulkCommentFieldKey || NONE}
+                      onValueChange={(v) => setBulkCommentFieldKey(v === NONE ? '' : v)}
+                    >
+                      <SelectTrigger aria-label="comment field for this batch (optional)">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE}>no comment field</SelectItem>
+                        {definition.fields.map((f) => (
+                          <SelectItem key={f.key} value={f.key}>
+                            comment: {f.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <label className="check-item">
                     <Checkbox checked={bulkAnonymous} onCheckedChange={(checked) => setBulkAnonymous(checked === true)} />
                     keep evaluators anonymous
                   </label>
-                  <Select
-                    value={bulkContextFieldKey || NONE}
-                    onValueChange={(v) => setBulkContextFieldKey(v === NONE ? '' : v)}
-                  >
-                    <SelectTrigger aria-label="context field for this batch (optional)">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>no context field</SelectItem>
-                      {definition.fields.map((f) => (
-                        <SelectItem key={f.key} value={f.key}>
-                          context: {f.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={bulkCommentFieldKey || NONE}
-                    onValueChange={(v) => setBulkCommentFieldKey(v === NONE ? '' : v)}
-                  >
-                    <SelectTrigger aria-label="comment field for this batch (optional)">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>no comment field</SelectItem>
-                      {definition.fields.map((f) => (
-                        <SelectItem key={f.key} value={f.key}>
-                          comment: {f.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
 
                   <Table className="kpi-bulk-mapping-table">
                     <TableHeader>
@@ -552,7 +556,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     <Button
                       type="button"
                       size="sm"
-                      disabled={busy || bulkMappedCount === 0}
+                      isDisabled={busy || bulkMappedCount === 0}
                       onClick={onBulkCreate}
                     >
                       map {bulkMappedCount} question{bulkMappedCount === 1 ? '' : 's'}
@@ -566,7 +570,6 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
                   onClick={openBulk}
                 >
                   bulk-map {unmappedScoreFields.length} remaining questions
