@@ -44,9 +44,7 @@ export class FormKpiMappingsService {
     // types (SCORE_FIELD_TYPES) actually produce a live score; the rest just never do, silently.
     const scoreField = definition.fields.find((f) => f.key === input.scoreFieldKey);
     if (!scoreField || scoreField.type === 'section_header') {
-      throw AppError.validation([
-        { path: 'scoreFieldKey', message: 'must reference a question on this form' },
-      ]);
+      throw AppError.validation([{ path: 'scoreFieldKey', message: 'must reference a question on this form' }]);
     }
     this.validateExtraFieldKeys(definition, input.contextFieldKey, input.commentFieldKey);
 
@@ -73,7 +71,13 @@ export class FormKpiMappingsService {
       },
     });
     await this.prisma.auditLog.create({
-      data: { actorId, action: 'form_kpi_mapping.created', entity: 'FormKpiMapping', entityId: mapping.id, detail: input },
+      data: {
+        actorId,
+        action: 'form_kpi_mapping.created',
+        entity: 'FormKpiMapping',
+        entityId: mapping.id,
+        detail: input,
+      },
     });
     return mapping;
   }
@@ -126,6 +130,21 @@ export class FormKpiMappingsService {
       skipped: [],
     };
 
+    // Batched upfront instead of a findUnique-per-row inside the loop below —
+    // up to 200 rows per call (bulkCreateFormKpiMappingSchema's cap), so this
+    // turns up to 2×200 sequential round trips into 2.
+    const areaIds = [...new Set(input.mappings.map((row) => row.evaluationAreaId))];
+    const [areas, existingMappings] = await Promise.all([
+      this.prisma.evaluationArea.findMany({ where: { id: { in: areaIds } } }),
+      this.prisma.formKpiMapping.findMany({ where: { formId, evaluationAreaId: { in: areaIds } } }),
+    ]);
+    const areaById = new Map(areas.map((area) => [area.id, area]));
+    // Tracks both pre-existing mappings and ones created earlier in this same
+    // batch — a row can't be re-checked against the DB mid-loop anymore, so
+    // this set is updated by hand right after each create() below, mirroring
+    // the read-your-own-writes behavior the old per-row findUnique gave for free.
+    const mappedAreaIds = new Set(existingMappings.map((m) => m.evaluationAreaId));
+
     for (const row of input.mappings) {
       const scoreField = definition.fields.find((f) => f.key === row.scoreFieldKey);
       if (!scoreField || scoreField.type === 'section_header') {
@@ -136,22 +155,20 @@ export class FormKpiMappingsService {
         continue;
       }
 
-      const area = await this.prisma.evaluationArea.findUnique({ where: { id: row.evaluationAreaId } });
+      const area = areaById.get(row.evaluationAreaId);
       if (!area) {
         result.skipped.push({ evaluationAreaId: row.evaluationAreaId, reason: 'evaluation area not found' });
         continue;
       }
 
-      const existing = await this.prisma.formKpiMapping.findUnique({
-        where: { formId_evaluationAreaId: { formId, evaluationAreaId: row.evaluationAreaId } },
-      });
-      if (existing) {
+      if (mappedAreaIds.has(row.evaluationAreaId)) {
         result.skipped.push({
           evaluationAreaId: row.evaluationAreaId,
           reason: `this form is already mapped to "${area.name}"`,
         });
         continue;
       }
+      mappedAreaIds.add(row.evaluationAreaId);
 
       const mapping = await this.prisma.formKpiMapping.create({
         data: {

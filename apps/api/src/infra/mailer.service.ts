@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { env } from './env';
 
 const MAILERSEND_URL = 'https://api.mailersend.com/v1/email';
 
@@ -15,12 +16,14 @@ export class MailerService {
   private readonly logger = new Logger(MailerService.name);
 
   async send(to: string, subject: string, html: string): Promise<void> {
-    const apiKey = process.env.MAILERSEND_API_KEY;
-    const fromEmail = process.env.MAIL_FROM_EMAIL ?? 'no-reply@pulse.local';
-    const fromName = process.env.MAIL_FROM_NAME ?? 'pulse';
+    const apiKey = env.MAILERSEND_API_KEY;
+    const fromEmail = env.MAIL_FROM_EMAIL;
+    const fromName = env.MAIL_FROM_NAME;
 
     if (!apiKey) {
-      this.logger.warn(`MAILERSEND_API_KEY is not configured — logging email instead of sending.\nTo: ${to}\nSubject: ${subject}\n${html}`);
+      this.logger.warn(
+        `MAILERSEND_API_KEY is not configured — logging email instead of sending.\nTo: ${to}\nSubject: ${subject}\n${html}`,
+      );
       return;
     }
 

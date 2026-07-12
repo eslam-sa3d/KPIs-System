@@ -40,9 +40,7 @@ export function compileAnswerValidator(definition: FormDefinition) {
         if (result.success) {
           cleaned[field.key] = result.data;
         } else {
-          issues.push(
-            ...result.error.issues.map((issue) => ({ ...issue, path: [field.key, ...issue.path] })),
-          );
+          issues.push(...result.error.issues.map((issue) => ({ ...issue, path: [field.key, ...issue.path] })));
         }
       }
 
@@ -91,7 +89,10 @@ function validatorFor(field: FormField): ZodTypeAny {
       if (field.minLength !== undefined) schema = schema.min(field.minLength);
       if (field.pattern) {
         try {
-          schema = schema.regex(new RegExp(field.pattern), field.patternErrorMessage ?? 'does not match the required format');
+          schema = schema.regex(
+            new RegExp(field.pattern),
+            field.patternErrorMessage ?? 'does not match the required format',
+          );
         } catch {
           // an invalid regex saved to a field shouldn't crash the validator — just skip the pattern check
         }
@@ -111,9 +112,7 @@ function validatorFor(field: FormField): ZodTypeAny {
     case 'select': {
       const known = z.enum(field.options.map((o) => o.value) as [string, ...string[]]);
       // "Other" answers are stored as "other:<free text>"
-      return field.allowOther
-        ? z.union([known, z.string().startsWith('other:').max(260)])
-        : known;
+      return field.allowOther ? z.union([known, z.string().startsWith('other:').max(260)]) : known;
     }
     case 'multi_select': {
       const known = z.enum(field.options.map((o) => o.value) as [string, ...string[]]);
@@ -133,7 +132,14 @@ function validatorFor(field: FormField): ZodTypeAny {
       // record of statement value → 0-based scale index, every statement answered
       const keys = field.statements.map((s) => s.value);
       return z
-        .record(z.enum(keys as [string, ...string[]]), z.number().int().min(0).max(field.scale.length - 1))
+        .record(
+          z.enum(keys as [string, ...string[]]),
+          z
+            .number()
+            .int()
+            .min(0)
+            .max(field.scale.length - 1),
+        )
         .refine((answers) => keys.every((k) => answers[k] !== undefined), {
           message: 'every statement must be answered',
         });
@@ -180,10 +186,9 @@ function validatorFor(field: FormField): ZodTypeAny {
       const perRow: ZodTypeAny = field.selection === 'multiple' ? z.array(columnEnum).min(1) : columnEnum;
       let schema: ZodTypeAny = z.record(z.enum(rowKeys), perRow);
       if (field.requireOnePerRow) {
-        schema = schema.refine(
-          (answers: Record<string, unknown>) => rowKeys.every((k) => answers[k] !== undefined),
-          { message: 'every row must be answered' },
-        );
+        schema = schema.refine((answers: Record<string, unknown>) => rowKeys.every((k) => answers[k] !== undefined), {
+          message: 'every row must be answered',
+        });
       }
       return schema;
     }

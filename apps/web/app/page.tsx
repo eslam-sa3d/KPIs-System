@@ -3,7 +3,17 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { BarChart3, ChevronRight, ClipboardList, Lightbulb, Search, Settings, Shield, Target, Users } from 'lucide-react';
+import {
+  BarChart3,
+  ChevronRight,
+  ClipboardList,
+  Lightbulb,
+  Search,
+  Settings,
+  Shield,
+  Target,
+  Users,
+} from 'lucide-react';
 import type { BrandIdentity } from '@pulse/contracts';
 import { LandingHeroIllustration } from '../components/landing-hero-illustration';
 import { Button } from '@/components/ui/button';
@@ -114,7 +124,9 @@ export default function LandingPage() {
                   <Icon size={17} aria-hidden="true" />
                   {label}
                 </span>
-                {idx < PIPELINE.length - 1 && <ChevronRight size={15} className="landing-pipeline-chevron" aria-hidden="true" />}
+                {idx < PIPELINE.length - 1 && (
+                  <ChevronRight size={15} className="landing-pipeline-chevron" aria-hidden="true" />
+                )}
               </span>
             ))}
           </div>

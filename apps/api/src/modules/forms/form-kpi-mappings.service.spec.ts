@@ -30,12 +30,11 @@ function makePrismaStub() {
       delete: vi.fn(),
     },
     evaluationArea: {
-      findUnique: vi.fn(
-        async (_args: { where: { id: string } }): Promise<{ id: string; name: string } | null> => ({
-          id: 'area-1',
-          name: 'Leadership',
-        }),
-      ),
+      findUnique: vi.fn(async (_args: { where: { id: string } }): Promise<{ id: string; name: string } | null> => ({
+        id: 'area-1',
+        name: 'Leadership',
+      })),
+      findMany: vi.fn(),
     },
     auditLog: { create: vi.fn() },
   };
@@ -143,9 +142,9 @@ describe('FormKpiMappingsService.create', () => {
 
   it('rejects when scoreFieldKey does not reference any field on the form', async () => {
     const service = new FormKpiMappingsService(prisma as never, forms as never);
-    await expect(
-      service.create('form-1', { ...validInput, scoreFieldKey: 'ghost' }, 'admin-1'),
-    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(service.create('form-1', { ...validInput, scoreFieldKey: 'ghost' }, 'admin-1')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
   });
 
   it('rejects an unknown Evaluation Area', async () => {
@@ -202,14 +201,18 @@ describe('FormKpiMappingsService.bulkCreate', () => {
     'area-2': { id: 'area-2', name: 'Communication' },
   };
 
-  /** existingMappings is per-call, not shared, so tests can't leak state into each other. */
+  /** existingMappings is per-call, not shared, so tests can't leak state into each other.
+   *  bulkCreate batches its area/existing-mapping lookups into findMany calls (not the
+   *  per-row findUnique that create() uses), so this stubs those instead. */
   function makeBulkPrismaStub(existingMappings: Record<string, { id: string } | null> = {}) {
     const prisma = makePrismaStub();
-    prisma.evaluationArea.findUnique.mockImplementation(async ({ where }) =>
-      Object.prototype.hasOwnProperty.call(areas, where.id) ? areas[where.id]! : null,
+    prisma.evaluationArea.findMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) =>
+      where.id.in.filter((id) => Object.prototype.hasOwnProperty.call(areas, id)).map((id) => areas[id]!),
     );
-    prisma.formKpiMapping.findUnique.mockImplementation(
-      async ({ where }) => existingMappings[where.formId_evaluationAreaId.evaluationAreaId] ?? null,
+    prisma.formKpiMapping.findMany.mockImplementation(async () =>
+      Object.entries(existingMappings)
+        .filter((entry): entry is [string, { id: string }] => entry[1] !== null)
+        .map(([evaluationAreaId, mapping]) => ({ ...mapping, evaluationAreaId })),
     );
     return prisma;
   }
@@ -255,7 +258,12 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
     const result = await service.bulkCreate(
       'form-1',
-      { evaluateeFieldKey: 'evaluatee', reviewType: 'peer' as const, anonymous: false, mappings: [{ evaluationAreaId: 'ghost-area', scoreFieldKey: 'score' }] },
+      {
+        evaluateeFieldKey: 'evaluatee',
+        reviewType: 'peer' as const,
+        anonymous: false,
+        mappings: [{ evaluationAreaId: 'ghost-area', scoreFieldKey: 'score' }],
+      },
       'admin-1',
     );
 
@@ -269,7 +277,12 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
     const result = await service.bulkCreate(
       'form-1',
-      { evaluateeFieldKey: 'evaluatee', reviewType: 'peer' as const, anonymous: false, mappings: [{ evaluationAreaId: 'area-1', scoreFieldKey: 'notes' }] },
+      {
+        evaluateeFieldKey: 'evaluatee',
+        reviewType: 'peer' as const,
+        anonymous: false,
+        mappings: [{ evaluationAreaId: 'area-1', scoreFieldKey: 'notes' }],
+      },
       'admin-1',
     );
 
@@ -283,7 +296,12 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
     const result = await service.bulkCreate(
       'form-1',
-      { evaluateeFieldKey: 'evaluatee', reviewType: 'peer' as const, anonymous: false, mappings: [{ evaluationAreaId: 'area-1', scoreFieldKey: 'heading' }] },
+      {
+        evaluateeFieldKey: 'evaluatee',
+        reviewType: 'peer' as const,
+        anonymous: false,
+        mappings: [{ evaluationAreaId: 'area-1', scoreFieldKey: 'heading' }],
+      },
       'admin-1',
     );
 
@@ -322,7 +340,12 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
     await service.bulkCreate(
       'form-1',
-      { evaluateeFieldKey: 'evaluatee', reviewType: 'peer' as const, anonymous: false, mappings: [{ evaluationAreaId: 'ghost-area', scoreFieldKey: 'score' }] },
+      {
+        evaluateeFieldKey: 'evaluatee',
+        reviewType: 'peer' as const,
+        anonymous: false,
+        mappings: [{ evaluationAreaId: 'ghost-area', scoreFieldKey: 'score' }],
+      },
       'admin-1',
     );
 

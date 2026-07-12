@@ -71,9 +71,7 @@ describe('FormAccessGuard', () => {
   it('rejects an uninvited, non-admin stranger', async () => {
     prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: true, createdById: 'owner' });
     prisma.formCollaborator.findUnique.mockResolvedValue(null);
-    await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'stranger' }))).rejects.toBeInstanceOf(
-      AppError,
-    );
+    await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'stranger' }))).rejects.toBeInstanceOf(AppError);
   });
 
   describe('@FormPermission tiers', () => {
@@ -94,9 +92,7 @@ describe('FormAccessGuard', () => {
       setAction('manage');
       prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
       prisma.formCollaborator.findUnique.mockResolvedValue({ canManage: false, canViewResponses: true });
-      await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'viewer' }))).rejects.toBeInstanceOf(
-        AppError,
-      );
+      await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'viewer' }))).rejects.toBeInstanceOf(AppError);
     });
 
     it('allows a canManage collaborator for either tier', async () => {

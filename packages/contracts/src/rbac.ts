@@ -24,8 +24,7 @@ export type Resource = (typeof RESOURCES)[number];
 export type Action = (typeof ACTIONS)[number];
 export type PermissionKey = `${Resource}:${Action}`;
 
-export const permission = (resource: Resource, action: Action): PermissionKey =>
-  `${resource}:${action}`;
+export const permission = (resource: Resource, action: Action): PermissionKey => `${resource}:${action}`;
 
 export const createRoleSchema = z.object({
   name: z.string().min(2).max(64),

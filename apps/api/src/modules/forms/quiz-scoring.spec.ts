@@ -100,7 +100,11 @@ describe('scoreSubmission', () => {
   });
 
   it('computes pass/fail against a threshold when one is provided', () => {
-    const passing = scoreSubmission(quiz, { capital: 'paris', oceans: ['pacific', 'atlantic'], round: true, author: 'Shakespeare', moons: 2 }, 70);
+    const passing = scoreSubmission(
+      quiz,
+      { capital: 'paris', oceans: ['pacific', 'atlantic'], round: true, author: 'Shakespeare', moons: 2 },
+      70,
+    );
     const failing = scoreSubmission(quiz, {}, 70);
     expect(passing!.passed).toBe(true);
     expect(failing!.passed).toBe(false);

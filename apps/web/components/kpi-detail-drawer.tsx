@@ -88,7 +88,9 @@ export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClo
                         <div className="p-d-kl">{area.name}</div>
                       </div>
                       <div className="p-d-kpi">
-                        <div className="p-d-kv" style={{ fontSize: 14 }}>{area.cadence}</div>
+                        <div className="p-d-kv" style={{ fontSize: 14 }}>
+                          {area.cadence}
+                        </div>
                         <div className="p-d-kl">cadence</div>
                       </div>
                     </div>
@@ -106,10 +108,7 @@ export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClo
                           const max = Math.max(...area.entries.map((x) => x.value), 1);
                           return (
                             <div key={`${entry.label}-${i}`} style={{ marginBottom: 10 }}>
-                              <div
-                                className="d-bar-row"
-                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                              >
+                              <div className="d-bar-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <div style={{ width: 90, fontSize: 11, color: 'var(--text-2)', flexShrink: 0 }}>
                                   {entry.label} <span className="muted">· {entry.personName}</span>
                                 </div>
@@ -131,13 +130,22 @@ export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClo
                                     }}
                                   />
                                 </div>
-                                <div style={{ width: 30, fontSize: 11, fontFamily: 'var(--mono)', textAlign: 'right', flexShrink: 0 }}>
+                                <div
+                                  style={{
+                                    width: 30,
+                                    fontSize: 11,
+                                    fontFamily: 'var(--mono)',
+                                    textAlign: 'right',
+                                    flexShrink: 0,
+                                  }}
+                                >
                                   {entry.value.toLocaleString()}
                                 </div>
                               </div>
                               <div className="muted" style={{ fontSize: 10.5, marginLeft: 98, marginTop: 2 }}>
-                                {entry.reviewType && `${REVIEW_TYPE_LABEL[entry.reviewType] ?? entry.reviewType} review`} by{' '}
-                                {entry.evaluatorName}
+                                {entry.reviewType &&
+                                  `${REVIEW_TYPE_LABEL[entry.reviewType] ?? entry.reviewType} review`}{' '}
+                                by {entry.evaluatorName}
                                 {entry.anonymous && ' (anonymous)'}
                               </div>
                               {entry.context && (
@@ -146,7 +154,15 @@ export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClo
                                 </div>
                               )}
                               {entry.comment && (
-                                <div style={{ fontSize: 11, marginLeft: 98, marginTop: 2, color: 'var(--text-2)', fontStyle: 'italic' }}>
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    marginLeft: 98,
+                                    marginTop: 2,
+                                    color: 'var(--text-2)',
+                                    fontStyle: 'italic',
+                                  }}
+                                >
                                   “{entry.comment}”
                                 </div>
                               )}

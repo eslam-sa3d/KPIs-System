@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordEvaluationAreaEntrySchema } from '@pulse/contracts';
 import { KpisService } from './kpis.service';
+import { RbacService } from '../rbac/rbac.service';
+
+function makeRedisStub() {
+  return { get: vi.fn(), set: vi.fn(), del: vi.fn() };
+}
 
 function makePrismaStub() {
   return {
@@ -35,7 +40,8 @@ describe('KpisService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = makePrismaStub();
-    service = new KpisService(prisma as never);
+    const rbac = new RbacService(prisma as never, makeRedisStub() as never);
+    service = new KpisService(prisma as never, rbac);
   });
 
   describe('createKpi', () => {
@@ -180,9 +186,9 @@ describe('KpisService', () => {
 
     it('rejects updating an area that does not belong to the given KPI', async () => {
       prisma.evaluationArea.findFirst.mockResolvedValue(null);
-      await expect(
-        service.updateEvaluationArea('other-kpi', 'area-1', { name: 'x' }, actorId),
-      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await expect(service.updateEvaluationArea('other-kpi', 'area-1', { name: 'x' }, actorId)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
     });
 
     it('hard-deletes an area with no recorded entries, and audit-logs it', async () => {
@@ -223,9 +229,9 @@ describe('KpisService', () => {
 
     it('rejects creating a sub-criteria under an area that does not belong to the given KPI', async () => {
       prisma.evaluationArea.findFirst.mockResolvedValue(null);
-      await expect(
-        service.createSubCriteria('other-kpi', 'area-1', { name: 'x' }, actorId),
-      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await expect(service.createSubCriteria('other-kpi', 'area-1', { name: 'x' }, actorId)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
       expect(prisma.subCriteria.create).not.toHaveBeenCalled();
     });
 
@@ -362,9 +368,9 @@ describe('KpisService', () => {
 
     it('updateEntry rejects an entry outside the given kpi/area', async () => {
       prisma.evaluationAreaEntry.findFirst.mockResolvedValue(null);
-      await expect(
-        service.updateEntry('kpi-1', 'area-1', 'ghost', { value: 4 }, actorId),
-      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await expect(service.updateEntry('kpi-1', 'area-1', 'ghost', { value: 4 }, actorId)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
       expect(prisma.evaluationAreaEntry.update).not.toHaveBeenCalled();
     });
 
@@ -645,12 +651,36 @@ describe('KpisService', () => {
       ]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([
         // area-1's latest period (two raters, averaged to 4)
-        { personId: 'user-1', evaluationAreaId: 'area-1', value: 3, periodStart: new Date('2026-02-01'), periodEnd: new Date('2026-02-28') },
-        { personId: 'user-1', evaluationAreaId: 'area-1', value: 5, periodStart: new Date('2026-02-01'), periodEnd: new Date('2026-02-28') },
+        {
+          personId: 'user-1',
+          evaluationAreaId: 'area-1',
+          value: 3,
+          periodStart: new Date('2026-02-01'),
+          periodEnd: new Date('2026-02-28'),
+        },
+        {
+          personId: 'user-1',
+          evaluationAreaId: 'area-1',
+          value: 5,
+          periodStart: new Date('2026-02-01'),
+          periodEnd: new Date('2026-02-28'),
+        },
         // area-1's earlier period — excluded from the average
-        { personId: 'user-1', evaluationAreaId: 'area-1', value: 1, periodStart: new Date('2026-01-01'), periodEnd: new Date('2026-01-31') },
+        {
+          personId: 'user-1',
+          evaluationAreaId: 'area-1',
+          value: 1,
+          periodStart: new Date('2026-01-01'),
+          periodEnd: new Date('2026-01-31'),
+        },
         // area-2 has just one entry, value 2
-        { personId: 'user-1', evaluationAreaId: 'area-2', value: 2, periodStart: new Date('2026-02-01'), periodEnd: new Date('2026-03-15') },
+        {
+          personId: 'user-1',
+          evaluationAreaId: 'area-2',
+          value: 2,
+          periodStart: new Date('2026-02-01'),
+          periodEnd: new Date('2026-03-15'),
+        },
       ]);
 
       const { members } = await service.getTeamOverview();

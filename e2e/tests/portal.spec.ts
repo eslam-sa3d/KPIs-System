@@ -129,9 +129,7 @@ test.describe('KPI module (create → evaluation area → score via a mapped for
     const kpiId = (kpisEnvelope.data as Array<{ id: string; name: string }>).find((k) => k.name === kpiName)!.id;
 
     const rolesEnvelope = await (await page.request.get(`${apiUrl}/api/v1/roles`, { headers: authHeaders })).json();
-    const adminRoleId = (rolesEnvelope.data as Array<{ id: string; name: string }>).find(
-      (r) => r.name === 'admin',
-    )!.id;
+    const adminRoleId = (rolesEnvelope.data as Array<{ id: string; name: string }>).find((r) => r.name === 'admin')!.id;
 
     await page.request.post(`${apiUrl}/api/v1/kpis/${kpiId}/assignments`, {
       headers: authHeaders,

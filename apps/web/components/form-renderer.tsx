@@ -1,8 +1,16 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, CheckCircle2 } from 'lucide-react';
-import { PIPE_TAG_PATTERN, resolveSectionPath, type FormDefinition, type FormField, type FormSettings, type SubmissionAnswers } from '@pulse/contracts';
+import {
+  PIPE_TAG_PATTERN,
+  resolveSectionPath,
+  type FormDefinition,
+  type FormField,
+  type FormSettings,
+  type QuizScore,
+  type SubmissionAnswers,
+} from '@pulse/contracts';
 import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
 import type { Media } from '@pulse/contracts';
 import { Button } from '@/components/ui/button';
@@ -19,18 +27,21 @@ interface UserOption {
   displayName: string;
 }
 
+// Plain <img>, not next/image, throughout this file: apps/web is a static
+// export with images.unoptimized (no resize/format server to call), and
+// every image here is an arbitrary-dimension respondent/admin upload shown
+// inside a max-width/max-height + object-fit:contain box — next/image needs
+// either known dimensions or a sized `fill` ancestor, neither of which fits
+// without either guessing a wrong aspect ratio (causing the very layout
+// shift it's meant to prevent) or restructuring this CSS. loading="lazy" is
+// the real, low-risk win available under these constraints.
 function FieldMedia({ media }: { media: Media }) {
   if (media.type === 'image' && media.assetId) {
-    return <img src={assetUrl(media.assetId)} alt={media.alt ?? ''} className="question-media-image" />;
+    return <img src={assetUrl(media.assetId)} alt={media.alt ?? ''} className="question-media-image" loading="lazy" />;
   }
   if (media.type === 'video' && media.url) {
     return (
-      <iframe
-        src={media.url}
-        title={media.alt ?? 'question video'}
-        className="question-media-video"
-        allowFullScreen
-      />
+      <iframe src={media.url} title={media.alt ?? 'question video'} className="question-media-video" allowFullScreen />
     );
   }
   return null;
@@ -68,8 +79,11 @@ export function applyPiping(text: string, answers: SubmissionAnswers): string {
   });
 }
 
-/** Exported for reuse by ResponseDetailModal's edit mode — same input for filling and correcting. */
-export function FieldInput({
+/** Exported for reuse by ResponseDetailModal's edit mode — same input for filling and correcting.
+ *  Memoized so that typing into one field doesn't re-render every other field's input on every
+ *  keystroke — FormRenderer hands each instance a stable per-field onChange (see
+ *  getFieldChangeHandler below) so this actually has a chance to skip re-rendering. */
+export const FieldInput = memo(function FieldInput({
   field,
   value,
   onChange,
@@ -113,8 +127,12 @@ export function FieldInput({
       return <Textarea id={id} rows={4} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
     case 'number':
       return (
-        <Input id={id} type="number" value={(value as number | undefined) ?? ''}
-          onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))} />
+        <Input
+          id={id}
+          type="number"
+          value={(value as number | undefined) ?? ''}
+          onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+        />
       );
     case 'date':
       return <Input id={id} type="date" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
@@ -129,10 +147,15 @@ export function FieldInput({
           <div className="scale-row star-row" role="radiogroup" aria-labelledby={`${id}-label`} id={id}>
             {field.lowLabel && <span className="muted scale-cap">{field.lowLabel}</span>}
             {Array.from({ length: field.scale }, (_, i) => i + 1).map((n) => (
-              <button key={n} type="button" role="radio" aria-checked={current === n}
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={current === n}
                 aria-label={`${n} star${n === 1 ? '' : 's'}`}
                 className={`star-pill${current !== undefined && n <= current ? ' star-pill-active' : ''}`}
-                onClick={() => onChange(n)}>
+                onClick={() => onChange(n)}
+              >
                 ★
               </button>
             ))}
@@ -144,9 +167,14 @@ export function FieldInput({
         <div className="scale-row" role="radiogroup" aria-labelledby={`${id}-label`} id={id}>
           {field.lowLabel && <span className="muted scale-cap">{field.lowLabel}</span>}
           {Array.from({ length: field.scale }, (_, i) => i + 1).map((n) => (
-            <button key={n} type="button" role="radio" aria-checked={current === n}
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={current === n}
               className={`scale-pill${current === n ? ' scale-pill-active' : ''}`}
-              onClick={() => onChange(n)}>
+              onClick={() => onChange(n)}
+            >
               {n}
             </button>
           ))}
@@ -160,9 +188,14 @@ export function FieldInput({
         <div className="scale-row" role="radiogroup" id={id}>
           <span className="muted scale-cap">{field.lowLabel}</span>
           {Array.from({ length: 11 }, (_, i) => i).map((n) => (
-            <button key={n} type="button" role="radio" aria-checked={current === n}
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={current === n}
               className={`scale-pill${current === n ? ' scale-pill-active' : ''}`}
-              onClick={() => onChange(n)}>
+              onClick={() => onChange(n)}
+            >
               {n}
             </button>
           ))}
@@ -184,7 +217,9 @@ export function FieldInput({
             {field.options.map((o) => (
               <label key={o.value} className="check-item">
                 <RadioGroupItem value={o.value} />
-                {o.imageAssetId && <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" />}
+                {o.imageAssetId && (
+                  <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" loading="lazy" />
+                )}
                 {o.label}
               </label>
             ))}
@@ -193,8 +228,12 @@ export function FieldInput({
                 <RadioGroupItem value="other:" />
                 other:
                 {isOther && (
-                  <Input type="text" aria-label={`${field.label} other`} value={raw.slice(6)}
-                    onChange={(e) => onChange(`other:${e.target.value}`)} />
+                  <Input
+                    type="text"
+                    aria-label={`${field.label} other`}
+                    value={raw.slice(6)}
+                    onChange={(e) => onChange(`other:${e.target.value}`)}
+                  />
                 )}
               </label>
             )}
@@ -212,14 +251,21 @@ export function FieldInput({
             </SelectTrigger>
             <SelectContent>
               {field.options.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
               ))}
               {field.allowOther && <SelectItem value="__other">other…</SelectItem>}
             </SelectContent>
           </Select>
           {isOther && (
-            <Input type="text" aria-label={`${field.label} other`} placeholder="please specify"
-              value={raw.slice(6)} onChange={(e) => onChange(`other:${e.target.value}`)} />
+            <Input
+              type="text"
+              aria-label={`${field.label} other`}
+              placeholder="please specify"
+              value={raw.slice(6)}
+              onChange={(e) => onChange(`other:${e.target.value}`)}
+            />
           )}
         </>
       );
@@ -231,30 +277,34 @@ export function FieldInput({
         <span className="check-group" id={id}>
           {field.options.map((o) => (
             <label key={o.value} className="check-item">
-              <Checkbox checked={selected.includes(o.value)}
+              <Checkbox
+                checked={selected.includes(o.value)}
                 onCheckedChange={(checked) =>
                   onChange(checked ? [...selected, o.value] : selected.filter((v) => v !== o.value))
-                } />
-              {o.imageAssetId && <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" />}
+                }
+              />
+              {o.imageAssetId && <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" loading="lazy" />}
               {o.label}
             </label>
           ))}
           {field.allowOther && (
             <label className="check-item">
-              <Checkbox checked={otherEntry !== undefined}
+              <Checkbox
+                checked={otherEntry !== undefined}
                 onCheckedChange={(checked) =>
-                  onChange(
-                    checked
-                      ? [...selected, 'other:']
-                      : selected.filter((v) => !v.startsWith('other:')),
-                  )
-                } />
+                  onChange(checked ? [...selected, 'other:'] : selected.filter((v) => !v.startsWith('other:')))
+                }
+              />
               other:
               {otherEntry !== undefined && (
-                <Input type="text" aria-label={`${field.label} other`} value={otherEntry.slice(6)}
+                <Input
+                  type="text"
+                  aria-label={`${field.label} other`}
+                  value={otherEntry.slice(6)}
                   onChange={(e) =>
                     onChange(selected.map((v) => (v.startsWith('other:') ? `other:${e.target.value}` : v)))
-                  } />
+                  }
+                />
               )}
             </label>
           )}
@@ -268,7 +318,9 @@ export function FieldInput({
           <div className="likert-row likert-head" role="row">
             <span role="columnheader" />
             {field.scale.map((s) => (
-              <span key={s} role="columnheader" className="muted">{s}</span>
+              <span key={s} role="columnheader" className="muted">
+                {s}
+              </span>
             ))}
           </div>
           {field.statements.map((st) => (
@@ -276,9 +328,13 @@ export function FieldInput({
               <span role="rowheader">{st.label}</span>
               {field.scale.map((s, idx) => (
                 <span key={s} role="cell">
-                  <input type="radio" name={`${id}-${st.value}`} aria-label={`${st.label}: ${s}`}
+                  <input
+                    type="radio"
+                    name={`${id}-${st.value}`}
+                    aria-label={`${st.label}: ${s}`}
                     checked={current[st.value] === idx}
-                    onChange={() => onChange({ ...current, [st.value]: idx })} />
+                    onChange={() => onChange({ ...current, [st.value]: idx })}
+                  />
                 </span>
               ))}
             </div>
@@ -294,12 +350,16 @@ export function FieldInput({
           <div className="likert-row likert-head" role="row">
             <span role="columnheader" />
             {field.columns.map((c) => (
-              <span key={c.value} role="columnheader" className="muted">{c.label}</span>
+              <span key={c.value} role="columnheader" className="muted">
+                {c.label}
+              </span>
             ))}
           </div>
           {field.rows.map((row) => {
             const rowAnswer = current[row.value];
-            const rowSelected = isMultiple ? ((rowAnswer as string[] | undefined) ?? []) : (rowAnswer as string | undefined);
+            const rowSelected = isMultiple
+              ? ((rowAnswer as string[] | undefined) ?? [])
+              : (rowAnswer as string | undefined);
             return (
               <div key={row.value} className="likert-row" role="row">
                 <span role="rowheader">{row.label}</span>
@@ -346,14 +406,27 @@ export function FieldInput({
           {order.map((v, i) => (
             <li key={v} className="ranking-item">
               <span>
-                {i + 1}. {imageOf(v) && <img src={assetUrl(imageOf(v)!)} alt="" className="option-image" />}
+                {i + 1}.{' '}
+                {imageOf(v) && <img src={assetUrl(imageOf(v)!)} alt="" className="option-image" loading="lazy" />}
                 {labelOf(v)}
               </span>
               <span className="ranking-controls">
-                <Button type="button" variant="ghost" size="icon-sm" aria-label={`move ${labelOf(v)} up`} onClick={() => move(i, -1)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`move ${labelOf(v)} up`}
+                  onClick={() => move(i, -1)}
+                >
                   <ArrowUp size={14} aria-hidden="true" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon-sm" aria-label={`move ${labelOf(v)} down`} onClick={() => move(i, 1)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`move ${labelOf(v)} down`}
+                  onClick={() => move(i, 1)}
+                >
                   <ArrowDown size={14} aria-hidden="true" />
                 </Button>
               </span>
@@ -428,7 +501,9 @@ export function FieldInput({
               onChange={(e) => void onPick(e)}
               disabled={uploadState.busy || ids.length >= fileField.maxFiles}
             />
-            <p className="muted">{ids.length} / {fileField.maxFiles} files</p>
+            <p className="muted">
+              {ids.length} / {fileField.maxFiles} files
+            </p>
             {ids.length > 0 && (
               <ul className="summary-samples">
                 {ids.map((fileId) => (
@@ -512,11 +587,21 @@ export function FieldInput({
           <label htmlFor={`${id}-email`} className="muted">
             email{field.requireEmail && ' *'}
           </label>
-          <Input id={`${id}-email`} type="email" value={current.email ?? ''} onChange={(e) => set('email', e.target.value)} />
+          <Input
+            id={`${id}-email`}
+            type="email"
+            value={current.email ?? ''}
+            onChange={(e) => set('email', e.target.value)}
+          />
           <label htmlFor={`${id}-phone`} className="muted">
             phone{field.requirePhone && ' *'}
           </label>
-          <Input id={`${id}-phone`} type="tel" value={current.phone ?? ''} onChange={(e) => set('phone', e.target.value)} />
+          <Input
+            id={`${id}-phone`}
+            type="tel"
+            value={current.phone ?? ''}
+            onChange={(e) => set('phone', e.target.value)}
+          />
         </div>
       );
     }
@@ -524,7 +609,7 @@ export function FieldInput({
       const current = value as string | undefined;
       return (
         <div className="hot-spot-frame" id={id}>
-          <img src={assetUrl(field.imageAssetId)} alt="" className="hot-spot-image" />
+          <img src={assetUrl(field.imageAssetId)} alt="" className="hot-spot-image" loading="lazy" />
           {field.regions.map((r) => (
             <button
               key={r.value}
@@ -567,7 +652,11 @@ export function FieldInput({
                 onChange={(e) => setPersonFilter(e.target.value)}
               />
               {personFilter && candidates.length > 0 && (
-                <div role="listbox" aria-label={`${field.label} matches`} className="max-h-48 overflow-y-auto rounded-md border">
+                <div
+                  role="listbox"
+                  aria-label={`${field.label} matches`}
+                  className="max-h-48 overflow-y-auto rounded-md border"
+                >
                   {candidates.map((u) => (
                     <button
                       key={u.id}
@@ -585,9 +674,7 @@ export function FieldInput({
                   ))}
                 </div>
               )}
-              {personFilter && candidates.length === 0 && userOptions !== null && (
-                <p className="muted">no matches</p>
-              )}
+              {personFilter && candidates.length === 0 && userOptions !== null && <p className="muted">no matches</p>}
             </>
           )}
         </span>
@@ -596,16 +683,9 @@ export function FieldInput({
     default:
       return <Input id={id} type="text" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
   }
-}
+});
 
-export interface SubmissionScore {
-  earnedPoints: number;
-  totalPoints: number;
-  percent: number | null;
-  passed: boolean | null;
-  /** per-gradable-question outcome + configured feedback, for the thank-you screen */
-  perField?: Record<string, { correct: boolean; feedback?: string }>;
-}
+export type SubmissionScore = QuizScore;
 
 /**
  * MS-Forms-style renderer shared by the portal fill tab and the public page.
@@ -622,7 +702,9 @@ export function FormRenderer({
 }: {
   definition: FormDefinition;
   settings: FormSettings;
-  onSubmit: (answers: SubmissionAnswers) => Promise<{ score?: SubmissionScore | null; editToken?: string | null } | void>;
+  onSubmit: (
+    answers: SubmissionAnswers,
+  ) => Promise<{ score?: SubmissionScore | null; editToken?: string | null } | void>;
   /** base path for file-field uploads, e.g. "/v1/forms/:slug/uploads" or "/v1/public/forms/:token/uploads" */
   uploadPath: string;
   /** seeds the answer state — used when the respondent arrived via an edit link. */
@@ -635,6 +717,18 @@ export function FormRenderer({
   captchaSlot?: React.ReactNode;
 }) {
   const [answers, setAnswers] = useState<SubmissionAnswers>(initialAnswers ?? {});
+  // One stable onChange closure per field key, reused across renders (rather
+  // than a fresh arrow function per field per render) so memo(FieldInput)
+  // above can actually skip re-rendering every other field when one changes.
+  const fieldChangeHandlers = useRef(new Map<string, (value: SubmissionAnswers[string]) => void>());
+  function getFieldChangeHandler(key: string) {
+    let handler = fieldChangeHandlers.current.get(key);
+    if (!handler) {
+      handler = (value) => setAnswers((a) => ({ ...a, [key]: value }));
+      fieldChangeHandlers.current.set(key, handler);
+    }
+    return handler;
+  }
   const [error, setError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -670,9 +764,7 @@ export function FormRenderer({
 
   const renderDefinition = hasSections ? { ...definition, sections: shuffledSections } : definition;
 
-  const [currentSectionId, setCurrentSectionId] = useState<string | null>(
-    renderDefinition.sections?.[0]?.id ?? null,
-  );
+  const [currentSectionId, setCurrentSectionId] = useState<string | null>(renderDefinition.sections?.[0]?.id ?? null);
 
   // frozen per page: only re-resolved on explicit navigation (onNext/onBack), not on every
   // answer change on the currently displayed page. Recomputing this live from `answers` let
@@ -706,14 +798,11 @@ export function FormRenderer({
   const isLastPage = currentIndex === path.length - 1;
   // filtered from the (possibly shuffled) orderedFields, not definition.fields
   // directly, so shuffleQuestions also applies within a page — see orderedFields above
-  const pageFields = currentSection
-    ? orderedFields.filter((f) => currentSection.fieldKeys.includes(f.key))
-    : [];
+  const pageFields = currentSection ? orderedFields.filter((f) => currentSection.fieldKeys.includes(f.key)) : [];
 
   const now = Date.now();
   const notYetOpen = settings.opensAt && now < Date.parse(settings.opensAt);
-  const closed =
-    !settings.acceptingResponses || (settings.closesAt && now > Date.parse(settings.closesAt));
+  const closed = !settings.acceptingResponses || (settings.closesAt && now > Date.parse(settings.closesAt));
 
   // hidden/UTM-style fields: read once from the query string and never shown to the
   // respondent — see the capturedFromUrlParam exclusion in visibleFields below.
@@ -779,11 +868,7 @@ export function FormRenderer({
         Object.entries(answers).filter(([key, value]) => {
           const field = definition.fields.find((f) => f.key === key);
           return (
-            field &&
-            isVisible(field, answers) &&
-            (!reachable || reachable.has(key)) &&
-            value !== null &&
-            value !== ''
+            field && isVisible(field, answers) && (!reachable || reachable.has(key)) && value !== null && value !== ''
           );
         }),
       );
@@ -919,11 +1004,20 @@ export function FormRenderer({
                   {field.media && <FieldMedia media={field.media} />}
                   <label htmlFor={`f-${field.key}`} className="question-title" id={`f-${field.key}-label`}>
                     <span className="question-number">{questionNumber}.</span> {label}
-                    {field.required && <span aria-hidden="true" className="question-required"> *</span>}
+                    {field.required && (
+                      <span aria-hidden="true" className="question-required">
+                        {' '}
+                        *
+                      </span>
+                    )}
                   </label>
                   {helpText && <p className="muted">{helpText}</p>}
-                  <FieldInput field={field} value={answers[field.key]} uploadPath={uploadPath}
-                    onChange={(value) => setAnswers((a) => ({ ...a, [field.key]: value }))} />
+                  <FieldInput
+                    field={field}
+                    value={answers[field.key]}
+                    uploadPath={uploadPath}
+                    onChange={getFieldChangeHandler(field.key)}
+                  />
                 </div>
               );
             });
@@ -951,7 +1045,9 @@ export function FormRenderer({
                 next →
               </Button>
             ) : (
-              <Button key="submit" type="submit">submit</Button>
+              <Button key="submit" type="submit">
+                submit
+              </Button>
             )}
           </div>
         </form>

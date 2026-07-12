@@ -37,7 +37,10 @@ describe('RbacService.getEffectivePermissions', () => {
   it('unions permissions across all of a user roles', async () => {
     prisma.userRole.findMany.mockResolvedValue([
       ...userWithRoles([['kpis', 'read']]),
-      ...userWithRoles([['forms', 'write'], ['kpis', 'read']]),
+      ...userWithRoles([
+        ['forms', 'write'],
+        ['kpis', 'read'],
+      ]),
     ]);
 
     const permissions = await service.getEffectivePermissions('user-1');
@@ -58,6 +61,24 @@ describe('RbacService.getEffectivePermissions', () => {
     prisma.userRole.findMany.mockResolvedValue([]);
     const permissions = await service.getEffectivePermissions('user-2');
     expect(permissions.size).toBe(0);
+  });
+
+  it('degrades to a DB-only read instead of throwing when Redis GET fails', async () => {
+    redis.get.mockRejectedValue(new Error('connection refused'));
+    prisma.userRole.findMany.mockResolvedValue(userWithRoles([['kpis', 'read']]));
+
+    const permissions = await service.getEffectivePermissions('user-3');
+
+    expect(permissions).toEqual(new Set(['kpis:read']));
+  });
+
+  it('still returns the freshly computed permissions when Redis SET fails', async () => {
+    redis.set.mockRejectedValue(new Error('connection refused'));
+    prisma.userRole.findMany.mockResolvedValue(userWithRoles([['forms', 'read']]));
+
+    const permissions = await service.getEffectivePermissions('user-4');
+
+    expect(permissions).toEqual(new Set(['forms:read']));
   });
 });
 

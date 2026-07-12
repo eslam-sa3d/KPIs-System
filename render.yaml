@@ -15,7 +15,14 @@
 #     a domain verified in MailerSend) — without a key, "forgot password"
 #     emails are logged instead of sent, so the app still runs, it just can't
 #     deliver a real reset link
-#   - run `pnpm db:seed` once from the pulse-api shell to create the admin
+#   - the first admin account is created automatically on first boot (the
+#     start command runs `pnpm db:seed`, which is idempotent — safe on every
+#     subsequent boot too) using SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD below;
+#     SEED_ADMIN_PASSWORD is Render-generated — fetch the actual value from
+#     the pulse-api service's Environment tab after the first deploy and
+#     change it after logging in (the seed script refuses to start in
+#     production without this var set, rather than falling back to a
+#     publicly-known default password)
 
 services:
   - type: web
@@ -57,6 +64,15 @@ services:
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      - key: NODE_ENV
+        value: production
+      # the seed script (run on every boot, see startCommand) refuses to
+      # create the first admin with a default password when NODE_ENV is
+      # production and this isn't set — generateValue makes that a non-issue
+      - key: SEED_ADMIN_PASSWORD
+        generateValue: true
+      - key: SEED_ADMIN_EMAIL
+        sync: false # optional — defaults to admin@pulse.local if unset
       # web and API live on separate *.onrender.com sites (PSL) — a Strict
       # cookie would never be sent cross-site and sessions would drop on reload
       - key: REFRESH_COOKIE_SAMESITE

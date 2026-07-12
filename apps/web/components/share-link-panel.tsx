@@ -30,9 +30,10 @@ export function ShareLinkPanel({
   const [confirmDisableExport, setConfirmDisableExport] = useState(false);
   const exportUrl = xToken ? `${API_URL}/api/v1/public/forms/export/${xToken}` : null;
 
-  const url = token && typeof window !== 'undefined'
-    ? `${window.location.origin}${window.location.pathname.replace(/forms\/.*/, '')}f/?t=${token}`
-    : null;
+  const url =
+    token && typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname.replace(/forms\/.*/, '')}f/?t=${token}`
+      : null;
 
   useEffect(() => {
     if (!url) return setQr(null);
@@ -106,98 +107,102 @@ export function ShareLinkPanel({
         <CardTitle>public share link</CardTitle>
       </CardHeader>
       <CardContent>
-      <p className="muted">
-        anyone with this link can submit a response without signing in — like a Microsoft Forms
-        share link. Disabling it (or rotating) invalidates the previous link immediately.
-      </p>
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+        <p className="muted">
+          anyone with this link can submit a response without signing in — like a Microsoft Forms share link. Disabling
+          it (or rotating) invalidates the previous link immediately.
+        </p>
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-      {!token ? (
-        <Button onClick={() => toggle(true)} disabled={busy}>
-          {busy ? 'creating…' : 'create public link'}
-        </Button>
-      ) : (
-        <div className="share-panel-active">
-          <div className="share-link-row">
-            <code className="share-link-url">{url}</code>
-            <Button variant="ghost" size="sm" onClick={copy}>{copied ? 'copied!' : 'copy'}</Button>
-          </div>
-          {qr && <img src={qr} alt="QR code for the public form link" width={140} height={140} />}
-
-          {embedSnippet && (
-            <div className="share-link-row" style={{ marginTop: 12 }}>
-              <code className="share-link-url">{embedSnippet}</code>
-              <Button variant="ghost" size="sm" onClick={copyEmbed}>
-                {embedCopied ? 'copied!' : 'copy embed code'}
+        {!token ? (
+          <Button onClick={() => toggle(true)} disabled={busy}>
+            {busy ? 'creating…' : 'create public link'}
+          </Button>
+        ) : (
+          <div className="share-panel-active">
+            <div className="share-link-row">
+              <code className="share-link-url">{url}</code>
+              <Button variant="ghost" size="sm" onClick={copy}>
+                {copied ? 'copied!' : 'copy'}
               </Button>
             </div>
-          )}
+            {qr && <img src={qr} alt="QR code for the public form link" width={140} height={140} />}
 
-          <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
-            <Button variant="ghost" size="sm" onClick={() => toggle(true)} disabled={busy}>
-              rotate link
-            </Button>
-            {confirmDisable ? (
-              <>
-                <span className="muted">disable the public link?</span>
-                <Button variant="ghost" size="sm" onClick={() => toggle(false)} disabled={busy}>
-                  confirm disable
+            {embedSnippet && (
+              <div className="share-link-row" style={{ marginTop: 12 }}>
+                <code className="share-link-url">{embedSnippet}</code>
+                <Button variant="ghost" size="sm" onClick={copyEmbed}>
+                  {embedCopied ? 'copied!' : 'copy embed code'}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(false)}>
-                  cancel
-                </Button>
-              </>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(true)} disabled={busy}>
-                disable
-              </Button>
+              </div>
             )}
-          </div>
-        </div>
-      )}
 
-      <h2 style={{ marginTop: 24 }}>live export link</h2>
-      <p className="muted">
-        paste this into Excel's "Get Data → From Web" and refresh anytime for the latest
-        responses — the practical equivalent of Microsoft Forms' "Open in Excel". The link
-        itself is the access control, so treat it like a password.
-      </p>
-      {!xToken ? (
-        <Button onClick={() => toggleExportLink(true)} disabled={xBusy}>
-          {xBusy ? 'creating…' : 'create live export link'}
-        </Button>
-      ) : (
-        <div className="share-panel-active">
-          <div className="share-link-row">
-            <code className="share-link-url">{exportUrl}</code>
-            <Button variant="ghost" size="sm" onClick={copyExportUrl}>{xCopied ? 'copied!' : 'copy'}</Button>
-          </div>
-          <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
-            <Button variant="ghost" size="sm" onClick={() => toggleExportLink(true)} disabled={xBusy}>
-              rotate link
-            </Button>
-            {confirmDisableExport ? (
-              <>
-                <span className="muted">disable the live export link?</span>
-                <Button variant="ghost" size="sm" onClick={() => toggleExportLink(false)} disabled={xBusy}>
-                  confirm disable
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(false)}>
-                  cancel
-                </Button>
-              </>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(true)} disabled={xBusy}>
-                disable
+            <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
+              <Button variant="ghost" size="sm" onClick={() => toggle(true)} disabled={busy}>
+                rotate link
               </Button>
-            )}
+              {confirmDisable ? (
+                <>
+                  <span className="muted">disable the public link?</span>
+                  <Button variant="ghost" size="sm" onClick={() => toggle(false)} disabled={busy}>
+                    confirm disable
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(false)}>
+                    cancel
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(true)} disabled={busy}>
+                  disable
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        <h2 style={{ marginTop: 24 }}>live export link</h2>
+        <p className="muted">
+          paste this into Excel's "Get Data → From Web" and refresh anytime for the latest responses — the practical
+          equivalent of Microsoft Forms' "Open in Excel". The link itself is the access control, so treat it like a
+          password.
+        </p>
+        {!xToken ? (
+          <Button onClick={() => toggleExportLink(true)} disabled={xBusy}>
+            {xBusy ? 'creating…' : 'create live export link'}
+          </Button>
+        ) : (
+          <div className="share-panel-active">
+            <div className="share-link-row">
+              <code className="share-link-url">{exportUrl}</code>
+              <Button variant="ghost" size="sm" onClick={copyExportUrl}>
+                {xCopied ? 'copied!' : 'copy'}
+              </Button>
+            </div>
+            <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
+              <Button variant="ghost" size="sm" onClick={() => toggleExportLink(true)} disabled={xBusy}>
+                rotate link
+              </Button>
+              {confirmDisableExport ? (
+                <>
+                  <span className="muted">disable the live export link?</span>
+                  <Button variant="ghost" size="sm" onClick={() => toggleExportLink(false)} disabled={xBusy}>
+                    confirm disable
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(false)}>
+                    cancel
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(true)} disabled={xBusy}>
+                  disable
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

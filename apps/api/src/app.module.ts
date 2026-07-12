@@ -1,8 +1,10 @@
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { env } from './infra/env';
 import { MailerService } from './infra/mailer.service';
 import { PrismaService } from './infra/prisma.service';
 import { RedisService } from './infra/redis.service';
@@ -33,12 +35,17 @@ import { RolesController } from './modules/rbac/roles.controller';
 @Module({
   imports: [
     // Global rate limiting; auth endpoints declare tighter @Throttle overrides.
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    // Backed by Redis (not the default in-memory store) so limits are shared
+    // across horizontally-scaled instances rather than counted per-process.
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 120 }],
+      storage: new ThrottlerStorageRedisService(env.REDIS_URL),
+    }),
     // Powers @Cron in FileUploadsService/AssetsService (orphaned-upload sweeps).
     ScheduleModule.forRoot(),
     JwtModule.register({
       global: true,
-      secret: process.env.JWT_SECRET,
+      secret: env.JWT_SECRET,
       signOptions: { issuer: 'pulse-kpi' },
       verifyOptions: { issuer: 'pulse-kpi' },
     }),
@@ -73,7 +80,7 @@ import { RolesController } from './modules/rbac/roles.controller';
     DemoDataService,
     // Guard chain runs in registration order:
     { provide: APP_GUARD, useClass: ThrottlerGuard }, // 1. rate limit
-    { provide: APP_GUARD, useClass: JwtAuthGuard },   // 2. authenticate (@Public opts out)
+    { provide: APP_GUARD, useClass: JwtAuthGuard }, // 2. authenticate (@Public opts out)
     { provide: APP_GUARD, useClass: PermissionsGuard }, // 3. authorize (@RequirePermissions)
     { provide: APP_GUARD, useClass: FormAccessGuard }, // 4. narrow further for restricted forms
   ],

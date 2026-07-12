@@ -1,8 +1,18 @@
-import { Injectable } from '@nestjs/common';
-import { CreateRoleInput, PermissionKey, UpdateRoleInput } from '@pulse/contracts';
+import { Injectable, Logger } from '@nestjs/common';
+import { CreateRoleInput, PermissionKey, Resource, UpdateRoleInput } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 import { RedisService } from '../../infra/redis.service';
+
+/** Resources whose rows have a `departmentId` (directly, or one hop away via
+ *  an assignment table) that a "department"/"own" scoped grant can actually
+ *  filter by. Every RolePermission.scope value that isn't "all" is
+ *  meaningful only for these — Forms/Submissions have their own, more
+ *  granular access model (FormCollaborator + `restricted`), not a
+ *  department, so department/own scope has no correct meaning there. Keep
+ *  this in sync with the scope selector in the roles admin UI, which only
+ *  offers non-"all" scope for resources listed here. */
+export const DEPARTMENT_SCOPABLE_RESOURCES: readonly Resource[] = ['kpis', 'users'];
 
 const PERMISSION_CACHE_TTL_SECONDS = 300;
 const cacheKey = (userId: string) => `rbac:perms:${userId}`;
@@ -13,14 +23,18 @@ const cacheKey = (userId: string) => `rbac:perms:${userId}`;
  */
 @Injectable()
 export class RbacService {
+  private readonly logger = new Logger(RbacService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
 
-  /** Resolve a user's effective permission set (union across roles), cached. */
+  /** Resolve a user's effective permission set (union across roles), cached.
+   *  Every authenticated request runs through here, so a Redis outage must
+   *  degrade to DB-only reads rather than 500 the whole API. */
   async getEffectivePermissions(userId: string): Promise<Set<PermissionKey>> {
-    const cached = await this.redis.get(cacheKey(userId));
+    const cached = await this.safeRedisGet(cacheKey(userId));
     if (cached) return new Set(JSON.parse(cached) as PermissionKey[]);
 
     const roles = await this.prisma.userRole.findMany({
@@ -30,18 +44,58 @@ export class RbacService {
 
     const permissions = new Set<PermissionKey>(
       roles.flatMap(({ role }) =>
-        role.permissions.map(
-          ({ permission }) => `${permission.resource}:${permission.action}` as PermissionKey,
-        ),
+        role.permissions.map(({ permission }) => `${permission.resource}:${permission.action}` as PermissionKey),
       ),
     );
 
-    await this.redis.set(
-      cacheKey(userId),
-      JSON.stringify([...permissions]),
-      PERMISSION_CACHE_TTL_SECONDS,
-    );
+    await this.safeRedisSet(cacheKey(userId), JSON.stringify([...permissions]), PERMISSION_CACHE_TTL_SECONDS);
     return permissions;
+  }
+
+  private async safeRedisGet(key: string): Promise<string | null> {
+    try {
+      return await this.redis.get(key);
+    } catch (err) {
+      this.logger.warn(`Redis GET failed, falling back to DB for this request: ${err}`);
+      return null;
+    }
+  }
+
+  private async safeRedisSet(key: string, value: string, ttlSeconds: number): Promise<void> {
+    try {
+      await this.redis.set(key, value, ttlSeconds);
+    } catch (err) {
+      this.logger.warn(`Redis SET failed, permission cache not updated for ${key}: ${err}`);
+    }
+  }
+
+  /**
+   * True once every one of the caller's roles that grant `resource:read` do
+   * so with a scope narrower than "all" — i.e. the caller's results must be
+   * filtered down to their own department, not shown org-wide. A single
+   * "all"-scoped grant (e.g. an admin role held alongside a narrower one) is
+   * enough to see everything, matching how permission checks already union
+   * across a user's roles rather than intersect.
+   */
+  async isReadScopeRestricted(userId: string, resource: Resource): Promise<boolean> {
+    const grants = await this.prisma.rolePermission.findMany({
+      where: {
+        role: { isActive: true, users: { some: { userId } } },
+        permission: { resource, action: 'read' },
+      },
+      select: { scope: true },
+    });
+    return !grants.some((g) => g.scope === 'all');
+  }
+
+  /** The caller's own departmentId, for building a `{ departmentId }` filter
+   *  once isReadScopeRestricted() is true. Null for a caller with no
+   *  department — callers should treat that as "sees nothing" when
+   *  restricted, not "sees everything". */
+  async myDepartmentId(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } });
+    if (!user) throw AppError.notFound('User', userId);
+    return user.departmentId;
   }
 
   /** All roles with their permission grants, for the admin UI. */

@@ -13,6 +13,7 @@ import {
 } from '@pulse/contracts';
 import type { Request, Response } from 'express';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
+import { env } from '../../infra/env';
 import { AuthService, GrantWithRefresh } from './auth.service';
 import { Public } from './public.decorator';
 
@@ -28,11 +29,11 @@ export const REFRESH_COOKIE = 'pulse_rt';
  * stays CSRF-safe here because CORS is allowlisted and every mutating endpoint
  * authenticates via the Authorization header, not this cookie.
  */
-const sameSite = (process.env.REFRESH_COOKIE_SAMESITE ?? 'strict') as 'strict' | 'lax' | 'none';
+const sameSite = env.REFRESH_COOKIE_SAMESITE;
 const refreshCookieOptions = {
   httpOnly: true,
   // browsers reject SameSite=None without Secure
-  secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
+  secure: env.isProduction || sameSite === 'none',
   sameSite,
   path: '/api/v1/auth',
   maxAge: 30 * 24 * 60 * 60 * 1000,
@@ -62,10 +63,7 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(200)
   @Throttle({ default: { ttl: 60_000, limit: 30 } })
-  async refresh(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<TokenGrant> {
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<TokenGrant> {
     const result = await this.auth.refresh(req.cookies?.[REFRESH_COOKIE], {
       userAgent: req.headers['user-agent'],
       ip: req.ip,

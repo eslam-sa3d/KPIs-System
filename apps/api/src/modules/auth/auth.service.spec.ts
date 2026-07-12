@@ -72,11 +72,7 @@ describe('AuthService', () => {
     it('returns a grant and stores only a HASH of the refresh token', async () => {
       prisma.user.findUnique.mockResolvedValue(activeUser);
 
-      const { grant, refreshToken } = await service.login(
-        activeUser.email,
-        'correct-password',
-        context,
-      );
+      const { grant, refreshToken } = await service.login(activeUser.email, 'correct-password', context);
 
       expect(grant).toMatchObject({
         accessToken: 'signed.access.token',

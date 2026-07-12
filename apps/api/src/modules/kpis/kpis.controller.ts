@@ -84,11 +84,7 @@ export class KpisController {
 
   @Delete(':kpiId/assignments/:assignmentId')
   @RequirePermissions('kpis:manage')
-  unassign(
-    @Param('kpiId') kpiId: string,
-    @Param('assignmentId') assignmentId: string,
-    @Req() req: AuthedRequest,
-  ) {
+  unassign(@Param('kpiId') kpiId: string, @Param('assignmentId') assignmentId: string, @Req() req: AuthedRequest) {
     return this.kpis.unassign(kpiId, assignmentId, req.user.id);
   }
 
@@ -189,11 +185,7 @@ export class KpisController {
 
   @Get(':kpiId/areas/:areaId/series')
   @RequirePermissions('kpis:read', 'kpi_entries:read')
-  series(
-    @Param('kpiId') kpiId: string,
-    @Param('areaId') areaId: string,
-    @Query('personId') personId?: string,
-  ) {
+  series(@Param('kpiId') kpiId: string, @Param('areaId') areaId: string, @Query('personId') personId?: string) {
     return this.kpis.getSeries(kpiId, areaId, personId);
   }
 }

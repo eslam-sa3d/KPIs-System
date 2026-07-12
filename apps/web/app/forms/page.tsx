@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ClipboardList, FolderOpen, Pencil, Search, Share2 } from 'lucide-react';
+import type { FormListItem } from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -12,18 +13,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
-
-interface FormListItem {
-  id: string;
-  slug: string;
-  status: string;
-  title: string;
-  fieldCount: number;
-  version: number;
-  hasPublicLink: boolean;
-  settings: { acceptingResponses: boolean };
-  folder: string | null;
-}
+import { useResource } from '../../lib/use-resource';
 
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -31,7 +21,7 @@ function pluralize(count: number, singular: string, plural = `${singular}s`): st
 
 export default function FormsPage() {
   const user = useSession();
-  const [forms, setForms] = useState<FormListItem[] | null>(null);
+  const { data: forms, reload, setData: setForms } = useResource<FormListItem[]>(user ? '/v1/forms' : null);
   const [search, setSearch] = useState('');
   const [folderFilter, setFolderFilter] = useState('');
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
@@ -39,19 +29,13 @@ export default function FormsPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const reload = () => api<FormListItem[]>('/v1/forms').then(setForms);
-
-  useEffect(() => {
-    if (user) void reload();
-  }, [user]);
-
   async function onArchiveToggle(form: FormListItem) {
     setError(null);
     try {
       await api(`/v1/forms/${form.id}/${form.status === 'archived' ? 'unarchive' : 'archive'}`, {
         method: 'POST',
       });
-      await reload();
+      reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Updating the form failed');
     }
@@ -62,7 +46,7 @@ export default function FormsPage() {
     try {
       await api(`/v1/forms/${formId}`, { method: 'DELETE' });
       setConfirmDeleteId(null);
-      await reload();
+      reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Deleting the form failed');
     }

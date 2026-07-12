@@ -5,23 +5,40 @@ import {
   CreateKpiInput,
   CreateSubCriteriaInput,
   KpiAssignmentInput,
-  PAGE_DEFAULTS,
   PageQuery,
   RecordEvaluationAreaEntryInput,
+  TeamOverview,
   UpdateEvaluationAreaEntryInput,
   UpdateEvaluationAreaInput,
   UpdateKpiInput,
   UpdateSubCriteriaInput,
   buildPaginationMeta,
+  resolvePageBounds,
 } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
 import { paged } from '../../common/envelope.interceptor';
 import { PrismaService } from '../../infra/prisma.service';
+import { RbacService } from '../rbac/rbac.service';
 
 /** How many recent entries per area feed the dashboard's trend/aggregate views.
  *  Multi-rater means several rows can now share one (person, period), so this
  *  is sized generously rather than assuming ~1 row per period. */
 const RECENT_ENTRIES_TAKE = 60;
+
+/** getTeamOverview only ever needs each area's *latest* period per person —
+ *  but without a bound, that query pulls every EvaluationAreaEntry ever
+ *  recorded org-wide into memory, growing unboundedly with tenure. A rolling
+ *  window is safe rather than an arbitrary row LIMIT: it can't silently drop
+ *  the true latest entry for a low-cadence (e.g. annual) area the way a
+ *  per-row cap could, as long as no area goes longer than this between
+ *  scores — generous on purpose for that reason. */
+const TEAM_OVERVIEW_LOOKBACK_DAYS = 730;
+
+function teamOverviewLookbackCutoff(): Date {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - TEAM_OVERVIEW_LOOKBACK_DAYS);
+  return cutoff;
+}
 
 type EntryWithEvaluator = {
   anonymous: boolean;
@@ -32,10 +49,7 @@ type EntryWithEvaluator = {
 /** Withholds the evaluator's identity on an anonymous entry from anyone
  *  without kpis:manage — `canSeeEvaluators` is resolved once per request,
  *  not per entry, since it's the same answer for every row in a response. */
-function scrubAnonymousEntry<T extends EntryWithEvaluator>(
-  entry: T,
-  canSeeEvaluators: boolean,
-): T {
+function scrubAnonymousEntry<T extends EntryWithEvaluator>(entry: T, canSeeEvaluators: boolean): T {
   if (!entry.anonymous || canSeeEvaluators) return entry;
   return { ...entry, enteredById: '', enteredBy: { id: '', displayName: 'anonymous' } };
 }
@@ -58,7 +72,10 @@ function serializeKpi<T extends { weight: Prisma.Decimal | number | null }>(
  */
 @Injectable()
 export class KpisService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly rbac: RbacService,
+  ) {}
 
   async createKpi(input: CreateKpiInput, actorId: string) {
     const kpi = await this.prisma.kpi.create({ data: input });
@@ -112,25 +129,6 @@ export class KpisService {
     return null;
   }
 
-  /**
-   * True once every one of the caller's roles that grant kpis:read does so
-   * with a scope narrower than "all" — i.e. list() must be filtered down to
-   * their own roles/department, the same way listMine() already is. A single
-   * "all"-scoped grant (e.g. from an admin role held alongside a narrower
-   * one) is enough to see everything, matching how permission checks
-   * already union across a user's roles rather than intersect.
-   */
-  private async isKpiReadScopeRestricted(userId: string): Promise<boolean> {
-    const grants = await this.prisma.rolePermission.findMany({
-      where: {
-        role: { isActive: true, users: { some: { userId } } },
-        permission: { resource: 'kpis', action: 'read' },
-      },
-      select: { scope: true },
-    });
-    return !grants.some((g) => g.scope === 'all');
-  }
-
   /** Whether this caller holds kpis:manage in any role — gates seeing the
    *  evaluator identity on entries their originating mapping marked anonymous. */
   private async canSeeAnonymousEvaluators(userId: string): Promise<boolean> {
@@ -159,17 +157,13 @@ export class KpisService {
   }
 
   async list(query: PageQuery, userId: string) {
-    const page = Math.max(Number(query.page ?? PAGE_DEFAULTS.page), 1);
-    const pageSize = Math.min(
-      Number(query.pageSize ?? PAGE_DEFAULTS.pageSize),
-      PAGE_DEFAULTS.maxPageSize,
-    );
+    const { page, pageSize } = resolvePageBounds(query);
 
     // Unlike listMine() (the respondent-facing dashboard, which should only
     // ever show active KPIs), this powers the admin management page — the
     // one place a deactivated KPI or Evaluation Area needs to still be
     // visible, or its own "reactivate" action would be unreachable.
-    const restricted = await this.isKpiReadScopeRestricted(userId);
+    const restricted = await this.rbac.isReadScopeRestricted(userId, 'kpis');
     const where = { ...(restricted ? await this.myAssignmentFilter(userId) : {}) };
     const [totalItems, items] = await this.prisma.$transaction([
       this.prisma.kpi.count({ where }),
@@ -280,7 +274,7 @@ export class KpisService {
    * anyone never scored, so the dashboard can tell "pending" apart from
    * "scored a 0".
    */
-  async getTeamOverview() {
+  async getTeamOverview(): Promise<TeamOverview> {
     const [users, kpis, entries] = await Promise.all([
       this.prisma.user.findMany({
         where: { isActive: true, isKpiApplicable: true },
@@ -302,7 +296,7 @@ export class KpisService {
         },
       }),
       this.prisma.evaluationAreaEntry.findMany({
-        where: { person: { isActive: true } },
+        where: { person: { isActive: true }, periodStart: { gte: teamOverviewLookbackCutoff() } },
         select: { personId: true, evaluationAreaId: true, value: true, periodStart: true, periodEnd: true },
       }),
     ]);
@@ -373,12 +367,7 @@ export class KpisService {
     return area;
   }
 
-  async updateEvaluationArea(
-    kpiId: string,
-    areaId: string,
-    input: UpdateEvaluationAreaInput,
-    actorId: string,
-  ) {
+  async updateEvaluationArea(kpiId: string, areaId: string, input: UpdateEvaluationAreaInput, actorId: string) {
     const area = await this.prisma.evaluationArea.findFirst({ where: { id: areaId, kpiId } });
     if (!area) throw AppError.notFound('Evaluation area', areaId);
     const updated = await this.prisma.evaluationArea.update({ where: { id: areaId }, data: input });
@@ -416,12 +405,7 @@ export class KpisService {
     return null;
   }
 
-  async createSubCriteria(
-    kpiId: string,
-    areaId: string,
-    input: CreateSubCriteriaInput,
-    actorId: string,
-  ) {
+  async createSubCriteria(kpiId: string, areaId: string, input: CreateSubCriteriaInput, actorId: string) {
     const area = await this.prisma.evaluationArea.findFirst({ where: { id: areaId, kpiId } });
     if (!area) throw AppError.notFound('Evaluation area', areaId);
 
@@ -486,19 +470,11 @@ export class KpisService {
     return null;
   }
 
-  async recordEntry(
-    kpiId: string,
-    areaId: string,
-    input: RecordEvaluationAreaEntryInput,
-    enteredById: string,
-  ) {
+  async recordEntry(kpiId: string, areaId: string, input: RecordEvaluationAreaEntryInput, enteredById: string) {
     const area = await this.prisma.evaluationArea.findFirst({ where: { id: areaId, kpiId } });
     if (!area) throw AppError.notFound('Evaluation area', areaId);
     if (!area.isActive) {
-      throw new AppError(
-        'CONFLICT',
-        `Evaluation area "${area.name}" is inactive and no longer accepts entries`,
-      );
+      throw new AppError('CONFLICT', `Evaluation area "${area.name}" is inactive and no longer accepts entries`);
     }
 
     const person = await this.prisma.user.findUnique({ where: { id: input.personId } });

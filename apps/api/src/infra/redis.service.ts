@@ -1,10 +1,11 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
+import { env } from './env';
 
 /** Thin Redis facade — consumers depend on this interface, not ioredis. */
 @Injectable()
 export class RedisService implements OnModuleDestroy {
-  private readonly client = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
+  private readonly client = new Redis(env.REDIS_URL);
 
   get(key: string): Promise<string | null> {
     return this.client.get(key);
@@ -16,6 +17,10 @@ export class RedisService implements OnModuleDestroy {
 
   async del(key: string): Promise<void> {
     await this.client.del(key);
+  }
+
+  ping(): Promise<string> {
+    return this.client.ping();
   }
 
   async onModuleDestroy() {

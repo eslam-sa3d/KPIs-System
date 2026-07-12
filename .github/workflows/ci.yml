@@ -30,6 +30,7 @@ jobs:
       - run: pnpm --filter @pulse/api exec prisma generate
       - run: pnpm lint
       - run: pnpm typecheck
+      - run: pnpm format:check
 
   # ── Stage 2: unit tests (no infrastructure) ───────────────────────────────
   unit:
@@ -45,6 +46,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @pulse/api exec prisma generate
       - run: pnpm test
+        env:
+          # apps/api's env module validates JWT_SECRET eagerly on import, same as
+          # the integration/e2e jobs below — a dummy value here, real secrets in
+          # deploy config.
+          JWT_SECRET: ci-only-secret
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
@@ -166,9 +172,43 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level high
 
-  # Frontend deployment: .github/workflows/deploy-pages.yml publishes the web
-  # app's static export to GitHub Pages once this workflow succeeds on main
-  # (workflow_run-gated, so a failing job here — including Dependency Audit —
-  # blocks the deploy).
-  # The API needs a Node host (Render/Fly/Railway/ECS…) — add its deploy job
-  # here once a platform is chosen, gated on [e2e, security].
+  # ── Stage 6: deploy — the only thing allowed to ship to prod ──────────────
+  # Both services live on Render (see render.yaml). Render's own "auto-deploy
+  # on push" must be turned OFF for both pulse-api and pulse-web in the Render
+  # dashboard — otherwise Render deploys straight off the push webhook,
+  # independent of and racing this job, and everything below is decorative.
+  # With auto-deploy off, this job is the only path to production: it only
+  # runs on a push to main, and only after every other stage (including the
+  # security audit) has passed.
+  #
+  # Configure once: create a Deploy Hook for each Render service (Settings →
+  # Deploy Hook) and save the two URLs as the repo secrets
+  # RENDER_API_DEPLOY_HOOK_URL / RENDER_WEB_DEPLOY_HOOK_URL. Until those
+  # secrets exist, the step below no-ops (with a warning) rather than fail,
+  # so this ships safely before that one-time setup is done — but nothing
+  # deploys until it is. (The `if:` conditions below can't reference
+  # `secrets` directly — GitHub Actions doesn't support that context there —
+  # so the presence check happens in the shell script instead, via `env:`.)
+  deploy:
+    name: Deploy (Render)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [quality, unit, integration, e2e, security]
+    steps:
+      - name: Trigger Render deploys
+        run: |
+          triggered=0
+          if [ -n "$API_HOOK_URL" ]; then
+            curl -fsS -X POST "$API_HOOK_URL"
+            triggered=1
+          fi
+          if [ -n "$WEB_HOOK_URL" ]; then
+            curl -fsS -X POST "$WEB_HOOK_URL"
+            triggered=1
+          fi
+          if [ "$triggered" = 0 ]; then
+            echo "::warning::No RENDER_*_DEPLOY_HOOK_URL secrets set — this run passed every gate but deployed nothing. See the comment above this job for one-time setup."
+          fi
+        env:
+          API_HOOK_URL: ${{ secrets.RENDER_API_DEPLOY_HOOK_URL }}
+          WEB_HOOK_URL: ${{ secrets.RENDER_WEB_DEPLOY_HOOK_URL }}

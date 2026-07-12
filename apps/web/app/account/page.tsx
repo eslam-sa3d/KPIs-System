@@ -17,8 +17,7 @@ export default function AccountPage() {
         <CardHeader>
           <CardTitle>change password</CardTitle>
           <CardDescription>
-            changing your password signs you out of every other device — you&apos;ll need to sign in again here
-            too.
+            changing your password signs you out of every other device — you&apos;ll need to sign in again here too.
           </CardDescription>
         </CardHeader>
         <CardContent>

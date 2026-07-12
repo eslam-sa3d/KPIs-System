@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -11,6 +11,7 @@ import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
+import { useResource } from '../../../lib/use-resource';
 
 interface RoleRow {
   id: string;
@@ -27,21 +28,26 @@ interface Catalog {
   actions: string[];
 }
 
+/** Only these resources' `read` grant has a row a "department"/"own" scope
+ *  can correctly filter by (User.departmentId / KpiAssignment.departmentId)
+ *  — every other resource's access model (forms' restricted+collaborator
+ *  system, roles/settings/branding being inherently org-wide, ...) has no
+ *  department to filter by, so scope stays "all" there. Keep in sync with
+ *  DEPARTMENT_SCOPABLE_RESOURCES in apps/api's rbac.service.ts. */
+const SCOPABLE_READ_GRANTS = new Set(['kpis:read', 'users:read']);
+const SCOPE_OPTIONS = [
+  { value: 'all', label: 'all' },
+  { value: 'department', label: 'own department' },
+  { value: 'own', label: 'own only' },
+];
+
 export default function RolesAdminPage() {
   const user = useSession();
-  const [roles, setRoles] = useState<RoleRow[] | null>(null);
-  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const { data: roles, reload } = useResource<RoleRow[]>(user ? '/v1/roles' : null);
+  const { data: catalog } = useResource<Catalog>(user ? '/v1/roles/permission-catalog' : null);
   const [error, setError] = useState<string | null>(null);
   const [renamingRoleId, setRenamingRoleId] = useState<string | null>(null);
   const [confirmDeleteRoleId, setConfirmDeleteRoleId] = useState<string | null>(null);
-
-  const reload = useCallback(() => api<RoleRow[]>('/v1/roles').then(setRoles), []);
-
-  useEffect(() => {
-    if (!user) return;
-    void reload();
-    void api<Catalog>('/v1/roles/permission-catalog').then(setCatalog);
-  }, [user, reload]);
 
   async function onRename(roleId: string, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,7 +56,7 @@ export default function RolesAdminPage() {
     try {
       await api(`/v1/roles/${roleId}`, { method: 'PATCH', body: JSON.stringify({ name }) });
       setRenamingRoleId(null);
-      await reload();
+      reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Renaming the role failed');
     }
@@ -60,7 +66,7 @@ export default function RolesAdminPage() {
     setError(null);
     try {
       await api(`/v1/roles/${role.id}`, { method: 'PATCH', body: JSON.stringify({ isActive: !role.isActive }) });
-      await reload();
+      reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Updating the role failed');
     }
@@ -71,7 +77,7 @@ export default function RolesAdminPage() {
     try {
       await api(`/v1/roles/${roleId}`, { method: 'DELETE' });
       setConfirmDeleteRoleId(null);
-      await reload();
+      reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Deleting the role failed');
     }
@@ -82,8 +88,10 @@ export default function RolesAdminPage() {
     setError(null);
     const form = new FormData(event.currentTarget);
     const permissions = form.getAll('permissions').map((raw) => {
-      const [resource, action] = String(raw).split(':');
-      return { resource, action, scope: 'all' };
+      const key = String(raw);
+      const [resource, action] = key.split(':');
+      const scope = SCOPABLE_READ_GRANTS.has(key) ? String(form.get(`scope:${key}`) ?? 'all') : 'all';
+      return { resource, action, scope };
     });
     if (permissions.length === 0) {
       setError('Select at least one permission');
@@ -99,7 +107,7 @@ export default function RolesAdminPage() {
         }),
       });
       (event.target as HTMLFormElement).reset();
-      await reload();
+      reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Creating the role failed');
     }
@@ -108,9 +116,7 @@ export default function RolesAdminPage() {
   return (
     <PortalShell user={user}>
       <h1>roles</h1>
-      <p className="portal-subtitle">
-        compose custom roles from the permission catalog — no deployment needed
-      </p>
+      <p className="portal-subtitle">compose custom roles from the permission catalog — no deployment needed</p>
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
@@ -131,12 +137,30 @@ export default function RolesAdminPage() {
                 {catalog.resources.map((resource) => (
                   <fieldset key={resource} className="perm-resource">
                     <legend>{resource.replace('_', ' ')}</legend>
-                    {catalog.actions.map((action) => (
-                      <label key={action} className="check-item">
-                        <Checkbox name="permissions" value={`${resource}:${action}`} />
-                        {action}
-                      </label>
-                    ))}
+                    {catalog.actions.map((action) => {
+                      const key = `${resource}:${action}`;
+                      const scopable = SCOPABLE_READ_GRANTS.has(key);
+                      return (
+                        <label key={action} className="check-item">
+                          <Checkbox name="permissions" value={key} />
+                          {action}
+                          {scopable && (
+                            <select
+                              name={`scope:${key}`}
+                              defaultValue="all"
+                              aria-label={`${key} scope`}
+                              style={{ fontSize: 12, marginInlineStart: 4 }}
+                            >
+                              {SCOPE_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </label>
+                      );
+                    })}
                   </fieldset>
                 ))}
               </div>
@@ -192,6 +216,7 @@ export default function RolesAdminPage() {
                     {role.permissions.map((p) => (
                       <code key={`${p.resource}:${p.action}`} className="perm-chip">
                         {p.resource}:{p.action}
+                        {p.scope !== 'all' && ` (${p.scope})`}
                       </code>
                     ))}
                   </span>

@@ -77,9 +77,7 @@ describe('API contract (envelope + auth + RBAC)', () => {
         slug,
         definition: {
           title: 'strict form',
-          fields: [
-            { key: 'score', label: 'Score', type: 'number', required: true, min: 0, max: 10 },
-          ],
+          fields: [{ key: 'score', label: 'Score', type: 'number', required: true, min: 0, max: 10 }],
         },
       });
 
@@ -118,8 +116,6 @@ describe('API contract (envelope + auth + RBAC)', () => {
     expect(deleted.status).toBe(200);
 
     const afterDelete = await api().get('/api/v1/departments').set(authHeader);
-    expect(afterDelete.body.data).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id })]),
-    );
+    expect(afterDelete.body.data).not.toEqual(expect.arrayContaining([expect.objectContaining({ id })]));
   });
 });

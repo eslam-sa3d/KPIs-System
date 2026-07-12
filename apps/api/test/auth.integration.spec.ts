@@ -13,10 +13,8 @@ const ADMIN = {
 };
 
 const api = () => request(BASE);
-const cookiesOf = (res: request.Response): string[] =>
-  ([] as string[]).concat(res.headers['set-cookie'] ?? []);
-const refreshCookie = (res: request.Response) =>
-  cookiesOf(res).find((c) => c.startsWith('pulse_rt='));
+const cookiesOf = (res: request.Response): string[] => ([] as string[]).concat(res.headers['set-cookie'] ?? []);
+const refreshCookie = (res: request.Response) => cookiesOf(res).find((c) => c.startsWith('pulse_rt='));
 
 describe('auth flow', () => {
   it('logs in: grant in envelope, refresh token ONLY in an httpOnly cookie', async () => {
@@ -40,9 +38,7 @@ describe('auth flow', () => {
   });
 
   it('rejects bad credentials with the standard envelope and no cookie', async () => {
-    const res = await api()
-      .post('/api/v1/auth/login')
-      .send({ email: ADMIN.email, password: 'definitely-wrong' });
+    const res = await api().post('/api/v1/auth/login').send({ email: ADMIN.email, password: 'definitely-wrong' });
 
     expect(res.status).toBe(401);
     expect(res.body.error).toMatchObject({
@@ -76,9 +72,7 @@ describe('auth flow', () => {
     expect(anonymous.status).toBe(401);
 
     const login = await api().post('/api/v1/auth/login').send(ADMIN);
-    const me = await api()
-      .get('/api/v1/auth/me')
-      .set('Authorization', `Bearer ${login.body.data.accessToken}`);
+    const me = await api().get('/api/v1/auth/me').set('Authorization', `Bearer ${login.body.data.accessToken}`);
     expect(me.body.data).toMatchObject({ email: ADMIN.email, roles: expect.any(Array) });
   });
 
@@ -125,9 +119,7 @@ describe('auth flow', () => {
   describe('forgot-password / reset-password', () => {
     it('always returns success, whether or not the email matches an account (no enumeration)', async () => {
       const known = await api().post('/api/v1/auth/forgot-password').send({ email: ADMIN.email });
-      const unknown = await api()
-        .post('/api/v1/auth/forgot-password')
-        .send({ email: 'nobody-here@pulse.local' });
+      const unknown = await api().post('/api/v1/auth/forgot-password').send({ email: 'nobody-here@pulse.local' });
 
       expect(known.status).toBe(200);
       expect(known.body).toMatchObject({ success: true });

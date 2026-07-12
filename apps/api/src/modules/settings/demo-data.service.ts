@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
@@ -11,7 +12,12 @@ import { PasswordHasher } from '../auth/password-hasher';
  *   KPIs  → name "Demo: …"   forms           → slug demo-*
  */
 
-export const DEMO_PASSWORD = 'DemoPass!2026';
+// Generated fresh on every seed() call rather than hardcoded, and handed
+// back only in that one seed() response — never from status() — so it
+// can't be retrieved indefinitely by anyone holding settings:manage.
+function generateDemoPassword(): string {
+  return `Demo-${randomBytes(9).toString('base64url')}!1`;
+}
 const DEMO_EMAIL_DOMAIN = '@pulse.demo';
 const DEMO_KPI_PREFIX = 'Demo: ';
 
@@ -46,7 +52,15 @@ const DEMO_FORM_DEFINITION = {
   description: 'sample form seeded by the demo data generator',
   fields: [
     { key: 'team', label: 'Team', type: 'short_text', required: true, maxLength: 200 },
-    { key: 'velocity', label: 'Velocity (points)', type: 'number', required: true, min: 0, max: 200, integerOnly: true },
+    {
+      key: 'velocity',
+      label: 'Velocity (points)',
+      type: 'number',
+      required: true,
+      min: 0,
+      max: 200,
+      integerOnly: true,
+    },
     { key: 'blocked', label: 'Any blockers?', type: 'boolean', required: true },
     {
       key: 'blocker_detail',
@@ -95,7 +109,6 @@ export class DemoDataService {
     return {
       present: users + kpis + forms > 0,
       counts: { users, kpis, forms, roles, departments, submissions },
-      demoPassword: DEMO_PASSWORD,
       demoUsers: DEMO_USERS.map((u) => u.email),
     };
   }
@@ -136,8 +149,9 @@ export class DemoDataService {
       });
     }
 
-    // users (all share DEMO_PASSWORD so any of them can be test-driven)
-    const passwordHash = await this.hasher.hash(DEMO_PASSWORD);
+    // users (all share one freshly-generated password so any of them can be test-driven)
+    const demoPassword = generateDemoPassword();
+    const passwordHash = await this.hasher.hash(demoPassword);
     const userIds: string[] = [];
     for (const spec of DEMO_USERS) {
       const user = await this.prisma.user.create({
@@ -232,7 +246,9 @@ export class DemoDataService {
     await this.prisma.auditLog.create({
       data: { actorId, action: 'settings.demo_data_seeded', entity: 'DemoData' },
     });
-    return this.status();
+    // demoPassword is only ever surfaced here, once, in response to the seed
+    // call that generated it — status()/remove() never echo it back.
+    return { ...(await this.status()), demoPassword };
   }
 
   /** Order matters: dependents before principals, markers only — real data untouched. */

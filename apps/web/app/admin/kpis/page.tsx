@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, EyeOff, FolderPlus, Layers, ListPlus, Pencil, Plus, Search, Target } from 'lucide-react';
 import { toast } from 'sonner';
 import { PortalShell, can } from '../../../components/portal-shell';
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner';
 import { ApiRequestError, api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
+import { useResource } from '../../../lib/use-resource';
 
 interface SubCriteriaRow {
   id: string;
@@ -87,21 +88,9 @@ function WeightRing({ value, size = 'md' }: { value: number; size?: 'md' | 'sm' 
 /** Toggles isActive via the same PATCH every level already uses — styled as
  *  a status pill (dot + label) instead of a text button whose label is
  *  always the opposite of the current state ("deactivate" while active). */
-function StatusPill({
-  isActive,
-  onToggle,
-  size,
-}: {
-  isActive: boolean;
-  onToggle: () => void;
-  size?: 'sm';
-}) {
+function StatusPill({ isActive, onToggle, size }: { isActive: boolean; onToggle: () => void; size?: 'sm' }) {
   return (
-    <Badge
-      asChild
-      variant="outline"
-      className={size === 'sm' ? 'gap-1.5 py-0.5 text-xs' : 'gap-1.5 py-1'}
-    >
+    <Badge asChild variant="outline" className={size === 'sm' ? 'gap-1.5 py-0.5 text-xs' : 'gap-1.5 py-1'}>
       <button type="button" onClick={onToggle} className={isActive ? '' : 'text-muted-foreground'}>
         <span
           className="size-[7px] shrink-0 rounded-full"
@@ -124,7 +113,9 @@ function LoadingRows() {
 
 export default function KpisAdminPage() {
   const user = useSession();
-  const [kpis, setKpis] = useState<KpiRow[] | null>(null);
+  const { data: kpis, reload } = useResource<KpiRow[]>(user ? '/v1/kpis?pageSize=100' : null);
+  const { data: departmentsData } = useResource<DepartmentOption[]>(user ? '/v1/departments' : null);
+  const departments = departmentsData ?? [];
   const [selectedKpiId, setSelectedKpiId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -141,18 +132,9 @@ export default function KpisAdminPage() {
   const [renamingSubCriteriaId, setRenamingSubCriteriaId] = useState<string | null>(null);
   const [confirmDeleteSubCriteriaId, setConfirmDeleteSubCriteriaId] = useState<string | null>(null);
   const [addingSubCriteriaForAreaId, setAddingSubCriteriaForAreaId] = useState<string | null>(null);
-  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [assigningKpiId, setAssigningKpiId] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState('');
   const [confirmUnassignId, setConfirmUnassignId] = useState<string | null>(null);
-
-  const reload = useCallback(() => api<KpiRow[]>('/v1/kpis?pageSize=100').then(setKpis), []);
-
-  useEffect(() => {
-    if (!user) return;
-    void reload();
-    api<DepartmentOption[]>('/v1/departments').then(setDepartments).catch(() => setDepartments([]));
-  }, [user, reload]);
 
   // The selected KPI can disappear out from under the detail pane (deleted,
   // or filtered out by a stale id after a reload) — fall back to the "pick
@@ -246,12 +228,10 @@ export default function KpisAdminPage() {
 
   function onDeleteKpi(kpiId: string, force = false) {
     const deletion = api(`/v1/kpis/${kpiId}${force ? '?force=true' : ''}`, { method: 'DELETE' });
-    void report(deletion, force ? 'KPI permanently deleted, including its recorded scores' : 'KPI deleted').then(
-      () => {
-        setConfirmDeleteKpiId(null);
-        setForceDeleteKpiId(null);
-      },
-    );
+    void report(deletion, force ? 'KPI permanently deleted, including its recorded scores' : 'KPI deleted').then(() => {
+      setConfirmDeleteKpiId(null);
+      setForceDeleteKpiId(null);
+    });
     // A plain delete blocked by existing scores offers a force-delete escalation
     // instead of just surfacing the error and leaving the admin stuck.
     if (!force) {
@@ -416,8 +396,23 @@ export default function KpisAdminPage() {
           {canWrite &&
             (creatingKpi ? (
               <form className="inline-form" onSubmit={(e) => onCreateKpi(e)}>
-                <Input name="name" required minLength={2} placeholder="QA Lead Evaluation" aria-label="KPI name" autoFocus />
-                <Input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
+                <Input
+                  name="name"
+                  required
+                  minLength={2}
+                  placeholder="QA Lead Evaluation"
+                  aria-label="KPI name"
+                  autoFocus
+                />
+                <Input
+                  name="weight"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.5"
+                  placeholder="weight %"
+                  aria-label="weight percent"
+                />
                 <AssignToField />
                 <Button type="submit">create</Button>
                 <Button type="button" variant="ghost" onClick={() => setCreatingKpi(false)}>
@@ -508,8 +503,23 @@ export default function KpisAdminPage() {
               {canWrite &&
                 (creatingKpi ? (
                   <form className="inline-form" onSubmit={(e) => onCreateKpi(e)}>
-                    <Input name="name" required minLength={2} placeholder="new KPI name" aria-label="KPI name" autoFocus />
-                    <Input name="weight" type="number" min={0} max={100} step="0.5" placeholder="weight %" aria-label="weight percent" />
+                    <Input
+                      name="name"
+                      required
+                      minLength={2}
+                      placeholder="new KPI name"
+                      aria-label="KPI name"
+                      autoFocus
+                    />
+                    <Input
+                      name="weight"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.5"
+                      placeholder="weight %"
+                      aria-label="weight percent"
+                    />
                     <AssignToField />
                     <Button type="submit">create</Button>
                     <Button type="button" variant="ghost" onClick={() => setCreatingKpi(false)}>
@@ -590,7 +600,14 @@ export default function KpisAdminPage() {
 
                   {renamingKpiId === selectedKpi.id ? (
                     <form className="inline-form" onSubmit={(e) => onRenameKpi(selectedKpi.id, e)}>
-                      <Input name="name" defaultValue={selectedKpi.name} required minLength={2} aria-label="KPI name" autoFocus />
+                      <Input
+                        name="name"
+                        defaultValue={selectedKpi.name}
+                        required
+                        minLength={2}
+                        aria-label="KPI name"
+                        autoFocus
+                      />
                       <Input
                         name="weight"
                         type="number"
@@ -638,7 +655,12 @@ export default function KpisAdminPage() {
                             (confirmDeleteKpiId === selectedKpi.id ? (
                               <>
                                 <span className="muted">delete permanently?</span>
-                                <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteKpi(selectedKpi.id)}>
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => onDeleteKpi(selectedKpi.id)}
+                                >
                                   confirm delete
                                 </Button>
                                 <Button
@@ -654,10 +676,15 @@ export default function KpisAdminPage() {
                             ) : forceDeleteKpiId === selectedKpi.id ? (
                               <>
                                 <span className="muted">
-                                  this KPI has recorded scores — force deleting destroys that history
-                                  permanently and cannot be undone.
+                                  this KPI has recorded scores — force deleting destroys that history permanently and
+                                  cannot be undone.
                                 </span>
-                                <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteKpi(selectedKpi.id, true)}>
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => onDeleteKpi(selectedKpi.id, true)}
+                                >
                                   force delete permanently
                                 </Button>
                                 <Button
@@ -792,7 +819,14 @@ export default function KpisAdminPage() {
                       <div key={area.id} className="builder-field kpi-area">
                         {renamingAreaId === area.id ? (
                           <form className="inline-form" onSubmit={(e) => onRenameArea(selectedKpi.id, area.id, e)}>
-                            <Input name="name" defaultValue={area.name} required minLength={2} aria-label="evaluation area name" autoFocus />
+                            <Input
+                              name="name"
+                              defaultValue={area.name}
+                              required
+                              minLength={2}
+                              aria-label="evaluation area name"
+                              autoFocus
+                            />
                             <Button type="submit" variant="ghost">
                               save
                             </Button>
@@ -808,7 +842,9 @@ export default function KpisAdminPage() {
                               </span>
                               <strong>{area.name}</strong>
                               {area.subCriteria.length > 0 && (
-                                <span className="muted">{pluralize(area.subCriteria.length, 'sub-criteria', 'sub-criteria')}</span>
+                                <span className="muted">
+                                  {pluralize(area.subCriteria.length, 'sub-criteria', 'sub-criteria')}
+                                </span>
                               )}
                             </div>
                             {canWrite && (
@@ -831,7 +867,12 @@ export default function KpisAdminPage() {
                                   (confirmDeleteAreaId === area.id ? (
                                     <>
                                       <span className="muted">delete permanently?</span>
-                                      <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteArea(selectedKpi.id, area.id)}>
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => onDeleteArea(selectedKpi.id, area.id)}
+                                      >
                                         confirm delete
                                       </Button>
                                       <Button
@@ -874,7 +915,14 @@ export default function KpisAdminPage() {
                                 className="inline-form"
                                 onSubmit={(e) => onRenameSubCriteria(selectedKpi.id, area.id, sub.id, e)}
                               >
-                                <Input name="name" defaultValue={sub.name} required minLength={2} aria-label="sub-criteria name" autoFocus />
+                                <Input
+                                  name="name"
+                                  defaultValue={sub.name}
+                                  required
+                                  minLength={2}
+                                  aria-label="sub-criteria name"
+                                  autoFocus
+                                />
                                 <Button type="submit" variant="ghost">
                                   save
                                 </Button>
@@ -939,7 +987,10 @@ export default function KpisAdminPage() {
                           )}
                           {canWrite &&
                             (addingSubCriteriaForAreaId === area.id ? (
-                              <form className="inline-form" onSubmit={(e) => onCreateSubCriteria(selectedKpi.id, area.id, e)}>
+                              <form
+                                className="inline-form"
+                                onSubmit={(e) => onCreateSubCriteria(selectedKpi.id, area.id, e)}
+                              >
                                 <Input
                                   name="name"
                                   required
@@ -978,7 +1029,14 @@ export default function KpisAdminPage() {
                   {canWrite &&
                     (addingAreaForKpiId === selectedKpi.id ? (
                       <form className="inline-form" onSubmit={(e) => onCreateArea(selectedKpi.id, e)}>
-                        <Input name="name" required minLength={2} placeholder="new area name" aria-label="new area name" autoFocus />
+                        <Input
+                          name="name"
+                          required
+                          minLength={2}
+                          placeholder="new area name"
+                          aria-label="new area name"
+                          autoFocus
+                        />
                         <Button type="submit" variant="ghost">
                           add
                         </Button>

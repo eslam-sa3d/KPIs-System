@@ -9,5 +9,4 @@ export const PERMISSIONS_KEY = 'required_permissions';
  *   @RequirePermissions('forms:write')
  *   @Post() createForm(...) {}
  */
-export const RequirePermissions = (...permissions: PermissionKey[]) =>
-  SetMetadata(PERMISSIONS_KEY, permissions);
+export const RequirePermissions = (...permissions: PermissionKey[]) => SetMetadata(PERMISSIONS_KEY, permissions);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EvaluationAreaCadence } from './kpi';
 
 /**
  * Maps a form to a KPI Evaluation Area: one field supplies the score. On
@@ -23,7 +24,16 @@ import { z } from 'zod';
  * (form, evaluationArea) pair.
  */
 
-export const SCORE_FIELD_TYPES = ['rating', 'nps', 'slider', 'number', 'boolean', 'select', 'multi_select', 'likert'] as const;
+export const SCORE_FIELD_TYPES = [
+  'rating',
+  'nps',
+  'slider',
+  'number',
+  'boolean',
+  'select',
+  'multi_select',
+  'likert',
+] as const;
 export type ScoreFieldType = (typeof SCORE_FIELD_TYPES)[number];
 
 /** Who a mapping's scores come from, relative to the evaluatee. Drives the
@@ -60,6 +70,14 @@ export interface FormKpiMapping {
   contextFieldKey: string | null;
   commentFieldKey: string | null;
   createdAt: string;
+}
+
+/** FormKpiMappingsService.list()'s row shape — a FormKpiMapping with its
+ *  Evaluation Area's display fields joined in, so the mappings panel doesn't
+ *  need a second round-trip to show what each mapping links to. Only list()
+ *  returns this — create()/bulkCreate() return plain FormKpiMapping rows. */
+export interface FormKpiMappingWithArea extends FormKpiMapping {
+  evaluationArea: { id: string; name: string; kpiId: string; cadence: EvaluationAreaCadence };
 }
 
 /**

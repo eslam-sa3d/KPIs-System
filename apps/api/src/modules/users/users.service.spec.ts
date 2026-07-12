@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UsersService } from './users.service';
+import { RbacService } from '../rbac/rbac.service';
 
 function makePrismaStub() {
   const tx = {
-    user: { create: vi.fn(async ({ data, select: _s }: { data: object; select?: object }) => ({ id: 'user-new', ...data })), update: vi.fn() },
+    user: {
+      create: vi.fn(async ({ data, select: _s }: { data: object; select?: object }) => ({ id: 'user-new', ...data })),
+      update: vi.fn(),
+    },
     auditLog: { create: vi.fn() },
     session: { updateMany: vi.fn() },
   };
@@ -11,6 +15,7 @@ function makePrismaStub() {
     tx,
     user: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn(), update: vi.fn() },
     department: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    rolePermission: { findMany: vi.fn() },
     session: { updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(async (arg: unknown) =>
@@ -29,7 +34,8 @@ describe('UsersService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prisma = makePrismaStub();
-    service = new UsersService(prisma as never, hasherStub as never, redisStub as never);
+    const rbac = new RbacService(prisma as never, redisStub as never);
+    service = new UsersService(prisma as never, hasherStub as never, redisStub as never, rbac);
   });
 
   it('creates a user with a HASHED password and role links, audited', async () => {
@@ -146,6 +152,42 @@ describe('UsersService', () => {
       await expect(service.deleteDepartment('ghost', 'admin-1')).rejects.toMatchObject({
         code: 'NOT_FOUND',
       });
+    });
+  });
+
+  describe('list — RolePermission.scope enforcement', () => {
+    it('shows every user when the caller holds an "all"-scoped users:read grant', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'all' }]);
+      prisma.user.count.mockResolvedValue(2);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await service.list({}, 'user-1');
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+    });
+
+    it('filters to the caller\'s own department when every users:read grant is scoped narrower than "all"', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'department' }]);
+      prisma.user.findUnique.mockResolvedValue({ departmentId: 'dept-1' });
+      prisma.user.count.mockResolvedValue(1);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await service.list({}, 'user-1');
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { departmentId: 'dept-1' } }));
+    });
+
+    it('sees no one (not everyone) when restricted with no department of their own', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'own' }]);
+      prisma.user.findUnique.mockResolvedValue({ departmentId: null });
+      prisma.user.count.mockResolvedValue(0);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await service.list({}, 'user-1');
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { departmentId: '__none__' } }),
+      );
     });
   });
 });

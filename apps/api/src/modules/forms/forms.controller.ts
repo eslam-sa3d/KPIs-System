@@ -29,6 +29,7 @@ import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { memoryStorage } from 'multer';
 import { Public } from '../auth/public.decorator';
+import { env } from '../../infra/env';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
 import { AssetsService } from './assets.service';
@@ -43,7 +44,10 @@ type AuthedRequest = { user: { id: string } };
 // files live in the DB, not disk — memoryStorage keeps the buffer in-process;
 // the per-question maxSizeMb cap is enforced in FileUploadsService, this is
 // just a generous outer ceiling so an oversized body never reaches it
-const UPLOAD_INTERCEPTOR = FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const UPLOAD_INTERCEPTOR = FileInterceptor('file', {
+  storage: memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
 // design assets are capped tighter (5MB, enforced again in AssetsService) —
 // this is just the outer multer ceiling, same pattern as UPLOAD_INTERCEPTOR
 const ASSET_INTERCEPTOR = FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -52,10 +56,10 @@ const ASSET_INTERCEPTOR = FileInterceptor('file', { storage: memoryStorage(), li
  *  "identity" a public-link filler has, used to enforce oneResponsePerUser without an account.
  *  Same cross-site cookie reasoning as the auth refresh cookie (see auth.controller.ts). */
 const RESPONDENT_COOKIE = 'pulse_pf';
-const respondentCookieSameSite = (process.env.REFRESH_COOKIE_SAMESITE ?? 'strict') as 'strict' | 'lax' | 'none';
+const respondentCookieSameSite = env.REFRESH_COOKIE_SAMESITE;
 const respondentCookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production' || respondentCookieSameSite === 'none',
+  secure: env.isProduction || respondentCookieSameSite === 'none',
   sameSite: respondentCookieSameSite,
   path: '/api/v1/public/forms',
   maxAge: 365 * 24 * 60 * 60 * 1000,
@@ -79,10 +83,7 @@ export class FormsController {
 
   @Post()
   @RequirePermissions('forms:write')
-  createForm(
-    @Body() body: { slug: string; definition: unknown },
-    @Req() req: AuthedRequest,
-  ) {
+  createForm(@Body() body: { slug: string; definition: unknown }, @Req() req: AuthedRequest) {
     return this.forms.createForm(body.slug, body.definition, req.user.id);
   }
 
@@ -94,31 +95,19 @@ export class FormsController {
 
   @Patch(':formId/settings')
   @RequirePermissions('forms:write')
-  updateSettings(
-    @Param('formId') formId: string,
-    @Body() body: unknown,
-    @Req() req: AuthedRequest,
-  ) {
+  updateSettings(@Param('formId') formId: string, @Body() body: unknown, @Req() req: AuthedRequest) {
     return this.forms.updateSettings(formId, body, req.user.id);
   }
 
   @Post(':formId/share-link')
   @RequirePermissions('forms:manage')
-  setShareLink(
-    @Param('formId') formId: string,
-    @Body() body: { enabled: boolean },
-    @Req() req: AuthedRequest,
-  ) {
+  setShareLink(@Param('formId') formId: string, @Body() body: { enabled: boolean }, @Req() req: AuthedRequest) {
     return this.forms.setShareLink(formId, Boolean(body?.enabled), req.user.id);
   }
 
   @Post(':formId/export-link')
   @RequirePermissions('forms:manage')
-  setExportLink(
-    @Param('formId') formId: string,
-    @Body() body: { enabled: boolean },
-    @Req() req: AuthedRequest,
-  ) {
+  setExportLink(@Param('formId') formId: string, @Body() body: { enabled: boolean }, @Req() req: AuthedRequest) {
     return this.forms.setExportLink(formId, Boolean(body?.enabled), req.user.id);
   }
 
@@ -126,11 +115,7 @@ export class FormsController {
    *  forms:write is the coarse gate; FormsService.getOwnedForm enforces the real ownership check. */
   @Post(':formId/restricted')
   @RequirePermissions('forms:write')
-  setRestricted(
-    @Param('formId') formId: string,
-    @Body() body: { restricted: boolean },
-    @Req() req: AuthedRequest,
-  ) {
+  setRestricted(@Param('formId') formId: string, @Body() body: { restricted: boolean }, @Req() req: AuthedRequest) {
     return this.forms.setRestricted(formId, Boolean(body?.restricted), req.user.id);
   }
 
@@ -143,11 +128,7 @@ export class FormsController {
   /** Free-text folder tag shown in the forms list filter. */
   @Post(':formId/folder')
   @RequirePermissions('forms:write')
-  setFolder(
-    @Param('formId') formId: string,
-    @Body() body: { folder: string | null },
-    @Req() req: AuthedRequest,
-  ) {
+  setFolder(@Param('formId') formId: string, @Body() body: { folder: string | null }, @Req() req: AuthedRequest) {
     return this.forms.setFolder(formId, body?.folder?.trim() || null, req.user.id);
   }
 
@@ -169,11 +150,7 @@ export class FormsController {
 
   @Delete(':formId/collaborators/:userId')
   @RequirePermissions('forms:write')
-  removeCollaborator(
-    @Param('formId') formId: string,
-    @Param('userId') userId: string,
-    @Req() req: AuthedRequest,
-  ) {
+  removeCollaborator(@Param('formId') formId: string, @Param('userId') userId: string, @Req() req: AuthedRequest) {
     return this.forms.removeCollaborator(formId, userId, req.user.id);
   }
 
@@ -235,11 +212,7 @@ export class FormsController {
 
   @Delete(':formId/kpi-mappings/:mappingId')
   @RequirePermissions('forms:manage', 'kpis:write')
-  deleteKpiMapping(
-    @Param('formId') formId: string,
-    @Param('mappingId') mappingId: string,
-    @Req() req: AuthedRequest,
-  ) {
+  deleteKpiMapping(@Param('formId') formId: string, @Param('mappingId') mappingId: string, @Req() req: AuthedRequest) {
     return this.kpiMappings.delete(formId, mappingId, req.user.id);
   }
 
@@ -269,10 +242,7 @@ export class FormsController {
 
   @Get(':slug/submissions')
   @FormPermission('view')
-  list(
-    @Param('slug') slug: string,
-    @Query() query: PageQuery & { [filter: `answers.${string}`]: string },
-  ) {
+  list(@Param('slug') slug: string, @Query() query: PageQuery & { [filter: `answers.${string}`]: string }) {
     const filters = Object.fromEntries(
       Object.entries(query)
         .filter(([key]) => key.startsWith('answers.'))
@@ -345,11 +315,7 @@ export class FormsController {
   /** Streams the raw file — deliberately outside the JSON envelope, like the CSV export. */
   @Get(':slug/uploads/:uploadId')
   @RequirePermissions('form_submissions:read')
-  async downloadFile(
-    @Param('slug') slug: string,
-    @Param('uploadId') uploadId: string,
-    @Res() res: Response,
-  ) {
+  async downloadFile(@Param('slug') slug: string, @Param('uploadId') uploadId: string, @Res() res: Response) {
     const upload = await this.uploads.getForDownload(slug, uploadId);
     res
       .type(upload.mimeType)
@@ -362,10 +328,7 @@ export class FormsController {
   @FormPermission('view')
   async export(@Param('slug') slug: string, @Req() req: AuthedRequest, @Res() res: Response) {
     const csv = await this.submissions.exportCsv(slug, req.user.id);
-    res
-      .type('text/csv')
-      .setHeader('Content-Disposition', `attachment; filename="${slug}-submissions.csv"`)
-      .send(csv);
+    res.type('text/csv').setHeader('Content-Disposition', `attachment; filename="${slug}-submissions.csv"`).send(csv);
   }
 
   @Get(':slug/submissions/export.xlsx')
@@ -388,7 +351,6 @@ export class FormsController {
       .setHeader('Content-Disposition', `attachment; filename="${slug}-summary.pdf"`)
       .send(buffer);
   }
-
 }
 
 /** Anonymous fill via tokenized share links — no session, tight rate limits. */

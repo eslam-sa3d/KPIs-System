@@ -170,11 +170,12 @@ function resolveBranchTarget(
   fieldByKey: Map<string, FormField>,
   answers: SubmissionAnswers,
 ): string | undefined {
-  const legacyRules = section.branchRules && section.branchRules.length > 0
-    ? section.branchRules
-    : section.branching
-      ? [section.branching]
-      : [];
+  const legacyRules =
+    section.branchRules && section.branchRules.length > 0
+      ? section.branchRules
+      : section.branching
+        ? [section.branching]
+        : [];
   if (legacyRules.length > 0) {
     for (const rule of legacyRules) {
       const matched = findMatchedCase(rule, fieldByKey, answers);

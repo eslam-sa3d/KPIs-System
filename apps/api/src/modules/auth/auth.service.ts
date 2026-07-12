@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AccessTokenClaims, AuthenticatedUser, TokenGrant } from '@pulse/contracts';
 import { createHash, randomBytes } from 'node:crypto';
 import { AppError } from '../../common/app-error';
+import { env } from '../../infra/env';
 import { resetPasswordEmail } from '../../infra/email-templates';
 import { MailerService } from '../../infra/mailer.service';
 import { PrismaService } from '../../infra/prisma.service';
@@ -156,7 +157,7 @@ export class AuthService {
           expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000),
         },
       });
-      const webUrl = process.env.WEB_URL ?? 'http://localhost:3000';
+      const webUrl = env.WEB_URL;
       const resetUrl = `${webUrl}/reset-password?token=${rawToken}`;
       await this.mailer.send(
         user.email,
@@ -207,10 +208,7 @@ export class AuthService {
     return null;
   }
 
-  private async issueGrant(
-    user: AuthenticatedUser,
-    context: SessionContext,
-  ): Promise<GrantWithRefresh> {
+  private async issueGrant(user: AuthenticatedUser, context: SessionContext): Promise<GrantWithRefresh> {
     const claims: AccessTokenClaims = { sub: user.id, email: user.email };
     const accessToken = await this.jwt.signAsync(claims, {
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,

@@ -305,7 +305,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                       </SelectContent>
                     </Select>
                   ) : (
-                    row.department?.name ?? '—'
+                    (row.department?.name ?? '—')
                   )}
                 </TableCell>
                 <TableCell>

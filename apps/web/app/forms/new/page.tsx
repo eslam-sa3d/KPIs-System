@@ -12,8 +12,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
   ArrowDown,
   ArrowUp,
@@ -25,17 +24,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import {
-  CONDITION_OPERATORS,
-  END_OF_FORM,
-  SCORE_FIELD_TYPES,
-  type FieldType,
-  type FormDefinition,
-  type FormField,
-  type FormSection,
-} from '@pulse/contracts';
-
-type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
+import { END_OF_FORM, SCORE_FIELD_TYPES, type FormDefinition } from '@pulse/contracts';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { KpiLinkCombobox } from '../../../components/kpi-link-combobox';
 import { LoadingState } from '../../../components/loading-state';
@@ -46,642 +35,25 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-
-const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
-  { value: 'short_text', label: 'short text' },
-  { value: 'long_text', label: 'long text' },
-  { value: 'number', label: 'number' },
-  { value: 'date', label: 'date' },
-  { value: 'time', label: 'time' },
-  { value: 'boolean', label: 'yes / no' },
-  { value: 'rating', label: 'rating (2–10)' },
-  { value: 'nps', label: 'net promoter score (0–10)' },
-  { value: 'select', label: 'choice (one answer)' },
-  { value: 'multi_select', label: 'choice (multiple answers)' },
-  { value: 'likert', label: 'likert matrix' },
-  { value: 'grid', label: 'grid (multiple choice / checkbox)' },
-  { value: 'ranking', label: 'ranking' },
-  { value: 'file', label: 'file upload' },
-  { value: 'section_header', label: 'section heading (no answer)' },
-  { value: 'slider', label: 'slider' },
-  { value: 'contact_info', label: 'contact info (name / email / phone)' },
-  { value: 'hot_spot', label: 'hot spot (click a region on an image)' },
-];
-
-const FIELD_TYPE_ICON: Record<FieldType, string> = {
-  short_text: '—',
-  long_text: '☰',
-  number: '#',
-  date: '📅',
-  time: '🕐',
-  boolean: '◐',
-  rating: '★',
-  nps: '📊',
-  select: '◉',
-  multi_select: '☑',
-  likert: '▤',
-  grid: '▦',
-  ranking: '↕',
-  file: '📎',
-  section_header: 'Tt',
-  slider: '🎚',
-  contact_info: '👤',
-  hot_spot: '⌖',
-  person: '🧑',
-};
-
-const parseList = (raw: string) =>
-  raw.split(',').map((s) => s.trim()).filter(Boolean);
-
-interface DraftField {
-  /** Pinned to the original field's key when hydrated for editing — keeps
-   *  visibleWhen references, quotas, KPI mappings, and existing submission
-   *  answers stable across a republish even if the label changes or the
-   *  field moves. undefined (brand-new fields) falls back to toKey(label, index). */
-  key?: string;
-  label: string;
-  helpText: string;
-  type: FieldType;
-  required: boolean;
-  /** comma-separated: select/multi_select/ranking options, or likert statements */
-  options: string;
-  layout: 'dropdown' | 'radio';
-  allowOther: boolean;
-  /** select/multi_select/ranking: randomize option order per respondent */
-  shuffleOptions: boolean;
-  scale: number;
-  lowLabel: string;
-  highLabel: string;
-  /** comma-separated likert scale labels, e.g. "disagree,neutral,agree" */
-  likertScale: string;
-  /** comma-separated MIME types accepted for a file-upload field */
-  acceptedMimeTypes: string;
-  maxSizeMb: number;
-  maxFiles: number;
-  /** option value -> uploaded FormAsset id, for select/multi_select/ranking "image choice" options */
-  optionImages: Record<string, string>;
-  /** select only, Google-Forms-style "go to section based on answer": option
-   *  value -> target page id, or "end". A missing/'' entry for an option
-   *  means "continue to the next page". */
-  optionGoTo: Record<string, string>;
-  mediaType: 'none' | 'image' | 'video';
-  mediaAssetId: string;
-  /** video: an external embed URL (e.g. YouTube) */
-  mediaUrl: string;
-  mediaAlt: string;
-  /** conditional visibility: '' = always visible */
-  visibleWhenFieldKey: string;
-  visibleWhenOperator: ConditionOperator;
-  visibleWhenValue: string;
-  /** quiz mode: 0/empty = not gradable. Meaning of correctValue depends on type:
-   *  select -> an option value; number -> parsed as a number; boolean -> 'true'/'false'. */
-  points: number;
-  correctValue: string;
-  /** multi_select: comma-separated set of option values that must all (and only) be selected */
-  correctValues: string;
-  /** short_text: comma-separated, case-insensitive any-of accepted answers */
-  correctAnswers: string;
-  /** quiz mode: shown per-question on the thank-you screen. '' = no feedback text. */
-  feedbackCorrect: string;
-  feedbackIncorrect: string;
-  /** short_text/long_text: Google Forms-style response validation. 0 = no minimum. */
-  minLength: number;
-  pattern: string;
-  patternErrorMessage: string;
-  /** rating: visual style only */
-  ratingStyle: 'pills' | 'stars';
-  /** slider */
-  sliderMin: number;
-  sliderMax: number;
-  sliderStep: number;
-  /** contact_info: which parts are required */
-  requireName: boolean;
-  requireEmail: boolean;
-  requirePhone: boolean;
-  /** hot_spot */
-  hotSpotAssetId: string;
-  hotSpotRegions: Array<{ value: string; label: string; x: number; y: number; width: number; height: number }>;
-  /** grid: comma-separated row statements and shared column choices */
-  gridRows: string;
-  gridColumns: string;
-  /** grid: one column per row ("multiple choice grid") or any columns per row ("checkbox grid") */
-  gridSelection: 'single' | 'multiple';
-  gridRequireOnePerRow: boolean;
-  /** UTM-style hidden field: '' = a normal, respondent-filled question. When set, this
-   *  question is never shown — its value is read once from this query-string parameter. */
-  capturedFromUrlParam: string;
-  /** KPI scoring link (optional, rating/nps/slider only) — mirrors a real
-   *  FormKpiMapping row 1:1, not a property on the field definition itself.
-   *  kpiId only narrows the evaluation-area picker; evaluationAreaId is what
-   *  actually drives mapping creation. kpiMappingId is set once a real
-   *  mapping exists (hydrated from an existing form, or just created) — its
-   *  presence is what "linked" means, not kpiId/evaluationAreaId alone. */
-  kpiId: string;
-  evaluationAreaId: string;
-  kpiMappingId: string;
-}
-
-const emptyField = (): DraftField => ({
-  label: '',
-  helpText: '',
-  type: 'short_text',
-  required: false,
-  options: '',
-  layout: 'radio',
-  allowOther: false,
-  shuffleOptions: false,
-  scale: 5,
-  lowLabel: '',
-  highLabel: '',
-  likertScale: 'disagree, neutral, agree',
-  acceptedMimeTypes: 'application/pdf, image/png, image/jpeg',
-  maxSizeMb: 10,
-  maxFiles: 1,
-  optionImages: {},
-  optionGoTo: {},
-  mediaType: 'none',
-  mediaAssetId: '',
-  mediaUrl: '',
-  mediaAlt: '',
-  visibleWhenFieldKey: '',
-  visibleWhenOperator: 'equals',
-  visibleWhenValue: '',
-  points: 0,
-  correctValue: '',
-  correctValues: '',
-  correctAnswers: '',
-  feedbackCorrect: '',
-  feedbackIncorrect: '',
-  minLength: 0,
-  pattern: '',
-  patternErrorMessage: '',
-  ratingStyle: 'pills',
-  sliderMin: 0,
-  sliderMax: 100,
-  sliderStep: 1,
-  requireName: true,
-  requireEmail: true,
-  requirePhone: false,
-  hotSpotAssetId: '',
-  hotSpotRegions: [],
-  gridRows: '',
-  gridColumns: '',
-  gridSelection: 'single',
-  gridRequireOnePerRow: false,
-  capturedFromUrlParam: '',
-  kpiId: '',
-  evaluationAreaId: '',
-  kpiMappingId: '',
-});
-
-// fieldKey is capped at 64 chars server-side (packages/contracts/src/form-schema.ts) — long
-// question labels (common in imported QA evaluation forms) must be truncated, not rejected.
-const toKey = (label: string, index: number) => {
-  const slug = label
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 50)
-    .replace(/_+$/, '');
-  return (/^[a-z]/.test(slug) ? slug : `field_${index + 1}${slug ? `_${slug}` : ''}`).slice(0, 64);
-};
-
-interface KpiOption {
-  id: string;
-  name: string;
-  evaluationAreas: Array<{ id: string; name: string; cadence: string; isActive: boolean }>;
-}
-
-interface KeyedField {
-  key: string;
-  label: string;
-  type: FieldType;
-  options: string[];
-  scale: number;
-  likertScale: string[];
-}
-
-/** Google Forms model: a page has no independently-editable field list — it's
- *  just "every question from `startFieldKey` up to the next page's start", in
- *  the form's own question order. The very first page has `startFieldKey:
- *  null` (it implicitly starts at the top). Dragging a question above/below a
- *  page's start field moves it into that page automatically — no separate
- *  bookkeeping required, matching how Google Forms' section breaks behave. */
-interface DraftSection {
-  id: string;
-  title: string;
-  description: string;
-  mediaType: 'none' | 'image' | 'video';
-  mediaAssetId: string;
-  mediaUrl: string;
-  mediaAlt: string;
-  startFieldKey: string | null;
-  /** Google-Forms-style "after this page, go to..." — the page's own fallback
-   *  once none of its `select` fields' own optionGoTo redirected elsewhere.
-   *  '' = continue to the next page normally. */
-  defaultGoTo: string;
-}
-
-const emptySection = (id: string, startFieldKey: string | null): DraftSection => ({
-  id,
-  title: '',
-  description: '',
-  mediaType: 'none',
-  mediaAssetId: '',
-  mediaUrl: '',
-  mediaAlt: '',
-  startFieldKey,
-  defaultGoTo: '',
-});
-
-/** Coerces the builder's always-string visibleWhen value to match its target field's answer shape
- *  (a boolean-target field stores real booleans; gt/lt need a real number to compare). */
-function coerceVisibleWhenValue(raw: string, operator: ConditionOperator, targetType: FieldType | undefined) {
-  if (operator === 'gt' || operator === 'lt') return Number(raw);
-  if (targetType === 'boolean') return raw === 'true';
-  if (targetType === 'number' || targetType === 'rating' || targetType === 'nps') return Number(raw);
-  return raw;
-}
-
-function toDefinitionField(draft: DraftField, index: number, keyedFields: KeyedField[]) {
-  const visibleWhenTarget = keyedFields.find((f) => f.key === draft.visibleWhenFieldKey);
-  const base = {
-    key: draft.key ?? toKey(draft.label, index),
-    label: draft.label,
-    required: draft.required,
-    ...(draft.helpText.trim() ? { helpText: draft.helpText.trim() } : {}),
-    ...(draft.mediaType === 'image' && draft.mediaAssetId
-      ? { media: { type: 'image' as const, assetId: draft.mediaAssetId, ...(draft.mediaAlt ? { alt: draft.mediaAlt } : {}) } }
-      : draft.mediaType === 'video' && draft.mediaUrl
-        ? { media: { type: 'video' as const, url: draft.mediaUrl, ...(draft.mediaAlt ? { alt: draft.mediaAlt } : {}) } }
-        : {}),
-    ...(draft.visibleWhenFieldKey && draft.visibleWhenValue !== ''
-      ? {
-          visibleWhen: {
-            fieldKey: draft.visibleWhenFieldKey,
-            operator: draft.visibleWhenOperator,
-            equals: coerceVisibleWhenValue(draft.visibleWhenValue, draft.visibleWhenOperator, visibleWhenTarget?.type),
-          },
-        }
-      : {}),
-    ...(draft.capturedFromUrlParam.trim() ? { capturedFromUrlParam: draft.capturedFromUrlParam.trim() } : {}),
-  };
-  const withImages = (values: string[]) =>
-    values.map((o) => ({ value: o, label: o, ...(draft.optionImages[o] ? { imageAssetId: draft.optionImages[o] } : {}) }));
-  const quizPoints = draft.points > 0 ? { points: draft.points } : {};
-  const quizFeedback = {
-    ...(draft.feedbackCorrect.trim() ? { feedbackCorrect: draft.feedbackCorrect.trim() } : {}),
-    ...(draft.feedbackIncorrect.trim() ? { feedbackIncorrect: draft.feedbackIncorrect.trim() } : {}),
-  };
-  switch (draft.type) {
-    case 'select': {
-      const optionValues = parseList(draft.options);
-      const options = withImages(optionValues);
-      const optionGoTo = Object.fromEntries(
-        optionValues
-          .map((v): [string, string] => [v, draft.optionGoTo[v] ?? ''])
-          .filter(([, goTo]) => goTo !== ''),
-      );
-      return {
-        ...base,
-        type: draft.type,
-        options,
-        layout: draft.layout,
-        allowOther: draft.allowOther,
-        shuffleOptions: draft.shuffleOptions,
-        ...(Object.keys(optionGoTo).length > 0 ? { optionGoTo } : {}),
-        ...(draft.points > 0 && draft.correctValue
-          ? { correctValue: draft.correctValue, ...quizPoints, ...quizFeedback }
-          : {}),
-      };
-    }
-    case 'multi_select': {
-      const options = withImages(parseList(draft.options));
-      return {
-        ...base,
-        type: draft.type,
-        options,
-        shuffleOptions: draft.shuffleOptions,
-        allowOther: draft.allowOther,
-        ...(draft.points > 0 && draft.correctValues.trim()
-          ? { correctValues: parseList(draft.correctValues), ...quizPoints, ...quizFeedback }
-          : {}),
-      };
-    }
-    case 'grid': {
-      const toOptionItems = (values: string[]) => values.map((v) => ({ value: v, label: v }));
-      return {
-        ...base,
-        type: draft.type,
-        rows: toOptionItems(parseList(draft.gridRows)),
-        columns: toOptionItems(parseList(draft.gridColumns)),
-        selection: draft.gridSelection,
-        requireOnePerRow: draft.gridRequireOnePerRow,
-      };
-    }
-    case 'boolean':
-      return {
-        ...base,
-        type: draft.type,
-        ...(draft.points > 0 && draft.correctValue
-          ? { correctValue: draft.correctValue === 'true', ...quizPoints, ...quizFeedback }
-          : {}),
-      };
-    case 'short_text':
-      return {
-        ...base,
-        type: draft.type,
-        ...(draft.minLength > 0 ? { minLength: draft.minLength } : {}),
-        ...(draft.pattern.trim() ? { pattern: draft.pattern.trim() } : {}),
-        ...(draft.patternErrorMessage.trim() ? { patternErrorMessage: draft.patternErrorMessage.trim() } : {}),
-        ...(draft.points > 0 && draft.correctAnswers.trim()
-          ? { correctAnswers: parseList(draft.correctAnswers), ...quizPoints, ...quizFeedback }
-          : {}),
-      };
-    case 'long_text':
-      return {
-        ...base,
-        type: draft.type,
-        ...(draft.minLength > 0 ? { minLength: draft.minLength } : {}),
-        ...(draft.pattern.trim() ? { pattern: draft.pattern.trim() } : {}),
-        ...(draft.patternErrorMessage.trim() ? { patternErrorMessage: draft.patternErrorMessage.trim() } : {}),
-      };
-    case 'number':
-      return {
-        ...base,
-        type: draft.type,
-        ...(draft.points > 0 && draft.correctValue !== ''
-          ? { correctValue: Number(draft.correctValue), ...quizPoints, ...quizFeedback }
-          : {}),
-      };
-    case 'ranking': {
-      const options = withImages(parseList(draft.options));
-      return { ...base, type: draft.type, options, shuffleOptions: draft.shuffleOptions };
-    }
-    case 'likert': {
-      const statements = parseList(draft.options).map((o) => ({ value: o, label: o }));
-      const scale = parseList(draft.likertScale);
-      return { ...base, type: draft.type, statements, scale };
-    }
-    case 'file': {
-      const acceptedMimeTypes = parseList(draft.acceptedMimeTypes);
-      return { ...base, type: draft.type, acceptedMimeTypes, maxSizeMb: draft.maxSizeMb, maxFiles: draft.maxFiles };
-    }
-    case 'rating':
-      return {
-        ...base,
-        type: draft.type,
-        scale: draft.scale,
-        style: draft.ratingStyle,
-        ...(draft.lowLabel ? { lowLabel: draft.lowLabel } : {}),
-        ...(draft.highLabel ? { highLabel: draft.highLabel } : {}),
-      };
-    case 'nps':
-      return {
-        ...base,
-        type: draft.type,
-        ...(draft.lowLabel ? { lowLabel: draft.lowLabel } : {}),
-        ...(draft.highLabel ? { highLabel: draft.highLabel } : {}),
-      };
-    case 'slider':
-      return {
-        ...base,
-        type: draft.type,
-        min: draft.sliderMin,
-        max: draft.sliderMax,
-        step: draft.sliderStep,
-        ...(draft.lowLabel ? { lowLabel: draft.lowLabel } : {}),
-        ...(draft.highLabel ? { highLabel: draft.highLabel } : {}),
-      };
-    case 'contact_info':
-      return {
-        ...base,
-        type: draft.type,
-        requireName: draft.requireName,
-        requireEmail: draft.requireEmail,
-        requirePhone: draft.requirePhone,
-      };
-    case 'hot_spot':
-      return {
-        ...base,
-        type: draft.type,
-        imageAssetId: draft.hotSpotAssetId,
-        regions: draft.hotSpotRegions,
-      };
-    default:
-      return { ...base, type: draft.type };
-  }
-}
-
-/** Reverses toDefinitionField for edit mode: rebuilds a DraftField from a
- *  saved FormField, pinning `key` so a republish doesn't regenerate it (see
- *  DraftField.key). Options/statements collapse label back to value — this
- *  builder never lets label and value diverge, so nothing is lost for any
- *  form actually authored through it. */
-function fromDefinitionField(field: FormField): DraftField {
-  const draft = emptyField();
-  draft.key = field.key;
-  draft.label = field.label;
-  draft.helpText = field.helpText ?? '';
-  draft.type = field.type;
-  draft.required = field.required;
-  draft.capturedFromUrlParam = field.capturedFromUrlParam ?? '';
-
-  if (field.media?.type === 'image') {
-    draft.mediaType = 'image';
-    draft.mediaAssetId = field.media.assetId ?? '';
-    draft.mediaAlt = field.media.alt ?? '';
-  } else if (field.media?.type === 'video') {
-    draft.mediaType = 'video';
-    draft.mediaUrl = field.media.url ?? '';
-    draft.mediaAlt = field.media.alt ?? '';
-  }
-
-  if (field.visibleWhen) {
-    draft.visibleWhenFieldKey = field.visibleWhen.fieldKey;
-    draft.visibleWhenOperator = field.visibleWhen.operator;
-    draft.visibleWhenValue = String(field.visibleWhen.equals);
-  }
-
-  const optionsToDraft = (options: Array<{ value: string; imageAssetId?: string }>) => {
-    draft.options = options.map((o) => o.value).join(', ');
-    draft.optionImages = Object.fromEntries(
-      options.filter((o) => o.imageAssetId).map((o) => [o.value, o.imageAssetId!]),
-    );
-  };
-
-  switch (field.type) {
-    case 'select':
-      optionsToDraft(field.options);
-      draft.layout = field.layout;
-      draft.allowOther = field.allowOther;
-      draft.shuffleOptions = field.shuffleOptions;
-      draft.optionGoTo = field.optionGoTo ?? {};
-      if (field.correctValue !== undefined) {
-        draft.correctValue = field.correctValue;
-        draft.points = field.points ?? 0;
-        draft.feedbackCorrect = field.feedbackCorrect ?? '';
-        draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
-      }
-      break;
-    case 'multi_select':
-      optionsToDraft(field.options);
-      draft.shuffleOptions = field.shuffleOptions;
-      draft.allowOther = field.allowOther;
-      if (field.correctValues) {
-        draft.correctValues = field.correctValues.join(', ');
-        draft.points = field.points ?? 0;
-        draft.feedbackCorrect = field.feedbackCorrect ?? '';
-        draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
-      }
-      break;
-    case 'boolean':
-      if (field.correctValue !== undefined) {
-        draft.correctValue = field.correctValue ? 'true' : 'false';
-        draft.points = field.points ?? 0;
-        draft.feedbackCorrect = field.feedbackCorrect ?? '';
-        draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
-      }
-      break;
-    case 'short_text':
-      draft.minLength = field.minLength ?? 0;
-      draft.pattern = field.pattern ?? '';
-      draft.patternErrorMessage = field.patternErrorMessage ?? '';
-      if (field.correctAnswers) {
-        draft.correctAnswers = field.correctAnswers.join(', ');
-        draft.points = field.points ?? 0;
-        draft.feedbackCorrect = field.feedbackCorrect ?? '';
-        draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
-      }
-      break;
-    case 'long_text':
-      draft.minLength = field.minLength ?? 0;
-      draft.pattern = field.pattern ?? '';
-      draft.patternErrorMessage = field.patternErrorMessage ?? '';
-      break;
-    case 'number':
-      if (field.correctValue !== undefined) {
-        draft.correctValue = String(field.correctValue);
-        draft.points = field.points ?? 0;
-        draft.feedbackCorrect = field.feedbackCorrect ?? '';
-        draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
-      }
-      break;
-    case 'ranking':
-      optionsToDraft(field.options);
-      draft.shuffleOptions = field.shuffleOptions;
-      break;
-    case 'likert':
-      draft.options = field.statements.map((s) => s.value).join(', ');
-      draft.likertScale = field.scale.join(', ');
-      break;
-    case 'file':
-      draft.acceptedMimeTypes = field.acceptedMimeTypes.join(', ');
-      draft.maxSizeMb = field.maxSizeMb;
-      draft.maxFiles = field.maxFiles;
-      break;
-    case 'rating':
-      draft.scale = field.scale;
-      draft.ratingStyle = field.style;
-      draft.lowLabel = field.lowLabel ?? '';
-      draft.highLabel = field.highLabel ?? '';
-      break;
-    case 'nps':
-      draft.lowLabel = field.lowLabel ?? '';
-      draft.highLabel = field.highLabel ?? '';
-      break;
-    case 'slider':
-      draft.sliderMin = field.min;
-      draft.sliderMax = field.max;
-      draft.sliderStep = field.step;
-      draft.lowLabel = field.lowLabel ?? '';
-      draft.highLabel = field.highLabel ?? '';
-      break;
-    case 'contact_info':
-      draft.requireName = field.requireName;
-      draft.requireEmail = field.requireEmail;
-      draft.requirePhone = field.requirePhone;
-      break;
-    case 'hot_spot':
-      draft.hotSpotAssetId = field.imageAssetId;
-      draft.hotSpotRegions = field.regions;
-      break;
-    case 'grid':
-      draft.gridRows = field.rows.map((r) => r.value).join(', ');
-      draft.gridColumns = field.columns.map((c) => c.value).join(', ');
-      draft.gridSelection = field.selection;
-      draft.gridRequireOnePerRow = field.requireOnePerRow;
-      break;
-    case 'date':
-    case 'time':
-    case 'section_header':
-    case 'person':
-      break;
-  }
-  return draft;
-}
-
-/** Reverses buildSectionsPayload: rebuilds a DraftSection from a saved
- *  FormSection. A section published under the previous (MS-Forms-style)
- *  `branching`/`branchRules` model reopens with no "after this page" default
- *  set here — same as any other legacy data the builder no longer edits;
- *  republishing preserves the original fields but writes the current model.
- *  `fieldKeys` collapses down to just its first entry (`startFieldKey`) — the
- *  builder only ever writes contiguous pages, so this is lossless for
- *  anything the current builder itself produced. */
-function fromDefinitionSection(section: FormSection, index: number): DraftSection {
-  return {
-    id: section.id,
-    title: section.title ?? '',
-    description: section.description ?? '',
-    mediaType: section.media?.type === 'image' ? 'image' : section.media?.type === 'video' ? 'video' : 'none',
-    mediaAssetId: section.media?.type === 'image' ? (section.media.assetId ?? '') : '',
-    mediaUrl: section.media?.type === 'video' ? (section.media.url ?? '') : '',
-    mediaAlt: section.media?.alt ?? '',
-    startFieldKey: index === 0 ? null : (section.fieldKeys[0] ?? null),
-    defaultGoTo: section.defaultGoTo ?? '',
-  };
-}
-
-type DragHandleProps = Pick<ReturnType<typeof useSortable>, 'attributes' | 'listeners'>;
-
-/** A drag-sortable <fieldset> wrapper. Pulled out as its own component (not
- *  inlined in a .map()) because useSortable is a hook — it can only run once
- *  per rendered item, which means once per component instance. */
-function SortableCard({
-  id,
-  className,
-  style,
-  onFocus,
-  onClick,
-  setRef,
-  children,
-}: {
-  id: string | number;
-  className: string;
-  style?: React.CSSProperties;
-  onFocus?: () => void;
-  onClick?: () => void;
-  setRef?: (el: HTMLFieldSetElement | null) => void;
-  children: (drag: DragHandleProps) => React.ReactNode;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  return (
-    <fieldset
-      ref={(el) => {
-        setRef?.(el);
-        setNodeRef(el);
-      }}
-      style={{ ...style, transform: CSS.Transform.toString(transform), transition }}
-      className={`${className}${isDragging ? ' is-dragging' : ''}`}
-      onFocus={onFocus}
-      onClick={onClick}
-    >
-      {children({ attributes, listeners })}
-    </fieldset>
-  );
-}
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { FIELD_TYPE_OPTIONS, FIELD_TYPE_ICON } from './constants';
+import type { DraftField, DraftSection, KpiOption } from './types';
+import {
+  parseList,
+  emptyField,
+  toKey,
+  emptySection,
+  toDefinitionField,
+  fromDefinitionField,
+  fromDefinitionSection,
+} from './field-transforms';
+import { SortableCard } from './sortable-card';
 
 function NewFormPage() {
   const user = useSession();
@@ -716,16 +88,16 @@ function NewFormPage() {
   const [branchingPanelOverrides, setBranchingPanelOverrides] = useState<Map<number, boolean>>(new Map());
 
   useEffect(() => {
-    api<KpiOption[]>('/v1/kpis?pageSize=100').then(setKpis).catch(() => setKpis([]));
+    api<KpiOption[]>('/v1/kpis?pageSize=100')
+      .then(setKpis)
+      .catch(() => setKpis([]));
   }, []);
 
   useEffect(() => {
     if (!editSlug) return;
     let cancelled = false;
     setLoadingExisting(true);
-    api<{ form: { id: string; slug: string }; definition: FormDefinition }>(
-      `/v1/forms/${encodeURIComponent(editSlug)}`,
-    )
+    api<{ form: { id: string; slug: string }; definition: FormDefinition }>(`/v1/forms/${encodeURIComponent(editSlug)}`)
       .then(async ({ form, definition }) => {
         if (cancelled) return;
         setEditingForm({ id: form.id, slug: form.slug });
@@ -749,7 +121,12 @@ function NewFormPage() {
               const key = f.key ?? toKey(f.label, i);
               const match = mappings.find((m) => m.scoreFieldKey === key);
               return match
-                ? { ...f, kpiId: match.evaluationArea.kpiId, evaluationAreaId: match.evaluationAreaId, kpiMappingId: match.id }
+                ? {
+                    ...f,
+                    kpiId: match.evaluationArea.kpiId,
+                    evaluationAreaId: match.evaluationAreaId,
+                    kpiMappingId: match.id,
+                  }
                 : f;
             }),
           );
@@ -1014,8 +391,12 @@ function NewFormPage() {
     try {
       // lazy-loaded: the xlsx parsing engine only ships once someone actually imports a file
       const { parseFormWorkbook } = await import('../../../lib/parse-form-workbook');
-      const { fields: parsed, issues, title: parsedTitle, description: parsedDescription } =
-        await parseFormWorkbook(file);
+      const {
+        fields: parsed,
+        issues,
+        title: parsedTitle,
+        description: parsedDescription,
+      } = await parseFormWorkbook(file);
       if (parsed.length === 0) {
         setError(issues[0] ?? 'no usable rows found — check that the sheet has a "question" column');
         return;
@@ -1237,7 +618,9 @@ function NewFormPage() {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="untitled form"
           />
-          <label htmlFor="form-description" className="msform-desc-label">description (optional)</label>
+          <label htmlFor="form-description" className="msform-desc-label">
+            description (optional)
+          </label>
           <Input
             id="form-description"
             className="msform-desc-input"
@@ -1248,921 +631,1003 @@ function NewFormPage() {
         </header>
 
         <div className="builder msform-body">
-        <div className="admin-card" style={{ marginBottom: 16 }}>
-          <label>import questions from a file</label>
-          <Input
-            ref={fileInputRef}
-            id="excel-import-input"
-            type="file"
-            accept=".xlsx,.xls,.csv,.docx"
-            onChange={onImportExcel}
-            style={{ display: 'none' }}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={importing}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {importing ? 'reading file…' : 'import from Excel, CSV, or Word'}
-          </Button>
-          {importIssues.length > 0 && (
-            <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
-              {importIssues.slice(0, 5).map((issue, i) => (
-                <li key={i}>{issue}</li>
-              ))}
-              {importIssues.length > 5 && <li>…and {importIssues.length - 5} more</li>}
-            </ul>
-          )}
-        </div>
-
-        {fields.length > 0 && (
-          <div className="page-title-row" style={{ marginBottom: 8 }}>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setFields((current) => current.map((f) => ({ ...f, required: true })))}
-            >
-              mark all required
+          <div className="admin-card" style={{ marginBottom: 16 }}>
+            <label>import questions from a file</label>
+            <Input
+              ref={fileInputRef}
+              id="excel-import-input"
+              type="file"
+              accept=".xlsx,.xls,.csv,.docx"
+              onChange={onImportExcel}
+              style={{ display: 'none' }}
+            />
+            <Button type="button" variant="ghost" disabled={importing} onClick={() => fileInputRef.current?.click()}>
+              {importing ? 'reading file…' : 'import from Excel, CSV, or Word'}
             </Button>
+            {importIssues.length > 0 && (
+              <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
+                {importIssues.slice(0, 5).map((issue, i) => (
+                  <li key={i}>{issue}</li>
+                ))}
+                {importIssues.length > 5 && <li>…and {importIssues.length - 5} more</li>}
+              </ul>
+            )}
+          </div>
+
+          {fields.length > 0 && (
+            <div className="page-title-row" style={{ marginBottom: 8 }}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setFields((current) => current.map((f) => ({ ...f, required: true })))}
+              >
+                mark all required
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setFields((current) => current.map((f) => ({ ...f, required: false })))}
+              >
+                mark all optional
+              </Button>
+            </div>
+          )}
+
+          <div className="builder-fields-row">
+            <div className="builder-fields-col">
+              <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={onFieldDragEnd}>
+                <SortableContext items={fields.map((_, i) => i)} strategy={verticalListSortingStrategy}>
+                  {fields.map((field, index) => {
+                    const isActive = activeFieldIndex === index;
+                    const fieldKey = keyedFields[index]?.key ?? '';
+                    // "go to section based on answer" only makes sense once there's a LATER page to jump to.
+                    const ownSectionIndex = sectionsEnabled
+                      ? resolvedSections.findIndex((s) => s.fieldKeys.includes(fieldKey))
+                      : -1;
+                    const ownSection = ownSectionIndex >= 0 ? resolvedSections[ownSectionIndex] : undefined;
+                    const laterSectionsForField = ownSection ? resolvedSections.slice(ownSectionIndex + 1) : [];
+                    // this question is literally where its page begins/ends — drives the inline page
+                    // header/footer rendered around its card, and whether "split a new page here" is offered
+                    const isPageStart = ownSection?.fieldKeys[0] === fieldKey;
+                    const isPageEnd = ownSection
+                      ? ownSection.fieldKeys[ownSection.fieldKeys.length - 1] === fieldKey
+                      : false;
+                    const pageDisplayIndex = ownSection ? resolvedSections.indexOf(ownSection) : -1;
+                    // Any answerable question can be linked to a KPI — section_header is the only
+                    // exclusion, since it has no answer at all. Whether the link actually produces a
+                    // live score depends on the field type; see kpiProducesLiveScore below.
+                    const canLinkKpiField = field.type !== 'section_header';
+                    // Only these types have a well-defined 0-5 normalization (see submissions.service.ts's
+                    // normalizeScore) — linking any other type is allowed, but never produces a score.
+                    const kpiProducesLiveScore = (SCORE_FIELD_TYPES as readonly string[]).includes(field.type);
+                    // "link to KPI" panel visibility: an explicit toggle (via the ⋮ menu) overrides the
+                    // default of "open if already linked" — so an existing link stays visible without
+                    // requiring the toggle, but can still be tucked away once reviewed.
+                    const kpiOpen = kpiPanelOverrides.has(index) ? kpiPanelOverrides.get(index)! : Boolean(field.kpiId);
+                    // "go to section based on answer" panel visibility — same explicit-toggle-with-
+                    // default-open-if-already-set pattern as kpiOpen above.
+                    const branchingOpen = branchingPanelOverrides.has(index)
+                      ? branchingPanelOverrides.get(index)!
+                      : Object.values(field.optionGoTo).some((v) => v);
+                    return (
+                      <Fragment key={index}>
+                        {isPageStart && ownSection && (
+                          <div className="admin-card page-break-card" style={{ marginBottom: 12 }}>
+                            <div className="page-title-row" style={{ marginBottom: 8 }}>
+                              <span className="field-legend">
+                                page {pageDisplayIndex + 1} of {resolvedSections.length}
+                              </span>
+                              {pageDisplayIndex > 0 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  title="remove this page break"
+                                  aria-label={`remove page ${pageDisplayIndex + 1} — merges its questions into the previous page`}
+                                  onClick={() => removeSection(ownSection.id)}
+                                >
+                                  <Trash2 size={14} aria-hidden="true" />
+                                </Button>
+                              )}
+                            </div>
+
+                            <label htmlFor={`section-title-${ownSection.id}`}>page title (optional)</label>
+                            <Input
+                              id={`section-title-${ownSection.id}`}
+                              value={ownSection.title}
+                              onChange={(e) => updateSection(ownSection.id, { title: e.target.value })}
+                              placeholder={ownSection.id}
+                            />
+
+                            <label htmlFor={`section-description-${ownSection.id}`}>page description (optional)</label>
+                            <Input
+                              id={`section-description-${ownSection.id}`}
+                              value={ownSection.description}
+                              onChange={(e) => updateSection(ownSection.id, { description: e.target.value })}
+                              placeholder="shown under the page title"
+                            />
+
+                            <label htmlFor={`section-media-type-${ownSection.id}`}>page media (optional)</label>
+                            <Select
+                              value={ownSection.mediaType}
+                              onValueChange={(v) =>
+                                updateSection(ownSection.id, { mediaType: v as DraftSection['mediaType'] })
+                              }
+                            >
+                              <SelectTrigger id={`section-media-type-${ownSection.id}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">none</SelectItem>
+                                <SelectItem value="image">image</SelectItem>
+                                <SelectItem value="video">video (embed URL)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {ownSection.mediaType === 'image' && (
+                              <>
+                                <Input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) =>
+                                    e.target.files?.[0] && onUploadSectionMedia(ownSection.id, e.target.files[0])
+                                  }
+                                />
+                                {ownSection.mediaAssetId && (
+                                  <img src={assetUrl(ownSection.mediaAssetId)} alt="" className="option-image" />
+                                )}
+                              </>
+                            )}
+                            {ownSection.mediaType === 'video' && (
+                              <Input
+                                value={ownSection.mediaUrl}
+                                onChange={(e) => updateSection(ownSection.id, { mediaUrl: e.target.value })}
+                                placeholder="https://www.youtube.com/embed/…"
+                              />
+                            )}
+                          </div>
+                        )}
+                        <SortableCard
+                          key={index}
+                          id={index}
+                          className={`builder-field question-card${isActive ? ' is-active' : ''}`}
+                          onFocus={() => setActiveFieldIndex(index)}
+                          onClick={() => setActiveFieldIndex(index)}
+                          setRef={(el) => {
+                            fieldRefs.current[index] = el;
+                          }}
+                        >
+                          {(drag) => (
+                            <>
+                              <legend className="field-legend">
+                                <span className="question-number">{index + 1}</span>
+                              </legend>
+
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="field-drag-handle"
+                                title="drag to reorder"
+                                aria-label="drag to reorder"
+                                {...drag.attributes}
+                                {...drag.listeners}
+                              >
+                                <span className="field-drag-dots">
+                                  <span />
+                                  <span />
+                                  <span />
+                                  <span />
+                                  <span />
+                                  <span />
+                                </span>
+                              </Button>
+
+                              <div className="field-head-row">
+                                <div className="field-title-group">
+                                  <label htmlFor={`field-label-${index}`}>field label</label>
+                                  <Input
+                                    id={`field-label-${index}`}
+                                    className="field-title-input"
+                                    value={field.label}
+                                    onChange={(e) => updateField(index, { label: e.target.value })}
+                                    placeholder="untitled question"
+                                  />
+                                </div>
+                                <div className="field-type-group">
+                                  <label htmlFor={`field-type-${index}`}>field type</label>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button id={`field-type-${index}`} type="button" className="field-type-summary">
+                                        <span className="field-type-icon">{FIELD_TYPE_ICON[field.type]}</span>
+                                        <span className="field-type-summary-label">
+                                          {FIELD_TYPE_OPTIONS.find((option) => option.value === field.type)?.label}
+                                        </span>
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent aria-label="field type">
+                                      {FIELD_TYPE_OPTIONS.map((option) => (
+                                        <DropdownMenuItem
+                                          key={option.value}
+                                          className={`field-type-option${field.type === option.value ? ' is-selected' : ''}`}
+                                          onSelect={() => {
+                                            updateField(index, { type: option.value });
+                                          }}
+                                        >
+                                          <span className="field-type-icon">{FIELD_TYPE_ICON[option.value]}</span>
+                                          {option.label}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                                {!isActive && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="field-expand-btn"
+                                    title="edit question"
+                                    aria-label="edit question"
+                                    onClick={() => setActiveFieldIndex(index)}
+                                  >
+                                    <ChevronDown size={16} aria-hidden="true" />
+                                  </Button>
+                                )}
+                              </div>
+
+                              <div className={`field-detail-wrap${isActive ? ' is-open' : ''}`}>
+                                <div className="field-detail-inner">
+                                  <label htmlFor={`field-help-${index}`}>help text (optional)</label>
+                                  <Input
+                                    id={`field-help-${index}`}
+                                    value={field.helpText}
+                                    onChange={(e) => updateField(index, { helpText: e.target.value })}
+                                    placeholder="shown under the question"
+                                  />
+                                  {(field.type === 'select' ||
+                                    field.type === 'multi_select' ||
+                                    field.type === 'ranking') && (
+                                    <>
+                                      <label>options</label>
+                                      <div className="option-rows">
+                                        {parseList(field.options).map((optionValue, optionIndex) => (
+                                          <div key={optionIndex} className="option-row">
+                                            <span
+                                              className={`option-row-mark${
+                                                field.type === 'multi_select'
+                                                  ? ' is-checkbox'
+                                                  : field.type === 'ranking'
+                                                    ? ' is-rank'
+                                                    : ''
+                                              }`}
+                                            >
+                                              {field.type === 'ranking' ? optionIndex + 1 : ''}
+                                            </span>
+                                            <Input
+                                              value={optionValue}
+                                              onChange={(e) => {
+                                                const list = parseList(field.options);
+                                                const previous = list[optionIndex]!;
+                                                list[optionIndex] = e.target.value;
+                                                updateField(index, {
+                                                  options: list.join(', '),
+                                                  // keep this option's "go to" mapping keyed to its (possibly renamed) value
+                                                  ...(previous !== e.target.value && previous in field.optionGoTo
+                                                    ? {
+                                                        optionGoTo: Object.fromEntries(
+                                                          Object.entries(field.optionGoTo).map(([k, v]) =>
+                                                            k === previous ? [e.target.value, v] : [k, v],
+                                                          ),
+                                                        ),
+                                                      }
+                                                    : {}),
+                                                });
+                                              }}
+                                              placeholder={`Option ${optionIndex + 1}`}
+                                            />
+                                            {field.type === 'select' &&
+                                              laterSectionsForField.length > 0 &&
+                                              branchingOpen && (
+                                                <Select
+                                                  value={field.optionGoTo[optionValue] || '__none__'}
+                                                  onValueChange={(v) =>
+                                                    updateField(index, {
+                                                      optionGoTo: {
+                                                        ...field.optionGoTo,
+                                                        [optionValue]: v === '__none__' ? '' : v,
+                                                      },
+                                                    })
+                                                  }
+                                                >
+                                                  <SelectTrigger
+                                                    className="option-row-goto"
+                                                    aria-label={`go to section after "${optionValue}"`}
+                                                  >
+                                                    <SelectValue />
+                                                  </SelectTrigger>
+                                                  <SelectContent>
+                                                    <SelectItem value="__none__">continue to next section</SelectItem>
+                                                    {laterSectionsForField.map((t) => (
+                                                      <SelectItem key={t.id} value={t.id}>
+                                                        go to {t.title.trim() || t.id}
+                                                      </SelectItem>
+                                                    ))}
+                                                    <SelectItem value={END_OF_FORM}>submit form</SelectItem>
+                                                  </SelectContent>
+                                                </Select>
+                                              )}
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon-xs"
+                                              className="option-row-remove"
+                                              title="remove option"
+                                              aria-label={`remove option ${optionIndex + 1}`}
+                                              onClick={() => {
+                                                const list = parseList(field.options).filter(
+                                                  (_, i) => i !== optionIndex,
+                                                );
+                                                const { [optionValue]: _removed, ...optionGoTo } = field.optionGoTo;
+                                                updateField(index, { options: list.join(', '), optionGoTo });
+                                              }}
+                                            >
+                                              <X size={12} aria-hidden="true" />
+                                            </Button>
+                                          </div>
+                                        ))}
+                                        {(field.type === 'select' || field.type === 'multi_select') &&
+                                          field.allowOther && (
+                                            <div className="option-row option-row-other">
+                                              <span
+                                                className={`option-row-mark${field.type === 'multi_select' ? ' is-checkbox' : ''}`}
+                                              />
+                                              <span className="option-row-other-label">Other…</span>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-xs"
+                                                className="option-row-remove"
+                                                title='remove "other"'
+                                                aria-label="remove other"
+                                                onClick={() => updateField(index, { allowOther: false })}
+                                              >
+                                                <X size={12} aria-hidden="true" />
+                                              </Button>
+                                            </div>
+                                          )}
+                                        <div className="option-row-add-line">
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            className="option-row-add"
+                                            onClick={() => {
+                                              const list = parseList(field.options);
+                                              list.push(`Option ${list.length + 1}`);
+                                              updateField(index, { options: list.join(', ') });
+                                            }}
+                                          >
+                                            <span
+                                              className={`option-row-mark${field.type === 'multi_select' ? ' is-checkbox' : ''}`}
+                                            />
+                                            add option
+                                          </Button>
+                                          {(field.type === 'select' || field.type === 'multi_select') &&
+                                            !field.allowOther && (
+                                              <>
+                                                {' '}
+                                                or{' '}
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  className="option-row-other-link"
+                                                  onClick={() => updateField(index, { allowOther: true })}
+                                                >
+                                                  add &quot;Other&quot;
+                                                </Button>
+                                              </>
+                                            )}
+                                        </div>
+                                      </div>
+                                      <span className="builder-required">
+                                        <Checkbox
+                                          id={`field-shuffle-${index}`}
+                                          checked={field.shuffleOptions}
+                                          onCheckedChange={(checked) =>
+                                            updateField(index, { shuffleOptions: checked === true })
+                                          }
+                                        />
+                                        <label htmlFor={`field-shuffle-${index}`}>
+                                          {field.type === 'ranking'
+                                            ? 'randomize starting order'
+                                            : 'shuffle option order per respondent'}
+                                        </label>
+                                      </span>
+                                    </>
+                                  )}
+
+                                  {field.type === 'select' && (
+                                    <>
+                                      <label htmlFor={`field-layout-${index}`}>layout</label>
+                                      <Select
+                                        value={field.layout}
+                                        onValueChange={(v) => updateField(index, { layout: v as 'dropdown' | 'radio' })}
+                                      >
+                                        <SelectTrigger id={`field-layout-${index}`}>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="dropdown">dropdown</SelectItem>
+                                          <SelectItem value="radio">radio buttons</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </>
+                                  )}
+
+                                  {field.type === 'likert' && (
+                                    <>
+                                      <label htmlFor={`field-options-${index}`}>statements (comma-separated)</label>
+                                      <Input
+                                        id={`field-options-${index}`}
+                                        value={field.options}
+                                        onChange={(e) => updateField(index, { options: e.target.value })}
+                                        placeholder="tooling quality, delivery pace"
+                                      />
+                                      <label htmlFor={`field-scale-${index}`}>scale labels (comma-separated)</label>
+                                      <Input
+                                        id={`field-scale-${index}`}
+                                        value={field.likertScale}
+                                        onChange={(e) => updateField(index, { likertScale: e.target.value })}
+                                        placeholder="disagree, neutral, agree"
+                                      />
+                                    </>
+                                  )}
+
+                                  {field.type === 'grid' && (
+                                    <>
+                                      <label htmlFor={`field-grid-rows-${index}`}>rows (comma-separated)</label>
+                                      <Input
+                                        id={`field-grid-rows-${index}`}
+                                        value={field.gridRows}
+                                        onChange={(e) => updateField(index, { gridRows: e.target.value })}
+                                        placeholder="communication, responsiveness, quality"
+                                      />
+                                      <label htmlFor={`field-grid-columns-${index}`}>columns (comma-separated)</label>
+                                      <Input
+                                        id={`field-grid-columns-${index}`}
+                                        value={field.gridColumns}
+                                        onChange={(e) => updateField(index, { gridColumns: e.target.value })}
+                                        placeholder="poor, fair, good, excellent"
+                                      />
+                                      <label htmlFor={`field-grid-selection-${index}`}>answers per row</label>
+                                      <Select
+                                        value={field.gridSelection}
+                                        onValueChange={(v) =>
+                                          updateField(index, { gridSelection: v as 'single' | 'multiple' })
+                                        }
+                                      >
+                                        <SelectTrigger id={`field-grid-selection-${index}`}>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="single">one answer (multiple choice grid)</SelectItem>
+                                          <SelectItem value="multiple">multiple answers (checkbox grid)</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <span className="builder-required">
+                                        <Checkbox
+                                          id={`field-grid-require-row-${index}`}
+                                          checked={field.gridRequireOnePerRow}
+                                          onCheckedChange={(checked) =>
+                                            updateField(index, { gridRequireOnePerRow: checked === true })
+                                          }
+                                        />
+                                        <label htmlFor={`field-grid-require-row-${index}`}>
+                                          require a response in each row
+                                        </label>
+                                      </span>
+                                    </>
+                                  )}
+
+                                  {field.type === 'file' && (
+                                    <>
+                                      <label htmlFor={`field-mime-${index}`}>
+                                        accepted file types (comma-separated MIME types)
+                                      </label>
+                                      <Input
+                                        id={`field-mime-${index}`}
+                                        value={field.acceptedMimeTypes}
+                                        onChange={(e) => updateField(index, { acceptedMimeTypes: e.target.value })}
+                                        placeholder="application/pdf, image/png, image/jpeg"
+                                      />
+                                      <label htmlFor={`field-maxsize-${index}`}>max file size (MB, up to 25)</label>
+                                      <Input
+                                        id={`field-maxsize-${index}`}
+                                        type="number"
+                                        min={1}
+                                        max={25}
+                                        value={field.maxSizeMb}
+                                        onChange={(e) => updateField(index, { maxSizeMb: Number(e.target.value) })}
+                                      />
+                                      <label htmlFor={`field-maxfiles-${index}`}>max number of files (up to 10)</label>
+                                      <Input
+                                        id={`field-maxfiles-${index}`}
+                                        type="number"
+                                        min={1}
+                                        max={10}
+                                        value={field.maxFiles}
+                                        onChange={(e) => updateField(index, { maxFiles: Number(e.target.value) })}
+                                      />
+                                    </>
+                                  )}
+
+                                  {field.type === 'rating' && (
+                                    <>
+                                      <label htmlFor={`field-scale-n-${index}`}>scale (2–10)</label>
+                                      <Input
+                                        id={`field-scale-n-${index}`}
+                                        type="number"
+                                        min={2}
+                                        max={10}
+                                        value={field.scale}
+                                        onChange={(e) => updateField(index, { scale: Number(e.target.value) })}
+                                      />
+                                      <label htmlFor={`field-rating-style-${index}`}>style</label>
+                                      <Select
+                                        value={field.ratingStyle}
+                                        onValueChange={(v) =>
+                                          updateField(index, { ratingStyle: v as 'pills' | 'stars' })
+                                        }
+                                      >
+                                        <SelectTrigger id={`field-rating-style-${index}`}>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="pills">numbered pills</SelectItem>
+                                          <SelectItem value="stars">stars</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </>
+                                  )}
+
+                                  {field.type === 'slider' && (
+                                    <>
+                                      <label htmlFor={`field-slider-min-${index}`}>minimum</label>
+                                      <Input
+                                        id={`field-slider-min-${index}`}
+                                        type="number"
+                                        value={field.sliderMin}
+                                        onChange={(e) => updateField(index, { sliderMin: Number(e.target.value) })}
+                                      />
+                                      <label htmlFor={`field-slider-max-${index}`}>maximum</label>
+                                      <Input
+                                        id={`field-slider-max-${index}`}
+                                        type="number"
+                                        value={field.sliderMax}
+                                        onChange={(e) => updateField(index, { sliderMax: Number(e.target.value) })}
+                                      />
+                                      <label htmlFor={`field-slider-step-${index}`}>step</label>
+                                      <Input
+                                        id={`field-slider-step-${index}`}
+                                        type="number"
+                                        min={0.01}
+                                        value={field.sliderStep}
+                                        onChange={(e) => updateField(index, { sliderStep: Number(e.target.value) })}
+                                      />
+                                    </>
+                                  )}
+
+                                  {(field.type === 'rating' || field.type === 'nps' || field.type === 'slider') && (
+                                    <>
+                                      <label htmlFor={`field-low-${index}`}>low-end label (optional)</label>
+                                      <Input
+                                        id={`field-low-${index}`}
+                                        value={field.lowLabel}
+                                        onChange={(e) => updateField(index, { lowLabel: e.target.value })}
+                                        placeholder="not likely"
+                                      />
+                                      <label htmlFor={`field-high-${index}`}>high-end label (optional)</label>
+                                      <Input
+                                        id={`field-high-${index}`}
+                                        value={field.highLabel}
+                                        onChange={(e) => updateField(index, { highLabel: e.target.value })}
+                                        placeholder="extremely likely"
+                                      />
+                                    </>
+                                  )}
+
+                                  {canLinkKpis && canLinkKpiField && kpiOpen && (
+                                    <div className="field-subpanel">
+                                      <span className="muted" style={{ fontSize: 12 }}>
+                                        link to KPI (optional)
+                                      </span>
+                                      {!kpiProducesLiveScore && (
+                                        <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                                          this question type has no numeric answer, so linking it won't produce an
+                                          automatic score — use rating, NPS, slider, number, yes/no, choice, checkboxes,
+                                          or likert questions for that.
+                                        </p>
+                                      )}
+                                      <label htmlFor={`field-kpi-${index}`}>KPI</label>
+                                      <KpiLinkCombobox
+                                        kpis={kpis}
+                                        kpiId={field.kpiId}
+                                        evaluationAreaId={field.evaluationAreaId}
+                                        onSelect={(kpiId, evaluationAreaId) =>
+                                          void onLinkFieldToKpi(index, kpiId, evaluationAreaId)
+                                        }
+                                        onClear={() => void onUnlinkFieldFromKpi(index)}
+                                      />
+                                      {kpiLinkErrors[index] && (
+                                        <p role="alert" className="form-error" style={{ fontSize: 12, marginTop: 4 }}>
+                                          {kpiLinkErrors[index]}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {(field.type === 'short_text' || field.type === 'long_text') && (
+                                    <div className="field-subpanel">
+                                      <span className="muted" style={{ fontSize: 12 }}>
+                                        response validation (optional)
+                                      </span>
+                                      <label htmlFor={`field-minlen-${index}`}>minimum length</label>
+                                      <Input
+                                        id={`field-minlen-${index}`}
+                                        type="number"
+                                        min={0}
+                                        value={field.minLength || ''}
+                                        onChange={(e) =>
+                                          updateField(index, {
+                                            minLength: e.target.value === '' ? 0 : Number(e.target.value),
+                                          })
+                                        }
+                                        placeholder="no minimum"
+                                      />
+                                      <label htmlFor={`field-pattern-${index}`}>
+                                        must match pattern (regex, optional)
+                                      </label>
+                                      <Input
+                                        id={`field-pattern-${index}`}
+                                        value={field.pattern}
+                                        onChange={(e) => updateField(index, { pattern: e.target.value })}
+                                        placeholder="e.g. ^[A-Z]{2}\\d{4}$"
+                                      />
+                                      {field.pattern && (
+                                        <>
+                                          <label htmlFor={`field-pattern-msg-${index}`}>
+                                            error message when it doesn't match
+                                          </label>
+                                          <Input
+                                            id={`field-pattern-msg-${index}`}
+                                            value={field.patternErrorMessage}
+                                            onChange={(e) =>
+                                              updateField(index, { patternErrorMessage: e.target.value })
+                                            }
+                                            placeholder="please enter a valid value"
+                                          />
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {field.type === 'contact_info' && (
+                                    <>
+                                      <span className="builder-required">
+                                        <Checkbox
+                                          id={`field-req-name-${index}`}
+                                          checked={field.requireName}
+                                          onCheckedChange={(checked) =>
+                                            updateField(index, { requireName: checked === true })
+                                          }
+                                        />
+                                        <label htmlFor={`field-req-name-${index}`}>require name</label>
+                                      </span>
+                                      <span className="builder-required">
+                                        <Checkbox
+                                          id={`field-req-email-${index}`}
+                                          checked={field.requireEmail}
+                                          onCheckedChange={(checked) =>
+                                            updateField(index, { requireEmail: checked === true })
+                                          }
+                                        />
+                                        <label htmlFor={`field-req-email-${index}`}>require email</label>
+                                      </span>
+                                      <span className="builder-required">
+                                        <Checkbox
+                                          id={`field-req-phone-${index}`}
+                                          checked={field.requirePhone}
+                                          onCheckedChange={(checked) =>
+                                            updateField(index, { requirePhone: checked === true })
+                                          }
+                                        />
+                                        <label htmlFor={`field-req-phone-${index}`}>require phone</label>
+                                      </span>
+                                    </>
+                                  )}
+
+                                  {field.type === 'hot_spot' && (
+                                    <div className="field-subpanel">
+                                      <label htmlFor={`field-hotspot-image-${index}`}>image</label>
+                                      <Input
+                                        id={`field-hotspot-image-${index}`}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) =>
+                                          e.target.files?.[0] &&
+                                          uploadAsset<{ id: string }>(e.target.files[0]).then((uploaded) =>
+                                            updateField(index, { hotSpotAssetId: uploaded.id }),
+                                          )
+                                        }
+                                      />
+                                      {field.hotSpotAssetId && (
+                                        <img
+                                          src={assetUrl(field.hotSpotAssetId)}
+                                          alt=""
+                                          className="option-image"
+                                          style={{ maxWidth: 240 }}
+                                        />
+                                      )}
+                                      <span className="muted" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
+                                        regions (x/y/width/height as % of the image)
+                                      </span>
+                                      {field.hotSpotRegions.map((region, ri) => (
+                                        <div
+                                          key={ri}
+                                          className="builder-required"
+                                          style={{ marginTop: 4, flexWrap: 'wrap' }}
+                                        >
+                                          <Input
+                                            aria-label="region label"
+                                            value={region.label}
+                                            placeholder="label"
+                                            style={{ width: 100 }}
+                                            onChange={(e) => {
+                                              const next = [...field.hotSpotRegions];
+                                              next[ri] = { ...next[ri]!, label: e.target.value, value: e.target.value };
+                                              updateField(index, { hotSpotRegions: next });
+                                            }}
+                                          />
+                                          {(['x', 'y', 'width', 'height'] as const).map((axis) => (
+                                            <Input
+                                              key={axis}
+                                              aria-label={axis}
+                                              type="number"
+                                              min={0}
+                                              max={100}
+                                              value={region[axis]}
+                                              placeholder={axis}
+                                              style={{ width: 60 }}
+                                              onChange={(e) => {
+                                                const next = [...field.hotSpotRegions];
+                                                next[ri] = { ...next[ri]!, [axis]: Number(e.target.value) };
+                                                updateField(index, { hotSpotRegions: next });
+                                              }}
+                                            />
+                                          ))}
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() =>
+                                              updateField(index, {
+                                                hotSpotRegions: field.hotSpotRegions.filter((_, i) => i !== ri),
+                                              })
+                                            }
+                                          >
+                                            remove
+                                          </Button>
+                                        </div>
+                                      ))}
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        style={{ marginTop: 4 }}
+                                        onClick={() =>
+                                          updateField(index, {
+                                            hotSpotRegions: [
+                                              ...field.hotSpotRegions,
+                                              {
+                                                value: `region_${field.hotSpotRegions.length + 1}`,
+                                                label: `region ${field.hotSpotRegions.length + 1}`,
+                                                x: 10,
+                                                y: 10,
+                                                width: 20,
+                                                height: 20,
+                                              },
+                                            ],
+                                          })
+                                        }
+                                      >
+                                        + add region
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  <div className="builder-field-actions">
+                                    <div className="field-actions-primary">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        title="duplicate"
+                                        aria-label="duplicate question"
+                                        onClick={() => duplicateField(index)}
+                                      >
+                                        <Copy size={14} aria-hidden="true" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        title="remove field"
+                                        aria-label="remove field"
+                                        onClick={() => removeField(index)}
+                                      >
+                                        <Trash2 size={14} aria-hidden="true" />
+                                      </Button>
+                                    </div>
+
+                                    {field.type !== 'section_header' && (
+                                      <span className="builder-required field-required-toggle">
+                                        <label htmlFor={`field-required-${index}`}>required</label>
+                                        <Switch
+                                          id={`field-required-${index}`}
+                                          checked={field.required}
+                                          onCheckedChange={(checked) => updateField(index, { required: checked })}
+                                        />
+                                      </span>
+                                    )}
+
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="field-kebab-summary"
+                                          aria-label="more actions"
+                                          title="more actions"
+                                        >
+                                          <MoreVertical size={16} aria-hidden="true" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent>
+                                        <DropdownMenuItem
+                                          disabled={index === 0}
+                                          onSelect={() => {
+                                            moveField(index, -1);
+                                          }}
+                                        >
+                                          <ArrowUp size={14} aria-hidden="true" /> move up
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          disabled={index === fields.length - 1}
+                                          onSelect={() => {
+                                            moveField(index, 1);
+                                          }}
+                                        >
+                                          <ArrowDown size={14} aria-hidden="true" /> move down
+                                        </DropdownMenuItem>
+                                        {sectionsEnabled && !isPageStart && (
+                                          <DropdownMenuItem
+                                            onSelect={() => {
+                                              splitPageHere(index);
+                                            }}
+                                          >
+                                            <SeparatorHorizontal size={14} aria-hidden="true" /> split into a new page
+                                            here
+                                          </DropdownMenuItem>
+                                        )}
+                                        {field.type === 'select' &&
+                                          sectionsEnabled &&
+                                          (laterSectionsForField.length > 0 ? (
+                                            <DropdownMenuCheckboxItem
+                                              checked={branchingOpen}
+                                              onCheckedChange={(checked) => {
+                                                toggleBranchingPanel(index, checked === true);
+                                                // Unchecking is the actual off switch, not just a UI collapse — clear
+                                                // every option's jump so a respondent's flow really does go back to
+                                                // normal, rather than leaving stale jumps active behind a hidden panel.
+                                                if (checked !== true) updateField(index, { optionGoTo: {} });
+                                              }}
+                                              onSelect={(e) => e.preventDefault()}
+                                            >
+                                              go to section based on answer
+                                            </DropdownMenuCheckboxItem>
+                                          ) : (
+                                            <DropdownMenuItem disabled onSelect={(e) => e.preventDefault()}>
+                                              no later page to route to
+                                            </DropdownMenuItem>
+                                          ))}
+                                        {canLinkKpis && canLinkKpiField && (
+                                          <DropdownMenuCheckboxItem
+                                            checked={kpiOpen}
+                                            onCheckedChange={(checked) => toggleKpiPanel(index, checked === true)}
+                                            onSelect={(e) => e.preventDefault()}
+                                          >
+                                            link to KPI
+                                          </DropdownMenuCheckboxItem>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </SortableCard>
+                        {isPageEnd && ownSection && laterSectionsForField.length > 0 && (
+                          <div className="admin-card" style={{ marginTop: -8, marginBottom: 12 }}>
+                            <label htmlFor={`section-default-${ownSection.id}`}>after this page, go to</label>
+                            <Select
+                              value={ownSection.defaultGoTo || '__none__'}
+                              onValueChange={(v) =>
+                                updateSection(ownSection.id, { defaultGoTo: v === '__none__' ? '' : v })
+                              }
+                            >
+                              <SelectTrigger id={`section-default-${ownSection.id}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">continue to the next page</SelectItem>
+                                {laterSectionsForField.map((t) => (
+                                  <SelectItem key={t.id} value={t.id}>
+                                    {t.title.trim() || t.id}
+                                  </SelectItem>
+                                ))}
+                                <SelectItem value={END_OF_FORM}>submit form</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </SortableContext>
+              </DndContext>
+
+              <Button type="button" variant="ghost" className="msform-add-field" onClick={() => addField()}>
+                + add field
+              </Button>
+            </div>
+          </div>
+
+          <div className="admin-card" style={{ marginTop: 24, marginBottom: 16 }}>
+            <span className="builder-required">
+              <Checkbox
+                id="sections-toggle"
+                checked={sectionsEnabled}
+                onCheckedChange={(checked) => {
+                  setSectionsEnabled(checked === true);
+                  if (checked === true && sections.length === 0) setSections([emptySection(freshSectionId(), null)]);
+                }}
+              />
+              <label htmlFor="sections-toggle">split into pages, with branching</label>
+            </span>
+            {sectionsEnabled && (
+              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                open a question's ⋮ menu and choose "split into a new page here" — everything from that question onward
+                moves to the new page. a "choice (one answer)" question can also send each of its own options to a
+                specific later page (or submit the form early).
+              </p>
+            )}
+          </div>
+
+          <div className="page-title-row">
             <Button
               type="button"
-              variant="ghost"
-              onClick={() => setFields((current) => current.map((f) => ({ ...f, required: false })))}
+              onClick={onPublish}
+              disabled={
+                !title.trim() ||
+                fields.length === 0 ||
+                fields.some((f) => !f.label.trim()) ||
+                (sectionsEnabled && resolvedSections.some((s) => s.fieldKeys.length === 0))
+              }
             >
-              mark all optional
+              {editingForm ? 'save changes' : 'publish'}
             </Button>
           </div>
-        )}
 
-        <div className="builder-fields-row">
-        <div className="builder-fields-col">
-        <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={onFieldDragEnd}>
-        <SortableContext items={fields.map((_, i) => i)} strategy={verticalListSortingStrategy}>
-        {fields.map((field, index) => {
-          const isActive = activeFieldIndex === index;
-          const fieldKey = keyedFields[index]?.key ?? '';
-          // "go to section based on answer" only makes sense once there's a LATER page to jump to.
-          const ownSectionIndex = sectionsEnabled
-            ? resolvedSections.findIndex((s) => s.fieldKeys.includes(fieldKey))
-            : -1;
-          const ownSection = ownSectionIndex >= 0 ? resolvedSections[ownSectionIndex] : undefined;
-          const laterSectionsForField = ownSection ? resolvedSections.slice(ownSectionIndex + 1) : [];
-          // this question is literally where its page begins/ends — drives the inline page
-          // header/footer rendered around its card, and whether "split a new page here" is offered
-          const isPageStart = ownSection?.fieldKeys[0] === fieldKey;
-          const isPageEnd = ownSection ? ownSection.fieldKeys[ownSection.fieldKeys.length - 1] === fieldKey : false;
-          const pageDisplayIndex = ownSection ? resolvedSections.indexOf(ownSection) : -1;
-          // Any answerable question can be linked to a KPI — section_header is the only
-          // exclusion, since it has no answer at all. Whether the link actually produces a
-          // live score depends on the field type; see kpiProducesLiveScore below.
-          const canLinkKpiField = field.type !== 'section_header';
-          // Only these types have a well-defined 0-5 normalization (see submissions.service.ts's
-          // normalizeScore) — linking any other type is allowed, but never produces a score.
-          const kpiProducesLiveScore = (SCORE_FIELD_TYPES as readonly string[]).includes(field.type);
-          // "link to KPI" panel visibility: an explicit toggle (via the ⋮ menu) overrides the
-          // default of "open if already linked" — so an existing link stays visible without
-          // requiring the toggle, but can still be tucked away once reviewed.
-          const kpiOpen = kpiPanelOverrides.has(index)
-            ? kpiPanelOverrides.get(index)!
-            : Boolean(field.kpiId);
-          // "go to section based on answer" panel visibility — same explicit-toggle-with-
-          // default-open-if-already-set pattern as kpiOpen above.
-          const branchingOpen = branchingPanelOverrides.has(index)
-            ? branchingPanelOverrides.get(index)!
-            : Object.values(field.optionGoTo).some((v) => v);
-          return (
-          <Fragment key={index}>
-          {isPageStart && ownSection && (
-            <div className="admin-card page-break-card" style={{ marginBottom: 12 }}>
-              <div className="page-title-row" style={{ marginBottom: 8 }}>
-                <span className="field-legend">
-                  page {pageDisplayIndex + 1} of {resolvedSections.length}
-                </span>
-                {pageDisplayIndex > 0 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    title="remove this page break"
-                    aria-label={`remove page ${pageDisplayIndex + 1} — merges its questions into the previous page`}
-                    onClick={() => removeSection(ownSection.id)}
-                  >
-                    <Trash2 size={14} aria-hidden="true" />
-                  </Button>
-                )}
-              </div>
-
-              <label htmlFor={`section-title-${ownSection.id}`}>page title (optional)</label>
-              <Input
-                id={`section-title-${ownSection.id}`}
-                value={ownSection.title}
-                onChange={(e) => updateSection(ownSection.id, { title: e.target.value })}
-                placeholder={ownSection.id}
-              />
-
-              <label htmlFor={`section-description-${ownSection.id}`}>page description (optional)</label>
-              <Input
-                id={`section-description-${ownSection.id}`}
-                value={ownSection.description}
-                onChange={(e) => updateSection(ownSection.id, { description: e.target.value })}
-                placeholder="shown under the page title"
-              />
-
-              <label htmlFor={`section-media-type-${ownSection.id}`}>page media (optional)</label>
-              <Select
-                value={ownSection.mediaType}
-                onValueChange={(v) => updateSection(ownSection.id, { mediaType: v as DraftSection['mediaType'] })}
-              >
-                <SelectTrigger id={`section-media-type-${ownSection.id}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">none</SelectItem>
-                  <SelectItem value="image">image</SelectItem>
-                  <SelectItem value="video">video (embed URL)</SelectItem>
-                </SelectContent>
-              </Select>
-              {ownSection.mediaType === 'image' && (
-                <>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => e.target.files?.[0] && onUploadSectionMedia(ownSection.id, e.target.files[0])}
-                  />
-                  {ownSection.mediaAssetId && (
-                    <img src={assetUrl(ownSection.mediaAssetId)} alt="" className="option-image" />
-                  )}
-                </>
-              )}
-              {ownSection.mediaType === 'video' && (
-                <Input
-                  value={ownSection.mediaUrl}
-                  onChange={(e) => updateSection(ownSection.id, { mediaUrl: e.target.value })}
-                  placeholder="https://www.youtube.com/embed/…"
-                />
-              )}
-            </div>
-          )}
-          <SortableCard
-            key={index}
-            id={index}
-            className={`builder-field question-card${isActive ? ' is-active' : ''}`}
-            onFocus={() => setActiveFieldIndex(index)}
-            onClick={() => setActiveFieldIndex(index)}
-            setRef={(el) => {
-              fieldRefs.current[index] = el;
-            }}
-          >
-          {(drag) => (
-          <>
-            <legend className="field-legend">
-              <span className="question-number">{index + 1}</span>
-            </legend>
-
-            <Button
-              type="button"
-              variant="ghost"
-              className="field-drag-handle"
-              title="drag to reorder"
-              aria-label="drag to reorder"
-              {...drag.attributes}
-              {...drag.listeners}
-            >
-              <span className="field-drag-dots">
-                <span />
-                <span />
-                <span />
-                <span />
-                <span />
-                <span />
-              </span>
-            </Button>
-
-            <div className="field-head-row">
-              <div className="field-title-group">
-                <label htmlFor={`field-label-${index}`}>field label</label>
-                <Input
-                  id={`field-label-${index}`}
-                  className="field-title-input"
-                  value={field.label}
-                  onChange={(e) => updateField(index, { label: e.target.value })}
-                  placeholder="untitled question"
-                />
-              </div>
-              <div className="field-type-group">
-                <label htmlFor={`field-type-${index}`}>field type</label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button id={`field-type-${index}`} type="button" className="field-type-summary">
-                      <span className="field-type-icon">{FIELD_TYPE_ICON[field.type]}</span>
-                      <span className="field-type-summary-label">
-                        {FIELD_TYPE_OPTIONS.find((option) => option.value === field.type)?.label}
-                      </span>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent aria-label="field type">
-                    {FIELD_TYPE_OPTIONS.map((option) => (
-                      <DropdownMenuItem
-                        key={option.value}
-                        className={`field-type-option${field.type === option.value ? ' is-selected' : ''}`}
-                        onSelect={() => {
-                          updateField(index, { type: option.value });
-                        }}
-                      >
-                        <span className="field-type-icon">{FIELD_TYPE_ICON[option.value]}</span>
-                        {option.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              {!isActive && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="field-expand-btn"
-                  title="edit question"
-                  aria-label="edit question"
-                  onClick={() => setActiveFieldIndex(index)}
-                >
-                  <ChevronDown size={16} aria-hidden="true" />
-                </Button>
-              )}
-            </div>
-
-            <div className={`field-detail-wrap${isActive ? ' is-open' : ''}`}>
-            <div className="field-detail-inner">
-
-            <label htmlFor={`field-help-${index}`}>help text (optional)</label>
-            <Input
-              id={`field-help-${index}`}
-              value={field.helpText}
-              onChange={(e) => updateField(index, { helpText: e.target.value })}
-              placeholder="shown under the question"
-            />
-            {(field.type === 'select' || field.type === 'multi_select' || field.type === 'ranking') && (
-              <>
-                <label>options</label>
-                <div className="option-rows">
-                  {parseList(field.options).map((optionValue, optionIndex) => (
-                    <div key={optionIndex} className="option-row">
-                      <span
-                        className={`option-row-mark${
-                          field.type === 'multi_select' ? ' is-checkbox' : field.type === 'ranking' ? ' is-rank' : ''
-                        }`}
-                      >
-                        {field.type === 'ranking' ? optionIndex + 1 : ''}
-                      </span>
-                      <Input
-                        value={optionValue}
-                        onChange={(e) => {
-                          const list = parseList(field.options);
-                          const previous = list[optionIndex]!;
-                          list[optionIndex] = e.target.value;
-                          updateField(index, {
-                            options: list.join(', '),
-                            // keep this option's "go to" mapping keyed to its (possibly renamed) value
-                            ...(previous !== e.target.value && previous in field.optionGoTo
-                              ? {
-                                  optionGoTo: Object.fromEntries(
-                                    Object.entries(field.optionGoTo).map(([k, v]) =>
-                                      k === previous ? [e.target.value, v] : [k, v],
-                                    ),
-                                  ),
-                                }
-                              : {}),
-                          });
-                        }}
-                        placeholder={`Option ${optionIndex + 1}`}
-                      />
-                      {field.type === 'select' && laterSectionsForField.length > 0 && branchingOpen && (
-                        <Select
-                          value={field.optionGoTo[optionValue] || '__none__'}
-                          onValueChange={(v) =>
-                            updateField(index, {
-                              optionGoTo: { ...field.optionGoTo, [optionValue]: v === '__none__' ? '' : v },
-                            })
-                          }
-                        >
-                          <SelectTrigger
-                            className="option-row-goto"
-                            aria-label={`go to section after "${optionValue}"`}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">continue to next section</SelectItem>
-                            {laterSectionsForField.map((t) => (
-                              <SelectItem key={t.id} value={t.id}>
-                                go to {t.title.trim() || t.id}
-                              </SelectItem>
-                            ))}
-                            <SelectItem value={END_OF_FORM}>submit form</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="option-row-remove"
-                        title="remove option"
-                        aria-label={`remove option ${optionIndex + 1}`}
-                        onClick={() => {
-                          const list = parseList(field.options).filter((_, i) => i !== optionIndex);
-                          const { [optionValue]: _removed, ...optionGoTo } = field.optionGoTo;
-                          updateField(index, { options: list.join(', '), optionGoTo });
-                        }}
-                      >
-                        <X size={12} aria-hidden="true" />
-                      </Button>
-                    </div>
-                  ))}
-                  {(field.type === 'select' || field.type === 'multi_select') && field.allowOther && (
-                    <div className="option-row option-row-other">
-                      <span className={`option-row-mark${field.type === 'multi_select' ? ' is-checkbox' : ''}`} />
-                      <span className="option-row-other-label">Other…</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="option-row-remove"
-                        title="remove &quot;other&quot;"
-                        aria-label="remove other"
-                        onClick={() => updateField(index, { allowOther: false })}
-                      >
-                        <X size={12} aria-hidden="true" />
-                      </Button>
-                    </div>
-                  )}
-                  <div className="option-row-add-line">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="option-row-add"
-                      onClick={() => {
-                        const list = parseList(field.options);
-                        list.push(`Option ${list.length + 1}`);
-                        updateField(index, { options: list.join(', ') });
-                      }}
-                    >
-                      <span className={`option-row-mark${field.type === 'multi_select' ? ' is-checkbox' : ''}`} />
-                      add option
-                    </Button>
-                    {(field.type === 'select' || field.type === 'multi_select') && !field.allowOther && (
-                      <>
-                        {' '}or{' '}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="option-row-other-link"
-                          onClick={() => updateField(index, { allowOther: true })}
-                        >
-                          add &quot;Other&quot;
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <span className="builder-required">
-                  <Checkbox
-                    id={`field-shuffle-${index}`}
-                    checked={field.shuffleOptions}
-                    onCheckedChange={(checked) => updateField(index, { shuffleOptions: checked === true })}
-                  />
-                  <label htmlFor={`field-shuffle-${index}`}>
-                    {field.type === 'ranking' ? 'randomize starting order' : 'shuffle option order per respondent'}
-                  </label>
-                </span>
-              </>
-            )}
-
-            {field.type === 'select' && (
-              <>
-                <label htmlFor={`field-layout-${index}`}>layout</label>
-                <Select
-                  value={field.layout}
-                  onValueChange={(v) => updateField(index, { layout: v as 'dropdown' | 'radio' })}
-                >
-                  <SelectTrigger id={`field-layout-${index}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="dropdown">dropdown</SelectItem>
-                    <SelectItem value="radio">radio buttons</SelectItem>
-                  </SelectContent>
-                </Select>
-              </>
-            )}
-
-            {field.type === 'likert' && (
-              <>
-                <label htmlFor={`field-options-${index}`}>statements (comma-separated)</label>
-                <Input
-                  id={`field-options-${index}`}
-                  value={field.options}
-                  onChange={(e) => updateField(index, { options: e.target.value })}
-                  placeholder="tooling quality, delivery pace"
-                />
-                <label htmlFor={`field-scale-${index}`}>scale labels (comma-separated)</label>
-                <Input
-                  id={`field-scale-${index}`}
-                  value={field.likertScale}
-                  onChange={(e) => updateField(index, { likertScale: e.target.value })}
-                  placeholder="disagree, neutral, agree"
-                />
-              </>
-            )}
-
-            {field.type === 'grid' && (
-              <>
-                <label htmlFor={`field-grid-rows-${index}`}>rows (comma-separated)</label>
-                <Input
-                  id={`field-grid-rows-${index}`}
-                  value={field.gridRows}
-                  onChange={(e) => updateField(index, { gridRows: e.target.value })}
-                  placeholder="communication, responsiveness, quality"
-                />
-                <label htmlFor={`field-grid-columns-${index}`}>columns (comma-separated)</label>
-                <Input
-                  id={`field-grid-columns-${index}`}
-                  value={field.gridColumns}
-                  onChange={(e) => updateField(index, { gridColumns: e.target.value })}
-                  placeholder="poor, fair, good, excellent"
-                />
-                <label htmlFor={`field-grid-selection-${index}`}>answers per row</label>
-                <Select
-                  value={field.gridSelection}
-                  onValueChange={(v) => updateField(index, { gridSelection: v as 'single' | 'multiple' })}
-                >
-                  <SelectTrigger id={`field-grid-selection-${index}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="single">one answer (multiple choice grid)</SelectItem>
-                    <SelectItem value="multiple">multiple answers (checkbox grid)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <span className="builder-required">
-                  <Checkbox
-                    id={`field-grid-require-row-${index}`}
-                    checked={field.gridRequireOnePerRow}
-                    onCheckedChange={(checked) => updateField(index, { gridRequireOnePerRow: checked === true })}
-                  />
-                  <label htmlFor={`field-grid-require-row-${index}`}>require a response in each row</label>
-                </span>
-              </>
-            )}
-
-            {field.type === 'file' && (
-              <>
-                <label htmlFor={`field-mime-${index}`}>accepted file types (comma-separated MIME types)</label>
-                <Input
-                  id={`field-mime-${index}`}
-                  value={field.acceptedMimeTypes}
-                  onChange={(e) => updateField(index, { acceptedMimeTypes: e.target.value })}
-                  placeholder="application/pdf, image/png, image/jpeg"
-                />
-                <label htmlFor={`field-maxsize-${index}`}>max file size (MB, up to 25)</label>
-                <Input
-                  id={`field-maxsize-${index}`}
-                  type="number"
-                  min={1}
-                  max={25}
-                  value={field.maxSizeMb}
-                  onChange={(e) => updateField(index, { maxSizeMb: Number(e.target.value) })}
-                />
-                <label htmlFor={`field-maxfiles-${index}`}>max number of files (up to 10)</label>
-                <Input
-                  id={`field-maxfiles-${index}`}
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={field.maxFiles}
-                  onChange={(e) => updateField(index, { maxFiles: Number(e.target.value) })}
-                />
-              </>
-            )}
-
-            {field.type === 'rating' && (
-              <>
-                <label htmlFor={`field-scale-n-${index}`}>scale (2–10)</label>
-                <Input
-                  id={`field-scale-n-${index}`}
-                  type="number"
-                  min={2}
-                  max={10}
-                  value={field.scale}
-                  onChange={(e) => updateField(index, { scale: Number(e.target.value) })}
-                />
-                <label htmlFor={`field-rating-style-${index}`}>style</label>
-                <Select
-                  value={field.ratingStyle}
-                  onValueChange={(v) => updateField(index, { ratingStyle: v as 'pills' | 'stars' })}
-                >
-                  <SelectTrigger id={`field-rating-style-${index}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pills">numbered pills</SelectItem>
-                    <SelectItem value="stars">stars</SelectItem>
-                  </SelectContent>
-                </Select>
-              </>
-            )}
-
-            {field.type === 'slider' && (
-              <>
-                <label htmlFor={`field-slider-min-${index}`}>minimum</label>
-                <Input
-                  id={`field-slider-min-${index}`}
-                  type="number"
-                  value={field.sliderMin}
-                  onChange={(e) => updateField(index, { sliderMin: Number(e.target.value) })}
-                />
-                <label htmlFor={`field-slider-max-${index}`}>maximum</label>
-                <Input
-                  id={`field-slider-max-${index}`}
-                  type="number"
-                  value={field.sliderMax}
-                  onChange={(e) => updateField(index, { sliderMax: Number(e.target.value) })}
-                />
-                <label htmlFor={`field-slider-step-${index}`}>step</label>
-                <Input
-                  id={`field-slider-step-${index}`}
-                  type="number"
-                  min={0.01}
-                  value={field.sliderStep}
-                  onChange={(e) => updateField(index, { sliderStep: Number(e.target.value) })}
-                />
-              </>
-            )}
-
-            {(field.type === 'rating' || field.type === 'nps' || field.type === 'slider') && (
-              <>
-                <label htmlFor={`field-low-${index}`}>low-end label (optional)</label>
-                <Input
-                  id={`field-low-${index}`}
-                  value={field.lowLabel}
-                  onChange={(e) => updateField(index, { lowLabel: e.target.value })}
-                  placeholder="not likely"
-                />
-                <label htmlFor={`field-high-${index}`}>high-end label (optional)</label>
-                <Input
-                  id={`field-high-${index}`}
-                  value={field.highLabel}
-                  onChange={(e) => updateField(index, { highLabel: e.target.value })}
-                  placeholder="extremely likely"
-                />
-              </>
-            )}
-
-            {canLinkKpis && canLinkKpiField && kpiOpen && (
-              <div className="field-subpanel">
-                <span className="muted" style={{ fontSize: 12 }}>link to KPI (optional)</span>
-                {!kpiProducesLiveScore && (
-                  <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                    this question type has no numeric answer, so linking it won't produce an automatic score —
-                    use rating, NPS, slider, number, yes/no, choice, checkboxes, or likert questions for that.
-                  </p>
-                )}
-                <label htmlFor={`field-kpi-${index}`}>KPI</label>
-                <KpiLinkCombobox
-                  kpis={kpis}
-                  kpiId={field.kpiId}
-                  evaluationAreaId={field.evaluationAreaId}
-                  onSelect={(kpiId, evaluationAreaId) => void onLinkFieldToKpi(index, kpiId, evaluationAreaId)}
-                  onClear={() => void onUnlinkFieldFromKpi(index)}
-                />
-                {kpiLinkErrors[index] && (
-                  <p role="alert" className="form-error" style={{ fontSize: 12, marginTop: 4 }}>
-                    {kpiLinkErrors[index]}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {(field.type === 'short_text' || field.type === 'long_text') && (
-              <div className="field-subpanel">
-                <span className="muted" style={{ fontSize: 12 }}>response validation (optional)</span>
-                <label htmlFor={`field-minlen-${index}`}>minimum length</label>
-                <Input
-                  id={`field-minlen-${index}`}
-                  type="number"
-                  min={0}
-                  value={field.minLength || ''}
-                  onChange={(e) => updateField(index, { minLength: e.target.value === '' ? 0 : Number(e.target.value) })}
-                  placeholder="no minimum"
-                />
-                <label htmlFor={`field-pattern-${index}`}>must match pattern (regex, optional)</label>
-                <Input
-                  id={`field-pattern-${index}`}
-                  value={field.pattern}
-                  onChange={(e) => updateField(index, { pattern: e.target.value })}
-                  placeholder="e.g. ^[A-Z]{2}\\d{4}$"
-                />
-                {field.pattern && (
-                  <>
-                    <label htmlFor={`field-pattern-msg-${index}`}>error message when it doesn't match</label>
-                    <Input
-                      id={`field-pattern-msg-${index}`}
-                      value={field.patternErrorMessage}
-                      onChange={(e) => updateField(index, { patternErrorMessage: e.target.value })}
-                      placeholder="please enter a valid value"
-                    />
-                  </>
-                )}
-              </div>
-            )}
-
-            {field.type === 'contact_info' && (
-              <>
-                <span className="builder-required">
-                  <Checkbox
-                    id={`field-req-name-${index}`}
-                    checked={field.requireName}
-                    onCheckedChange={(checked) => updateField(index, { requireName: checked === true })}
-                  />
-                  <label htmlFor={`field-req-name-${index}`}>require name</label>
-                </span>
-                <span className="builder-required">
-                  <Checkbox
-                    id={`field-req-email-${index}`}
-                    checked={field.requireEmail}
-                    onCheckedChange={(checked) => updateField(index, { requireEmail: checked === true })}
-                  />
-                  <label htmlFor={`field-req-email-${index}`}>require email</label>
-                </span>
-                <span className="builder-required">
-                  <Checkbox
-                    id={`field-req-phone-${index}`}
-                    checked={field.requirePhone}
-                    onCheckedChange={(checked) => updateField(index, { requirePhone: checked === true })}
-                  />
-                  <label htmlFor={`field-req-phone-${index}`}>require phone</label>
-                </span>
-              </>
-            )}
-
-            {field.type === 'hot_spot' && (
-              <div className="field-subpanel">
-                <label htmlFor={`field-hotspot-image-${index}`}>image</label>
-                <Input
-                  id={`field-hotspot-image-${index}`}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) =>
-                    e.target.files?.[0] &&
-                    uploadAsset<{ id: string }>(e.target.files[0]).then((uploaded) =>
-                      updateField(index, { hotSpotAssetId: uploaded.id }),
-                    )
-                  }
-                />
-                {field.hotSpotAssetId && (
-                  <img src={assetUrl(field.hotSpotAssetId)} alt="" className="option-image" style={{ maxWidth: 240 }} />
-                )}
-                <span className="muted" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
-                  regions (x/y/width/height as % of the image)
-                </span>
-                {field.hotSpotRegions.map((region, ri) => (
-                  <div key={ri} className="builder-required" style={{ marginTop: 4, flexWrap: 'wrap' }}>
-                    <Input
-                      aria-label="region label"
-                      value={region.label}
-                      placeholder="label"
-                      style={{ width: 100 }}
-                      onChange={(e) => {
-                        const next = [...field.hotSpotRegions];
-                        next[ri] = { ...next[ri]!, label: e.target.value, value: e.target.value };
-                        updateField(index, { hotSpotRegions: next });
-                      }}
-                    />
-                    {(['x', 'y', 'width', 'height'] as const).map((axis) => (
-                      <Input
-                        key={axis}
-                        aria-label={axis}
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={region[axis]}
-                        placeholder={axis}
-                        style={{ width: 60 }}
-                        onChange={(e) => {
-                          const next = [...field.hotSpotRegions];
-                          next[ri] = { ...next[ri]!, [axis]: Number(e.target.value) };
-                          updateField(index, { hotSpotRegions: next });
-                        }}
-                      />
-                    ))}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() =>
-                        updateField(index, { hotSpotRegions: field.hotSpotRegions.filter((_, i) => i !== ri) })
-                      }
-                    >
-                      remove
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  style={{ marginTop: 4 }}
-                  onClick={() =>
-                    updateField(index, {
-                      hotSpotRegions: [
-                        ...field.hotSpotRegions,
-                        { value: `region_${field.hotSpotRegions.length + 1}`, label: `region ${field.hotSpotRegions.length + 1}`, x: 10, y: 10, width: 20, height: 20 },
-                      ],
-                    })
-                  }
-                >
-                  + add region
-                </Button>
-              </div>
-            )}
-
-            <div className="builder-field-actions">
-              <div className="field-actions-primary">
-                <Button type="button" variant="ghost" size="icon-sm" title="duplicate" aria-label="duplicate question" onClick={() => duplicateField(index)}>
-                  <Copy size={14} aria-hidden="true" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  title="remove field"
-                  aria-label="remove field"
-                  onClick={() => removeField(index)}
-                >
-                  <Trash2 size={14} aria-hidden="true" />
-                </Button>
-              </div>
-
-              {field.type !== 'section_header' && (
-                <span className="builder-required field-required-toggle">
-                  <label htmlFor={`field-required-${index}`}>required</label>
-                  <Switch
-                    id={`field-required-${index}`}
-                    checked={field.required}
-                    onCheckedChange={(checked) => updateField(index, { required: checked })}
-                  />
-                </span>
-              )}
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" className="field-kebab-summary" aria-label="more actions" title="more actions">
-                    <MoreVertical size={16} aria-hidden="true" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem
-                    disabled={index === 0}
-                    onSelect={() => {
-                      moveField(index, -1);
-                    }}
-                  >
-                    <ArrowUp size={14} aria-hidden="true" /> move up
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={index === fields.length - 1}
-                    onSelect={() => {
-                      moveField(index, 1);
-                    }}
-                  >
-                    <ArrowDown size={14} aria-hidden="true" /> move down
-                  </DropdownMenuItem>
-                  {sectionsEnabled && !isPageStart && (
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        splitPageHere(index);
-                      }}
-                    >
-                      <SeparatorHorizontal size={14} aria-hidden="true" /> split into a new page here
-                    </DropdownMenuItem>
-                  )}
-                  {field.type === 'select' && sectionsEnabled && (
-                    laterSectionsForField.length > 0 ? (
-                      <DropdownMenuCheckboxItem
-                        checked={branchingOpen}
-                        onCheckedChange={(checked) => {
-                          toggleBranchingPanel(index, checked === true);
-                          // Unchecking is the actual off switch, not just a UI collapse — clear
-                          // every option's jump so a respondent's flow really does go back to
-                          // normal, rather than leaving stale jumps active behind a hidden panel.
-                          if (checked !== true) updateField(index, { optionGoTo: {} });
-                        }}
-                        onSelect={(e) => e.preventDefault()}
-                      >
-                        go to section based on answer
-                      </DropdownMenuCheckboxItem>
-                    ) : (
-                      <DropdownMenuItem disabled onSelect={(e) => e.preventDefault()}>
-                        no later page to route to
-                      </DropdownMenuItem>
-                    )
-                  )}
-                  {canLinkKpis && canLinkKpiField && (
-                    <DropdownMenuCheckboxItem
-                      checked={kpiOpen}
-                      onCheckedChange={(checked) => toggleKpiPanel(index, checked === true)}
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      link to KPI
-                    </DropdownMenuCheckboxItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            </div>
-            </div>
-          </>
-          )}
-          </SortableCard>
-          {isPageEnd && ownSection && laterSectionsForField.length > 0 && (
-            <div className="admin-card" style={{ marginTop: -8, marginBottom: 12 }}>
-              <label htmlFor={`section-default-${ownSection.id}`}>after this page, go to</label>
-              <Select
-                value={ownSection.defaultGoTo || '__none__'}
-                onValueChange={(v) => updateSection(ownSection.id, { defaultGoTo: v === '__none__' ? '' : v })}
-              >
-                <SelectTrigger id={`section-default-${ownSection.id}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">continue to the next page</SelectItem>
-                  {laterSectionsForField.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.title.trim() || t.id}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value={END_OF_FORM}>submit form</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          </Fragment>
-          );
-        })}
-        </SortableContext>
-        </DndContext>
-
-        <Button
-          type="button"
-          variant="ghost"
-          className="msform-add-field"
-          onClick={() => addField()}
-        >
-          + add field
-        </Button>
-        </div>
-        </div>
-
-        <div className="admin-card" style={{ marginTop: 24, marginBottom: 16 }}>
-          <span className="builder-required">
-            <Checkbox
-              id="sections-toggle"
-              checked={sectionsEnabled}
-              onCheckedChange={(checked) => {
-                setSectionsEnabled(checked === true);
-                if (checked === true && sections.length === 0) setSections([emptySection(freshSectionId(), null)]);
-              }}
-            />
-            <label htmlFor="sections-toggle">split into pages, with branching</label>
-          </span>
-          {sectionsEnabled && (
-            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-              open a question's ⋮ menu and choose "split into a new page here" — everything from that
-              question onward moves to the new page. a "choice (one answer)" question can also send each
-              of its own options to a specific later page (or submit the form early).
+          {error && (
+            <p role="alert" className="form-error">
+              {error}
             </p>
           )}
-        </div>
-
-        <div className="page-title-row">
-          <Button
-            type="button"
-            onClick={onPublish}
-            disabled={
-              !title.trim() ||
-              fields.length === 0 ||
-              fields.some((f) => !f.label.trim()) ||
-              (sectionsEnabled && resolvedSections.some((s) => s.fieldKeys.length === 0))
-            }
-          >
-            {editingForm ? 'save changes' : 'publish'}
-          </Button>
-        </div>
-
-        {error && (
-          <p role="alert" className="form-error">
-            {error}
-          </p>
-        )}
         </div>
       </div>
     </PortalShell>

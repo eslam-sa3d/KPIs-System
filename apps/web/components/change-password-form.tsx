@@ -63,14 +63,7 @@ export function ChangePasswordForm() {
       />
 
       <label htmlFor="newPassword">new password</label>
-      <Input
-        id="newPassword"
-        name="newPassword"
-        type="password"
-        autoComplete="new-password"
-        minLength={8}
-        required
-      />
+      <Input id="newPassword" name="newPassword" type="password" autoComplete="new-password" minLength={8} required />
 
       <label htmlFor="confirmPassword">confirm new password</label>
       <Input

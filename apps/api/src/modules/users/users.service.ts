@@ -2,17 +2,18 @@ import { Injectable } from '@nestjs/common';
 import {
   CreateDepartmentInput,
   CreateUserInput,
-  PAGE_DEFAULTS,
   PageQuery,
   UpdateDepartmentInput,
   UpdateUserInput,
   buildPaginationMeta,
+  resolvePageBounds,
 } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
 import { paged } from '../../common/envelope.interceptor';
 import { PrismaService } from '../../infra/prisma.service';
 import { PasswordHasher } from '../auth/password-hasher';
 import { RedisService } from '../../infra/redis.service';
+import { RbacService } from '../rbac/rbac.service';
 
 /** Directory management: users and departments (roles live in the rbac module). */
 @Injectable()
@@ -21,18 +22,27 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly hasher: PasswordHasher,
     private readonly redis: RedisService,
+    private readonly rbac: RbacService,
   ) {}
 
-  async list(query: PageQuery) {
-    const page = Math.max(Number(query.page ?? PAGE_DEFAULTS.page), 1);
-    const pageSize = Math.min(
-      Number(query.pageSize ?? PAGE_DEFAULTS.pageSize),
-      PAGE_DEFAULTS.maxPageSize,
-    );
+  /** `userId` is the caller, not a filter target — a `users:read` grant with
+   *  a department/own scope (see RbacService.DEPARTMENT_SCOPABLE_RESOURCES)
+   *  restricts the roster to the caller's own department, the same way
+   *  KpisService.list() restricts KPIs to the caller's own assignments. */
+  async list(query: PageQuery, userId: string) {
+    const { page, pageSize } = resolvePageBounds(query);
+
+    const restricted = await this.rbac.isReadScopeRestricted(userId, 'users');
+    // A restricted caller with no department of their own sees no one —
+    // `departmentId: null` would otherwise match every other departmentless
+    // user, which is the opposite of "restricted".
+    const departmentId = restricted ? await this.rbac.myDepartmentId(userId) : undefined;
+    const where = restricted ? { departmentId: departmentId ?? '__none__' } : {};
 
     const [totalItems, users] = await this.prisma.$transaction([
-      this.prisma.user.count(),
+      this.prisma.user.count({ where }),
       this.prisma.user.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,

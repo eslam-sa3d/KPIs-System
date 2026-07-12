@@ -1,4 +1,4 @@
-import { FormDefinition, FormField, SubmissionAnswers } from '@pulse/contracts';
+import { FormDefinition, FormField, QuizScore, SubmissionAnswers } from '@pulse/contracts';
 
 /**
  * MS-Forms-style quiz scoring: sums points for gradable fields (select,
@@ -8,16 +8,7 @@ import { FormDefinition, FormField, SubmissionAnswers } from '@pulse/contracts';
  * submission, right after answer validation, so the result can be stored
  * alongside the submission and never recomputed against a later form edit.
  */
-export interface QuizScore {
-  earnedPoints: number;
-  totalPoints: number;
-  /** null when no field on the form is actually gradable (no points to score) */
-  percent: number | null;
-  /** null unless a passThresholdPercent was configured */
-  passed: boolean | null;
-  /** per-gradable-question outcome, for the thank-you screen's "see feedback" section */
-  perField: Record<string, { correct: boolean; feedback?: string }>;
-}
+export type { QuizScore };
 
 function pointsFor(field: FormField): number {
   return 'points' in field && field.points ? field.points : 0;
@@ -56,8 +47,7 @@ function isCorrect(field: FormField, answer: SubmissionAnswers[string] | undefin
       return typeof answer === 'boolean' && answer === field.correctValue;
     case 'short_text':
       return (
-        typeof answer === 'string' &&
-        (field.correctAnswers ?? []).some((c) => c.toLowerCase() === answer.toLowerCase())
+        typeof answer === 'string' && (field.correctAnswers ?? []).some((c) => c.toLowerCase() === answer.toLowerCase())
       );
     case 'number':
       return typeof answer === 'number' && answer === field.correctValue;
@@ -92,8 +82,7 @@ export function scoreSubmission(
   }
 
   const percent = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : null;
-  const passed =
-    passThresholdPercent === undefined || percent === null ? null : percent >= passThresholdPercent;
+  const passed = passThresholdPercent === undefined || percent === null ? null : percent >= passThresholdPercent;
 
   return { earnedPoints, totalPoints, percent, passed, perField };
 }

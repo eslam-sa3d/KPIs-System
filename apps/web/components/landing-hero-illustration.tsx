@@ -58,7 +58,17 @@ export function LandingHeroIllustration() {
         })}
 
         {/* Laptop */}
-        <rect x="90" y="58" width="360" height="242" rx="14" fill={card} stroke={cardBdr} strokeWidth="2" filter="url(#lshadow)" />
+        <rect
+          x="90"
+          y="58"
+          width="360"
+          height="242"
+          rx="14"
+          fill={card}
+          stroke={cardBdr}
+          strokeWidth="2"
+          filter="url(#lshadow)"
+        />
         <circle cx="270" cy="68" r="3" fill={rowMuted} />
         <rect x="102" y="78" width="336" height="212" rx="6" fill={screenBg} />
         <rect x="102" y="78" width="336" height="28" rx="6" fill={sidebarBg} />
@@ -74,8 +84,24 @@ export function LandingHeroIllustration() {
         <rect x="118" y="119" width="20" height="6" rx="3" fill={purple} opacity="0.7" />
         {[136, 153, 170, 187, 204, 221].map((y, i) => (
           <g key={y}>
-            <rect x="112" y={y} width="42" height="10" rx="5" fill={i === 0 ? purple : 'transparent'} opacity={i === 0 ? 0.1 : 1} />
-            <rect x="118" y={y + 2} width={i === 0 ? 28 : 22} height="6" rx="3" fill={i === 0 ? purple : rowMuted} opacity={i === 0 ? 0.8 : 1} />
+            <rect
+              x="112"
+              y={y}
+              width="42"
+              height="10"
+              rx="5"
+              fill={i === 0 ? purple : 'transparent'}
+              opacity={i === 0 ? 0.1 : 1}
+            />
+            <rect
+              x="118"
+              y={y + 2}
+              width={i === 0 ? 28 : 22}
+              height="6"
+              rx="3"
+              fill={i === 0 ? purple : rowMuted}
+              opacity={i === 0 ? 0.8 : 1}
+            />
             {i === 0 && <rect x="102" y={y} width="3" height="10" rx="1.5" fill={coral} />}
           </g>
         ))}
@@ -92,8 +118,24 @@ export function LandingHeroIllustration() {
             <rect x={174 + i * 88} y="142" width="80" height="48" rx="8" fill={card} stroke={cardBdr} strokeWidth="1" />
             <rect x={174 + i * 88} y="142" width="80" height="4" rx="4" fill={color} opacity="0.8" />
             <rect x={180 + i * 88} y="152" width={w} height="6" rx="3" fill={rowMuted} />
-            <rect x={180 + i * 88} y="163" width={i === 1 ? 38 : i === 0 ? 26 : 18} height="14" rx="4" fill={color} opacity="0.12" />
-            <rect x={182 + i * 88} y="166" width={i === 1 ? 28 : i === 0 ? 20 : 14} height="8" rx="3" fill={color} opacity="0.9" />
+            <rect
+              x={180 + i * 88}
+              y="163"
+              width={i === 1 ? 38 : i === 0 ? 26 : 18}
+              height="14"
+              rx="4"
+              fill={color}
+              opacity="0.12"
+            />
+            <rect
+              x={182 + i * 88}
+              y="166"
+              width={i === 1 ? 28 : i === 0 ? 20 : 14}
+              height="8"
+              rx="3"
+              fill={color}
+              opacity="0.9"
+            />
           </g>
         ))}
 
@@ -139,7 +181,16 @@ export function LandingHeroIllustration() {
           <rect x="399" y="208" width="97" height="8" fill={sidebarBg} />
           <rect x="407" y="200" width="40" height="8" rx="4" fill={rowMuted} />
           {[224, 236, 248].map((y, i) => (
-            <rect key={y} x="407" y={y} width="81" height="8" rx="4" fill={i === 0 ? sidebarBg : rowMuted} opacity="0.7" />
+            <rect
+              key={y}
+              x="407"
+              y={y}
+              width="81"
+              height="8"
+              rx="4"
+              fill={i === 0 ? sidebarBg : rowMuted}
+              opacity="0.7"
+            />
           ))}
           <circle cx="447" cy="289" r="26" fill={sidebarBg} />
           <circle cx="447" cy="289" r="26" stroke={cardBdr} strokeWidth="5" fill="none" />
@@ -155,7 +206,15 @@ export function LandingHeroIllustration() {
             fill="none"
             transform="rotate(-90 447 289)"
           />
-          <text x="447" y="293" textAnchor="middle" fill={purple} fontSize="11" fontWeight="700" style={{ fontFamily: 'var(--font-family-base)' }}>
+          <text
+            x="447"
+            y="293"
+            textAnchor="middle"
+            fill={purple}
+            fontSize="11"
+            fontWeight="700"
+            style={{ fontFamily: 'var(--font-family-base)' }}
+          >
             95%
           </text>
           <rect x="432" y="332" width="30" height="3" rx="1.5" fill={cardBdr} />
@@ -177,7 +236,15 @@ export function LandingHeroIllustration() {
         <g transform="translate(68, 90)" filter="url(#cshadow)">
           <rect x="-26" y="-26" width="56" height="56" rx="14" fill={card} stroke={cardBdr} strokeWidth="1.5" />
           <rect x="-26" y="-26" width="56" height="4" rx="4" fill={purple} opacity="0.15" />
-          <text x="2" y="10" textAnchor="middle" fill={coral} fontSize="20" fontWeight="800" style={{ fontFamily: 'monospace' }}>
+          <text
+            x="2"
+            y="10"
+            textAnchor="middle"
+            fill={coral}
+            fontSize="20"
+            fontWeight="800"
+            style={{ fontFamily: 'monospace' }}
+          >
             {'</>'}
           </text>
         </g>
@@ -202,8 +269,23 @@ export function LandingHeroIllustration() {
           {[-14, -4, 6, 16].map((y, i) => (
             <g key={y}>
               <circle cx="-14" cy={y + 1} r="4" fill={i < 3 ? coral : rowMuted} opacity={i < 3 ? 0.9 : 0.5} />
-              {i < 3 && <path d={`M-17,${y + 1} L-15,${y + 3} L-11,${y - 1}`} stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
-              <rect x="-4" y={y - 2} width={i === 0 ? 28 : i === 1 ? 22 : i === 2 ? 26 : 18} height="6" rx="3" fill={i < 3 ? rowMuted : cardBdr} />
+              {i < 3 && (
+                <path
+                  d={`M-17,${y + 1} L-15,${y + 3} L-11,${y - 1}`}
+                  stroke="white"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+              <rect
+                x="-4"
+                y={y - 2}
+                width={i === 0 ? 28 : i === 1 ? 22 : i === 2 ? 26 : 18}
+                height="6"
+                rx="3"
+                fill={i < 3 ? rowMuted : cardBdr}
+              />
             </g>
           ))}
         </g>
@@ -211,7 +293,12 @@ export function LandingHeroIllustration() {
         <g transform="translate(62, 275)" filter="url(#cshadow)">
           <rect x="-26" y="-26" width="56" height="56" rx="14" fill={card} stroke={cardBdr} strokeWidth="1.5" />
           <path d="M2,-14 L18,0 L18,10 Q18,22 2,28 Q-14,22 -14,10 L-14,0 Z" fill={purple} opacity="0.12" />
-          <path d="M2,-14 L18,0 L18,10 Q18,22 2,28 Q-14,22 -14,10 L-14,0 Z" fill="none" stroke={purple} strokeWidth="2" />
+          <path
+            d="M2,-14 L18,0 L18,10 Q18,22 2,28 Q-14,22 -14,10 L-14,0 Z"
+            fill="none"
+            stroke={purple}
+            strokeWidth="2"
+          />
           <path d="M-6,6 L0,13 L11,-2" stroke={purple} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         </g>
 

@@ -1,10 +1,17 @@
 'use client';
 
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import dynamic from 'next/dynamic';
 import type { FormResponseSummary } from '@pulse/contracts';
-import { chartSeries, palette } from '@pulse/theme';
+import { palette } from '@pulse/theme';
 import { Card, CardContent } from '@/components/ui/card';
+import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+// Lazy-loaded: recharts only ships once a card actually renders a pie chart.
+const PieBreakdown = dynamic(() => import('./response-pie-breakdown'), {
+  ssr: false,
+  loading: () => <LoadingState label="loading chart…" />,
+});
 
 export type ResponseSummaryData = FormResponseSummary;
 
@@ -62,78 +69,6 @@ function BarBreakdown({
   );
 }
 
-/** Mutually-exclusive single-answer breakdown: a pie (proportional whole)
- *  plus a swatch legend — recharts' <Pie> alone fails the brand chart-series
- *  contrast note (2 of 6 series read under 3:1), so every slice also carries
- *  a direct label + count in the legend, never color alone. */
-function PieBreakdown({
-  counts,
-  total,
-  onSegmentClick,
-}: {
-  counts: Record<string, number>;
-  total: number;
-  onSegmentClick?: (value: string) => void;
-}) {
-  const data = Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, count]) => ({ label, count }));
-
-  return (
-    <div className="summary-pie">
-      <div style={{ width: '100%', height: 200 }}>
-        <ResponsiveContainer>
-          <PieChart>
-            <Pie data={data} dataKey="count" nameKey="label" outerRadius={80}>
-              {data.map((entry, i) => (
-                <Cell key={entry.label} fill={chartSeries[i % chartSeries.length]} />
-              ))}
-            </Pie>
-            <RechartsTooltip
-              formatter={(value: number, _name, item) => [
-                `${value} (${total ? Math.round((value / total) * 100) : 0}%)`,
-                item.payload.label,
-              ]}
-              contentStyle={{
-                borderRadius: 8,
-                border: `1px solid ${palette.secondary.silverLight}`,
-                fontFamily: 'inherit',
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-      <ul className="summary-pie-legend">
-        {data.map(({ label, count }, i) => (
-          <li key={label} className="summary-pie-legend-row">
-            {onSegmentClick ? (
-              <button
-                type="button"
-                className="summary-pie-legend-row-inner summary-bar-row-clickable"
-                onClick={() => onSegmentClick(label)}
-              >
-                <span className="summary-pie-swatch" style={{ background: chartSeries[i % chartSeries.length] }} />
-                <span className="summary-bar-label">{label}</span>
-                <span className="summary-bar-count muted">
-                  {count} ({total ? Math.round((count / total) * 100) : 0}%)
-                </span>
-              </button>
-            ) : (
-              <span className="summary-pie-legend-row-inner">
-                <span className="summary-pie-swatch" style={{ background: chartSeries[i % chartSeries.length] }} />
-                <span className="summary-bar-label">{label}</span>
-                <span className="summary-bar-count muted">
-                  {count} ({total ? Math.round((count / total) * 100) : 0}%)
-                </span>
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 /**
  * MS-Forms-style "response summary" dashboard: one card per question, chart
  * shape driven by the question type. No axis chrome needed at this scale —
@@ -151,30 +86,31 @@ export function ResponseSummary({
     <div className="summary-grid">
       <Card className="summary-headline">
         <CardContent>
-        <strong>{data.responses}</strong>
-        <span className="muted">total responses</span>
-        {data.lastResponseAt && (
-          <span className="muted">
-            last response {new Date(data.lastResponseAt).toLocaleString()}
-          </span>
-        )}
+          <strong>{data.responses}</strong>
+          <span className="muted">total responses</span>
+          {data.lastResponseAt && (
+            <span className="muted">last response {new Date(data.lastResponseAt).toLocaleString()}</span>
+          )}
         </CardContent>
       </Card>
 
       {data.quiz && (
         <Card className="summary-field-card">
           <CardContent>
-          <h3>quiz results</h3>
-          <p className="muted">
-            average score <strong>{data.quiz.averagePercent}%</strong>
-            {data.quiz.passRate !== undefined && (
-              <> · pass rate <strong>{Math.round(data.quiz.passRate * 100)}%</strong></>
-            )}
-          </p>
-          <BarBreakdown
-            counts={data.quiz.distribution}
-            total={Object.values(data.quiz.distribution).reduce((a, b) => a + b, 0)}
-          />
+            <h3>quiz results</h3>
+            <p className="muted">
+              average score <strong>{data.quiz.averagePercent}%</strong>
+              {data.quiz.passRate !== undefined && (
+                <>
+                  {' '}
+                  · pass rate <strong>{Math.round(data.quiz.passRate * 100)}%</strong>
+                </>
+              )}
+            </p>
+            <BarBreakdown
+              counts={data.quiz.distribution}
+              total={Object.values(data.quiz.distribution).reduce((a, b) => a + b, 0)}
+            />
           </CardContent>
         </Card>
       )}
@@ -182,109 +118,112 @@ export function ResponseSummary({
       {data.fields.map((field) => (
         <Card key={field.key} className="summary-field-card">
           <CardContent>
-          <h3>{field.label}</h3>
-          <p className="muted">{field.answered} response(s)</p>
+            <h3>{field.label}</h3>
+            <p className="muted">{field.answered} response(s)</p>
 
-          {field.counts && (() => {
-            const Breakdown = PIE_CHART_TYPES.has(field.type) ? PieBreakdown : BarBreakdown;
-            return (
-              <Breakdown
-                counts={field.counts}
-                total={field.answered}
-                // "other:" answers collapse to a single "other" bucket server-side and
-                // can't be exact-matched back to their free-text value — skip those
-                onSegmentClick={
-                  onFilterByAnswer && (field.type === 'select' || field.type === 'multi_select')
-                    ? (value) => value !== 'other' && onFilterByAnswer(field.key, field.label, value)
-                    : undefined
-                }
-              />
-            );
-          })()}
+            {field.counts &&
+              (() => {
+                const Breakdown = PIE_CHART_TYPES.has(field.type) ? PieBreakdown : BarBreakdown;
+                return (
+                  <Breakdown
+                    counts={field.counts}
+                    total={field.answered}
+                    // "other:" answers collapse to a single "other" bucket server-side and
+                    // can't be exact-matched back to their free-text value — skip those
+                    onSegmentClick={
+                      onFilterByAnswer && (field.type === 'select' || field.type === 'multi_select')
+                        ? (value) => value !== 'other' && onFilterByAnswer(field.key, field.label, value)
+                        : undefined
+                    }
+                  />
+                );
+              })()}
 
-          {field.type === 'nps' && field.npsScore !== undefined && (
-            <p className="summary-nps">
-              NPS <strong>{field.npsScore}</strong>
-            </p>
-          )}
+            {field.type === 'nps' && field.npsScore !== undefined && (
+              <p className="summary-nps">
+                NPS <strong>{field.npsScore}</strong>
+              </p>
+            )}
 
-          {(field.type === 'number' || field.type === 'rating') && field.average != null && (
-            <p className="muted">
-              average <strong>{field.average.toFixed(1)}</strong>
-              {field.min != null && field.max != null && ` · range ${field.min}–${field.max}`}
-            </p>
-          )}
+            {(field.type === 'number' || field.type === 'rating') && field.average != null && (
+              <p className="muted">
+                average <strong>{field.average.toFixed(1)}</strong>
+                {field.min != null && field.max != null && ` · range ${field.min}–${field.max}`}
+              </p>
+            )}
 
-          {field.matrix && field.scale && (
-            <Table className="summary-likert-table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead />
-                  {field.scale.map((s) => (
-                    <TableHead key={s}>{s}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {Object.entries(field.matrix).map(([statement, dist]) => (
-                  <TableRow key={statement}>
-                    <TableCell>{statement}</TableCell>
-                    {field.scale!.map((_, idx) => (
-                      <TableCell key={idx}>{dist[String(idx)] ?? 0}</TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-
-          {/* grid has no ordered `scale` (its columns are free-text choices,
-              not a scale) — derive column order from whatever the matrix holds. */}
-          {field.type === 'grid' && field.matrix && (() => {
-            const columns = Array.from(new Set(Object.values(field.matrix).flatMap((row) => Object.keys(row))));
-            return (
+            {field.matrix && field.scale && (
               <Table className="summary-likert-table">
                 <TableHeader>
                   <TableRow>
                     <TableHead />
-                    {columns.map((c) => (
-                      <TableHead key={c}>{c}</TableHead>
+                    {field.scale.map((s) => (
+                      <TableHead key={s}>{s}</TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Object.entries(field.matrix).map(([row, dist]) => (
-                    <TableRow key={row}>
-                      <TableCell>{row}</TableCell>
-                      {columns.map((c) => (
-                        <TableCell key={c}>{dist[c] ?? 0}</TableCell>
+                  {Object.entries(field.matrix).map(([statement, dist]) => (
+                    <TableRow key={statement}>
+                      <TableCell>{statement}</TableCell>
+                      {field.scale!.map((_, idx) => (
+                        <TableCell key={idx}>{dist[String(idx)] ?? 0}</TableCell>
                       ))}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            );
-          })()}
+            )}
 
-          {field.averagePosition && (
-            <ol className="summary-ranking">
-              {Object.entries(field.averagePosition)
-                .sort((a, b) => a[1] - b[1])
-                .map(([value, avg]) => (
-                  <li key={value}>
-                    {value} <span className="muted">avg. rank {avg.toFixed(1)}</span>
-                  </li>
+            {/* grid has no ordered `scale` (its columns are free-text choices,
+              not a scale) — derive column order from whatever the matrix holds. */}
+            {field.type === 'grid' &&
+              field.matrix &&
+              (() => {
+                const columns = Array.from(new Set(Object.values(field.matrix).flatMap((row) => Object.keys(row))));
+                return (
+                  <Table className="summary-likert-table">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead />
+                        {columns.map((c) => (
+                          <TableHead key={c}>{c}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.entries(field.matrix).map(([row, dist]) => (
+                        <TableRow key={row}>
+                          <TableCell>{row}</TableCell>
+                          {columns.map((c) => (
+                            <TableCell key={c}>{dist[c] ?? 0}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                );
+              })()}
+
+            {field.averagePosition && (
+              <ol className="summary-ranking">
+                {Object.entries(field.averagePosition)
+                  .sort((a, b) => a[1] - b[1])
+                  .map(([value, avg]) => (
+                    <li key={value}>
+                      {value} <span className="muted">avg. rank {avg.toFixed(1)}</span>
+                    </li>
+                  ))}
+              </ol>
+            )}
+
+            {field.samples && field.samples.length > 0 && (
+              <ul className="summary-samples">
+                {field.samples.map((s, i) => (
+                  <li key={i}>“{s}”</li>
                 ))}
-            </ol>
-          )}
-
-          {field.samples && field.samples.length > 0 && (
-            <ul className="summary-samples">
-              {field.samples.map((s, i) => (
-                <li key={i}>“{s}”</li>
-              ))}
-            </ul>
-          )}
+              </ul>
+            )}
           </CardContent>
         </Card>
       ))}

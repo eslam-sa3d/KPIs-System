@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import type { BrandIdentity } from '@pulse/contracts';
 import { PortalShell } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
@@ -10,16 +10,13 @@ import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
+import { useResource } from '../../../lib/use-resource';
 
 export default function BrandingAdminPage() {
   const user = useSession();
-  const [identity, setIdentity] = useState<BrandIdentity | null>(null);
+  const { data: identity, setData: setIdentity } = useResource<BrandIdentity>(user ? '/v1/branding' : null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (user) void api<BrandIdentity>('/v1/branding').then(setIdentity);
-  }, [user]);
 
   async function onSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

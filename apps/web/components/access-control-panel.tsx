@@ -112,117 +112,123 @@ export function AccessControlPanel({
         <CardTitle>access</CardTitle>
       </CardHeader>
       <CardContent>
-      <p className="muted">
-        by default, anyone signed in with the "view forms" permission can open this form. restricting it
-        limits that to specific people — the public share link above is unaffected either way.
-      </p>
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+        <p className="muted">
+          by default, anyone signed in with the "view forms" permission can open this form. restricting it limits that
+          to specific people — the public share link above is unaffected either way.
+        </p>
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-      <label className="check-item">
-        <input
-          type="checkbox"
-          checked={restricted}
-          disabled={busy}
-          onChange={(e) => toggleRestricted(e.target.checked)}
-        />
-        restrict to specific people
-      </label>
-
-      {restricted && (
-        <>
-          <label htmlFor="ac-filter">invite someone</label>
+        <label className="check-item">
           <input
-            id="ac-filter"
-            value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value);
-              setPickUserId('');
-            }}
-            placeholder="search by name or email"
+            type="checkbox"
+            checked={restricted}
+            disabled={busy}
+            onChange={(e) => toggleRestricted(e.target.checked)}
           />
-          {filter && candidates.length > 0 && (
-            <div role="listbox" aria-label="matching users" className="max-h-48 overflow-y-auto rounded-md border">
-              {candidates.map((u) => (
-                <button
-                  key={u.id}
-                  type="button"
-                  role="option"
-                  aria-selected={pickUserId === u.id}
-                  onClick={() => setPickUserId(u.id)}
-                  className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-accent aria-selected:bg-accent aria-selected:text-accent-foreground"
-                >
-                  {u.displayName} ({u.email})
-                </button>
-              ))}
-            </div>
-          )}
-          <span className="builder-required">
-            <input
-              id="ac-can-manage"
-              type="checkbox"
-              checked={pickCanManage}
-              onChange={(e) => setPickCanManage(e.target.checked)}
-            />
-            <label htmlFor="ac-can-manage">co-owner (can also edit and manage this form)</label>
-          </span>
-          <span className="builder-required">
-            <input
-              id="ac-can-view-responses"
-              type="checkbox"
-              checked={pickCanViewResponses}
-              disabled={pickCanManage}
-              onChange={(e) => setPickCanViewResponses(e.target.checked)}
-            />
-            <label htmlFor="ac-can-view-responses">
-              can view responses (without editing the form — implied by co-owner)
-            </label>
-          </span>
-          <Button type="button" variant="ghost" size="sm" disabled={!pickUserId || busy} onClick={invite}>
-            invite
-          </Button>
+          restrict to specific people
+        </label>
 
-          <label>people with access</label>
-          {collaborators === null ? (
-            <LoadingState />
-          ) : collaborators.length === 0 ? (
-            <p className="muted">no one invited yet — only you and admins can open this form.</p>
-          ) : (
-            <ul className="summary-samples">
-              {collaborators.map((c) => (
-                <li key={c.id}>
-                  {c.user.displayName} ({c.user.email}){' '}
-                  {c.canManage ? '· co-owner' : c.canViewResponses ? '· can view responses' : ''}{' '}
-                  {confirmRemoveUserId === c.userId ? (
-                    <>
-                      <span className="muted">remove access?</span>{' '}
-                      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => remove(c.userId)}>
-                        confirm remove
-                      </Button>{' '}
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmRemoveUserId(null)}>
-                        cancel
+        {restricted && (
+          <>
+            <label htmlFor="ac-filter">invite someone</label>
+            <input
+              id="ac-filter"
+              value={filter}
+              onChange={(e) => {
+                setFilter(e.target.value);
+                setPickUserId('');
+              }}
+              placeholder="search by name or email"
+            />
+            {filter && candidates.length > 0 && (
+              <div role="listbox" aria-label="matching users" className="max-h-48 overflow-y-auto rounded-md border">
+                {candidates.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    role="option"
+                    aria-selected={pickUserId === u.id}
+                    onClick={() => setPickUserId(u.id)}
+                    className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-accent aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  >
+                    {u.displayName} ({u.email})
+                  </button>
+                ))}
+              </div>
+            )}
+            <span className="builder-required">
+              <input
+                id="ac-can-manage"
+                type="checkbox"
+                checked={pickCanManage}
+                onChange={(e) => setPickCanManage(e.target.checked)}
+              />
+              <label htmlFor="ac-can-manage">co-owner (can also edit and manage this form)</label>
+            </span>
+            <span className="builder-required">
+              <input
+                id="ac-can-view-responses"
+                type="checkbox"
+                checked={pickCanViewResponses}
+                disabled={pickCanManage}
+                onChange={(e) => setPickCanViewResponses(e.target.checked)}
+              />
+              <label htmlFor="ac-can-view-responses">
+                can view responses (without editing the form — implied by co-owner)
+              </label>
+            </span>
+            <Button type="button" variant="ghost" size="sm" disabled={!pickUserId || busy} onClick={invite}>
+              invite
+            </Button>
+
+            <label>people with access</label>
+            {collaborators === null ? (
+              <LoadingState />
+            ) : collaborators.length === 0 ? (
+              <p className="muted">no one invited yet — only you and admins can open this form.</p>
+            ) : (
+              <ul className="summary-samples">
+                {collaborators.map((c) => (
+                  <li key={c.id}>
+                    {c.user.displayName} ({c.user.email}){' '}
+                    {c.canManage ? '· co-owner' : c.canViewResponses ? '· can view responses' : ''}{' '}
+                    {confirmRemoveUserId === c.userId ? (
+                      <>
+                        <span className="muted">remove access?</span>{' '}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => remove(c.userId)}
+                        >
+                          confirm remove
+                        </Button>{' '}
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmRemoveUserId(null)}>
+                          cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => setConfirmRemoveUserId(c.userId)}
+                      >
+                        remove
                       </Button>
-                    </>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => setConfirmRemoveUserId(c.userId)}
-                    >
-                      remove
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
       </CardContent>
     </Card>
   );

@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
-import { useEffect } from 'react';
+import type { TeamOverview } from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
 import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
 import { Badge } from '@/components/ui/badge';
@@ -11,73 +11,26 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { api, downloadCsv } from '../../lib/api-client';
+import { downloadCsv } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
+import { useResource } from '../../lib/use-resource';
 import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusBadgeStyle, statusOf } from '../../lib/kpi-status';
+import {
+  avg,
+  computeKpi,
+  latestAreaValue,
+  latestPeriodEntries,
+  previousAreaValue,
+  round2,
+  type ComputedKpi,
+  type RawKpi,
+} from './scoring';
 
 // Lazy-loaded: recharts only ships once the dashboard actually renders a chart.
 const KpiDistributionChart = dynamic(() => import('../../components/kpi-distribution-chart'), {
   ssr: false,
   loading: () => <LoadingState label="loading chart…" />,
 });
-
-interface RawEntry {
-  value: string | number;
-  periodStart: string;
-  periodEnd: string;
-  note: string | null;
-  reviewType: string | null;
-  anonymous: boolean;
-  context: string | null;
-  comment: string | null;
-  person: { id: string; displayName: string };
-  enteredBy: { id: string; displayName: string };
-}
-
-interface RawEvaluationArea {
-  id: string;
-  name: string;
-  cadence: string;
-  isActive: boolean;
-  entries: RawEntry[];
-}
-
-interface RawKpi {
-  id: string;
-  name: string;
-  isActive: boolean;
-  /** relative importance 0-100; null means "no weight set" — see compositeScore. */
-  weight: string | number | null;
-  evaluationAreas: RawEvaluationArea[];
-}
-
-interface ComputedKpi {
-  id: string;
-  name: string;
-  isActive: boolean;
-  areas: RawEvaluationArea[];
-  weight: number | null;
-  /** average across every area's most recent PERIOD, itself averaged across every rater/evaluatee scored in that period */
-  latestValue: number | null;
-  status: StatusKey;
-  lastUpdated: string | null;
-}
-
-interface TeamMember {
-  id: string;
-  displayName: string;
-  email: string;
-  department: string | null;
-  roles: string[];
-  hasKpi: boolean;
-  finalScore: number | null;
-  lastUpdated: string | null;
-}
-
-interface TeamOverview {
-  totalActiveUsers: number;
-  members: TeamMember[];
-}
 
 type SortKey = 'name' | 'latestValue' | 'status' | 'updated';
 type MemberSortKey = 'name' | 'department' | 'finalScore' | 'status' | 'updated';
@@ -96,81 +49,24 @@ const REVIEW_TYPE_LABEL: Record<string, string> = {
   '360': '360',
 };
 
-function avg(values: number[]): number {
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-/** Entries arrive ordered periodStart desc (see KpisService.listMine). Multi-rater
- *  means several entries can share one (person, period) slot, so "the latest" is
- *  every entry whose periodStart equals the area's own most recent one — not just
- *  entries[0], which would arbitrarily pick a single rater/evaluatee and ignore the rest. */
-function latestPeriodEntries(area: RawEvaluationArea): RawEntry[] {
-  if (area.entries.length === 0) return [];
-  const maxPeriodStart = area.entries.reduce((max, e) => (e.periodStart > max ? e.periodStart : max), area.entries[0]!.periodStart);
-  return area.entries.filter((e) => e.periodStart === maxPeriodStart);
-}
-
-/** An area's blended latest score: every rater's and every evaluatee's entry in its most recent period, averaged. */
-function latestAreaValue(area: RawEvaluationArea): number | null {
-  const entries = latestPeriodEntries(area);
-  return entries.length > 0 ? avg(entries.map((e) => Number(e.value))) : null;
-}
-
-/** The period immediately before the area's latest one, for a period-over-period delta. */
-function previousAreaValue(area: RawEvaluationArea): number | null {
-  const distinctPeriods = [...new Set(area.entries.map((e) => e.periodStart))].sort().reverse();
-  if (distinctPeriods.length < 2) return null;
-  const previousPeriod = distinctPeriods[1];
-  const entries = area.entries.filter((e) => e.periodStart === previousPeriod);
-  return entries.length > 0 ? avg(entries.map((e) => Number(e.value))) : null;
-}
-
-function computeKpi(kpi: RawKpi): ComputedKpi {
-  const areaValues = kpi.evaluationAreas.map(latestAreaValue).filter((v): v is number => v !== null);
-  const latestValue = areaValues.length > 0 ? round2(avg(areaValues)) : null;
-  const lastUpdated =
-    kpi.evaluationAreas
-      .flatMap(latestPeriodEntries)
-      .map((e) => e.periodEnd)
-      .sort()
-      .at(-1) ?? null;
-  return {
-    id: kpi.id,
-    name: kpi.name,
-    isActive: kpi.isActive,
-    areas: kpi.evaluationAreas,
-    weight: kpi.weight === null ? null : Number(kpi.weight),
-    latestValue,
-    status: statusOf(latestValue),
-    lastUpdated,
-  };
-}
-
 export default function DashboardPage() {
   const user = useSession();
-  const [kpis, setKpis] = useState<ComputedKpi[] | null>(null);
   const [level, setLevel] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'latestValue', dir: -1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [teamOverview, setTeamOverview] = useState<TeamOverview | null>(null);
   const [memberStatusFilter, setMemberStatusFilter] = useState<StatusKey | 'all'>('all');
   const [memberSort, setMemberSort] = useState<{ key: MemberSortKey; dir: 1 | -1 }>({ key: 'finalScore', dir: -1 });
   const [memberFilter, setMemberFilter] = useState('');
   const canSeeTeamOverview = can(user, 'kpis:manage');
 
-  useEffect(() => {
-    if (user) void api<RawKpi[]>('/v1/kpis/my').then((raw) => setKpis(raw.map(computeKpi)));
-  }, [user]);
+  const { data: rawKpis } = useResource<RawKpi[]>(user ? '/v1/kpis/my' : null);
+  const kpis = useMemo(() => rawKpis?.map(computeKpi) ?? null, [rawKpis]);
 
   // org-wide roster with KPI coverage/final score/last-updated — admin-only, powers the team coverage cards and table below
-  useEffect(() => {
-    if (user && canSeeTeamOverview) void api<TeamOverview>('/v1/kpis/team-overview').then(setTeamOverview);
-  }, [user, canSeeTeamOverview]);
+  const { data: teamOverview } = useResource<TeamOverview>(
+    user && canSeeTeamOverview ? '/v1/kpis/team-overview' : null,
+  );
 
   // cadence now lives on each Evaluation Area (a KPI can span several) — "level" filters
   // to KPIs that have at least one area on that cadence, rather than a single KPI-wide value
@@ -296,10 +192,7 @@ export default function DashboardPage() {
 
   const teamMembers = teamOverview?.members ?? [];
   const noKpiMembers = useMemo(() => teamMembers.filter((m) => !m.hasKpi), [teamMembers]);
-  const pendingMembers = useMemo(
-    () => teamMembers.filter((m) => m.hasKpi && m.finalScore === null),
-    [teamMembers],
-  );
+  const pendingMembers = useMemo(() => teamMembers.filter((m) => m.hasKpi && m.finalScore === null), [teamMembers]);
 
   const memberTableData = useMemo(() => {
     let data = teamMembers.filter((m) => {
@@ -314,9 +207,7 @@ export default function DashboardPage() {
         case 'department':
           return (a.department ?? '').localeCompare(b.department ?? '') * dir;
         case 'status':
-          return (
-            (STATUS_ORDER.indexOf(statusOf(a.finalScore)) - STATUS_ORDER.indexOf(statusOf(b.finalScore))) * dir
-          );
+          return (STATUS_ORDER.indexOf(statusOf(a.finalScore)) - STATUS_ORDER.indexOf(statusOf(b.finalScore))) * dir;
         case 'updated':
           return (a.lastUpdated ?? '').localeCompare(b.lastUpdated ?? '') * dir;
         case 'finalScore': {
@@ -383,7 +274,7 @@ export default function DashboardPage() {
       }
     : null;
 
-  const levelLabel = level === 'all' ? 'all cadences' : CADENCE_LABEL[level] ?? level;
+  const levelLabel = level === 'all' ? 'all cadences' : (CADENCE_LABEL[level] ?? level);
 
   return (
     <PortalShell user={user}>
@@ -413,15 +304,18 @@ export default function DashboardPage() {
         )}
 
         {kpis === null ? (
-          <div className="rounded-md border bg-card mt-4 mb-6 p-6" style={{ display: 'flex', justifyContent: 'center' }}>
+          <div
+            className="rounded-md border bg-card mt-4 mb-6 p-6"
+            style={{ display: 'flex', justifyContent: 'center' }}
+          >
             <Spinner className="size-6" />
           </div>
         ) : (
           <>
             {kpis.length === 0 && (
               <p className="muted" style={{ marginBottom: 12 }}>
-                no KPIs assigned yet — an admin can map KPIs to your role or department under KPI settings. the
-                widgets below will fill in as soon as one is.
+                no KPIs assigned yet — an admin can map KPIs to your role or department under KPI settings. the widgets
+                below will fill in as soon as one is.
               </p>
             )}
             <div className="p-kpi-strip">
@@ -435,7 +329,9 @@ export default function DashboardPage() {
                   <div className="p-kpi-label">{STATUS_LABEL[s]}</div>
                   <div className="p-kpi-val">{stats[s]}</div>
                   <div className="p-kpi-sub">
-                    {s === 'pending' ? 'no entries yet' : `${levelData.length ? Math.round((stats[s] / levelData.length) * 100) : 0}% of KPIs`}
+                    {s === 'pending'
+                      ? 'no entries yet'
+                      : `${levelData.length ? Math.round((stats[s] / levelData.length) * 100) : 0}% of KPIs`}
                   </div>
                 </button>
               ))}
@@ -479,7 +375,8 @@ export default function DashboardPage() {
                       {pendingMembers.length}
                     </span>
                     <span className="muted" style={{ fontSize: 11 }}>
-                      team members with a KPI mapped who haven&apos;t been scored yet, out of {teamOverview.totalActiveUsers}
+                      team members with a KPI mapped who haven&apos;t been scored yet, out of{' '}
+                      {teamOverview.totalActiveUsers}
                     </span>
                   </div>
                   {pendingMembers.length > 0 && (
@@ -519,33 +416,41 @@ export default function DashboardPage() {
                 <div className="p-card-title">KPI status by cadence</div>
                 {hasDistributionData ? (
                   <>
-                    <KpiDistributionChart
-                      data={distributionData}
-                      textColor="var(--text-3)"
-                      gridColor="var(--border)"
-                    />
+                    <KpiDistributionChart data={distributionData} textColor="var(--text-3)" gridColor="var(--border)" />
                     <div className="p-legend-row">
-                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--purple)' }} />Outstanding</div>
-                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--green)' }} />Meet expectations</div>
-                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--amber)' }} />Needs improvement</div>
-                      <div className="p-legend-item"><span className="p-legend-dot" style={{ background: 'var(--red)' }} />Below expectations</div>
+                      <div className="p-legend-item">
+                        <span className="p-legend-dot" style={{ background: 'var(--purple)' }} />
+                        Outstanding
+                      </div>
+                      <div className="p-legend-item">
+                        <span className="p-legend-dot" style={{ background: 'var(--green)' }} />
+                        Meet expectations
+                      </div>
+                      <div className="p-legend-item">
+                        <span className="p-legend-dot" style={{ background: 'var(--amber)' }} />
+                        Needs improvement
+                      </div>
+                      <div className="p-legend-item">
+                        <span className="p-legend-dot" style={{ background: 'var(--red)' }} />
+                        Below expectations
+                      </div>
                     </div>
                   </>
                 ) : (
-                  <p className="muted" style={{ fontSize: 12 }}>no scored KPIs in this view yet.</p>
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    no scored KPIs in this view yet.
+                  </p>
                 )}
               </div>
 
               <div className="p-card">
                 <div className="p-card-title">KPI by Person</div>
                 {hasByPersonData ? (
-                  <KpiDistributionChart
-                    data={byPersonData}
-                    textColor="var(--text-3)"
-                    gridColor="var(--border)"
-                  />
+                  <KpiDistributionChart data={byPersonData} textColor="var(--text-3)" gridColor="var(--border)" />
                 ) : (
-                  <p className="muted" style={{ fontSize: 12 }}>no scored KPIs in this view yet.</p>
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    no scored KPIs in this view yet.
+                  </p>
                 )}
               </div>
             </div>
@@ -554,7 +459,12 @@ export default function DashboardPage() {
               <div className="p-table-header">
                 <div className="p-filter-pills">
                   {(['all', ...STATUS_ORDER] as const).map((s) => (
-                    <Badge key={s} asChild variant={statusFilter === s ? 'default' : 'outline'} className="cursor-pointer py-1">
+                    <Badge
+                      key={s}
+                      asChild
+                      variant={statusFilter === s ? 'default' : 'outline'}
+                      className="cursor-pointer py-1"
+                    >
                       <button onClick={() => setStatusFilter(s)}>{s === 'all' ? 'All' : STATUS_LABEL[s]}</button>
                     </Badge>
                   ))}
@@ -672,7 +582,9 @@ export default function DashboardPage() {
                         variant={memberStatusFilter === s ? 'default' : 'outline'}
                         className="cursor-pointer py-1"
                       >
-                        <button onClick={() => setMemberStatusFilter(s)}>{s === 'all' ? 'All' : STATUS_LABEL[s]}</button>
+                        <button onClick={() => setMemberStatusFilter(s)}>
+                          {s === 'all' ? 'All' : STATUS_LABEL[s]}
+                        </button>
                       </Badge>
                     ))}
                   </div>
@@ -697,7 +609,9 @@ export default function DashboardPage() {
                     <TableRow>
                       <TableHead
                         className="p-th-sortable"
-                        aria-sort={memberSort.key === 'name' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'}
+                        aria-sort={
+                          memberSort.key === 'name' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
+                        }
                       >
                         <button type="button" onClick={() => sortMembersBy('name')}>
                           name
@@ -726,7 +640,9 @@ export default function DashboardPage() {
                       </TableHead>
                       <TableHead
                         className="p-th-sortable"
-                        aria-sort={memberSort.key === 'status' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'}
+                        aria-sort={
+                          memberSort.key === 'status' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
+                        }
                       >
                         <button type="button" onClick={() => sortMembersBy('status')}>
                           status

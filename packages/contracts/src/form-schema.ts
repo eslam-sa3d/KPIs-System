@@ -8,8 +8,19 @@ import { END_OF_FORM, FormSection, SectionBranchRule, formSectionSchema, section
  *  answer). Shared with the builder UI so the trigger-field picker and the
  *  validator never drift apart. */
 export const BRANCH_TRIGGER_TYPES: FieldType[] = [
-  'select', 'multi_select', 'rating', 'likert', 'boolean', 'nps', 'short_text', 'long_text', 'number', 'date',
-  'slider', 'hot_spot', 'time',
+  'select',
+  'multi_select',
+  'rating',
+  'likert',
+  'boolean',
+  'nps',
+  'short_text',
+  'long_text',
+  'number',
+  'date',
+  'slider',
+  'hot_spot',
+  'time',
 ];
 
 /**
@@ -351,7 +362,10 @@ export const formDefinitionSchema = z
           message: `visibleWhen references unknown field "${field.visibleWhen.fieldKey}"`,
         });
       }
-      for (const [prop, text] of [['label', field.label], ['helpText', field.helpText]] as const) {
+      for (const [prop, text] of [
+        ['label', field.label],
+        ['helpText', field.helpText],
+      ] as const) {
         for (const pipedKey of pipeReferences(text)) {
           if (!form.fields.some((f) => f.key === pipedKey)) {
             ctx.addIssue({
@@ -368,19 +382,13 @@ export const formDefinitionSchema = z
     validateSections(form.fields, form.sections, ctx);
   });
 
-function validateSections(
-  fields: FormField[],
-  sections: FormSection[],
-  ctx: z.RefinementCtx,
-): void {
+function validateSections(fields: FormField[], sections: FormSection[], ctx: z.RefinementCtx): void {
   const fieldByKey = new Map(fields.map((f) => [f.key, f]));
   const sectionIds = new Set(sections.map((s) => s.id));
   const sectionIndexById = new Map(sections.map((s, i) => [s.id, i]));
   const assignedFieldKeys = new Set<string>();
 
-  const duplicateSectionIds = sections
-    .map((s) => s.id)
-    .filter((id, index, all) => all.indexOf(id) !== index);
+  const duplicateSectionIds = sections.map((s) => s.id).filter((id, index, all) => all.indexOf(id) !== index);
   if (duplicateSectionIds.length) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -487,7 +495,11 @@ function validateSections(
     const validateTarget = (target: string, path: (string | number)[]) => {
       if (target === END_OF_FORM) return;
       if (!sectionIds.has(target)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path, message: `"go to section" target "${target}" is not a section id` });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path,
+          message: `"go to section" target "${target}" is not a section id`,
+        });
         return;
       }
       if (sectionIndexById.get(target)! <= sectionIndex) {

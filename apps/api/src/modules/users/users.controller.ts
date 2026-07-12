@@ -24,16 +24,13 @@ export class UsersController {
 
   @Get()
   @RequirePermissions('users:read')
-  list(@Query() query: PageQuery) {
-    return this.users.list(query);
+  list(@Query() query: PageQuery, @Req() req: AuthedRequest) {
+    return this.users.list(query, req.user.id);
   }
 
   @Post()
   @RequirePermissions('users:write')
-  create(
-    @Body(new ZodValidationPipe(createUserSchema)) input: CreateUserInput,
-    @Req() req: AuthedRequest,
-  ) {
+  create(@Body(new ZodValidationPipe(createUserSchema)) input: CreateUserInput, @Req() req: AuthedRequest) {
     return this.users.create(input, req.user.id);
   }
 
@@ -70,10 +67,7 @@ export class DepartmentsController {
 
   @Post()
   @RequirePermissions('departments:manage')
-  create(
-    @Body(new ZodValidationPipe(createDepartmentSchema)) input: CreateDepartmentInput,
-    @Req() req: AuthedRequest,
-  ) {
+  create(@Body(new ZodValidationPipe(createDepartmentSchema)) input: CreateDepartmentInput, @Req() req: AuthedRequest) {
     return this.users.createDepartment(input, req.user.id);
   }
 

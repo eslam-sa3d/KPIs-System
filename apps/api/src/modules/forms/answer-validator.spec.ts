@@ -67,12 +67,8 @@ describe('compileAnswerValidator', () => {
   });
 
   it('enforces numeric bounds and integer-only rules', () => {
-    expect(() => validator.validate({ team: 'x', velocity: 999, blocked: false })).toThrow(
-      ZodError,
-    );
-    expect(() => validator.validate({ team: 'x', velocity: 4.5, blocked: false })).toThrow(
-      ZodError,
-    );
+    expect(() => validator.validate({ team: 'x', velocity: 999, blocked: false })).toThrow(ZodError);
+    expect(() => validator.validate({ team: 'x', velocity: 4.5, blocked: false })).toThrow(ZodError);
   });
 
   it('requires conditionally visible fields only when their condition matches', () => {
@@ -89,15 +85,13 @@ describe('compileAnswerValidator', () => {
   });
 
   it('rejects answers for fields that do not exist in the form version', () => {
-    expect(() =>
-      validator.validate({ team: 'x', velocity: 10, blocked: false, hacked_field: 'boom' }),
-    ).toThrow(ZodError);
+    expect(() => validator.validate({ team: 'x', velocity: 10, blocked: false, hacked_field: 'boom' })).toThrow(
+      ZodError,
+    );
   });
 
   it('caps rating answers at the configured scale', () => {
-    expect(() =>
-      validator.validate({ team: 'x', velocity: 10, blocked: false, confidence: 9 }),
-    ).toThrow(ZodError);
+    expect(() => validator.validate({ team: 'x', velocity: 10, blocked: false, confidence: 9 })).toThrow(ZodError);
   });
 });
 
@@ -166,9 +160,7 @@ describe('response validation on text fields', () => {
   const v = compileAnswerValidator(
     formDefinitionSchema.parse({
       title: 'validated text',
-      fields: [
-        { key: 'code', label: 'Employee code', type: 'short_text', minLength: 4, pattern: '^[A-Z]{2}\\d{4}$' },
-      ],
+      fields: [{ key: 'code', label: 'Employee code', type: 'short_text', minLength: 4, pattern: '^[A-Z]{2}\\d{4}$' }],
     }),
   );
 
@@ -288,9 +280,7 @@ describe('file field with maxFiles', () => {
     const multi = compileAnswerValidator(
       formDefinitionSchema.parse({
         title: 'multi upload',
-        fields: [
-          { key: 'photos', label: 'Photos', type: 'file', acceptedMimeTypes: ['image/png'], maxFiles: 3 },
-        ],
+        fields: [{ key: 'photos', label: 'Photos', type: 'file', acceptedMimeTypes: ['image/png'], maxFiles: 3 }],
       }),
     );
     expect(multi.validate({ photos: ['a', 'b'] })).toEqual({ photos: ['a', 'b'] });
@@ -480,7 +470,15 @@ describe('branchRules (multiple rules per page, expanded trigger types)', () => 
       formDefinitionSchema.parse({
         title: 'invalid trigger',
         fields: [
-          { key: 'prio', label: 'Rank', type: 'ranking', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] },
+          {
+            key: 'prio',
+            label: 'Rank',
+            type: 'ranking',
+            options: [
+              { value: 'a', label: 'A' },
+              { value: 'b', label: 'B' },
+            ],
+          },
           { key: 'name', label: 'Name', type: 'short_text' },
         ],
         sections: [
@@ -565,7 +563,7 @@ describe('section branching off a likert statement', () => {
   });
   const validator = compileAnswerValidator(definition);
 
-  it('branches on the named statement\'s scale index, ignoring other statements', () => {
+  it("branches on the named statement's scale index, ignoring other statements", () => {
     const cleaned = validator.validate({
       mood: { pace: 0, tools: 2 },
       pace_detail: 'sprint felt rushed',
@@ -691,7 +689,10 @@ describe('section branching, Google-Forms style (per-option goTo + section defau
         },
         { key: 'why_not', label: 'Why not?', type: 'short_text', required: true },
       ],
-      sections: [{ id: 'intro', fieldKeys: ['satisfied'] }, { id: 'followup', fieldKeys: ['why_not'] }],
+      sections: [
+        { id: 'intro', fieldKeys: ['satisfied'] },
+        { id: 'followup', fieldKeys: ['why_not'] },
+      ],
     });
     const v = compileAnswerValidator(endsEarly);
     const cleaned = v.validate({ satisfied: 'no' });
@@ -745,11 +746,17 @@ describe('formDefinitionSchema (builder-side validation)', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects a select field\'s optionGoTo pointing backward', () => {
+  it("rejects a select field's optionGoTo pointing backward", () => {
     const result = formDefinitionSchema.safeParse({
       title: 'bad branching form',
       fields: [
-        { key: 'choice', label: 'Pick one', type: 'select', options: [{ value: 'a', label: 'A' }], optionGoTo: { a: 'intro' } },
+        {
+          key: 'choice',
+          label: 'Pick one',
+          type: 'select',
+          options: [{ value: 'a', label: 'A' }],
+          optionGoTo: { a: 'intro' },
+        },
         { key: 'name', label: 'Name', type: 'short_text' },
       ],
       sections: [

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   DEFAULT_FORM_SETTINGS,
   FormDefinition,
+  FormListItem,
   FormSettings,
   formDefinitionSchema,
   formSettingsSchema,
@@ -68,7 +69,7 @@ export class FormsService {
   /** Every form (including archived — this is the admin management list;
    *  hiding archived forms here would make "unarchive" unreachable) with its
    *  latest version's title. */
-  async listForms() {
+  async listForms(): Promise<FormListItem[]> {
     const forms = await this.prisma.form.findMany({
       orderBy: { createdAt: 'desc' },
       include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
@@ -79,14 +80,14 @@ export class FormsService {
       return {
         id: form.id,
         slug: form.slug,
-        status: form.status,
+        status: form.status as FormListItem['status'],
         title: definition?.title ?? form.slug,
         fieldCount: definition?.fields.length ?? 0,
         version: latest?.version ?? 0,
         hasPublicLink: Boolean(form.publicToken),
         settings: this.settingsOf(form.settings),
         folder: form.folder,
-        createdAt: form.createdAt,
+        createdAt: form.createdAt.toISOString(),
       };
     });
   }
@@ -147,9 +148,7 @@ export class FormsService {
   async updateSettings(formId: string, raw: unknown, actorId: string): Promise<FormSettings> {
     const result = formSettingsSchema.safeParse(raw);
     if (!result.success) {
-      throw AppError.validation(
-        result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-      );
+      throw AppError.validation(result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
     }
     const form = await this.prisma.form.findUnique({ where: { id: formId } });
     if (!form) throw AppError.notFound('Form', formId);
@@ -275,10 +274,7 @@ export class FormsService {
       where: { formVersion: { formId } },
     });
     if (submissionCount > 0) {
-      throw new AppError(
-        'CONFLICT',
-        `"${form.slug}" has ${submissionCount} submission(s) — archive it instead`,
-      );
+      throw new AppError('CONFLICT', `"${form.slug}" has ${submissionCount} submission(s) — archive it instead`);
     }
 
     await this.prisma.form.delete({ where: { id: formId } });
@@ -387,9 +383,7 @@ export class FormsService {
   private parseDefinition(definition: unknown): FormDefinition {
     const result = formDefinitionSchema.safeParse(definition);
     if (!result.success) {
-      throw AppError.validation(
-        result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-      );
+      throw AppError.validation(result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
     }
     return result.data;
   }

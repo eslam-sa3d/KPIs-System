@@ -8,7 +8,14 @@ const summary: FormResponseSummary = {
   lastResponseAt: '2026-01-03T00:00:00.000Z',
   fields: [
     { key: 'team', label: 'Team', type: 'short_text', answered: 3, samples: ['ops', 'eng'] },
-    { key: 'satisfaction', label: 'Satisfaction', type: 'rating', answered: 3, counts: { '4': 2, '5': 1 }, average: 4.33 },
+    {
+      key: 'satisfaction',
+      label: 'Satisfaction',
+      type: 'rating',
+      answered: 3,
+      counts: { '4': 2, '5': 1 },
+      average: 4.33,
+    },
   ],
   quiz: { averagePercent: 80, passRate: 0.67, distribution: { '80': 2, '60': 1 } },
 };

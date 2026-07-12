@@ -103,10 +103,11 @@ export function ResponseDetailModal({
         }}
       >
         <DialogHeader>
-          <DialogTitle>response {index + 1} of {total}</DialogTitle>
+          <DialogTitle>
+            response {index + 1} of {total}
+          </DialogTitle>
           <p className="muted" style={{ margin: '4px 0 0' }}>
-            {submission.submittedBy?.displayName ?? 'anonymous'} ·{' '}
-            {new Date(submission.createdAt).toLocaleString()}
+            {submission.submittedBy?.displayName ?? 'anonymous'} · {new Date(submission.createdAt).toLocaleString()}
           </p>
           {submission.score && submission.score.percent !== null && (
             <p className="quiz-score" style={{ margin: '4px 0 0', fontSize: 'var(--font-size-md)' }}>
@@ -173,7 +174,9 @@ export function ResponseDetailModal({
                               key={uploadId}
                               variant="ghost"
                               size="sm"
-                              onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${uploadId}`, `${field.label}-${i + 1}`)}
+                              onClick={() =>
+                                downloadFile(`/v1/forms/${slug}/uploads/${uploadId}`, `${field.label}-${i + 1}`)
+                              }
                             >
                               download {i + 1}
                             </Button>
@@ -194,7 +197,11 @@ export function ResponseDetailModal({
             <>
               <Button
                 variant="ghost"
-                onClick={() => { setEditing(false); setDraft(submission.answers); setSaveError(null); }}
+                onClick={() => {
+                  setEditing(false);
+                  setDraft(submission.answers);
+                  setSaveError(null);
+                }}
               >
                 cancel
               </Button>

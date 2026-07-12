@@ -33,7 +33,12 @@ export default function KpiDistributionChart({
       <ResponsiveContainer>
         <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: -20 }}>
           <CartesianGrid stroke={gridColor} vertical={false} />
-          <XAxis dataKey="level" tick={{ fill: textColor, fontSize: 11 }} tickLine={false} axisLine={{ stroke: gridColor }} />
+          <XAxis
+            dataKey="level"
+            tick={{ fill: textColor, fontSize: 11 }}
+            tickLine={false}
+            axisLine={{ stroke: gridColor }}
+          />
           <YAxis allowDecimals={false} tick={{ fill: textColor, fontSize: 11 }} tickLine={false} axisLine={false} />
           <Tooltip
             cursor={{ fill: 'transparent' }}

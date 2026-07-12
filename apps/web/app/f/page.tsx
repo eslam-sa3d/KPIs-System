@@ -15,10 +15,7 @@ const TURNSTILE_SCRIPT_ID = 'cf-turnstile-script';
 declare global {
   interface Window {
     turnstile?: {
-      render: (
-        container: HTMLElement,
-        options: { sitekey: string; callback: (token: string) => void },
-      ) => void;
+      render: (container: HTMLElement, options: { sitekey: string; callback: (token: string) => void }) => void;
     };
   }
 }
@@ -46,14 +43,18 @@ function PublicForm() {
     if (!token || !editToken) return;
     fetch(`${API_URL}/api/v1/public/forms/${encodeURIComponent(token)}/submissions/${encodeURIComponent(editToken)}`)
       .then((r) => r.json())
-      .then((env) => { if (env?.success) setInitialAnswers(env.data.answers); })
+      .then((env) => {
+        if (env?.success) setInitialAnswers(env.data.answers);
+      })
       .catch(() => undefined);
   }, [token, editToken]);
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/branding`)
       .then((r) => r.json())
-      .then((env) => { if (env?.success) setBranding(env.data); })
+      .then((env) => {
+        if (env?.success) setBranding(env.data);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -113,7 +114,9 @@ function PublicForm() {
       </header>
       <div className="portal-main">
         {missing ? (
-          <div className="empty-state"><h2>this form link is invalid or expired</h2></div>
+          <div className="empty-state">
+            <h2>this form link is invalid or expired</h2>
+          </div>
         ) : !data ? (
           <LoadingState />
         ) : (
@@ -124,9 +127,7 @@ function PublicForm() {
             uploadPath={`/v1/public/forms/${encodeURIComponent(token)}/uploads`}
             initialAnswers={initialAnswers}
             editUrlFor={(newEditToken) => `?t=${encodeURIComponent(token)}&edit=${encodeURIComponent(newEditToken)}`}
-            captchaSlot={
-              data.settings.requireCaptcha && TURNSTILE_SITE_KEY ? <div ref={turnstileRef} /> : undefined
-            }
+            captchaSlot={data.settings.requireCaptcha && TURNSTILE_SITE_KEY ? <div ref={turnstileRef} /> : undefined}
           />
         )}
       </div>

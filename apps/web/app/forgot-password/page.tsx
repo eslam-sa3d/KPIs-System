@@ -35,8 +35,8 @@ export default function ForgotPasswordPage() {
           <h1>check your email</h1>
           <Alert>
             <AlertDescription>
-              if an account matches that address, we&apos;ve sent a link to reset your password. it expires in
-              60 minutes.
+              if an account matches that address, we&apos;ve sent a link to reset your password. it expires in 60
+              minutes.
             </AlertDescription>
           </Alert>
           <Button asChild variant="ghost" className="w-full">

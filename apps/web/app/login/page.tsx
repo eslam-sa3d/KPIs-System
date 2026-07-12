@@ -39,14 +39,7 @@ export default function LoginPage() {
         <Input id="email" name="email" type="email" autoComplete="email" required />
 
         <label htmlFor="password">password</label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          minLength={8}
-          required
-        />
+        <Input id="password" name="password" type="password" autoComplete="current-password" minLength={8} required />
         <Link href="/forgot-password" className="login-forgot-link">
           forgot password?
         </Link>

@@ -66,21 +66,13 @@ export class RolesController {
 
   @Post(':roleId/users/:userId')
   @RequirePermissions('roles:manage', 'users:write')
-  assignRole(
-    @Param('roleId') roleId: string,
-    @Param('userId') userId: string,
-    @Req() req: { user: { id: string } },
-  ) {
+  assignRole(@Param('roleId') roleId: string, @Param('userId') userId: string, @Req() req: { user: { id: string } }) {
     return this.rbac.assignRoleToUser(userId, roleId, req.user.id);
   }
 
   @Delete(':roleId/users/:userId')
   @RequirePermissions('roles:manage', 'users:write')
-  unassignRole(
-    @Param('roleId') roleId: string,
-    @Param('userId') userId: string,
-    @Req() req: { user: { id: string } },
-  ) {
+  unassignRole(@Param('roleId') roleId: string, @Param('userId') userId: string, @Req() req: { user: { id: string } }) {
     return this.rbac.unassignRoleFromUser(userId, roleId, req.user.id);
   }
 }

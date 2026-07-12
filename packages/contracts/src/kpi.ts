@@ -35,6 +35,7 @@ export const kpiAssignmentSchema = z
 export type KpiAssignmentInput = z.infer<typeof kpiAssignmentSchema>;
 
 export const EVALUATION_AREA_CADENCES = ['weekly', 'monthly', 'quarterly', 'yearly'] as const;
+export type EvaluationAreaCadence = (typeof EVALUATION_AREA_CADENCES)[number];
 
 export const createEvaluationAreaSchema = z.object({
   name: z.string().min(2).max(200),

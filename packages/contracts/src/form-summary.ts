@@ -1,4 +1,23 @@
-import { FieldType } from './form-schema';
+import { FieldType, FormSettings } from './form-schema';
+
+export const FORM_STATUSES = ['draft', 'published', 'archived'] as const;
+export type FormStatus = (typeof FORM_STATUSES)[number];
+
+/** Row of FormsService.listForms() — the admin forms list, one row per form
+ *  showing its latest version's title/field count rather than the full
+ *  definition. Shared verbatim so the forms list page doesn't re-derive it. */
+export interface FormListItem {
+  id: string;
+  slug: string;
+  status: FormStatus;
+  title: string;
+  fieldCount: number;
+  version: number;
+  hasPublicLink: boolean;
+  settings: FormSettings;
+  folder: string | null;
+  createdAt: string;
+}
 
 /**
  * Per-question response aggregate for the "response summary" dashboard.
@@ -47,4 +66,21 @@ export interface FormResponseSummary {
   lastResponseAt: string | null;
   fields: FormFieldSummary[];
   quiz?: QuizResponseSummary;
+}
+
+/**
+ * MS-Forms-style quiz result for a single submission — computed once at
+ * submit time by quiz-scoring.ts and stored alongside it. Shared verbatim so
+ * the thank-you screen's "see feedback" section doesn't re-derive the shape
+ * (perField is always populated, even to `{}`, once a QuizScore exists at
+ * all — never omit it optionally on the consuming side).
+ */
+export interface QuizScore {
+  earnedPoints: number;
+  totalPoints: number;
+  /** null when no field on the form is actually gradable (no points to score) */
+  percent: number | null;
+  /** null unless a passThresholdPercent was configured */
+  passed: boolean | null;
+  perField: Record<string, { correct: boolean; feedback?: string }>;
 }

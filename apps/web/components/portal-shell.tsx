@@ -8,6 +8,7 @@ import type { AuthenticatedUser } from '@pulse/contracts';
 import { logout } from '../lib/api-client';
 import { asset } from '../lib/asset';
 import { Button } from '@/components/ui/button';
+import { LoadingState } from './loading-state';
 import { ThemeToggle } from './theme-toggle';
 
 const NAV_ITEMS: Array<{ href: string; label: string; permission?: string }> = [
@@ -23,13 +24,7 @@ export const can = (user: AuthenticatedUser | null, permission: string): boolean
   Boolean(user?.permissions?.includes(permission));
 
 /** Authenticated chrome: brand header + permission-gated nav, shared by every portal page. */
-export function PortalShell({
-  user,
-  children,
-}: {
-  user: AuthenticatedUser | null;
-  children: React.ReactNode;
-}) {
+export function PortalShell({ user, children }: { user: AuthenticatedUser | null; children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -46,6 +41,26 @@ export function PortalShell({
 
   const visibleItems = NAV_ITEMS.filter((item) => !item.permission || can(user, item.permission));
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
+  // useSession() reports `null` both while still restoring the refresh-cookie
+  // session AND once it's confirmed there's none (a redirect to /login is
+  // already in flight in that second case) — a brand-only skeleton here
+  // avoids the previous flash of a fully-rendered but permission-blank nav
+  // (every gated item filtered out, no display name) on every hard reload.
+  if (!user) {
+    return (
+      <div className="portal">
+        <header className="portal-header" data-surface="purple">
+          <div className="portal-header-nav">
+            <Image src={asset('/brand/pulse-neg.svg')} alt="pulse by solutions" width={110} height={48} />
+          </div>
+        </header>
+        <main className="portal-main">
+          <LoadingState label="loading your session…" />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="portal">

@@ -32,10 +32,25 @@ async function main() {
   }
 
   const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@pulse.local';
-  const password = process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe!2026';
+  const password = process.env.SEED_ADMIN_PASSWORD;
+
+  // The seed script runs on every boot (see the Render start command), so a
+  // missing override must never silently fall back to a publicly-known
+  // password in production — refuse to start instead. Local/dev/CI keep the
+  // convenience default so `pnpm db:seed` still works out of the box there.
+  if (!password) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'SEED_ADMIN_PASSWORD must be set in production — refusing to seed the first admin account with a default, publicly-known password.',
+      );
+    }
+    console.warn('SEED_ADMIN_PASSWORD not set — using the local-dev-only default. Never do this in production.');
+  }
+  const resolvedPassword = password ?? 'ChangeMe!2026';
+
   const user = await prisma.user.upsert({
     where: { email },
-    create: { email, displayName: 'Platform Admin', passwordHash: await argon2.hash(password) },
+    create: { email, displayName: 'Platform Admin', passwordHash: await argon2.hash(resolvedPassword) },
     update: {},
   });
 

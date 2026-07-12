@@ -2,16 +2,13 @@
 
 import { useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
+import type { KpiOptionSummary } from '@pulse/contracts';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
-export interface KpiComboboxOption {
-  id: string;
-  name: string;
-  evaluationAreas: Array<{ id: string; name: string; isActive: boolean }>;
-}
+export type KpiComboboxOption = KpiOptionSummary;
 
 /** Searchable "link to KPI" picker — one control instead of a KPI select
  *  feeding an evaluation-area select, since most KPIs only ever have a
@@ -87,7 +84,9 @@ export function KpiLinkCombobox({
                           setOpen(false);
                         }}
                       >
-                        <Check className={cn('mr-2 size-4', area.id === evaluationAreaId ? 'opacity-100' : 'opacity-0')} />
+                        <Check
+                          className={cn('mr-2 size-4', area.id === evaluationAreaId ? 'opacity-100' : 'opacity-0')}
+                        />
                         {area.name}
                       </CommandItem>
                     ))}

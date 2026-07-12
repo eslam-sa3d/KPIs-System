@@ -5,10 +5,10 @@ import {
   FormFieldSummary,
   FormResponseSummary,
   FormSettings,
-  PAGE_DEFAULTS,
   PageQuery,
   SubmissionAnswers,
   buildPaginationMeta,
+  resolvePageBounds,
 } from '@pulse/contracts';
 import { ZodError } from 'zod';
 import ExcelJS from 'exceljs';
@@ -22,6 +22,20 @@ import { FormsService } from './forms.service';
 import { QuizScore, scoreSubmission } from './quiz-scoring';
 import { buildSummaryPdf } from './report-export';
 import { TurnstileService } from './turnstile.service';
+
+/**
+ * summary() and buildExportTable() both load every submission for a form
+ * into memory and reduce client-side — necessary because the aggregation
+ * shape differs per field type (select counts, likert matrices, ranking
+ * positions, quiz-score distributions, ...) and expressing all of that as
+ * dynamic per-field-type SQL would be its own significant, error-prone
+ * project. Below this cap that's a fine, simple design; above it, it's an
+ * unbounded-memory risk with no ceiling. Rather than let it degrade
+ * silently, both methods fail fast with a clear error once a form crosses
+ * this line — the real fix at that point is a background export job, not a
+ * bigger cap.
+ */
+const MAX_SUBMISSIONS_FOR_SYNC_REPORT = 20_000;
 
 /**
  * Submission engine: validates answers against the form version's compiled
@@ -153,9 +167,7 @@ export class SubmissionsService {
       answers = compileAnswerValidator(definition).validate(rawAnswers);
     } catch (error) {
       if (error instanceof ZodError) {
-        throw AppError.validation(
-          error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-        );
+        throw AppError.validation(error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
       }
       throw error;
     }
@@ -175,9 +187,7 @@ export class SubmissionsService {
       }
     }
 
-    const score = settings.quizMode
-      ? scoreSubmission(definition, answers, settings.passThresholdPercent)
-      : null;
+    const score = settings.quizMode ? scoreSubmission(definition, answers, settings.passThresholdPercent) : null;
 
     return { answers, uploadIds, score };
   }
@@ -431,7 +441,13 @@ export class SubmissionsService {
         data: { answers, score: score ? (score as unknown as Prisma.InputJsonValue) : Prisma.DbNull },
       }),
       this.prisma.auditLog.create({
-        data: { actorId, action: 'submission.updated', entity: 'FormSubmission', entityId: submissionId, detail: { formSlug } },
+        data: {
+          actorId,
+          action: 'submission.updated',
+          entity: 'FormSubmission',
+          entityId: submissionId,
+          detail: { formSlug },
+        },
       }),
     ]);
     if (uploadIds.length) {
@@ -448,11 +464,7 @@ export class SubmissionsService {
   async list(formSlug: string, query: PageQuery, filters: Record<string, string> = {}) {
     const { version } = await this.forms.getLatestVersion(formSlug);
 
-    const page = Math.max(Number(query.page ?? PAGE_DEFAULTS.page), 1);
-    const pageSize = Math.min(
-      Number(query.pageSize ?? PAGE_DEFAULTS.pageSize),
-      PAGE_DEFAULTS.maxPageSize,
-    );
+    const { page, pageSize } = resolvePageBounds(query);
 
     const where = {
       formVersionId: version.id,
@@ -478,6 +490,7 @@ export class SubmissionsService {
   /** MS-Forms-style per-question aggregates for the summary dashboard. */
   async summary(formSlug: string): Promise<FormResponseSummary> {
     const { version, definition } = await this.forms.getLatestVersion(formSlug);
+    await this.assertSyncReportSizeOk(version.id);
     const submissions = await this.prisma.formSubmission.findMany({
       where: { formVersionId: version.id },
       select: { answers: true, createdAt: true, score: true },
@@ -487,112 +500,108 @@ export class SubmissionsService {
     const fields: FormFieldSummary[] = definition.fields
       .filter((field) => field.type !== 'section_header') // display-only, never has an answer
       .map((field) => {
-      const values = submissions
-        .map((s) => (s.answers as SubmissionAnswers)[field.key])
-        .filter((v) => v !== undefined && v !== null && v !== '');
-      const answered = values.length;
-      const base = { key: field.key, label: field.label, type: field.type, answered };
+        const values = submissions
+          .map((s) => (s.answers as SubmissionAnswers)[field.key])
+          .filter((v) => v !== undefined && v !== null && v !== '');
+        const answered = values.length;
+        const base = { key: field.key, label: field.label, type: field.type, answered };
 
-      switch (field.type) {
-        case 'select': {
-          const counts: Record<string, number> = {};
-          for (const v of values as string[]) {
-            const key = v.startsWith('other:') ? 'other' : v;
-            counts[key] = (counts[key] ?? 0) + 1;
-          }
-          return { ...base, counts };
-        }
-        case 'multi_select': {
-          const counts: Record<string, number> = {};
-          for (const arr of values as string[][])
-            for (const v of arr) {
+        switch (field.type) {
+          case 'select': {
+            const counts: Record<string, number> = {};
+            for (const v of values as string[]) {
               const key = v.startsWith('other:') ? 'other' : v;
               counts[key] = (counts[key] ?? 0) + 1;
             }
-          return { ...base, counts };
-        }
-        case 'boolean': {
-          const yes = (values as boolean[]).filter(Boolean).length;
-          return { ...base, counts: { yes, no: answered - yes } };
-        }
-        case 'rating':
-        case 'nps': {
-          const nums = values as number[];
-          const counts: Record<string, number> = {};
-          for (const v of nums) counts[String(v)] = (counts[String(v)] ?? 0) + 1;
-          const average = answered ? nums.reduce((a, b) => a + b, 0) / answered : null;
-          if (field.type === 'nps' && answered) {
-            const promoters = nums.filter((v) => v >= 9).length;
-            const detractors = nums.filter((v) => v <= 6).length;
+            return { ...base, counts };
+          }
+          case 'multi_select': {
+            const counts: Record<string, number> = {};
+            for (const arr of values as string[][])
+              for (const v of arr) {
+                const key = v.startsWith('other:') ? 'other' : v;
+                counts[key] = (counts[key] ?? 0) + 1;
+              }
+            return { ...base, counts };
+          }
+          case 'boolean': {
+            const yes = (values as boolean[]).filter(Boolean).length;
+            return { ...base, counts: { yes, no: answered - yes } };
+          }
+          case 'rating':
+          case 'nps': {
+            const nums = values as number[];
+            const counts: Record<string, number> = {};
+            for (const v of nums) counts[String(v)] = (counts[String(v)] ?? 0) + 1;
+            const average = answered ? nums.reduce((a, b) => a + b, 0) / answered : null;
+            if (field.type === 'nps' && answered) {
+              const promoters = nums.filter((v) => v >= 9).length;
+              const detractors = nums.filter((v) => v <= 6).length;
+              return {
+                ...base,
+                counts,
+                average,
+                npsScore: Math.round(((promoters - detractors) / answered) * 100),
+              };
+            }
+            return { ...base, counts, average };
+          }
+          case 'number':
+          case 'slider': {
+            const nums = values as number[];
             return {
               ...base,
-              counts,
-              average,
-              npsScore: Math.round(((promoters - detractors) / answered) * 100),
+              average: answered ? nums.reduce((a, b) => a + b, 0) / answered : null,
+              min: answered ? Math.min(...nums) : null,
+              max: answered ? Math.max(...nums) : null,
             };
           }
-          return { ...base, counts, average };
-        }
-        case 'number':
-        case 'slider': {
-          const nums = values as number[];
-          return {
-            ...base,
-            average: answered ? nums.reduce((a, b) => a + b, 0) / answered : null,
-            min: answered ? Math.min(...nums) : null,
-            max: answered ? Math.max(...nums) : null,
-          };
-        }
-        case 'hot_spot': {
-          const counts: Record<string, number> = {};
-          for (const v of values as string[]) counts[v] = (counts[v] ?? 0) + 1;
-          return { ...base, counts };
-        }
-        case 'contact_info':
-          // a compound name/email/phone answer has no single chartable shape — the
-          // headline "answered" count above is the useful signal for this type
-          return { ...base };
-        case 'likert': {
-          // statement → scale-index → count
-          const matrix: Record<string, Record<string, number>> = {};
-          for (const rec of values as Array<Record<string, number>>)
-            for (const [statement, idx] of Object.entries(rec)) {
-              matrix[statement] ??= {};
-              matrix[statement][String(idx)] = (matrix[statement][String(idx)] ?? 0) + 1;
-            }
-          return { ...base, matrix, scale: field.scale };
-        }
-        case 'ranking': {
-          // average position per option (1-based; lower = ranked higher)
-          const positions: Record<string, number[]> = {};
-          for (const order of values as string[][])
-            order.forEach((v, i) => (positions[v] ??= []).push(i + 1));
-          const averagePosition = Object.fromEntries(
-            Object.entries(positions).map(([v, arr]) => [
-              v,
-              arr.reduce((a, b) => a + b, 0) / arr.length,
-            ]),
-          );
-          return { ...base, averagePosition };
-        }
-        case 'grid': {
-          // row -> column value -> count. `selection: 'multiple'` rows hold a
-          // string[] instead of a single string; both flatten into the same matrix.
-          const matrix: Record<string, Record<string, number>> = {};
-          for (const rec of values as Array<Record<string, string | string[]>>) {
-            for (const [row, answer] of Object.entries(rec)) {
-              matrix[row] ??= {};
-              const columns = Array.isArray(answer) ? answer : [answer];
-              for (const col of columns) matrix[row][col] = (matrix[row][col] ?? 0) + 1;
-            }
+          case 'hot_spot': {
+            const counts: Record<string, number> = {};
+            for (const v of values as string[]) counts[v] = (counts[v] ?? 0) + 1;
+            return { ...base, counts };
           }
-          return { ...base, matrix };
+          case 'contact_info':
+            // a compound name/email/phone answer has no single chartable shape — the
+            // headline "answered" count above is the useful signal for this type
+            return { ...base };
+          case 'likert': {
+            // statement → scale-index → count
+            const matrix: Record<string, Record<string, number>> = {};
+            for (const rec of values as Array<Record<string, number>>)
+              for (const [statement, idx] of Object.entries(rec)) {
+                matrix[statement] ??= {};
+                matrix[statement][String(idx)] = (matrix[statement][String(idx)] ?? 0) + 1;
+              }
+            return { ...base, matrix, scale: field.scale };
+          }
+          case 'ranking': {
+            // average position per option (1-based; lower = ranked higher)
+            const positions: Record<string, number[]> = {};
+            for (const order of values as string[][]) order.forEach((v, i) => (positions[v] ??= []).push(i + 1));
+            const averagePosition = Object.fromEntries(
+              Object.entries(positions).map(([v, arr]) => [v, arr.reduce((a, b) => a + b, 0) / arr.length]),
+            );
+            return { ...base, averagePosition };
+          }
+          case 'grid': {
+            // row -> column value -> count. `selection: 'multiple'` rows hold a
+            // string[] instead of a single string; both flatten into the same matrix.
+            const matrix: Record<string, Record<string, number>> = {};
+            for (const rec of values as Array<Record<string, string | string[]>>) {
+              for (const [row, answer] of Object.entries(rec)) {
+                matrix[row] ??= {};
+                const columns = Array.isArray(answer) ? answer : [answer];
+                for (const col of columns) matrix[row][col] = (matrix[row][col] ?? 0) + 1;
+              }
+            }
+            return { ...base, matrix };
+          }
+          default: {
+            return { ...base, samples: (values as string[]).slice(-5).reverse() };
+          }
         }
-        default: {
-          return { ...base, samples: (values as string[]).slice(-5).reverse() };
-        }
-      }
-    });
+      });
 
     const scores = submissions
       .map((s) => s.score as unknown as QuizScore | null | undefined)
@@ -694,12 +703,25 @@ export class SubmissionsService {
     return buildSummaryPdf(definition.title, summary);
   }
 
+  /** See MAX_SUBMISSIONS_FOR_SYNC_REPORT — guards summary()/buildExportTable()
+   *  against loading an unbounded submission set into memory in one request. */
+  private async assertSyncReportSizeOk(formVersionId: string): Promise<void> {
+    const count = await this.prisma.formSubmission.count({ where: { formVersionId } });
+    if (count > MAX_SUBMISSIONS_FOR_SYNC_REPORT) {
+      throw new AppError(
+        'CONFLICT',
+        `This form has ${count} responses, above the ${MAX_SUBMISSIONS_FOR_SYNC_REPORT}-response limit for on-demand summaries/exports — this needs a background export job rather than a synchronous request. Contact an administrator.`,
+      );
+    }
+  }
+
   private async buildExportTable(
     formSlug: string,
     actorId: string | null,
     auditAction = 'submissions.exported',
   ): Promise<{ header: string[]; rows: string[][] }> {
     const { version, definition } = await this.forms.getLatestVersion(formSlug);
+    await this.assertSyncReportSizeOk(version.id);
     const submissions = await this.prisma.formSubmission.findMany({
       where: { formVersionId: version.id },
       orderBy: { createdAt: 'asc' },

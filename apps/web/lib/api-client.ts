@@ -1,4 +1,4 @@
-import type { ApiEnvelope, AuthenticatedUser, TokenGrant } from '@pulse/contracts';
+import type { ApiEnvelope, ApiSuccess, AuthenticatedUser, PaginationMeta, TokenGrant } from '@pulse/contracts';
 
 /**
  * Envelope-aware API client for the portal.
@@ -71,8 +71,8 @@ function tryRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
-/** Core request: unwraps the envelope, silently refreshing once on 401. */
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+/** Shared by api()/apiPaged(): unwraps the envelope, silently refreshing once on 401. */
+async function apiEnvelope<T>(path: string, init: RequestInit = {}): Promise<ApiSuccess<T>> {
   // A hard navigation may still be restoring the session — join it rather
   // than sending an unauthenticated request that triggers a second refresh.
   if (!accessToken && refreshInFlight) await refreshInFlight;
@@ -87,7 +87,23 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     const status = envelope.error.code === 'UNAUTHENTICATED' ? 401 : 400;
     throw new ApiRequestError(envelope.error.code, envelope.error.message, status);
   }
-  return envelope.data;
+  return envelope;
+}
+
+/** Core request: unwraps the envelope, silently refreshing once on 401. */
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return (await apiEnvelope<T>(path, init)).data;
+}
+
+/** Same as api(), but also surfaces `meta.pagination` — every paginated list
+ *  endpoint sets it, but plain api() silently drops it, which is how the
+ *  submissions table ended up with no way to page past its first 100 rows. */
+export async function apiPaged<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<{ data: T; pagination: PaginationMeta | null }> {
+  const envelope = await apiEnvelope<T>(path, init);
+  return { data: envelope.data, pagination: envelope.meta.pagination ?? null };
 }
 
 export async function login(email: string, password: string): Promise<AuthenticatedUser> {

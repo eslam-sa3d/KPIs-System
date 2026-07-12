@@ -81,7 +81,13 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
         <Card>
           <CardContent className="pt-6">
             <form className="inline-form" onSubmit={onCreate}>
-              <Input name="name" required minLength={2} placeholder="new department name" aria-label="department name" />
+              <Input
+                name="name"
+                required
+                minLength={2}
+                placeholder="new department name"
+                aria-label="department name"
+              />
               <Button type="submit">create department</Button>
             </form>
             {notice && (
@@ -153,12 +159,7 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
                             <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(d.id)}>
                               confirm
                             </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setConfirmDeleteId(null)}
-                            >
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
                               cancel
                             </Button>
                           </>

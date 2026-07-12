@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DemoDataService, DEMO_PASSWORD } from './demo-data.service';
+import { DemoDataService } from './demo-data.service';
 
 /** Previously zero test coverage on this module, including its destructive
  *  DELETE path. Full seed() creation cascade (dozens of sequential Prisma
@@ -40,7 +40,7 @@ describe('DemoDataService', () => {
 
       expect(status.present).toBe(false);
       expect(status.counts).toEqual({ users: 0, kpis: 0, forms: 0, roles: 0, departments: 0, submissions: 0 });
-      expect(status.demoPassword).toBe(DEMO_PASSWORD);
+      expect(status).not.toHaveProperty('demoPassword');
       expect(status.demoUsers).toHaveLength(3);
     });
 

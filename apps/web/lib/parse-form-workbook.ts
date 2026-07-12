@@ -47,18 +47,39 @@ const COLUMN_ALIASES: Record<string, string[]> = {
 };
 
 const TYPE_ALIASES: Record<string, FieldType> = {
-  'short text': 'short_text', short_text: 'short_text', text: 'short_text', 'single line': 'short_text',
-  'long text': 'long_text', long_text: 'long_text', paragraph: 'long_text', 'multi line': 'long_text',
+  'short text': 'short_text',
+  short_text: 'short_text',
+  text: 'short_text',
+  'single line': 'short_text',
+  'long text': 'long_text',
+  long_text: 'long_text',
+  paragraph: 'long_text',
+  'multi line': 'long_text',
   number: 'number',
   date: 'date',
-  boolean: 'boolean', 'yes/no': 'boolean', 'yes / no': 'boolean',
+  boolean: 'boolean',
+  'yes/no': 'boolean',
+  'yes / no': 'boolean',
   rating: 'rating',
-  nps: 'nps', 'net promoter score': 'nps',
-  select: 'select', choice: 'select', dropdown: 'select', 'single choice': 'select', 'choice (one answer)': 'select',
-  multi_select: 'multi_select', 'multi select': 'multi_select', 'multiple choice': 'multi_select', checkbox: 'multi_select', 'choice (multiple answers)': 'multi_select',
-  likert: 'likert', matrix: 'likert', 'likert matrix': 'likert',
+  nps: 'nps',
+  'net promoter score': 'nps',
+  select: 'select',
+  choice: 'select',
+  dropdown: 'select',
+  'single choice': 'select',
+  'choice (one answer)': 'select',
+  multi_select: 'multi_select',
+  'multi select': 'multi_select',
+  'multiple choice': 'multi_select',
+  checkbox: 'multi_select',
+  'choice (multiple answers)': 'multi_select',
+  likert: 'likert',
+  matrix: 'likert',
+  'likert matrix': 'likert',
   ranking: 'ranking',
-  file: 'file', 'file upload': 'file', attachment: 'file',
+  file: 'file',
+  'file upload': 'file',
+  attachment: 'file',
 };
 
 const DEFAULT_FIELD = {
@@ -74,7 +95,10 @@ const DEFAULT_FIELD = {
 };
 
 function normalizeHeader(cell: unknown): string {
-  return String(cell ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return String(cell ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
 }
 
 function cellToString(cell: unknown): string {
@@ -98,7 +122,7 @@ function cellToNumber(cell: unknown, fallback: number, min: number, max: number)
 }
 
 /** Maps header-row + data-row cells (from a spreadsheet or CSV) onto ParsedFormField[]. */
-function mapRowsToFields(rows: unknown[][]): ParsedFormWorkbook {
+export function mapRowsToFields(rows: unknown[][]): ParsedFormWorkbook {
   const issues: string[] = [];
 
   if (rows.length === 0) {
@@ -159,7 +183,7 @@ function mapRowsToFields(rows: unknown[][]): ParsedFormWorkbook {
 }
 
 /** Parses RFC4180-ish CSV text (quoted fields, embedded commas/newlines, "" escaping) into rows of cells. */
-function parseCsvText(text: string): string[][] {
+export function parseCsvText(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
@@ -181,11 +205,20 @@ function parseCsvText(text: string): string[][] {
       continue;
     }
     if (ch === '"') inQuotes = true;
-    else if (ch === ',') { row.push(field); field = ''; }
-    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-    else if (ch !== '\r') field += ch;
+    else if (ch === ',') {
+      row.push(field);
+      field = '';
+    } else if (ch === '\n') {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else if (ch !== '\r') field += ch;
   }
-  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
 
   return rows;
 }
@@ -225,10 +258,13 @@ function splitHelpText(text: string): { label: string; helpText: string } {
  * Falls back gracefully: unrecognized structure just becomes individual
  * short-text questions, same as before.
  */
-function parseDocxLines(rawText: string): ParsedFormWorkbook {
+export function parseDocxLines(rawText: string): ParsedFormWorkbook {
   const issues: string[] = [];
   const fields: ParsedFormField[] = [];
-  const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
 
   if (lines.length === 0) {
     return { fields, issues: ['the document has no content'] };

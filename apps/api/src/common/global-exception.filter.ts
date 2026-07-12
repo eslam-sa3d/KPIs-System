@@ -54,10 +54,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const code =
-        status === 401 ? 'UNAUTHENTICATED'
-        : status === 403 ? 'FORBIDDEN'
-        : status === 404 ? 'NOT_FOUND'
-        : 'INTERNAL_ERROR';
+        status === 401
+          ? 'UNAUTHENTICATED'
+          : status === 403
+            ? 'FORBIDDEN'
+            : status === 404
+              ? 'NOT_FOUND'
+              : 'INTERNAL_ERROR';
       return {
         status,
         body: { success: false, error: { code, message: exception.message }, meta },

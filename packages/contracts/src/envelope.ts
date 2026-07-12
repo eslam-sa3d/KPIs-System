@@ -79,11 +79,17 @@ export interface PageQuery {
 
 export const PAGE_DEFAULTS = { page: 1, pageSize: 25, maxPageSize: 100 } as const;
 
-export function buildPaginationMeta(
-  page: number,
-  pageSize: number,
-  totalItems: number,
-): PaginationMeta {
+/** Clamps a PageQuery's page/pageSize to sane bounds — page ≥ 1, pageSize
+ *  capped at PAGE_DEFAULTS.maxPageSize — the same clamping every paginated
+ *  service does before running its query. */
+export function resolvePageBounds(query: PageQuery): { page: number; pageSize: number } {
+  return {
+    page: Math.max(Number(query.page ?? PAGE_DEFAULTS.page), 1),
+    pageSize: Math.min(Number(query.pageSize ?? PAGE_DEFAULTS.pageSize), PAGE_DEFAULTS.maxPageSize),
+  };
+}
+
+export function buildPaginationMeta(page: number, pageSize: number, totalItems: number): PaginationMeta {
   return {
     page,
     pageSize,

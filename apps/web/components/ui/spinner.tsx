@@ -6,12 +6,7 @@ import { cn } from '@/lib/utils';
  *  tertiary/coral token and read as off-brand). */
 function Spinner({ className, ...props }: React.ComponentProps<typeof Loader2>) {
   return (
-    <Loader2
-      data-slot="spinner"
-      className={cn('animate-spin text-primary', className)}
-      aria-hidden="true"
-      {...props}
-    />
+    <Loader2 data-slot="spinner" className={cn('animate-spin text-primary', className)} aria-hidden="true" {...props} />
   );
 }
 
