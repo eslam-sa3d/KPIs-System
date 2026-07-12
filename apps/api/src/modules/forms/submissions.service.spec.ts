@@ -683,7 +683,7 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
       expect(prisma.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBeCloseTo(10 / 3); // avg(1,3)=2, 2/3*5
     });
 
-    it('performance_level: scores by the midpoint of the chosen level\'s configured range', async () => {
+    it("performance_level: scores by the midpoint of the chosen level's configured range", async () => {
       const { prisma, service } = makeService({ type: 'performance_level' });
       prisma.performanceLevel.findMany.mockResolvedValue([
         { id: '22222222-2222-4222-8222-222222222222', minScore: 4, maxScore: 5 },
