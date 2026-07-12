@@ -36,3 +36,29 @@ export interface TeamOverview {
   totalActiveUsers: number;
   members: TeamMember[];
 }
+
+/** One Evaluation Area's blended rate for a single team member — the same
+ *  multi-rater average used everywhere else (see latestAreaValue client-side,
+ *  or the equivalent blending in getTeamOverview), not split out per rater. */
+export interface TeamMemberKpiArea {
+  id: string;
+  name: string;
+  cadence: EvaluationAreaCadence;
+  latestValue: number | null;
+  previousValue: number | null;
+}
+
+export interface TeamMemberKpi {
+  id: string;
+  name: string;
+  areas: TeamMemberKpiArea[];
+}
+
+/** Response of GET /v1/kpis/team-overview/:personId — a single team member's
+ *  own rate across every KPI that covers them, for the dashboard's team
+ *  member detail drawer. */
+export interface TeamMemberBreakdown {
+  personId: string;
+  displayName: string;
+  kpis: TeamMemberKpi[];
+}

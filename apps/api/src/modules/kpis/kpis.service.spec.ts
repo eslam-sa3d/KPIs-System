@@ -537,6 +537,16 @@ describe('KpisService', () => {
       expect(include.evaluationAreas.include.entries.include.person.select).toEqual({ id: true, displayName: true });
     });
 
+    it("excludes entries for evaluatees no longer flagged isKpiApplicable, so they don't linger in the dashboard", async () => {
+      prisma.user.findUnique.mockResolvedValue({ departmentId: null, roles: [] });
+      prisma.kpi.findMany.mockResolvedValue([]);
+
+      await service.listMine('user-1');
+
+      const include = prisma.kpi.findMany.mock.calls[0]![0].include;
+      expect(include.evaluationAreas.include.entries.where).toEqual({ person: { isKpiApplicable: true } });
+    });
+
     function kpiWithOneEntry(entryOverrides: Record<string, unknown>) {
       return [
         {
@@ -657,6 +667,7 @@ describe('KpisService', () => {
           value: 3,
           periodStart: new Date('2026-02-01'),
           periodEnd: new Date('2026-02-28'),
+          createdAt: new Date('2026-02-28T10:00:00Z'),
         },
         {
           personId: 'user-1',
@@ -664,6 +675,8 @@ describe('KpisService', () => {
           value: 5,
           periodStart: new Date('2026-02-01'),
           periodEnd: new Date('2026-02-28'),
+          // most recently *submitted* entry overall, despite an earlier periodEnd than area-2's
+          createdAt: new Date('2026-03-01T09:00:00Z'),
         },
         // area-1's earlier period — excluded from the average
         {
@@ -672,14 +685,17 @@ describe('KpisService', () => {
           value: 1,
           periodStart: new Date('2026-01-01'),
           periodEnd: new Date('2026-01-31'),
+          createdAt: new Date('2026-01-31T09:00:00Z'),
         },
-        // area-2 has just one entry, value 2
+        // area-2 has just one entry, value 2 — its periodEnd is the latest of all
+        // four rows, but it was actually *submitted* earliest (a backdated period)
         {
           personId: 'user-1',
           evaluationAreaId: 'area-2',
           value: 2,
           periodStart: new Date('2026-02-01'),
           periodEnd: new Date('2026-03-15'),
+          createdAt: new Date('2026-02-15T09:00:00Z'),
         },
       ]);
 
@@ -687,7 +703,10 @@ describe('KpisService', () => {
 
       // area-1 latest avg = 4, area-2 latest avg = 2 → final score = 3
       expect(members[0]!.finalScore).toBe(3);
-      expect(members[0]!.lastUpdated).toBe(new Date('2026-03-15').toISOString());
+      // lastUpdated tracks the most recent createdAt (actual submission time),
+      // not the latest periodEnd — proven by area-2's later periodEnd losing
+      // out to area-1's later-submitted entry.
+      expect(members[0]!.lastUpdated).toBe(new Date('2026-03-01T09:00:00Z').toISOString());
     });
 
     it('treats a KPI assignment with no active evaluation areas as not covering anyone', async () => {
@@ -721,6 +740,81 @@ describe('KpisService', () => {
       expect(totalActiveUsers).toBe(2);
       expect(prisma.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { isActive: true, isKpiApplicable: true } }),
+      );
+    });
+  });
+
+  describe('getPersonBreakdown', () => {
+    const person = { id: 'user-2', displayName: 'Evaluatee', departmentId: null, roles: [] };
+
+    it('rejects an unknown person', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.getPersonBreakdown('ghost')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it("blends the person's own entries per area into a latest/previous value, same as everywhere else", async () => {
+      prisma.user.findUnique.mockResolvedValue(person);
+      prisma.kpi.findMany.mockResolvedValue([
+        {
+          id: 'kpi-1',
+          name: 'QA Lead Evaluation',
+          evaluationAreas: [
+            {
+              id: 'area-1',
+              name: 'Leadership',
+              cadence: 'quarterly',
+              entries: [
+                { value: 3, periodStart: new Date('2026-02-01') },
+                { value: 5, periodStart: new Date('2026-02-01') },
+                { value: 1, periodStart: new Date('2026-01-01') },
+              ],
+            },
+          ],
+        },
+      ]);
+
+      const breakdown = await service.getPersonBreakdown('user-2');
+
+      expect(breakdown.personId).toBe('user-2');
+      expect(breakdown.displayName).toBe('Evaluatee');
+      expect(breakdown.kpis).toEqual([
+        {
+          id: 'kpi-1',
+          name: 'QA Lead Evaluation',
+          areas: [{ id: 'area-1', name: 'Leadership', cadence: 'quarterly', latestValue: 4, previousValue: 1 }],
+        },
+      ]);
+    });
+
+    it('reports null latest/previous for an area with no entries yet, rather than omitting it', async () => {
+      prisma.user.findUnique.mockResolvedValue(person);
+      prisma.kpi.findMany.mockResolvedValue([
+        {
+          id: 'kpi-1',
+          name: 'QA Lead Evaluation',
+          evaluationAreas: [{ id: 'area-1', name: 'Leadership', cadence: 'quarterly', entries: [] }],
+        },
+      ]);
+
+      const breakdown = await service.getPersonBreakdown('user-2');
+
+      expect(breakdown.kpis[0]!.areas[0]).toMatchObject({ latestValue: null, previousValue: null });
+    });
+
+    it('scopes the query to KPIs covering the selected person, not the caller', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...person, departmentId: 'dept-1', roles: [{ roleId: 'role-1' }] });
+      prisma.kpi.findMany.mockResolvedValue([]);
+
+      await service.getPersonBreakdown('user-2');
+
+      expect(prisma.kpi.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            isActive: true,
+            assignments: { some: { OR: [{ roleId: { in: ['role-1'] } }, { departmentId: 'dept-1' }] } },
+          },
+        }),
       );
     });
   });

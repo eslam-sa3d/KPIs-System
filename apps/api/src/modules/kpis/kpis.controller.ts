@@ -56,6 +56,13 @@ export class KpisController {
     return this.kpis.getTeamOverview();
   }
 
+  /** One team member's own rate across every covering KPI — powers the team overview table's row detail drawer. */
+  @Get('team-overview/:personId')
+  @RequirePermissions('kpis:manage')
+  getPersonBreakdown(@Param('personId') personId: string) {
+    return this.kpis.getPersonBreakdown(personId);
+  }
+
   @Patch(':id')
   @RequirePermissions('kpis:write')
   update(

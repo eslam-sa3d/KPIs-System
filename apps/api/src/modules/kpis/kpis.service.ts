@@ -7,6 +7,8 @@ import {
   KpiAssignmentInput,
   PageQuery,
   RecordEvaluationAreaEntryInput,
+  TeamMemberBreakdown,
+  TeamMemberKpiArea,
   TeamOverview,
   UpdateEvaluationAreaEntryInput,
   UpdateEvaluationAreaInput,
@@ -52,6 +54,27 @@ type EntryWithEvaluator = {
 function scrubAnonymousEntry<T extends EntryWithEvaluator>(entry: T, canSeeEvaluators: boolean): T {
   if (!entry.anonymous || canSeeEvaluators) return entry;
   return { ...entry, enteredById: '', enteredBy: { id: '', displayName: 'anonymous' } };
+}
+
+/** Blends a set of entries into a "latest period" value and a "period before
+ *  that" value — the same multi-rater averaging as latestAreaValue/
+ *  previousAreaValue client-side (apps/web/app/dashboard/scoring.ts) and
+ *  getTeamOverview's own inline version, just for one already-known person's
+ *  own entries rather than everyone's at once. */
+function blendedAreaValues(entries: Array<{ value: Prisma.Decimal; periodStart: Date }>): {
+  latestValue: number | null;
+  previousValue: number | null;
+} {
+  if (entries.length === 0) return { latestValue: null, previousValue: null };
+  const distinctPeriods = [...new Set(entries.map((e) => e.periodStart.getTime()))].sort((a, b) => b - a);
+  const average = (periodTime: number) => {
+    const inPeriod = entries.filter((e) => e.periodStart.getTime() === periodTime);
+    return Math.round((inPeriod.reduce((sum, e) => sum + Number(e.value), 0) / inPeriod.length) * 100) / 100;
+  };
+  return {
+    latestValue: average(distinctPeriods[0]!),
+    previousValue: distinctPeriods.length > 1 ? average(distinctPeriods[1]!) : null,
+  };
 }
 
 /** Prisma.Decimal's own toJSON() serializes to a string, so every KPI
@@ -238,6 +261,11 @@ export class KpisService {
             where: { isActive: true },
             include: {
               entries: {
+                // Historical entries can outlive a person's isKpiApplicable
+                // flag being turned off — exclude them here so a no-longer-
+                // applicable person doesn't linger in the dashboard's
+                // aggregate/per-person breakdowns.
+                where: { person: { isKpiApplicable: true } },
                 orderBy: { periodStart: 'desc' },
                 take: RECENT_ENTRIES_TAKE,
                 include: {
@@ -297,7 +325,14 @@ export class KpisService {
       }),
       this.prisma.evaluationAreaEntry.findMany({
         where: { person: { isActive: true }, periodStart: { gte: teamOverviewLookbackCutoff() } },
-        select: { personId: true, evaluationAreaId: true, value: true, periodStart: true, periodEnd: true },
+        select: {
+          personId: true,
+          evaluationAreaId: true,
+          value: true,
+          periodStart: true,
+          periodEnd: true,
+          createdAt: true,
+        },
       }),
     ]);
 
@@ -337,8 +372,12 @@ export class KpisService {
         areaLatestValues.length > 0
           ? Math.round((areaLatestValues.reduce((a, b) => a + b, 0) / areaLatestValues.length) * 100) / 100
           : null;
+      // The date this person was last actually scored (when the entry was
+      // submitted), not periodEnd — periodEnd is the scoring period's own
+      // boundary and can be backdated/future-dated relative to when the
+      // rater actually entered the score.
       const lastUpdated = personEntries.reduce<Date | null>(
-        (max, e) => (max === null || e.periodEnd > max ? e.periodEnd : max),
+        (max, e) => (max === null || e.createdAt > max ? e.createdAt : max),
         null,
       );
 
@@ -355,6 +394,58 @@ export class KpisService {
     });
 
     return { totalActiveUsers: users.length, members };
+  }
+
+  /**
+   * One team member's own rate across every KPI that covers them — the
+   * team-overview table's row, expanded. Each area's value is the same
+   * blended (multi-rater) average used everywhere else, never split out by
+   * who entered which score.
+   */
+  async getPersonBreakdown(personId: string): Promise<TeamMemberBreakdown> {
+    const person = await this.prisma.user.findUnique({
+      where: { id: personId },
+      select: { id: true, displayName: true },
+    });
+    if (!person) throw AppError.notFound('User', personId);
+
+    const kpis = await this.prisma.kpi.findMany({
+      where: { isActive: true, ...(await this.myAssignmentFilter(personId)) },
+      orderBy: { name: 'asc' },
+      include: {
+        evaluationAreas: {
+          where: { isActive: true },
+          orderBy: { name: 'asc' },
+          include: {
+            entries: {
+              where: { personId },
+              orderBy: { periodStart: 'desc' },
+              take: RECENT_ENTRIES_TAKE,
+              select: { value: true, periodStart: true },
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      personId: person.id,
+      displayName: person.displayName,
+      kpis: kpis.map((kpi) => ({
+        id: kpi.id,
+        name: kpi.name,
+        areas: kpi.evaluationAreas.map((area) => {
+          const { latestValue, previousValue } = blendedAreaValues(area.entries);
+          return {
+            id: area.id,
+            name: area.name,
+            cadence: area.cadence as TeamMemberKpiArea['cadence'],
+            latestValue,
+            previousValue,
+          };
+        }),
+      })),
+    };
   }
 
   async createEvaluationArea(kpiId: string, input: CreateEvaluationAreaInput, actorId: string) {

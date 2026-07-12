@@ -2,9 +2,10 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
-import type { TeamOverview } from '@pulse/contracts';
+import type { TeamMemberBreakdown, TeamOverview } from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
 import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
+import { TeamMemberDetailDrawer } from '../../components/team-member-detail-drawer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,7 +34,7 @@ const KpiDistributionChart = dynamic(() => import('../../components/kpi-distribu
 });
 
 type SortKey = 'name' | 'latestValue' | 'status' | 'updated';
-type MemberSortKey = 'name' | 'department' | 'finalScore' | 'status' | 'updated';
+type MemberSortKey = 'name' | 'department' | 'finalScore' | 'updated';
 
 const CADENCE_LABEL: Record<string, string> = {
   weekly: 'Weekly',
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'latestValue', dir: -1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberStatusFilter, setMemberStatusFilter] = useState<StatusKey | 'all'>('all');
   const [memberSort, setMemberSort] = useState<{ key: MemberSortKey; dir: 1 | -1 }>({ key: 'finalScore', dir: -1 });
   const [memberFilter, setMemberFilter] = useState('');
@@ -67,6 +69,16 @@ export default function DashboardPage() {
   const { data: teamOverview } = useResource<TeamOverview>(
     user && canSeeTeamOverview ? '/v1/kpis/team-overview' : null,
   );
+
+  // fetched on demand when a team member row is clicked — their own blended
+  // rate per area, across every KPI that covers them
+  const { data: memberBreakdown, error: memberBreakdownError } = useResource<TeamMemberBreakdown>(
+    selectedMemberId ? `/v1/kpis/team-overview/${selectedMemberId}` : null,
+  );
+  // useResource keeps the previous response around until the next one lands —
+  // guard against showing a just-clicked member's drawer with the last
+  // member's stale breakdown while their own fetch is still in flight.
+  const currentMemberBreakdown = memberBreakdown?.personId === selectedMemberId ? memberBreakdown : null;
 
   // cadence now lives on each Evaluation Area (a KPI can span several) — "level" filters
   // to KPIs that have at least one area on that cadence, rather than a single KPI-wide value
@@ -206,8 +218,6 @@ export default function DashboardPage() {
       switch (memberSort.key) {
         case 'department':
           return (a.department ?? '').localeCompare(b.department ?? '') * dir;
-        case 'status':
-          return (STATUS_ORDER.indexOf(statusOf(a.finalScore)) - STATUS_ORDER.indexOf(statusOf(b.finalScore))) * dir;
         case 'updated':
           return (a.lastUpdated ?? '').localeCompare(b.lastUpdated ?? '') * dir;
         case 'finalScore': {
@@ -641,16 +651,6 @@ export default function DashboardPage() {
                       <TableHead
                         className="p-th-sortable"
                         aria-sort={
-                          memberSort.key === 'status' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
-                        }
-                      >
-                        <button type="button" onClick={() => sortMembersBy('status')}>
-                          status
-                        </button>
-                      </TableHead>
-                      <TableHead
-                        className="p-th-sortable"
-                        aria-sort={
                           memberSort.key === 'updated' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
                         }
                       >
@@ -663,7 +663,7 @@ export default function DashboardPage() {
                   <TableBody>
                     {memberTableData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="muted" style={{ textAlign: 'center' }}>
+                        <TableCell colSpan={5} className="muted" style={{ textAlign: 'center' }}>
                           {teamMembers.length === 0 ? 'no active team members.' : 'no team members match this filter.'}
                         </TableCell>
                       </TableRow>
@@ -671,7 +671,21 @@ export default function DashboardPage() {
                       memberTableData.map((m) => {
                         const status = statusOf(m.finalScore);
                         return (
-                          <TableRow key={m.id}>
+                          <TableRow
+                            key={m.id}
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`view ${m.displayName}'s rate`}
+                            onClick={() => setSelectedMemberId(m.id)}
+                            onKeyDown={(e) => {
+                              if (e.target !== e.currentTarget) return;
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedMemberId(m.id);
+                              }
+                            }}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <TableCell style={{ fontWeight: 500 }}>{m.displayName}</TableCell>
                             <TableCell className="muted">{m.department ?? '—'}</TableCell>
                             <TableCell className="muted">{m.roles.join(', ') || '—'}</TableCell>
@@ -679,15 +693,6 @@ export default function DashboardPage() {
                               <span className={`p-score-ring p-status-${status}`}>
                                 {m.finalScore !== null ? m.finalScore.toLocaleString() : '—'}
                               </span>
-                            </TableCell>
-                            <TableCell>
-                              {m.hasKpi ? (
-                                <Badge className="border-transparent" style={statusBadgeStyle(status)}>
-                                  {STATUS_LABEL[status]}
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline">no KPI</Badge>
-                              )}
                             </TableCell>
                             <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
                               {m.lastUpdated ? new Date(m.lastUpdated).toLocaleDateString() : '—'}
@@ -719,6 +724,12 @@ export default function DashboardPage() {
         )}
 
         <KpiDetailDrawer kpi={drawerKpi} onClose={() => setSelectedId(null)} />
+        <TeamMemberDetailDrawer
+          breakdown={currentMemberBreakdown}
+          loading={selectedMemberId !== null && currentMemberBreakdown === null && !memberBreakdownError}
+          error={selectedMemberId !== null ? memberBreakdownError : null}
+          onClose={() => setSelectedMemberId(null)}
+        />
       </div>
     </PortalShell>
   );
