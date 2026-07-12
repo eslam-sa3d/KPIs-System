@@ -13,6 +13,8 @@ import { AuthService } from './modules/auth/auth.service';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { PasswordHasher } from './modules/auth/password-hasher';
 import { BrandingController } from './modules/branding/branding.controller';
+import { PerformanceLevelsController } from './modules/configuration/performance-levels.controller';
+import { PerformanceLevelsService } from './modules/configuration/performance-levels.service';
 import { DemoDataService } from './modules/settings/demo-data.service';
 import { SettingsController } from './modules/settings/settings.controller';
 import { DepartmentsController, UsersController } from './modules/users/users.controller';
@@ -61,6 +63,7 @@ import { RolesController } from './modules/rbac/roles.controller';
     PublicFormsController,
     BrandingController,
     SettingsController,
+    PerformanceLevelsController,
   ],
   providers: [
     PrismaService,
@@ -78,6 +81,7 @@ import { RolesController } from './modules/rbac/roles.controller';
     FileUploadsService,
     AssetsService,
     DemoDataService,
+    PerformanceLevelsService,
     // Guard chain runs in registration order:
     { provide: APP_GUARD, useClass: ThrottlerGuard }, // 1. rate limit
     { provide: APP_GUARD, useClass: JwtAuthGuard }, // 2. authenticate (@Public opts out)

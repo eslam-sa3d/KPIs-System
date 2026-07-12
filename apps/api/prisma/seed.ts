@@ -61,6 +61,25 @@ async function main() {
   });
 
   console.log(`Seeded admin ${email}`);
+
+  await seedPerformanceLevels();
+}
+
+/** Default 0-5 score bands for the Configuration page's Performance Levels
+ *  tab. Matched by label so re-running the seed never duplicates rows, but
+ *  also never overwrites ranges an admin has since edited. */
+async function seedPerformanceLevels() {
+  const defaults = [
+    { label: 'Outstanding', minScore: 4.0, maxScore: 5.0 },
+    { label: 'Meets Expectations', minScore: 2.0, maxScore: 3.9 },
+    { label: 'Need Improvement', minScore: 1.1, maxScore: 1.9 },
+    { label: 'Below Expectations', minScore: 0, maxScore: 1.0 },
+  ];
+  for (const level of defaults) {
+    const existing = await prisma.performanceLevel.findFirst({ where: { label: level.label } });
+    if (!existing) await prisma.performanceLevel.create({ data: level });
+  }
+  console.log('Seeded default performance levels');
 }
 
 main().finally(() => prisma.$disconnect());

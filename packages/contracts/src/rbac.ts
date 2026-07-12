@@ -16,6 +16,7 @@ export const RESOURCES = [
   'dashboards',
   'branding',
   'settings',
+  'configuration',
 ] as const;
 
 export const ACTIONS = ['read', 'write', 'execute', 'manage'] as const;

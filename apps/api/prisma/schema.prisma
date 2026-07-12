@@ -439,3 +439,19 @@ model BrandSetting {
   value     Json
   updatedAt DateTime @updatedAt
 }
+
+// ─────────────────────────── Scoring Configuration ─────────────────────────────
+
+/// Names a band of the 0-5 EvaluationAreaEntry score range (e.g. "Outstanding"
+/// for 4.0-5.0) — the Configuration page's Performance Levels tab. Purely a
+/// labeling/display concern: nothing currently reads this to band a person's
+/// finalScore (see apps/web/lib/kpi-status.ts, which still uses its own fixed
+/// thresholds) until that's wired up.
+model PerformanceLevel {
+  id        String   @id @default(uuid())
+  label     String
+  minScore  Decimal // 0-5
+  maxScore  Decimal // 0-5
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
