@@ -26,14 +26,9 @@ export const can = (user: AuthenticatedUser | null, permission: string): boolean
 export function PortalShell({
   user,
   children,
-  fullBleedMain = false,
 }: {
   user: AuthenticatedUser | null;
   children: React.ReactNode;
-  /** Skips .portal-main's max-width/padding for pages that need to render
-   *  edge-to-edge below the header (e.g. the form-builder's Google-Forms-
-   *  style editor) instead of sitting in the usual centered column. */
-  fullBleedMain?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -124,7 +119,7 @@ export function PortalShell({
         </div>
       </nav>
 
-      <main className={fullBleedMain ? undefined : 'portal-main'}>{children}</main>
+      <main className="portal-main">{children}</main>
     </div>
   );
 }
