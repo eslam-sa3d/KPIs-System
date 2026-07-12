@@ -31,8 +31,15 @@ services:
     plan: free
     # Render preinstalls pnpm (packageManager field) — corepack is unnecessary
     # and fails on the read-only image filesystem.
+    #
+    # NODE_ENV=development on just the install step: NODE_ENV is production
+    # for this service (see envVars below) and Render exposes that during the
+    # build too, but pnpm skips devDependencies — including the `prisma` CLI
+    # this build needs — whenever NODE_ENV=production is set. Overriding it
+    # for install only keeps the real runtime env (Express/helmet/the seed
+    # script's production check) untouched.
     buildCommand: >-
-      pnpm install --frozen-lockfile &&
+      NODE_ENV=development pnpm install --frozen-lockfile &&
       pnpm --filter @pulse/contracts build &&
       pnpm --filter @pulse/api exec prisma generate &&
       pnpm --filter @pulse/api build
