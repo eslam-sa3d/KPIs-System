@@ -29,6 +29,9 @@ export interface DraftField {
   maxFiles: number;
   /** option value -> uploaded FormAsset id, for select/multi_select/ranking "image choice" options */
   optionImages: Record<string, string>;
+  /** option value -> that User's id, for a 'select' option added via "select a user"
+   *  instead of typed — see optionItem.userId in form-schema.ts. */
+  optionUserIds: Record<string, string>;
   /** select only, Google-Forms-style "go to section based on answer": option
    *  value -> target page id, or "end". A missing/'' entry for an option
    *  means "continue to the next page". */

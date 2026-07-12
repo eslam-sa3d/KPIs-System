@@ -139,6 +139,34 @@ describe('toDefinitionField', () => {
     const field = toDefinitionField(draft, 0, []);
     expect(field.key).toBe('original_key');
   });
+
+  it('builds a select option whose value is a user id when the option is user-linked', () => {
+    const draft = {
+      ...emptyField(),
+      label: 'Who does this concern?',
+      type: 'select' as const,
+      options: 'Alice, Other team member',
+      optionUserIds: { Alice: 'user-alice-id' },
+    };
+    const field = toDefinitionField(draft, 0, []) as Record<string, unknown>;
+    expect(field.options).toEqual([
+      { value: 'user-alice-id', label: 'Alice', userId: 'user-alice-id' },
+      { value: 'Other team member', label: 'Other team member' },
+    ]);
+  });
+
+  it("keys a user-linked option's optionGoTo entry by its real (user id) value, not its displayed text", () => {
+    const draft = {
+      ...emptyField(),
+      label: 'Who does this concern?',
+      type: 'select' as const,
+      options: 'Alice, Bob',
+      optionUserIds: { Alice: 'user-alice-id', Bob: 'user-bob-id' },
+      optionGoTo: { Alice: 'section-2' },
+    };
+    const field = toDefinitionField(draft, 0, []) as Record<string, unknown>;
+    expect(field.optionGoTo).toEqual({ 'user-alice-id': 'section-2' });
+  });
 });
 
 describe('fromDefinitionField / toDefinitionField round-trip', () => {
@@ -184,6 +212,31 @@ describe('fromDefinitionField / toDefinitionField round-trip', () => {
     const draft = fromDefinitionField(original);
     const rebuilt = toDefinitionField(draft, 0, []) as Record<string, unknown>;
     expect(rebuilt).toMatchObject({ scale: 7, style: 'stars', lowLabel: 'terrible', highLabel: 'amazing' });
+  });
+
+  it('round-trips a select field with a user-linked option, including its optionGoTo entry', () => {
+    const original: FormField = {
+      key: 'q4',
+      label: 'Who does this concern?',
+      type: 'select',
+      required: true,
+      layout: 'radio',
+      allowOther: false,
+      shuffleOptions: false,
+      options: [
+        { value: 'user-alice-id', label: 'Alice', userId: 'user-alice-id' },
+        { value: 'Someone else', label: 'Someone else' },
+      ],
+      optionGoTo: { 'user-alice-id': 'section-2' },
+    };
+    const draft = fromDefinitionField(original);
+    // the draft edits/displays the user's name, not their id
+    expect(draft.options).toBe('Alice, Someone else');
+    expect(draft.optionUserIds).toEqual({ Alice: 'user-alice-id' });
+    expect(draft.optionGoTo).toEqual({ Alice: 'section-2' });
+
+    const rebuilt = toDefinitionField(draft, 0, []);
+    expect(rebuilt).toMatchObject({ options: original.options, optionGoTo: original.optionGoTo });
   });
 
   it('round-trips a grid field', () => {

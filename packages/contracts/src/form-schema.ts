@@ -120,6 +120,13 @@ const optionItem = z.object({
   label: z.string().min(1).max(200),
   /** FormAsset id — renders this option as an image choice. */
   imageAssetId: z.string().uuid().optional(),
+  /** Set when this option was added via "select a user" rather than typed —
+   *  `value` is that User's id (not free text), same live-lookup split as the
+   *  'person' field type: structural shape here, referential integrity
+   *  resolved against the users table at submission time. Lets a single
+   *  'select' field mix ordinary text options with user-backed ones, so it
+   *  can double as the evaluatee source for a FormKpiMapping. */
+  userId: z.string().uuid().optional(),
 });
 
 export const formFieldSchema = z.discriminatedUnion('type', [

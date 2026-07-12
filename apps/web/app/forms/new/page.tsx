@@ -22,11 +22,13 @@ import {
   MoreVertical,
   SeparatorHorizontal,
   Trash2,
+  User as UserIcon,
   X,
 } from 'lucide-react';
 import { END_OF_FORM, SCORE_FIELD_TYPES, type FormDefinition } from '@pulse/contracts';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { KpiLinkCombobox } from '../../../components/kpi-link-combobox';
+import { UserPickerCombobox } from '../../../components/user-picker-combobox';
 import { LoadingState } from '../../../components/loading-state';
 import { api, assetUrl, uploadAsset } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -426,6 +428,7 @@ function NewFormPage() {
           maxSizeMb: p.maxSizeMb,
           maxFiles: 1,
           optionImages: {},
+          optionUserIds: {},
           optionGoTo: {},
           mediaType: 'none' as const,
           mediaAssetId: '',
@@ -659,7 +662,12 @@ function NewFormPage() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setFields((current) => current.map((f) => ({ ...f, required: true })))}
+                onClick={() =>
+                  setFields((current) =>
+                    // a section_header has no answer and can never be required
+                    current.map((f) => (f.type === 'section_header' ? f : { ...f, required: true })),
+                  )
+                }
               >
                 mark all required
               </Button>
@@ -907,13 +915,23 @@ function NewFormPage() {
                                                 const list = parseList(field.options);
                                                 const previous = list[optionIndex]!;
                                                 list[optionIndex] = e.target.value;
+                                                const renamed = previous !== e.target.value;
                                                 updateField(index, {
                                                   options: list.join(', '),
-                                                  // keep this option's "go to" mapping keyed to its (possibly renamed) value
-                                                  ...(previous !== e.target.value && previous in field.optionGoTo
+                                                  // keep this option's "go to" mapping and user link keyed to its (possibly renamed) text
+                                                  ...(renamed && previous in field.optionGoTo
                                                     ? {
                                                         optionGoTo: Object.fromEntries(
                                                           Object.entries(field.optionGoTo).map(([k, v]) =>
+                                                            k === previous ? [e.target.value, v] : [k, v],
+                                                          ),
+                                                        ),
+                                                      }
+                                                    : {}),
+                                                  ...(renamed && previous in field.optionUserIds
+                                                    ? {
+                                                        optionUserIds: Object.fromEntries(
+                                                          Object.entries(field.optionUserIds).map(([k, v]) =>
                                                             k === previous ? [e.target.value, v] : [k, v],
                                                           ),
                                                         ),
@@ -923,6 +941,14 @@ function NewFormPage() {
                                               }}
                                               placeholder={`Option ${optionIndex + 1}`}
                                             />
+                                            {field.optionUserIds[optionValue] && (
+                                              <span
+                                                className="option-row-user-mark"
+                                                title="linked to a user — the answer will be that person's id"
+                                              >
+                                                <UserIcon size={14} aria-hidden="true" />
+                                              </span>
+                                            )}
                                             {field.type === 'select' &&
                                               laterSectionsForField.length > 0 &&
                                               branchingOpen && (
@@ -966,7 +992,13 @@ function NewFormPage() {
                                                   (_, i) => i !== optionIndex,
                                                 );
                                                 const { [optionValue]: _removed, ...optionGoTo } = field.optionGoTo;
-                                                updateField(index, { options: list.join(', '), optionGoTo });
+                                                const { [optionValue]: _removedUser, ...optionUserIds } =
+                                                  field.optionUserIds;
+                                                updateField(index, {
+                                                  options: list.join(', '),
+                                                  optionGoTo,
+                                                  optionUserIds,
+                                                });
                                               }}
                                             >
                                               <X size={12} aria-hidden="true" />
@@ -1024,6 +1056,23 @@ function NewFormPage() {
                                                 </Button>
                                               </>
                                             )}
+                                          {field.type === 'select' && (
+                                            <>
+                                              {' '}
+                                              or{' '}
+                                              <UserPickerCombobox
+                                                triggerLabel="select a user"
+                                                onSelect={(u) => {
+                                                  const list = parseList(field.options);
+                                                  list.push(u.displayName);
+                                                  updateField(index, {
+                                                    options: list.join(', '),
+                                                    optionUserIds: { ...field.optionUserIds, [u.displayName]: u.id },
+                                                  });
+                                                }}
+                                              />
+                                            </>
+                                          )}
                                         </div>
                                       </div>
                                       <span className="builder-required">

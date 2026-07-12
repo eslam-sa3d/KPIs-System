@@ -24,6 +24,7 @@ export const emptyField = (): DraftField => ({
   maxSizeMb: 10,
   maxFiles: 1,
   optionImages: {},
+  optionUserIds: {},
   optionGoTo: {},
   mediaType: 'none',
   mediaAssetId: '',
@@ -98,7 +99,11 @@ export function toDefinitionField(draft: DraftField, index: number, keyedFields:
   const base = {
     key: draft.key ?? toKey(draft.label, index),
     label: draft.label,
-    required: draft.required,
+    // A section_header has no answer and can never be required — forced
+    // false here regardless of draft state so a field that ended up required
+    // some other way (an old "mark all required" bug, a legacy import) heals
+    // itself on the next save instead of blocking publish.
+    required: draft.type === 'section_header' ? false : draft.required,
     ...(draft.helpText.trim() ? { helpText: draft.helpText.trim() } : {}),
     ...(draft.mediaType === 'image' && draft.mediaAssetId
       ? {
@@ -122,11 +127,17 @@ export function toDefinitionField(draft: DraftField, index: number, keyedFields:
       : {}),
     ...(draft.capturedFromUrlParam.trim() ? { capturedFromUrlParam: draft.capturedFromUrlParam.trim() } : {}),
   };
+  // A user-linked option's real answer value is that User's id, not its
+  // displayed text — resolveOptionValue keeps the raw typed/displayed text
+  // (used everywhere else as the draft-side key: optionGoTo, optionImages,
+  // list editing) while swapping in the id for the published option's value.
+  const resolveOptionValue = (o: string) => draft.optionUserIds[o] ?? o;
   const withImages = (values: string[]) =>
     values.map((o) => ({
-      value: o,
+      value: resolveOptionValue(o),
       label: o,
       ...(draft.optionImages[o] ? { imageAssetId: draft.optionImages[o] } : {}),
+      ...(draft.optionUserIds[o] ? { userId: draft.optionUserIds[o] } : {}),
     }));
   const quizPoints = draft.points > 0 ? { points: draft.points } : {};
   const quizFeedback = {
@@ -138,7 +149,9 @@ export function toDefinitionField(draft: DraftField, index: number, keyedFields:
       const optionValues = parseList(draft.options);
       const options = withImages(optionValues);
       const optionGoTo = Object.fromEntries(
-        optionValues.map((v): [string, string] => [v, draft.optionGoTo[v] ?? '']).filter(([, goTo]) => goTo !== ''),
+        optionValues
+          .map((v): [string, string] => [resolveOptionValue(v), draft.optionGoTo[v] ?? ''])
+          .filter(([, goTo]) => goTo !== ''),
       );
       return {
         ...base,
@@ -301,20 +314,32 @@ export function fromDefinitionField(field: FormField): DraftField {
     draft.visibleWhenValue = String(field.visibleWhen.equals);
   }
 
-  const optionsToDraft = (options: Array<{ value: string; imageAssetId?: string }>) => {
-    draft.options = options.map((o) => o.value).join(', ');
+  const optionsToDraft = (options: Array<{ value: string; label: string; imageAssetId?: string; userId?: string }>) => {
+    // A user-linked option's displayed/edited text is its label (the user's
+    // display name at the time it was added), not its value (that user's
+    // id) — every other option still has value === label, so this is a
+    // no-op for anything the builder itself produced before this feature.
+    draft.options = options.map((o) => o.label).join(', ');
     draft.optionImages = Object.fromEntries(
-      options.filter((o) => o.imageAssetId).map((o) => [o.value, o.imageAssetId!]),
+      options.filter((o) => o.imageAssetId).map((o) => [o.label, o.imageAssetId!]),
     );
+    draft.optionUserIds = Object.fromEntries(options.filter((o) => o.userId).map((o) => [o.label, o.userId!]));
   };
 
   switch (field.type) {
-    case 'select':
+    case 'select': {
       optionsToDraft(field.options);
       draft.layout = field.layout;
       draft.allowOther = field.allowOther;
       draft.shuffleOptions = field.shuffleOptions;
-      draft.optionGoTo = field.optionGoTo ?? {};
+      // field.optionGoTo is keyed by each option's real value (a user id for
+      // a user-linked option) — the draft keys it by the option's displayed
+      // text instead (see optionsToDraft above), so re-key through value ->
+      // label on the way in.
+      const labelByValue = new Map(field.options.map((o) => [o.value, o.label]));
+      draft.optionGoTo = Object.fromEntries(
+        Object.entries(field.optionGoTo ?? {}).map(([value, goTo]) => [labelByValue.get(value) ?? value, goTo]),
+      );
       if (field.correctValue !== undefined) {
         draft.correctValue = field.correctValue;
         draft.points = field.points ?? 0;
@@ -322,6 +347,7 @@ export function fromDefinitionField(field: FormField): DraftField {
         draft.feedbackIncorrect = field.feedbackIncorrect ?? '';
       }
       break;
+    }
     case 'multi_select':
       optionsToDraft(field.options);
       draft.shuffleOptions = field.shuffleOptions;

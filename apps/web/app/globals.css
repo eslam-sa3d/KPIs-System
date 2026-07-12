@@ -1969,6 +1969,13 @@ h3 {
   font-style: italic;
 }
 
+.option-row-user-mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--pulse-purple);
+}
+
 .msform-add-field {
   font: inherit;
   font-weight: var(--font-weight-medium);
