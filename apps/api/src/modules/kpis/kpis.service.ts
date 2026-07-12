@@ -1,12 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  ActivityTrend,
   CreateEvaluationAreaInput,
   CreateKpiInput,
   CreateSubCriteriaInput,
+  EvaluationAreaCadence,
+  FormDefinition,
   KpiAssignmentInput,
+  MeasurementGaps,
   PageQuery,
+  RecentFeedback,
   RecordEvaluationAreaEntryInput,
+  SCORE_FIELD_TYPES,
+  ScoreFieldType,
   TeamMemberBreakdown,
   TeamMemberKpiArea,
   TeamOverview,
@@ -27,6 +34,9 @@ import { RbacService } from '../rbac/rbac.service';
  *  is sized generously rather than assuming ~1 row per period. */
 const RECENT_ENTRIES_TAKE = 60;
 
+/** How many recent context/comment entries the feedback digest returns. */
+const RECENT_FEEDBACK_TAKE = 30;
+
 /** getTeamOverview only ever needs each area's *latest* period per person —
  *  but without a bound, that query pulls every EvaluationAreaEntry ever
  *  recorded org-wide into memory, growing unboundedly with tenure. A rolling
@@ -40,6 +50,35 @@ function teamOverviewLookbackCutoff(): Date {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - TEAM_OVERVIEW_LOOKBACK_DAYS);
   return cutoff;
+}
+
+/** "Stale" for an area means no score in longer than one full cycle plus a
+ *  grace period at its own cadence — a yearly area going quiet for 45 days is
+ *  normal; a weekly one is not. Same day-counts as demo-data.service.ts's
+ *  stepDaysByCadence, doubled for the grace period. */
+const STALE_GRACE_DAYS_BY_CADENCE: Record<EvaluationAreaCadence, number> = {
+  weekly: 14,
+  monthly: 60,
+  quarterly: 180,
+  yearly: 730,
+};
+
+/** How many unmapped questions / stale areas to return in full — callers
+ *  needing the true count beyond that use the accompanying `total`. */
+const MEASUREMENT_GAPS_ITEM_CAP = 25;
+
+/** How many weeks of history the activity trend covers. */
+const ACTIVITY_TREND_WEEKS = 12;
+
+/** The Monday (UTC midnight) of the week containing `date` — a stable
+ *  bucketing key independent of time-of-day, used to group entries into
+ *  weekly counts for the activity trend. */
+function mondayOf(date: Date): Date {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d;
 }
 
 type EntryWithEvaluator = {
@@ -56,6 +95,14 @@ function scrubAnonymousEntry<T extends EntryWithEvaluator>(entry: T, canSeeEvalu
   return { ...entry, enteredById: '', enteredBy: { id: '', displayName: 'anonymous' } };
 }
 
+function avg(values: number[]): number {
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 /** Blends a set of entries into a "latest period" value and a "period before
  *  that" value — the same multi-rater averaging as latestAreaValue/
  *  previousAreaValue client-side (apps/web/app/dashboard/scoring.ts) and
@@ -69,7 +116,7 @@ function blendedAreaValues(entries: Array<{ value: Prisma.Decimal; periodStart: 
   const distinctPeriods = [...new Set(entries.map((e) => e.periodStart.getTime()))].sort((a, b) => b - a);
   const average = (periodTime: number) => {
     const inPeriod = entries.filter((e) => e.periodStart.getTime() === periodTime);
-    return Math.round((inPeriod.reduce((sum, e) => sum + Number(e.value), 0) / inPeriod.length) * 100) / 100;
+    return round2(avg(inPeriod.map((e) => Number(e.value))));
   };
   return {
     latestValue: average(distinctPeriods[0]!),
@@ -360,18 +407,18 @@ export class KpisService {
         if (list) list.push(entry);
         else byArea.set(entry.evaluationAreaId, [entry]);
       }
-      const areaLatestValues = [...byArea.values()].map((areaEntries) => {
-        const maxPeriodStart = areaEntries.reduce(
-          (max, e) => (e.periodStart > max ? e.periodStart : max),
-          areaEntries[0]!.periodStart,
-        );
-        const latest = areaEntries.filter((e) => e.periodStart.getTime() === maxPeriodStart.getTime());
-        return latest.reduce((sum, e) => sum + Number(e.value), 0) / latest.length;
-      });
-      const finalScore =
-        areaLatestValues.length > 0
-          ? Math.round((areaLatestValues.reduce((a, b) => a + b, 0) / areaLatestValues.length) * 100) / 100
-          : null;
+      // Same per-area blend as getPersonBreakdown, averaged across areas both
+      // for the current period (finalScore) and the period before that
+      // (previousScore) — the latter powers the team table's trend arrow.
+      // Only areas that actually have a prior period contribute to
+      // previousScore, so a person with just one area newly scored doesn't
+      // read as "no change" (null previousScore means "not enough history
+      // yet", not zero movement).
+      const areaValues = [...byArea.values()].map((areaEntries) => blendedAreaValues(areaEntries));
+      const latestValues = areaValues.map((v) => v.latestValue).filter((v): v is number => v !== null);
+      const previousValues = areaValues.map((v) => v.previousValue).filter((v): v is number => v !== null);
+      const finalScore = latestValues.length > 0 ? round2(avg(latestValues)) : null;
+      const previousScore = previousValues.length > 0 ? round2(avg(previousValues)) : null;
       // The date this person was last actually scored (when the entry was
       // submitted), not periodEnd — periodEnd is the scoring period's own
       // boundary and can be backdated/future-dated relative to when the
@@ -389,6 +436,7 @@ export class KpisService {
         roles: user.roles.map((r) => r.role.name),
         hasKpi,
         finalScore,
+        previousScore,
         lastUpdated: lastUpdated ? lastUpdated.toISOString() : null,
       };
     });
@@ -446,6 +494,170 @@ export class KpisService {
         }),
       })),
     };
+  }
+
+  /**
+   * Two silent measurement gaps, org-wide: score-eligible questions on a
+   * published form that no FormKpiMapping points at yet, and active
+   * Evaluation Areas that haven't been scored recently enough for their own
+   * cadence. Distinct from the per-person "pending evaluation" signal, which
+   * only catches a gap for one person at a time, not a KPI stale across
+   * everyone or a form whose answers never reach a KPI at all.
+   */
+  async getMeasurementGaps(): Promise<MeasurementGaps> {
+    const [forms, kpis] = await Promise.all([
+      this.prisma.form.findMany({
+        where: { status: 'published' },
+        select: {
+          slug: true,
+          versions: { orderBy: { version: 'desc' }, take: 1, select: { definition: true } },
+          kpiMappings: { select: { scoreFieldKey: true } },
+        },
+      }),
+      this.prisma.kpi.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          evaluationAreas: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              name: true,
+              cadence: true,
+              entries: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const unmappedQuestions: MeasurementGaps['unmappedQuestions']['items'] = [];
+    for (const form of forms) {
+      const latest = form.versions[0];
+      if (!latest) continue;
+      const definition = latest.definition as unknown as FormDefinition;
+      const mappedKeys = new Set(form.kpiMappings.map((m) => m.scoreFieldKey));
+      for (const field of definition.fields) {
+        if (!SCORE_FIELD_TYPES.includes(field.type as ScoreFieldType)) continue;
+        if (mappedKeys.has(field.key)) continue;
+        unmappedQuestions.push({
+          formSlug: form.slug,
+          formTitle: definition.title,
+          fieldKey: field.key,
+          fieldLabel: field.label,
+        });
+      }
+    }
+
+    const now = Date.now();
+    const staleAreas: MeasurementGaps['staleAreas']['items'] = [];
+    for (const kpi of kpis) {
+      for (const area of kpi.evaluationAreas) {
+        const cadence = area.cadence as EvaluationAreaCadence;
+        const graceDays = STALE_GRACE_DAYS_BY_CADENCE[cadence] ?? STALE_GRACE_DAYS_BY_CADENCE.monthly;
+        const lastEntry = area.entries[0];
+        const isStale = !lastEntry || now - lastEntry.createdAt.getTime() > graceDays * 24 * 60 * 60 * 1000;
+        if (!isStale) continue;
+        staleAreas.push({
+          kpiId: kpi.id,
+          kpiName: kpi.name,
+          areaId: area.id,
+          areaName: area.name,
+          cadence,
+          lastScoredAt: lastEntry ? lastEntry.createdAt.toISOString() : null,
+        });
+      }
+    }
+
+    return {
+      unmappedQuestions: {
+        total: unmappedQuestions.length,
+        items: unmappedQuestions.slice(0, MEASUREMENT_GAPS_ITEM_CAP),
+      },
+      staleAreas: { total: staleAreas.length, items: staleAreas.slice(0, MEASUREMENT_GAPS_ITEM_CAP) },
+    };
+  }
+
+  /**
+   * The free-text context/comment an evaluator leaves alongside a score,
+   * across the org (or one KPI), most recent first — real qualitative
+   * signal that today only exists one entry at a time inside a person's own
+   * drawer. Callers reach this at all only with kpis:manage, which already
+   * entitles them to see every evaluator's identity regardless of that
+   * entry's own anonymous flag (same rule as scrubAnonymousEntry elsewhere)
+   * — so unlike listMine(), nothing here needs scrubbing; `anonymous` is
+   * just returned as a label for the UI.
+   */
+  async getRecentFeedback(kpiId?: string): Promise<RecentFeedback> {
+    const entries = await this.prisma.evaluationAreaEntry.findMany({
+      where: {
+        OR: [{ context: { not: null } }, { comment: { not: null } }],
+        ...(kpiId ? { evaluationArea: { kpiId } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: RECENT_FEEDBACK_TAKE,
+      select: {
+        id: true,
+        anonymous: true,
+        context: true,
+        comment: true,
+        createdAt: true,
+        person: { select: { displayName: true } },
+        enteredBy: { select: { displayName: true } },
+        evaluationArea: { select: { name: true, kpiId: true, kpi: { select: { name: true } } } },
+      },
+    });
+
+    return {
+      entries: entries.map((e) => ({
+        id: e.id,
+        kpiId: e.evaluationArea.kpiId,
+        kpiName: e.evaluationArea.kpi.name,
+        areaName: e.evaluationArea.name,
+        personName: e.person.displayName,
+        evaluatorName: e.enteredBy.displayName,
+        anonymous: e.anonymous,
+        context: e.context,
+        comment: e.comment,
+        createdAt: e.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  /**
+   * A weekly count of new Evaluation Area entries, org-wide, over the last
+   * ACTIVITY_TREND_WEEKS weeks — nothing else in the system tracks
+   * submission/evaluation volume over time at all (the only timestamps that
+   * exist elsewhere are single snapshots like a form's first/last response).
+   * Every week in the window is present even at 0, so a gap in activity
+   * reads as a flat line, not a missing bar.
+   */
+  async getActivityTrend(): Promise<ActivityTrend> {
+    const currentWeekStart = mondayOf(new Date());
+    const earliestWeekStart = new Date(currentWeekStart);
+    earliestWeekStart.setUTCDate(earliestWeekStart.getUTCDate() - (ACTIVITY_TREND_WEEKS - 1) * 7);
+
+    const entries = await this.prisma.evaluationAreaEntry.findMany({
+      where: { createdAt: { gte: earliestWeekStart } },
+      select: { createdAt: true },
+    });
+
+    const counts = new Map<string, number>();
+    for (const entry of entries) {
+      const key = mondayOf(entry.createdAt).toISOString().slice(0, 10);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    const points: ActivityTrend['points'] = [];
+    for (let i = 0; i < ACTIVITY_TREND_WEEKS; i++) {
+      const weekStart = new Date(earliestWeekStart);
+      weekStart.setUTCDate(weekStart.getUTCDate() + i * 7);
+      const key = weekStart.toISOString().slice(0, 10);
+      points.push({ weekStart: key, count: counts.get(key) ?? 0 });
+    }
+
+    return { points };
   }
 
   async createEvaluationArea(kpiId: string, input: CreateEvaluationAreaInput, actorId: string) {

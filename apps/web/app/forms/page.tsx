@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { ClipboardList, FolderOpen, Pencil, Search, Share2 } from 'lucide-react';
+import { AlertTriangle, ClipboardList, FolderOpen, Pencil, Search, Share2 } from 'lucide-react';
 import type { FormListItem } from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
 import { StatusBadge } from '@/components/status-badge';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 import { useResource } from '../../lib/use-resource';
@@ -213,15 +214,41 @@ export default function FormsPage() {
                       <Link href={`/forms/view?slug=${encodeURIComponent(form.slug)}`}>{form.title}</Link>
                     </TableCell>
                     <TableCell>
-                      {form.status === 'archived' ? (
-                        <StatusBadge active={false} label="archived" size="sm" />
-                      ) : (
-                        <StatusBadge
-                          active={form.settings.acceptingResponses}
-                          label={form.settings.acceptingResponses ? 'open' : 'closed'}
-                          size="sm"
-                        />
-                      )}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        {form.status === 'archived' ? (
+                          <StatusBadge active={false} label="archived" size="sm" />
+                        ) : (
+                          <StatusBadge
+                            active={form.settings.acceptingResponses}
+                            label={form.settings.acceptingResponses ? 'open' : 'closed'}
+                            size="sm"
+                          />
+                        )}
+                        {(form.hasSubmissionGap || form.mappedWhileClosed) && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="form health warning"
+                                style={{
+                                  display: 'inline-flex',
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  cursor: 'default',
+                                  color: 'var(--amber)',
+                                }}
+                              >
+                                <AlertTriangle size={14} aria-hidden="true" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {form.hasSubmissionGap && <p>open, but no submissions in 30+ days</p>}
+                              {form.mappedWhileClosed && <p>linked to a KPI, but not currently reachable</p>}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </span>
                     </TableCell>
                     <TableCell>{pluralize(form.fieldCount, 'field')}</TableCell>
                     <TableCell>v{form.version}</TableCell>

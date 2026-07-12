@@ -2,7 +2,14 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
-import type { TeamMemberBreakdown, TeamOverview } from '@pulse/contracts';
+import Link from 'next/link';
+import type {
+  ActivityTrend,
+  MeasurementGaps,
+  RecentFeedback,
+  TeamMemberBreakdown,
+  TeamOverview,
+} from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
 import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
 import { TeamMemberDetailDrawer } from '../../components/team-member-detail-drawer';
@@ -32,9 +39,45 @@ const KpiDistributionChart = dynamic(() => import('../../components/kpi-distribu
   ssr: false,
   loading: () => <LoadingState label="loading chart…" />,
 });
+const ActivityTrendChart = dynamic(() => import('../../components/activity-trend-chart'), {
+  ssr: false,
+  loading: () => <LoadingState label="loading chart…" />,
+});
 
 type SortKey = 'name' | 'latestValue' | 'status' | 'updated';
-type MemberSortKey = 'name' | 'department' | 'finalScore' | 'updated';
+type MemberSortKey = 'name' | 'department' | 'finalScore' | 'trend' | 'updated';
+
+/** finalScore vs. previousScore — null unless both sides have a value, so
+ *  "not enough history yet" never reads as "no change" (a real, motionless 0). */
+function memberTrend(finalScore: number | null, previousScore: number | null): number | null {
+  if (finalScore === null || previousScore === null) return null;
+  return Math.round((finalScore - previousScore) * 100) / 100;
+}
+
+function TrendIndicator({ trend }: { trend: number | null }) {
+  if (trend === null) {
+    return (
+      <span className="muted" style={{ fontSize: 11 }}>
+        —
+      </span>
+    );
+  }
+  if (trend === 0) {
+    return (
+      <span className="muted" style={{ fontSize: 11 }}>
+        no change
+      </span>
+    );
+  }
+  const up = trend > 0;
+  return (
+    <span
+      style={{ fontSize: 11, color: up ? 'var(--green)' : 'var(--red)', fontFamily: 'var(--mono)', fontWeight: 600 }}
+    >
+      {up ? '▲' : '▼'} {Math.abs(trend).toLocaleString()}
+    </span>
+  );
+}
 
 const CADENCE_LABEL: Record<string, string> = {
   weekly: 'Weekly',
@@ -68,6 +111,23 @@ export default function DashboardPage() {
   // org-wide roster with KPI coverage/final score/last-updated — admin-only, powers the team coverage cards and table below
   const { data: teamOverview } = useResource<TeamOverview>(
     user && canSeeTeamOverview ? '/v1/kpis/team-overview' : null,
+  );
+
+  // unmapped score-eligible questions + stale evaluation areas, org-wide
+  const { data: measurementGaps } = useResource<MeasurementGaps>(
+    user && canSeeTeamOverview ? '/v1/kpis/measurement-gaps' : null,
+  );
+
+  // recent context/comment feedback, org-wide — the qualitative signal
+  // usually buried one entry at a time inside a person's own drawer
+  const { data: recentFeedback } = useResource<RecentFeedback>(
+    user && canSeeTeamOverview ? '/v1/kpis/recent-feedback' : null,
+  );
+
+  // weekly count of new scores, org-wide — nothing else tracks evaluation
+  // volume over time at all
+  const { data: activityTrend } = useResource<ActivityTrend>(
+    user && canSeeTeamOverview ? '/v1/kpis/activity-trend' : null,
   );
 
   // fetched on demand when a team member row is clicked — their own blended
@@ -206,6 +266,30 @@ export default function DashboardPage() {
   const noKpiMembers = useMemo(() => teamMembers.filter((m) => !m.hasKpi), [teamMembers]);
   const pendingMembers = useMemo(() => teamMembers.filter((m) => m.hasKpi && m.finalScore === null), [teamMembers]);
 
+  // "Score by Department": same stacked-status-band shape as KPI status by
+  // cadence / KPI by Person above, grouped by department instead — the whole
+  // org's roster, not scoped to the cadence tab (department composition has
+  // nothing to do with which cadence is selected).
+  const byDepartmentData = useMemo(() => {
+    const byDept = new Map<string, StatusKey[]>();
+    for (const m of teamMembers) {
+      const key = m.department ?? 'no department';
+      const list = byDept.get(key) ?? [];
+      list.push(statusOf(m.finalScore));
+      byDept.set(key, list);
+    }
+    return [...byDept.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([dept, statuses]) => ({
+        level: dept,
+        outstanding: statuses.filter((s) => s === 'outstanding').length,
+        meets: statuses.filter((s) => s === 'meets').length,
+        improve: statuses.filter((s) => s === 'improve').length,
+        below: statuses.filter((s) => s === 'below').length,
+      }));
+  }, [teamMembers]);
+  const hasByDepartmentData = byDepartmentData.some((d) => d.outstanding + d.meets + d.improve + d.below > 0);
+
   const memberTableData = useMemo(() => {
     let data = teamMembers.filter((m) => {
       if (memberStatusFilter !== 'all' && statusOf(m.finalScore) !== memberStatusFilter) return false;
@@ -223,6 +307,14 @@ export default function DashboardPage() {
         case 'finalScore': {
           const av = a.finalScore;
           const bv = b.finalScore;
+          if (av === null && bv === null) return 0;
+          if (av === null) return 1;
+          if (bv === null) return -1;
+          return (av - bv) * dir;
+        }
+        case 'trend': {
+          const av = memberTrend(a.finalScore, a.previousScore);
+          const bv = memberTrend(b.finalScore, b.previousScore);
           if (av === null && bv === null) return 0;
           if (av === null) return 1;
           if (bv === null) return -1;
@@ -259,11 +351,32 @@ export default function DashboardPage() {
   }
 
   const selected = kpis?.find((k) => k.id === selectedId) ?? null;
+  // This KPI's own review-type mix and anonymous rate, scoped to its own
+  // latest-period entries — distinct from the org-wide reviewMix above,
+  // which is one flat tally across every KPI in the current cadence view.
+  const selectedReviewStats = useMemo(() => {
+    if (!selected) return { reviewMix: {} as Record<string, number>, anonymousRate: null as number | null };
+    const counts: Record<string, number> = {};
+    let anonymousCount = 0;
+    let total = 0;
+    for (const area of selected.areas) {
+      for (const entry of latestPeriodEntries(area)) {
+        const key = entry.reviewType ?? 'peer';
+        counts[key] = (counts[key] ?? 0) + 1;
+        if (entry.anonymous) anonymousCount += 1;
+        total += 1;
+      }
+    }
+    return { reviewMix: counts, anonymousRate: total > 0 ? Math.round((anonymousCount / total) * 100) : null };
+  }, [selected]);
+
   const drawerKpi: DrawerKpi | null = selected
     ? {
         id: selected.id,
         name: selected.name,
         status: selected.status,
+        reviewMix: selectedReviewStats.reviewMix,
+        anonymousRate: selectedReviewStats.anonymousRate,
         areas: selected.areas.map((a) => ({
           id: a.id,
           name: a.name,
@@ -418,6 +531,123 @@ export default function DashboardPage() {
                     </ul>
                   )}
                 </div>
+              </div>
+            )}
+
+            {canSeeTeamOverview && teamOverview && (
+              <div className="p-card" style={{ marginBottom: 16 }}>
+                <div className="p-card-title">Score by department</div>
+                {hasByDepartmentData ? (
+                  <KpiDistributionChart data={byDepartmentData} textColor="var(--text-3)" gridColor="var(--border)" />
+                ) : (
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    no scored team members yet.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {canSeeTeamOverview && measurementGaps && (
+              <div className="p-charts-row" style={{ marginBottom: 16 }}>
+                <div className="p-card">
+                  <div className="p-card-title">Unmapped questions</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+                    <span className="p-score-ring p-status-below" style={{ width: 64, height: 44, fontSize: 15 }}>
+                      {measurementGaps.unmappedQuestions.total}
+                    </span>
+                    <span className="muted" style={{ fontSize: 11 }}>
+                      score-eligible question{measurementGaps.unmappedQuestions.total === 1 ? '' : 's'} on a published
+                      form that no KPI mapping points at
+                    </span>
+                  </div>
+                  {measurementGaps.unmappedQuestions.items.length > 0 && (
+                    <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
+                      {measurementGaps.unmappedQuestions.items.slice(0, 8).map((q) => (
+                        <li key={`${q.formSlug}-${q.fieldKey}`}>
+                          <Link href={`/forms/view?slug=${q.formSlug}`}>{q.fieldLabel}</Link>{' '}
+                          <span className="muted">· {q.formTitle}</span>
+                        </li>
+                      ))}
+                      {measurementGaps.unmappedQuestions.total > 8 && (
+                        <li>…and {measurementGaps.unmappedQuestions.total - 8} more</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="p-card">
+                  <div className="p-card-title">Stale evaluation areas</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+                    <span className="p-score-ring p-status-below" style={{ width: 64, height: 44, fontSize: 15 }}>
+                      {measurementGaps.staleAreas.total}
+                    </span>
+                    <span className="muted" style={{ fontSize: 11 }}>
+                      area{measurementGaps.staleAreas.total === 1 ? '' : 's'} not scored recently enough for their own
+                      cadence
+                    </span>
+                  </div>
+                  {measurementGaps.staleAreas.items.length > 0 && (
+                    <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
+                      {measurementGaps.staleAreas.items.slice(0, 8).map((a) => (
+                        <li key={a.areaId}>
+                          {a.kpiName} · {a.areaName}{' '}
+                          <span className="muted">
+                            (
+                            {a.lastScoredAt
+                              ? `last scored ${new Date(a.lastScoredAt).toLocaleDateString()}`
+                              : 'never scored'}
+                            )
+                          </span>
+                        </li>
+                      ))}
+                      {measurementGaps.staleAreas.total > 8 && (
+                        <li>…and {measurementGaps.staleAreas.total - 8} more</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {canSeeTeamOverview && recentFeedback && recentFeedback.entries.length > 0 && (
+              <div className="p-card" style={{ marginBottom: 16 }}>
+                <div className="p-card-title">Recent feedback</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 380, overflowY: 'auto' }}>
+                  {recentFeedback.entries.map((entry) => (
+                    <div key={entry.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 3 }}>
+                        {entry.kpiName} · {entry.areaName} — {entry.personName}
+                        <span className="muted"> · {new Date(entry.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      {entry.comment && <div style={{ fontSize: 13, fontStyle: 'italic' }}>“{entry.comment}”</div>}
+                      {entry.context && (
+                        <div style={{ fontSize: 12, color: 'var(--text-2)' }}>context: {entry.context}</div>
+                      )}
+                      <div className="muted" style={{ fontSize: 10.5, marginTop: 2 }}>
+                        by {entry.evaluatorName}
+                        {entry.anonymous && ' (anonymous)'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {canSeeTeamOverview && activityTrend && (
+              <div className="p-card" style={{ marginBottom: 16 }}>
+                <div className="p-card-title">Evaluation activity</div>
+                {activityTrend.points.some((p) => p.count > 0) ? (
+                  <ActivityTrendChart
+                    data={activityTrend.points}
+                    textColor="var(--text-3)"
+                    gridColor="var(--border)"
+                    barColor="var(--accent)"
+                  />
+                ) : (
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    no scores recorded in the last 12 weeks.
+                  </p>
+                )}
               </div>
             )}
 
@@ -651,6 +881,16 @@ export default function DashboardPage() {
                       <TableHead
                         className="p-th-sortable"
                         aria-sort={
+                          memberSort.key === 'trend' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
+                        }
+                      >
+                        <button type="button" onClick={() => sortMembersBy('trend')}>
+                          trend
+                        </button>
+                      </TableHead>
+                      <TableHead
+                        className="p-th-sortable"
+                        aria-sort={
                           memberSort.key === 'updated' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
                         }
                       >
@@ -663,7 +903,7 @@ export default function DashboardPage() {
                   <TableBody>
                     {memberTableData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="muted" style={{ textAlign: 'center' }}>
+                        <TableCell colSpan={6} className="muted" style={{ textAlign: 'center' }}>
                           {teamMembers.length === 0 ? 'no active team members.' : 'no team members match this filter.'}
                         </TableCell>
                       </TableRow>
@@ -693,6 +933,9 @@ export default function DashboardPage() {
                               <span className={`p-score-ring p-status-${status}`}>
                                 {m.finalScore !== null ? m.finalScore.toLocaleString() : '—'}
                               </span>
+                            </TableCell>
+                            <TableCell>
+                              <TrendIndicator trend={memberTrend(m.finalScore, m.previousScore)} />
                             </TableCell>
                             <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
                               {m.lastUpdated ? new Date(m.lastUpdated).toLocaleDateString() : '—'}

@@ -14,6 +14,12 @@ import { PrismaService } from '../../infra/prisma.service';
 import { RbacService } from '../rbac/rbac.service';
 import { AssetsService } from './assets.service';
 
+/** A form open with no submissions in this long (or ever) is flagged as a
+ *  possible silent gap in the forms list — see listForms()'s
+ *  hasSubmissionGap. Same order of magnitude as the "stale" thresholds
+ *  KpisService uses for Evaluation Areas, applied here to forms instead. */
+const FORM_STALE_DAYS = 30;
+
 /**
  * Form lifecycle: draft → published (immutable versions) → archived.
  * Publishing an edit creates a NEW version so historical submissions keep
@@ -68,15 +74,42 @@ export class FormsService {
 
   /** Every form (including archived — this is the admin management list;
    *  hiding archived forms here would make "unarchive" unreachable) with its
-   *  latest version's title. */
+   *  latest version's title, plus two health signals: hasSubmissionGap (open
+   *  and accepting responses, but quiet for FORM_STALE_DAYS or longer — a
+   *  form nobody's actually filling) and mappedWhileClosed (linked to at
+   *  least one KPI, but not currently reachable — the KPI it feeds is
+   *  silently starved). Only looks at the latest version's own submissions
+   *  for "last submission" — an older, superseded version's history doesn't
+   *  count toward whether the form is *currently* active. */
   async listForms(): Promise<FormListItem[]> {
     const forms = await this.prisma.form.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+      include: {
+        versions: {
+          orderBy: { version: 'desc' },
+          take: 1,
+          include: { submissions: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } },
+        },
+        kpiMappings: { select: { id: true } },
+      },
     });
+    const staleCutoff = Date.now() - FORM_STALE_DAYS * 24 * 60 * 60 * 1000;
     return forms.map((form) => {
       const latest = form.versions[0];
       const definition = latest?.definition as unknown as FormDefinition | undefined;
+      const settings = this.settingsOf(form.settings);
+      const lastSubmission = latest?.submissions[0];
+      const now = new Date();
+      // Mirrors SubmissionsService.enforceSettings's closed-check, plus the
+      // status gate that's normally enforced one layer up (form lookup).
+      const isCurrentlyAccepting =
+        form.status === 'published' &&
+        settings.acceptingResponses &&
+        !(settings.opensAt && now < new Date(settings.opensAt)) &&
+        !(settings.closesAt && now > new Date(settings.closesAt));
+      const hasSubmissionGap =
+        isCurrentlyAccepting && (!lastSubmission || lastSubmission.createdAt.getTime() < staleCutoff);
+      const mappedWhileClosed = !isCurrentlyAccepting && form.kpiMappings.length > 0;
       return {
         id: form.id,
         slug: form.slug,
@@ -85,9 +118,12 @@ export class FormsService {
         fieldCount: definition?.fields.length ?? 0,
         version: latest?.version ?? 0,
         hasPublicLink: Boolean(form.publicToken),
-        settings: this.settingsOf(form.settings),
+        settings,
         folder: form.folder,
         createdAt: form.createdAt.toISOString(),
+        lastSubmissionAt: lastSubmission ? lastSubmission.createdAt.toISOString() : null,
+        hasSubmissionGap,
+        mappedWhileClosed,
       };
     });
   }

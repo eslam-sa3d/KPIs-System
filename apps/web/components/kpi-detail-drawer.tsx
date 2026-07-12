@@ -9,6 +9,13 @@ export interface DrawerKpi {
   id: string;
   name: string;
   status: StatusKey;
+  /** Tally of this KPI's own latest-period entries by reviewType — a rigor/
+   *  credibility signal distinct from the org-wide mix (a KPI that's all
+   *  self-assessment reads very differently from one with real peer coverage). */
+  reviewMix: Record<string, number>;
+  /** % of this KPI's own latest-period entries recorded anonymously, or null
+   *  when there are no entries yet to compute a rate from. */
+  anonymousRate: number | null;
   areas: Array<{
     id: string;
     name: string;
@@ -73,6 +80,20 @@ export function KpiDetailDrawer({ kpi, onClose }: { kpi: DrawerKpi | null; onClo
                   {STATUS_LABEL[kpi.status]}
                 </Badge>
               </div>
+              {Object.keys(kpi.reviewMix).length > 0 && (
+                <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {Object.entries(kpi.reviewMix).map(([type, count]) => (
+                    <Badge key={type} variant="outline" className="py-1">
+                      {REVIEW_TYPE_LABEL[type] ?? type}: {count}
+                    </Badge>
+                  ))}
+                  {kpi.anonymousRate !== null && (
+                    <Badge variant="outline" className="py-1">
+                      {kpi.anonymousRate}% anonymous
+                    </Badge>
+                  )}
+                </div>
+              )}
             </SheetHeader>
             <div className="p-drawer-body">
               {kpi.areas.length === 0 ? (

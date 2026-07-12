@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordEvaluationAreaEntrySchema } from '@pulse/contracts';
 import { KpisService } from './kpis.service';
 import { RbacService } from '../rbac/rbac.service';
@@ -23,6 +23,17 @@ function makePrismaStub() {
       delete: vi.fn(),
     },
     user: { findUnique: vi.fn(), findMany: vi.fn() },
+    form: {
+      findMany: vi.fn(
+        async (): Promise<
+          Array<{
+            slug: string;
+            versions: Array<{ definition: unknown }>;
+            kpiMappings: Array<{ scoreFieldKey: string }>;
+          }>
+        > => [],
+      ),
+    },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn((ops: Array<Promise<unknown>>) => Promise.all(ops)),
   };
@@ -703,10 +714,35 @@ describe('KpisService', () => {
 
       // area-1 latest avg = 4, area-2 latest avg = 2 → final score = 3
       expect(members[0]!.finalScore).toBe(3);
+      // previousScore only draws from areas that actually have a prior
+      // period — area-2 has just one period (contributes nothing here), so
+      // previousScore is area-1's own previous-period avg (1), not diluted
+      // by treating area-2's missing history as a 0 or excluding the person entirely.
+      expect(members[0]!.previousScore).toBe(1);
       // lastUpdated tracks the most recent createdAt (actual submission time),
       // not the latest periodEnd — proven by area-2's later periodEnd losing
       // out to area-1's later-submitted entry.
       expect(members[0]!.lastUpdated).toBe(new Date('2026-03-01T09:00:00Z').toISOString());
+    });
+
+    it('reports previousScore as null (not 0) when no area has a prior period yet', async () => {
+      prisma.user.findMany.mockResolvedValue([coveredUser]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([
+        {
+          personId: 'user-1',
+          evaluationAreaId: 'area-1',
+          value: 4,
+          periodStart: new Date('2026-02-01'),
+          periodEnd: new Date('2026-02-28'),
+          createdAt: new Date('2026-02-28T10:00:00Z'),
+        },
+      ]);
+
+      const { members } = await service.getTeamOverview();
+
+      expect(members[0]!.finalScore).toBe(4);
+      expect(members[0]!.previousScore).toBeNull();
     });
 
     it('treats a KPI assignment with no active evaluation areas as not covering anyone', async () => {
@@ -815,6 +851,237 @@ describe('KpisService', () => {
             assignments: { some: { OR: [{ roleId: { in: ['role-1'] } }, { departmentId: 'dept-1' }] } },
           },
         }),
+      );
+    });
+  });
+
+  describe('getMeasurementGaps', () => {
+    const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+
+    it('flags a score-eligible question with no FormKpiMapping, and excludes one already mapped', async () => {
+      prisma.form.findMany.mockResolvedValue([
+        {
+          slug: 'sprint-check',
+          versions: [
+            {
+              definition: {
+                title: 'Sprint check',
+                fields: [
+                  { key: 'confidence', label: 'Confidence', type: 'rating' },
+                  { key: 'velocity', label: 'Velocity', type: 'number' },
+                ],
+              },
+            },
+          ],
+          kpiMappings: [{ scoreFieldKey: 'velocity' }],
+        },
+      ]);
+      prisma.kpi.findMany.mockResolvedValue([]);
+
+      const { unmappedQuestions } = await service.getMeasurementGaps();
+
+      expect(unmappedQuestions.total).toBe(1);
+      expect(unmappedQuestions.items).toEqual([
+        { formSlug: 'sprint-check', formTitle: 'Sprint check', fieldKey: 'confidence', fieldLabel: 'Confidence' },
+      ]);
+    });
+
+    it('ignores field types that can never be a score (e.g. short_text, section_header)', async () => {
+      prisma.form.findMany.mockResolvedValue([
+        {
+          slug: 'sprint-check',
+          versions: [
+            {
+              definition: {
+                title: 'Sprint check',
+                fields: [
+                  { key: 'notes', label: 'Notes', type: 'short_text' },
+                  { key: 'heading', label: 'Section', type: 'section_header' },
+                ],
+              },
+            },
+          ],
+          kpiMappings: [],
+        },
+      ]);
+      prisma.kpi.findMany.mockResolvedValue([]);
+
+      const { unmappedQuestions } = await service.getMeasurementGaps();
+
+      expect(unmappedQuestions.total).toBe(0);
+    });
+
+    it('skips a form with no published version yet', async () => {
+      prisma.form.findMany.mockResolvedValue([{ slug: 'draft-form', versions: [], kpiMappings: [] }]);
+      prisma.kpi.findMany.mockResolvedValue([]);
+
+      const { unmappedQuestions } = await service.getMeasurementGaps();
+
+      expect(unmappedQuestions.total).toBe(0);
+    });
+
+    it('flags a weekly-cadence area whose last entry is well past its grace period', async () => {
+      prisma.kpi.findMany.mockResolvedValue([
+        {
+          id: 'kpi-1',
+          name: 'Delivery',
+          evaluationAreas: [
+            {
+              id: 'area-1',
+              name: 'Sprint velocity',
+              cadence: 'weekly',
+              entries: [{ createdAt: daysAgo(30) }],
+            },
+          ],
+        },
+      ]);
+
+      const { staleAreas } = await service.getMeasurementGaps();
+
+      expect(staleAreas.total).toBe(1);
+      expect(staleAreas.items[0]).toMatchObject({ kpiId: 'kpi-1', areaId: 'area-1', cadence: 'weekly' });
+    });
+
+    it('does not flag an area scored within its own cadence grace period', async () => {
+      prisma.kpi.findMany.mockResolvedValue([
+        {
+          id: 'kpi-1',
+          name: 'Annual review',
+          evaluationAreas: [
+            { id: 'area-1', name: 'Leadership', cadence: 'yearly', entries: [{ createdAt: daysAgo(30) }] },
+          ],
+        },
+      ]);
+
+      const { staleAreas } = await service.getMeasurementGaps();
+
+      expect(staleAreas.total).toBe(0);
+    });
+
+    it('flags an area with zero entries ever as stale, with lastScoredAt null', async () => {
+      prisma.kpi.findMany.mockResolvedValue([
+        {
+          id: 'kpi-1',
+          name: 'New KPI',
+          evaluationAreas: [{ id: 'area-1', name: 'Quality', cadence: 'monthly', entries: [] }],
+        },
+      ]);
+
+      const { staleAreas } = await service.getMeasurementGaps();
+
+      expect(staleAreas.items[0]).toMatchObject({ lastScoredAt: null });
+    });
+  });
+
+  describe('getRecentFeedback', () => {
+    const feedbackEntry = {
+      id: 'entry-1',
+      anonymous: false,
+      context: 'Level: Senior',
+      comment: 'Great communication this quarter.',
+      createdAt: new Date('2026-03-01T09:00:00Z'),
+      person: { displayName: 'Evaluatee' },
+      enteredBy: { displayName: 'Rater One' },
+      evaluationArea: { name: 'Communication', kpiId: 'kpi-1', kpi: { name: 'QA Lead Evaluation' } },
+    };
+
+    it('maps entries into the digest shape, querying only rows with context or comment', async () => {
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([feedbackEntry]);
+
+      const { entries } = await service.getRecentFeedback();
+
+      expect(prisma.evaluationAreaEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { OR: [{ context: { not: null } }, { comment: { not: null } }] },
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+      expect(entries).toEqual([
+        {
+          id: 'entry-1',
+          kpiId: 'kpi-1',
+          kpiName: 'QA Lead Evaluation',
+          areaName: 'Communication',
+          personName: 'Evaluatee',
+          evaluatorName: 'Rater One',
+          anonymous: false,
+          context: 'Level: Senior',
+          comment: 'Great communication this quarter.',
+          createdAt: '2026-03-01T09:00:00.000Z',
+        },
+      ]);
+    });
+
+    it('never withholds the evaluator identity, even on an anonymous entry — kpis:manage already entitles the caller', async () => {
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([{ ...feedbackEntry, anonymous: true }]);
+
+      const { entries } = await service.getRecentFeedback();
+
+      expect(entries[0]).toMatchObject({ anonymous: true, evaluatorName: 'Rater One' });
+    });
+
+    it('scopes to one KPI when kpiId is passed', async () => {
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
+
+      await service.getRecentFeedback('kpi-1');
+
+      expect(prisma.evaluationAreaEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { OR: [{ context: { not: null } }, { comment: { not: null } }], evaluationArea: { kpiId: 'kpi-1' } },
+        }),
+      );
+    });
+  });
+
+  describe('getActivityTrend', () => {
+    beforeEach(() => {
+      // A known Wednesday, so "this week"'s Monday is unambiguous.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-03-11T12:00:00Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('returns exactly ACTIVITY_TREND_WEEKS points, oldest first, ending on the current week', async () => {
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
+
+      const { points } = await service.getActivityTrend();
+
+      expect(points).toHaveLength(12);
+      expect(points[0]!.weekStart).toBe('2025-12-22');
+      expect(points[11]!.weekStart).toBe('2026-03-09'); // Monday of the current week
+    });
+
+    it('buckets entries by the Monday of their own week, and counts every entry that week', async () => {
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([
+        { createdAt: new Date('2026-03-09T08:00:00Z') }, // Monday of current week
+        { createdAt: new Date('2026-03-11T20:00:00Z') }, // Wednesday, same week
+        { createdAt: new Date('2026-03-02T09:00:00Z') }, // previous week
+      ]);
+
+      const { points } = await service.getActivityTrend();
+
+      expect(points.find((p) => p.weekStart === '2026-03-09')?.count).toBe(2);
+      expect(points.find((p) => p.weekStart === '2026-03-02')?.count).toBe(1);
+    });
+
+    it('reports 0, not an omitted point, for a week with no activity', async () => {
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
+
+      const { points } = await service.getActivityTrend();
+
+      expect(points.every((p) => p.count === 0)).toBe(true);
+    });
+
+    it("queries only entries within the window's earliest week", async () => {
+      prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
+
+      await service.getActivityTrend();
+
+      expect(prisma.evaluationAreaEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { createdAt: { gte: new Date('2025-12-22T00:00:00.000Z') } } }),
       );
     });
   });

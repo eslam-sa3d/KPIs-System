@@ -7,7 +7,7 @@ import { FormsService } from './forms.service';
  *  indirectly via apps/api/test/forms.integration.spec.ts against a live DB. */
 function makePrismaStub() {
   return {
-    form: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    form: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), delete: vi.fn() },
     formSubmission: { count: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn((ops: Array<Promise<unknown>>) => Promise.all(ops)),
@@ -104,5 +104,98 @@ describe('FormsService.archiveForm / unarchiveForm / deleteForm', () => {
         where: { formVersion: { formId: 'form-1' } },
       });
     });
+  });
+});
+
+describe('FormsService.listForms', () => {
+  let prisma: ReturnType<typeof makePrismaStub>;
+  let service: FormsService;
+
+  const definition = { title: 'Sprint check', fields: [{ key: 'q1', label: 'Q1', type: 'rating' }] };
+
+  function formRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'form-1',
+      slug: 'sprint-check',
+      status: 'published',
+      publicToken: null,
+      settings: null,
+      folder: null,
+      createdAt: new Date('2026-01-01'),
+      versions: [{ version: 1, definition, submissions: [] }],
+      kpiMappings: [],
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    prisma = makePrismaStub();
+    service = new FormsService(prisma as never, {} as never, {} as never);
+  });
+
+  it('reports hasSubmissionGap: false for an accepting form scored within the last 30 days', async () => {
+    prisma.form.findMany.mockResolvedValue([
+      formRow({ versions: [{ version: 1, definition, submissions: [{ createdAt: new Date() }] }] }),
+    ]);
+
+    const [item] = await service.listForms();
+
+    expect(item!.hasSubmissionGap).toBe(false);
+    expect(item!.lastSubmissionAt).not.toBeNull();
+  });
+
+  it('flags an accepting form with no submissions in 30+ days as hasSubmissionGap', async () => {
+    const old = new Date();
+    old.setDate(old.getDate() - 45);
+    prisma.form.findMany.mockResolvedValue([
+      formRow({ versions: [{ version: 1, definition, submissions: [{ createdAt: old }] }] }),
+    ]);
+
+    const [item] = await service.listForms();
+
+    expect(item!.hasSubmissionGap).toBe(true);
+  });
+
+  it('flags an accepting form that has never received a submission as hasSubmissionGap', async () => {
+    prisma.form.findMany.mockResolvedValue([formRow()]);
+
+    const [item] = await service.listForms();
+
+    expect(item!.hasSubmissionGap).toBe(true);
+    expect(item!.lastSubmissionAt).toBeNull();
+  });
+
+  it('never flags a draft form as hasSubmissionGap, even with zero submissions', async () => {
+    prisma.form.findMany.mockResolvedValue([formRow({ status: 'draft' })]);
+
+    const [item] = await service.listForms();
+
+    expect(item!.hasSubmissionGap).toBe(false);
+  });
+
+  it('flags an archived form still linked to a KPI as mappedWhileClosed', async () => {
+    prisma.form.findMany.mockResolvedValue([formRow({ status: 'archived', kpiMappings: [{ id: 'mapping-1' }] })]);
+
+    const [item] = await service.listForms();
+
+    expect(item!.mappedWhileClosed).toBe(true);
+  });
+
+  it('does not flag a currently-accepting, mapped form as mappedWhileClosed', async () => {
+    prisma.form.findMany.mockResolvedValue([formRow({ kpiMappings: [{ id: 'mapping-1' }] })]);
+
+    const [item] = await service.listForms();
+
+    expect(item!.mappedWhileClosed).toBe(false);
+  });
+
+  it('treats a form past its own closesAt as not currently accepting', async () => {
+    const settings = { acceptingResponses: true, closesAt: '2020-01-01T00:00:00.000Z' };
+    prisma.form.findMany.mockResolvedValue([formRow({ settings, kpiMappings: [{ id: 'mapping-1' }] })]);
+
+    const [item] = await service.listForms();
+
+    expect(item!.mappedWhileClosed).toBe(true);
+    expect(item!.hasSubmissionGap).toBe(false); // not "accepting", so no submission-gap signal either
   });
 });

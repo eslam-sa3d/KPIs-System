@@ -63,6 +63,27 @@ export class KpisController {
     return this.kpis.getPersonBreakdown(personId);
   }
 
+  /** Unmapped score-eligible questions + stale Evaluation Areas, org-wide — powers the dashboard's measurement-gap panel. */
+  @Get('measurement-gaps')
+  @RequirePermissions('kpis:manage')
+  getMeasurementGaps() {
+    return this.kpis.getMeasurementGaps();
+  }
+
+  /** Recent context/comment feedback, org-wide or scoped to one KPI — powers the dashboard's qualitative feedback digest. */
+  @Get('recent-feedback')
+  @RequirePermissions('kpis:manage')
+  getRecentFeedback(@Query('kpiId') kpiId?: string) {
+    return this.kpis.getRecentFeedback(kpiId);
+  }
+
+  /** Weekly count of new Evaluation Area entries, org-wide — powers the dashboard's evaluation activity trend chart. */
+  @Get('activity-trend')
+  @RequirePermissions('kpis:manage')
+  getActivityTrend() {
+    return this.kpis.getActivityTrend();
+  }
+
   @Patch(':id')
   @RequirePermissions('kpis:write')
   update(

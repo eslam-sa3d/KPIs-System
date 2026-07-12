@@ -17,6 +17,16 @@ export interface FormListItem {
   settings: FormSettings;
   folder: string | null;
   createdAt: string;
+  /** Most recent submission to this form's latest version, or null if it's
+   *  never received one. */
+  lastSubmissionAt: string | null;
+  /** Open and accepting responses, but quiet for 30+ days (or forever) —
+   *  a form nobody's actually filling. */
+  hasSubmissionGap: boolean;
+  /** Linked to at least one FormKpiMapping, but not currently reachable
+   *  (draft, archived, closed, or outside its open window) — the KPI it
+   *  feeds is silently starved of new scores. */
+  mappedWhileClosed: boolean;
 }
 
 /**
