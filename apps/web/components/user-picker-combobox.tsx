@@ -45,7 +45,7 @@ export function UserPickerCombobox({
           {triggerLabel}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-0" align="start">
+      <PopoverContent className="w-[420px] p-0" align="start">
         <Command>
           <CommandInput placeholder="search people…" />
           <CommandList>
@@ -59,9 +59,16 @@ export function UserPickerCombobox({
                     onSelect(u);
                     setOpen(false);
                   }}
+                  style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}
                 >
-                  <span className="truncate">{u.displayName}</span>
-                  <span className="muted" style={{ marginLeft: 6, fontSize: 12 }}>
+                  <span className="truncate" style={{ flex: '0 1 auto' }}>
+                    {u.displayName}
+                  </span>
+                  {/* opacity dims relative to whatever the current text color is (default
+                      foreground, or accent-foreground when this item is keyboard-selected)
+                      instead of a fixed muted gray, which reads as illegible against the
+                      selected item's own accent background. */}
+                  <span className="truncate" style={{ flex: '1 1 auto', fontSize: 12, minWidth: 0, opacity: 0.65 }}>
                     {u.email}
                   </span>
                 </CommandItem>
