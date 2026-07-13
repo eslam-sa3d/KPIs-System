@@ -1,15 +1,19 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   CreateDepartmentInput,
+  CreateProjectGroupInput,
   CreateUserInput,
   PageQuery,
   SetUserStatusInput,
   UpdateDepartmentInput,
+  UpdateProjectGroupInput,
   UpdateUserInput,
   createDepartmentSchema,
+  createProjectGroupSchema,
   createUserSchema,
   setUserStatusSchema,
   updateDepartmentSchema,
+  updateProjectGroupSchema,
   updateUserSchema,
 } from '@pulse/contracts';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
@@ -23,7 +27,7 @@ export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  @RequirePermissions('users:read')
+  @RequirePermissions('users:view')
   list(@Query() query: PageQuery & { search?: string; departmentId?: string }, @Req() req: AuthedRequest) {
     return this.users.list(query, req.user.id);
   }
@@ -31,19 +35,19 @@ export class UsersController {
   /** Headline counts for the users page's stat widgets — computed by aggregate
    *  query rather than derived from a (possibly filtered/paginated) list page. */
   @Get('stats')
-  @RequirePermissions('users:read')
+  @RequirePermissions('users:view')
   stats(@Req() req: AuthedRequest) {
     return this.users.stats(req.user.id);
   }
 
   @Post()
-  @RequirePermissions('users:write')
+  @RequirePermissions('users:edit')
   create(@Body(new ZodValidationPipe(createUserSchema)) input: CreateUserInput, @Req() req: AuthedRequest) {
     return this.users.create(input, req.user.id);
   }
 
   @Patch(':userId')
-  @RequirePermissions('users:write')
+  @RequirePermissions('users:edit')
   update(
     @Param('userId') userId: string,
     @Body(new ZodValidationPipe(updateUserSchema)) input: UpdateUserInput,
@@ -53,7 +57,7 @@ export class UsersController {
   }
 
   @Patch(':userId/status')
-  @RequirePermissions('users:manage')
+  @RequirePermissions('users:activate_deactivate')
   setStatus(
     @Param('userId') userId: string,
     @Body(new ZodValidationPipe(setUserStatusSchema)) input: SetUserStatusInput,
@@ -68,19 +72,19 @@ export class DepartmentsController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  @RequirePermissions('departments:read')
+  @RequirePermissions('departments:view')
   list() {
     return this.users.listDepartments();
   }
 
   @Post()
-  @RequirePermissions('departments:manage')
+  @RequirePermissions('departments:edit')
   create(@Body(new ZodValidationPipe(createDepartmentSchema)) input: CreateDepartmentInput, @Req() req: AuthedRequest) {
     return this.users.createDepartment(input, req.user.id);
   }
 
   @Patch(':departmentId')
-  @RequirePermissions('departments:manage')
+  @RequirePermissions('departments:edit')
   rename(
     @Param('departmentId') departmentId: string,
     @Body(new ZodValidationPipe(updateDepartmentSchema)) input: UpdateDepartmentInput,
@@ -90,8 +94,44 @@ export class DepartmentsController {
   }
 
   @Delete(':departmentId')
-  @RequirePermissions('departments:manage')
+  @RequirePermissions('departments:delete')
   remove(@Param('departmentId') departmentId: string, @Req() req: AuthedRequest) {
     return this.users.deleteDepartment(departmentId, req.user.id);
+  }
+}
+
+@Controller('v1/project-groups')
+export class ProjectGroupsController {
+  constructor(private readonly users: UsersService) {}
+
+  @Get()
+  @RequirePermissions('project_groups:view')
+  list() {
+    return this.users.listProjectGroups();
+  }
+
+  @Post()
+  @RequirePermissions('project_groups:edit')
+  create(
+    @Body(new ZodValidationPipe(createProjectGroupSchema)) input: CreateProjectGroupInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.users.createProjectGroup(input, req.user.id);
+  }
+
+  @Patch(':groupId')
+  @RequirePermissions('project_groups:edit')
+  rename(
+    @Param('groupId') groupId: string,
+    @Body(new ZodValidationPipe(updateProjectGroupSchema)) input: UpdateProjectGroupInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.users.renameProjectGroup(groupId, input, req.user.id);
+  }
+
+  @Delete(':groupId')
+  @RequirePermissions('project_groups:delete')
+  remove(@Param('groupId') groupId: string, @Req() req: AuthedRequest) {
+    return this.users.deleteProjectGroup(groupId, req.user.id);
   }
 }

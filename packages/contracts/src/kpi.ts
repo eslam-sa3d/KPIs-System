@@ -16,10 +16,14 @@ export type CreateKpiInput = z.infer<typeof createKpiSchema>;
 export const updateKpiSchema = z.object({
   name: z.string().min(2).max(200).optional(),
   weight: z.number().min(0).max(100).optional(),
-  isActive: z.boolean().optional(),
 });
 
 export type UpdateKpiInput = z.infer<typeof updateKpiSchema>;
+
+/** Separate from updateKpiSchema so activating/deactivating a KPI is its own
+ *  permission (kpis:activate_deactivate) instead of bundled with editing. */
+export const setKpiStatusSchema = z.object({ isActive: z.boolean() });
+export type SetKpiStatusInput = z.infer<typeof setKpiStatusSchema>;
 
 /** Map a KPI to a role, department, and/or delivery stream — at least one. */
 export const kpiAssignmentSchema = z
@@ -47,10 +51,13 @@ export type CreateEvaluationAreaInput = z.infer<typeof createEvaluationAreaSchem
 export const updateEvaluationAreaSchema = z.object({
   name: z.string().min(2).max(200).optional(),
   cadence: z.enum(EVALUATION_AREA_CADENCES).optional(),
-  isActive: z.boolean().optional(),
 });
 
 export type UpdateEvaluationAreaInput = z.infer<typeof updateEvaluationAreaSchema>;
+
+/** Separate from updateEvaluationAreaSchema — see setKpiStatusSchema. */
+export const setEvaluationAreaStatusSchema = z.object({ isActive: z.boolean() });
+export type SetEvaluationAreaStatusInput = z.infer<typeof setEvaluationAreaStatusSchema>;
 
 /** A named leaf under an Evaluation Area — pure taxonomy, no scoring/cadence
  *  of its own (see EvaluationArea's own doc comment for where those live). */

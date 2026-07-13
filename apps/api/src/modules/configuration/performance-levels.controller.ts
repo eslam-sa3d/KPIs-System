@@ -16,13 +16,13 @@ export class PerformanceLevelsController {
   constructor(private readonly levels: PerformanceLevelsService) {}
 
   @Get()
-  @RequirePermissions('configuration:read')
+  @RequirePermissions('configuration:view')
   list() {
     return this.levels.list();
   }
 
   @Post()
-  @RequirePermissions('configuration:manage')
+  @RequirePermissions('configuration:edit')
   create(
     @Body(new ZodValidationPipe(createPerformanceLevelSchema)) input: CreatePerformanceLevelInput,
     @Req() req: AuthedRequest,
@@ -31,7 +31,7 @@ export class PerformanceLevelsController {
   }
 
   @Patch(':levelId')
-  @RequirePermissions('configuration:manage')
+  @RequirePermissions('configuration:edit')
   update(
     @Param('levelId') levelId: string,
     @Body(new ZodValidationPipe(updatePerformanceLevelSchema)) input: UpdatePerformanceLevelInput,
@@ -41,7 +41,7 @@ export class PerformanceLevelsController {
   }
 
   @Delete(':levelId')
-  @RequirePermissions('configuration:manage')
+  @RequirePermissions('configuration:delete')
   remove(@Param('levelId') levelId: string, @Req() req: AuthedRequest) {
     return this.levels.remove(levelId, req.user.id);
   }

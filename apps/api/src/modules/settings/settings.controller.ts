@@ -10,19 +10,19 @@ export class SettingsController {
   constructor(private readonly demoData: DemoDataService) {}
 
   @Get('demo-data')
-  @RequirePermissions('settings:manage')
+  @RequirePermissions('settings:view')
   status() {
     return this.demoData.status();
   }
 
   @Post('demo-data')
-  @RequirePermissions('settings:manage')
+  @RequirePermissions('settings:edit')
   seed(@Req() req: AuthedRequest) {
     return this.demoData.seed(req.user.id);
   }
 
   @Delete('demo-data')
-  @RequirePermissions('settings:manage')
+  @RequirePermissions('settings:delete')
   remove(@Req() req: AuthedRequest) {
     return this.demoData.remove(req.user.id);
   }

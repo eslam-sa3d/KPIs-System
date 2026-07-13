@@ -6,6 +6,8 @@ import {
   KpiAssignmentInput,
   PageQuery,
   RecordEvaluationAreaEntryInput,
+  SetEvaluationAreaStatusInput,
+  SetKpiStatusInput,
   UpdateEvaluationAreaEntryInput,
   UpdateEvaluationAreaInput,
   UpdateKpiInput,
@@ -15,6 +17,8 @@ import {
   createSubCriteriaSchema,
   kpiAssignmentSchema,
   recordEvaluationAreaEntrySchema,
+  setEvaluationAreaStatusSchema,
+  setKpiStatusSchema,
   updateEvaluationAreaEntrySchema,
   updateEvaluationAreaSchema,
   updateKpiSchema,
@@ -31,61 +35,63 @@ export class KpisController {
   constructor(private readonly kpis: KpisService) {}
 
   @Post()
-  @RequirePermissions('kpis:write')
+  @RequirePermissions('kpis:edit')
   create(@Body(new ZodValidationPipe(createKpiSchema)) input: CreateKpiInput, @Req() req: AuthedRequest) {
     return this.kpis.createKpi(input, req.user.id);
   }
 
   @Get()
-  @RequirePermissions('kpis:read')
+  @RequirePermissions('kpis:view')
   list(@Query() query: PageQuery, @Req() req: AuthedRequest) {
     return this.kpis.list(query, req.user.id);
   }
 
   /** KPIs scoped to the caller's own roles/department — powers "my dashboard". */
   @Get('my')
-  @RequirePermissions('kpis:read')
+  @RequirePermissions('kpis:view')
   listMine(@Req() req: AuthedRequest) {
     return this.kpis.listMine(req.user.id);
   }
 
-  /** Every active user with their coverage/score/last-updated — powers the admin dashboard's team overview table. */
+  /** Every active user with their coverage/score/last-updated — powers the admin
+   *  dashboard's team overview table. Dashboard data, not KPI administration —
+   *  gated on dashboards:view rather than kpis:*. */
   @Get('team-overview')
-  @RequirePermissions('kpis:manage')
-  getTeamOverview() {
-    return this.kpis.getTeamOverview();
+  @RequirePermissions('dashboards:view')
+  getTeamOverview(@Req() req: AuthedRequest) {
+    return this.kpis.getTeamOverview(req.user.id);
   }
 
   /** One team member's own rate across every covering KPI — powers the team overview table's row detail drawer. */
   @Get('team-overview/:personId')
-  @RequirePermissions('kpis:manage')
+  @RequirePermissions('dashboards:view')
   getPersonBreakdown(@Param('personId') personId: string) {
     return this.kpis.getPersonBreakdown(personId);
   }
 
   /** Unmapped score-eligible questions + stale Evaluation Areas, org-wide — powers the dashboard's measurement-gap panel. */
   @Get('measurement-gaps')
-  @RequirePermissions('kpis:manage')
+  @RequirePermissions('dashboards:view')
   getMeasurementGaps() {
     return this.kpis.getMeasurementGaps();
   }
 
   /** Recent context/comment feedback, org-wide or scoped to one KPI — powers the dashboard's qualitative feedback digest. */
   @Get('recent-feedback')
-  @RequirePermissions('kpis:manage')
+  @RequirePermissions('dashboards:view')
   getRecentFeedback(@Query('kpiId') kpiId?: string) {
     return this.kpis.getRecentFeedback(kpiId);
   }
 
   /** Weekly count of new Evaluation Area entries, org-wide — powers the dashboard's evaluation activity trend chart. */
   @Get('activity-trend')
-  @RequirePermissions('kpis:manage')
+  @RequirePermissions('dashboards:view')
   getActivityTrend() {
     return this.kpis.getActivityTrend();
   }
 
   @Patch(':id')
-  @RequirePermissions('kpis:write')
+  @RequirePermissions('kpis:edit')
   update(
     @Param('id') id: string,
     @Body(new ZodValidationPipe(updateKpiSchema)) input: UpdateKpiInput,
@@ -94,14 +100,24 @@ export class KpisController {
     return this.kpis.updateKpi(id, input, req.user.id);
   }
 
+  @Patch(':id/status')
+  @RequirePermissions('kpis:activate_deactivate')
+  setStatus(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(setKpiStatusSchema)) input: SetKpiStatusInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpis.setKpiStatus(id, input, req.user.id);
+  }
+
   @Delete(':id')
-  @RequirePermissions('kpis:manage')
+  @RequirePermissions('kpis:delete')
   remove(@Param('id') id: string, @Query('force') force: string | undefined, @Req() req: AuthedRequest) {
     return this.kpis.deleteKpi(id, req.user.id, force === 'true');
   }
 
   @Post(':kpiId/assignments')
-  @RequirePermissions('kpis:manage')
+  @RequirePermissions('kpis:edit')
   assign(
     @Param('kpiId') kpiId: string,
     @Body(new ZodValidationPipe(kpiAssignmentSchema)) input: KpiAssignmentInput,
@@ -111,13 +127,13 @@ export class KpisController {
   }
 
   @Delete(':kpiId/assignments/:assignmentId')
-  @RequirePermissions('kpis:manage')
+  @RequirePermissions('kpis:edit')
   unassign(@Param('kpiId') kpiId: string, @Param('assignmentId') assignmentId: string, @Req() req: AuthedRequest) {
     return this.kpis.unassign(kpiId, assignmentId, req.user.id);
   }
 
   @Post(':kpiId/areas')
-  @RequirePermissions('kpis:write')
+  @RequirePermissions('kpis:edit')
   createArea(
     @Param('kpiId') kpiId: string,
     @Body(new ZodValidationPipe(createEvaluationAreaSchema)) input: CreateEvaluationAreaInput,
@@ -127,7 +143,7 @@ export class KpisController {
   }
 
   @Patch(':kpiId/areas/:areaId')
-  @RequirePermissions('kpis:write')
+  @RequirePermissions('kpis:edit')
   updateArea(
     @Param('kpiId') kpiId: string,
     @Param('areaId') areaId: string,
@@ -137,14 +153,25 @@ export class KpisController {
     return this.kpis.updateEvaluationArea(kpiId, areaId, input, req.user.id);
   }
 
+  @Patch(':kpiId/areas/:areaId/status')
+  @RequirePermissions('kpis:activate_deactivate')
+  setAreaStatus(
+    @Param('kpiId') kpiId: string,
+    @Param('areaId') areaId: string,
+    @Body(new ZodValidationPipe(setEvaluationAreaStatusSchema)) input: SetEvaluationAreaStatusInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpis.setEvaluationAreaStatus(kpiId, areaId, input, req.user.id);
+  }
+
   @Delete(':kpiId/areas/:areaId')
-  @RequirePermissions('kpis:manage')
+  @RequirePermissions('kpis:delete')
   removeArea(@Param('kpiId') kpiId: string, @Param('areaId') areaId: string, @Req() req: AuthedRequest) {
     return this.kpis.deleteEvaluationArea(kpiId, areaId, req.user.id);
   }
 
   @Post(':kpiId/areas/:areaId/sub-criteria')
-  @RequirePermissions('kpis:write')
+  @RequirePermissions('kpis:edit')
   createSubCriteria(
     @Param('kpiId') kpiId: string,
     @Param('areaId') areaId: string,
@@ -155,7 +182,7 @@ export class KpisController {
   }
 
   @Patch(':kpiId/areas/:areaId/sub-criteria/:subCriteriaId')
-  @RequirePermissions('kpis:write')
+  @RequirePermissions('kpis:edit')
   updateSubCriteria(
     @Param('kpiId') kpiId: string,
     @Param('areaId') areaId: string,
@@ -167,7 +194,7 @@ export class KpisController {
   }
 
   @Delete(':kpiId/areas/:areaId/sub-criteria/:subCriteriaId')
-  @RequirePermissions('kpis:manage')
+  @RequirePermissions('kpis:delete')
   removeSubCriteria(
     @Param('kpiId') kpiId: string,
     @Param('areaId') areaId: string,
@@ -178,7 +205,7 @@ export class KpisController {
   }
 
   @Post(':kpiId/areas/:areaId/entries')
-  @RequirePermissions('kpi_entries:write')
+  @RequirePermissions('kpi_entries:edit')
   recordEntry(
     @Param('kpiId') kpiId: string,
     @Param('areaId') areaId: string,
@@ -189,7 +216,7 @@ export class KpisController {
   }
 
   @Patch(':kpiId/areas/:areaId/entries/:entryId')
-  @RequirePermissions('kpi_entries:write')
+  @RequirePermissions('kpi_entries:edit')
   updateEntry(
     @Param('kpiId') kpiId: string,
     @Param('areaId') areaId: string,
@@ -201,7 +228,7 @@ export class KpisController {
   }
 
   @Delete(':kpiId/areas/:areaId/entries/:entryId')
-  @RequirePermissions('kpi_entries:manage')
+  @RequirePermissions('kpi_entries:delete')
   removeEntry(
     @Param('kpiId') kpiId: string,
     @Param('areaId') areaId: string,
@@ -212,7 +239,7 @@ export class KpisController {
   }
 
   @Get(':kpiId/areas/:areaId/series')
-  @RequirePermissions('kpis:read', 'kpi_entries:read')
+  @RequirePermissions('kpis:view', 'kpi_entries:view')
   series(@Param('kpiId') kpiId: string, @Param('areaId') areaId: string, @Query('personId') personId?: string) {
     return this.kpis.getSeries(kpiId, areaId, personId);
   }

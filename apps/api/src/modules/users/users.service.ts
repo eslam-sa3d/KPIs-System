@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import {
   CreateDepartmentInput,
+  CreateProjectGroupInput,
   CreateUserInput,
   PageQuery,
   UpdateDepartmentInput,
+  UpdateProjectGroupInput,
   UpdateUserInput,
   buildPaginationMeta,
   resolvePageBounds,
@@ -25,33 +27,49 @@ export class UsersService {
     private readonly rbac: RbacService,
   ) {}
 
-  /** `userId` is the caller, not a filter target — a `users:read` grant with
-   *  a department/own scope (see RbacService.DEPARTMENT_SCOPABLE_RESOURCES)
-   *  restricts the roster to the caller's own department, the same way
-   *  KpisService.list() restricts KPIs to the caller's own assignments. */
+  /** `userId` is the caller, not a filter target — a `users:view` grant scoped
+   *  to department and/or project_group (see RbacService.userViewScopeKinds)
+   *  restricts the roster to the union of whichever the caller's roles grant,
+   *  the same way KpisService.list() restricts KPIs to the caller's own
+   *  assignments. Returns null when unrestricted (an 'all'-scoped grant), so
+   *  callers can fall back to their own optional filters in that case. */
+  private async scopeFilter(userId: string): Promise<Record<string, unknown> | null> {
+    const kinds = await this.rbac.userViewScopeKinds(userId);
+    if (kinds === 'all') return null;
+    // A restricted caller with none of the granted dimensions set sees no
+    // one — `departmentId: null` would otherwise match every other
+    // departmentless user, which is the opposite of "restricted".
+    const conditions: object[] = [];
+    if (kinds.includes('department')) {
+      conditions.push({ departmentId: (await this.rbac.myDepartmentId(userId)) ?? '__none__' });
+    }
+    if (kinds.includes('project_group')) {
+      conditions.push({ projectGroupId: (await this.rbac.myProjectGroupId(userId)) ?? '__none__' });
+    }
+    if (kinds.includes('own')) conditions.push({ id: userId });
+    return conditions.length > 0 ? { OR: conditions } : { id: '__none__' };
+  }
+
   async list(query: PageQuery & { search?: string; departmentId?: string }, userId: string) {
     const { page, pageSize } = resolvePageBounds(query);
 
-    const restricted = await this.rbac.isReadScopeRestricted(userId, 'users');
-    // A restricted caller with no department of their own sees no one —
-    // `departmentId: null` would otherwise match every other departmentless
-    // user, which is the opposite of "restricted".
-    const ownDepartmentId = restricted ? await this.rbac.myDepartmentId(userId) : undefined;
+    const scoped = await this.scopeFilter(userId);
     const search = query.search?.trim();
+    // AND'd as separate clauses, not spread — scoped's own OR (department/
+    // project_group/own) and search's OR (name/email) would otherwise collide
+    // on the same object key and silently drop one of the two filters.
     const where = {
-      ...(restricted
-        ? { departmentId: ownDepartmentId ?? '__none__' }
-        : query.departmentId
-          ? { departmentId: query.departmentId }
-          : {}),
-      ...(search
-        ? {
-            OR: [
-              { displayName: { contains: search, mode: 'insensitive' as const } },
-              { email: { contains: search, mode: 'insensitive' as const } },
-            ],
-          }
-        : {}),
+      AND: [
+        scoped ?? (query.departmentId ? { departmentId: query.departmentId } : {}),
+        search
+          ? {
+              OR: [
+                { displayName: { contains: search, mode: 'insensitive' as const } },
+                { email: { contains: search, mode: 'insensitive' as const } },
+              ],
+            }
+          : {},
+      ],
     };
 
     const [totalItems, users] = await this.prisma.$transaction([
@@ -69,6 +87,7 @@ export class UsersService {
           isKpiApplicable: true,
           createdAt: true,
           department: { select: { id: true, name: true } },
+          projectGroup: { select: { id: true, name: true } },
           roles: { select: { role: { select: { id: true, name: true } } } },
         },
       }),
@@ -78,12 +97,10 @@ export class UsersService {
     return paged(items, buildPaginationMeta(page, pageSize, totalItems));
   }
 
-  /** Headline counts for the users page's stat widgets — same read-scope
+  /** Headline counts for the users page's stat widgets — same view-scope
    *  restriction as list(), but an unfiltered aggregate rather than a page. */
   async stats(userId: string) {
-    const restricted = await this.rbac.isReadScopeRestricted(userId, 'users');
-    const ownDepartmentId = restricted ? await this.rbac.myDepartmentId(userId) : undefined;
-    const where = restricted ? { departmentId: ownDepartmentId ?? '__none__' } : {};
+    const where = (await this.scopeFilter(userId)) ?? {};
 
     const [total, active, assignedToDepartment, departments] = await this.prisma.$transaction([
       this.prisma.user.count({ where }),
@@ -107,6 +124,7 @@ export class UsersService {
           displayName: input.displayName,
           passwordHash,
           departmentId: input.departmentId,
+          projectGroupId: input.projectGroupId,
           isKpiApplicable: input.isKpiApplicable,
           roles: { create: input.roleIds.map((roleId) => ({ roleId })) },
         },
@@ -141,6 +159,7 @@ export class UsersService {
         ...(input.email !== undefined ? { email: input.email } : {}),
         ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
         ...(input.departmentId !== undefined ? { departmentId: input.departmentId } : {}),
+        ...(input.projectGroupId !== undefined ? { projectGroupId: input.projectGroupId } : {}),
         ...(input.isKpiApplicable !== undefined ? { isKpiApplicable: input.isKpiApplicable } : {}),
       },
       select: {
@@ -150,6 +169,7 @@ export class UsersService {
         isActive: true,
         isKpiApplicable: true,
         department: { select: { id: true, name: true } },
+        projectGroup: { select: { id: true, name: true } },
       },
     });
     await this.prisma.auditLog.create({
@@ -239,6 +259,56 @@ export class UsersService {
     await this.prisma.department.delete({ where: { id: departmentId } });
     await this.prisma.auditLog.create({
       data: { actorId, action: 'department.deleted', entity: 'Department', entityId: departmentId },
+    });
+    return null;
+  }
+
+  listProjectGroups() {
+    return this.prisma.projectGroup.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  async createProjectGroup(input: CreateProjectGroupInput, actorId: string) {
+    const existing = await this.prisma.projectGroup.findUnique({ where: { name: input.name } });
+    if (existing) throw new AppError('CONFLICT', `Project group "${input.name}" already exists`);
+    const group = await this.prisma.projectGroup.create({ data: input });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'project_group.created', entity: 'ProjectGroup', entityId: group.id },
+    });
+    return group;
+  }
+
+  async renameProjectGroup(groupId: string, input: UpdateProjectGroupInput, actorId: string) {
+    const group = await this.prisma.projectGroup.findUnique({ where: { id: groupId } });
+    if (!group) throw AppError.notFound('ProjectGroup', groupId);
+    const existing = await this.prisma.projectGroup.findUnique({ where: { name: input.name } });
+    if (existing && existing.id !== groupId) {
+      throw new AppError('CONFLICT', `Project group "${input.name}" already exists`);
+    }
+    const updated = await this.prisma.projectGroup.update({
+      where: { id: groupId },
+      data: { name: input.name },
+    });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'project_group.renamed', entity: 'ProjectGroup', entityId: groupId },
+    });
+    return updated;
+  }
+
+  /** Same "fix it first" pattern as deleteDepartment — blocked while any user
+   *  is still assigned, rather than silently orphaning their project group. */
+  async deleteProjectGroup(groupId: string, actorId: string) {
+    const group = await this.prisma.projectGroup.findUnique({ where: { id: groupId } });
+    if (!group) throw AppError.notFound('ProjectGroup', groupId);
+    const memberCount = await this.prisma.user.count({ where: { projectGroupId: groupId } });
+    if (memberCount > 0) {
+      throw new AppError(
+        'CONFLICT',
+        `"${group.name}" still has ${memberCount} member${memberCount === 1 ? '' : 's'} — move them to another project group first`,
+      );
+    }
+    await this.prisma.projectGroup.delete({ where: { id: groupId } });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'project_group.deleted', entity: 'ProjectGroup', entityId: groupId },
     });
     return null;
   }

@@ -1,18 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CreateRoleInput, PermissionKey, Resource, UpdateRoleInput } from '@pulse/contracts';
+import { CreateRoleInput, PermissionKey, Resource, SetRoleStatusInput, UpdateRoleInput } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 import { RedisService } from '../../infra/redis.service';
 
-/** Resources whose rows have a `departmentId` (directly, or one hop away via
- *  an assignment table) that a "department"/"own" scoped grant can actually
- *  filter by. Every RolePermission.scope value that isn't "all" is
- *  meaningful only for these — Forms/Submissions have their own, more
- *  granular access model (FormCollaborator + `restricted`), not a
- *  department, so department/own scope has no correct meaning there. Keep
- *  this in sync with the scope selector in the roles admin UI, which only
- *  offers non-"all" scope for resources listed here. */
+/** Resources whose rows have a `departmentId`/`projectGroupId` (directly, or one
+ *  hop away via an assignment table) that a "department"/"project_group"/"own"
+ *  scoped grant can actually filter by. Every RolePermission.scope value that
+ *  isn't "all" is meaningful only for these — Forms/Submissions have their own,
+ *  more granular access model (FormCollaborator + `restricted`), not a
+ *  department, so department/project_group/own scope has no correct meaning
+ *  there. Keep this in sync with the scope selector in the roles admin UI, which
+ *  only offers non-"all" scope for resources listed here. */
 export const DEPARTMENT_SCOPABLE_RESOURCES: readonly Resource[] = ['kpis', 'users'];
+export const PROJECT_GROUP_SCOPABLE_RESOURCES: readonly Resource[] = ['users'];
 
 const PERMISSION_CACHE_TTL_SECONDS = 300;
 const cacheKey = (userId: string) => `rbac:perms:${userId}`;
@@ -70,18 +71,18 @@ export class RbacService {
   }
 
   /**
-   * True once every one of the caller's roles that grant `resource:read` do
+   * True once every one of the caller's roles that grant `resource:view` do
    * so with a scope narrower than "all" — i.e. the caller's results must be
-   * filtered down to their own department, not shown org-wide. A single
-   * "all"-scoped grant (e.g. an admin role held alongside a narrower one) is
-   * enough to see everything, matching how permission checks already union
-   * across a user's roles rather than intersect.
+   * filtered down to their own department/project group, not shown org-wide.
+   * A single "all"-scoped grant (e.g. an admin role held alongside a narrower
+   * one) is enough to see everything, matching how permission checks already
+   * union across a user's roles rather than intersect.
    */
-  async isReadScopeRestricted(userId: string, resource: Resource): Promise<boolean> {
+  async isViewScopeRestricted(userId: string, resource: Resource): Promise<boolean> {
     const grants = await this.prisma.rolePermission.findMany({
       where: {
         role: { isActive: true, users: { some: { userId } } },
-        permission: { resource, action: 'read' },
+        permission: { resource, action: 'view' },
       },
       select: { scope: true },
     });
@@ -89,13 +90,57 @@ export class RbacService {
   }
 
   /** The caller's own departmentId, for building a `{ departmentId }` filter
-   *  once isReadScopeRestricted() is true. Null for a caller with no
+   *  once isViewScopeRestricted() is true. Null for a caller with no
    *  department — callers should treat that as "sees nothing" when
    *  restricted, not "sees everything". */
   async myDepartmentId(userId: string): Promise<string | null> {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { departmentId: true } });
     if (!user) throw AppError.notFound('User', userId);
     return user.departmentId;
+  }
+
+  /** Same shape as myDepartmentId, for a "project_group"-scoped grant. */
+  async myProjectGroupId(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { projectGroupId: true } });
+    if (!user) throw AppError.notFound('User', userId);
+    return user.projectGroupId;
+  }
+
+  /** Users-specific: unlike isViewScopeRestricted's single all-or-restricted
+   *  boolean, `users:view` can be scoped by department AND/OR project_group at
+   *  once (a caller might hold one role scoped each way) — the effective view
+   *  is the UNION of whichever dimensions are granted, same "any 'all' grant
+   *  wins" precedence as everywhere else. Returns 'all' when unrestricted,
+   *  otherwise the distinct non-'all' scope values actually granted. */
+  async userViewScopeKinds(userId: string): Promise<'all' | Array<'department' | 'project_group' | 'own'>> {
+    const grants = await this.prisma.rolePermission.findMany({
+      where: {
+        role: { isActive: true, users: { some: { userId } } },
+        permission: { resource: 'users', action: 'view' },
+      },
+      select: { scope: true },
+    });
+    if (grants.some((g) => g.scope === 'all')) return 'all';
+    return [...new Set(grants.map((g) => g.scope))].filter(
+      (s): s is 'department' | 'project_group' | 'own' => s === 'department' || s === 'project_group' || s === 'own',
+    );
+  }
+
+  /** dashboards:view-specific: null means unrestricted (the caller holds an
+   *  "all"-scoped grant), otherwise the union of PerformanceLevel ids across
+   *  every "level"-scoped dashboards:view grant the caller holds. An empty
+   *  array means restricted-but-nothing-selected (sees nobody), not
+   *  unrestricted — callers must distinguish null from []. */
+  async allowedDashboardLevelIds(userId: string): Promise<string[] | null> {
+    const grants = await this.prisma.rolePermission.findMany({
+      where: {
+        role: { isActive: true, users: { some: { userId } } },
+        permission: { resource: 'dashboards', action: 'view' },
+      },
+      select: { scope: true, scopeValues: true },
+    });
+    if (grants.some((g) => g.scope === 'all')) return null;
+    return [...new Set(grants.filter((g) => g.scope === 'level').flatMap((g) => g.scopeValues))];
   }
 
   /** All roles with their permission grants, for the admin UI. */
@@ -116,10 +161,11 @@ export class RbacService {
           isSystem: role.isSystem,
           isActive: role.isActive,
           memberCount: role._count.users,
-          permissions: role.permissions.map(({ permission, scope }) => ({
+          permissions: role.permissions.map(({ permission, scope, scopeValues }) => ({
             resource: permission.resource,
             action: permission.action,
             scope,
+            scopeValues,
           })),
         })),
       );
@@ -143,7 +189,7 @@ export class RbacService {
           update: {},
         });
         await tx.rolePermission.create({
-          data: { roleId: role.id, permissionId: permission.id, scope: grant.scope },
+          data: { roleId: role.id, permissionId: permission.id, scope: grant.scope, scopeValues: grant.scopeValues },
         });
       }
 
@@ -169,7 +215,7 @@ export class RbacService {
           update: {},
         });
         await tx.rolePermission.create({
-          data: { roleId, permissionId: permission.id, scope: grant.scope },
+          data: { roleId, permissionId: permission.id, scope: grant.scope, scopeValues: grant.scopeValues },
         });
       }
       await tx.auditLog.create({
@@ -186,7 +232,9 @@ export class RbacService {
     await this.invalidateRoleMembers(roleId);
   }
 
-  /** Admin: rename/re-describe a role, or deactivate/reactivate it. System roles are protected. */
+  /** Admin: rename/re-describe a role. System roles are protected. Status
+   *  (isActive) is a separate action — see setRoleStatus — gated by its own
+   *  roles:activate_deactivate permission instead of bundled with editing. */
   async updateRole(roleId: string, input: UpdateRoleInput, actorId: string) {
     const role = await this.prisma.role.findUnique({ where: { id: roleId } });
     if (!role) throw AppError.notFound('Role', roleId);
@@ -199,14 +247,30 @@ export class RbacService {
 
     const updated = await this.prisma.role.update({
       where: { id: roleId },
-      data: { name: input.name, description: input.description, isActive: input.isActive },
+      data: { name: input.name, description: input.description },
     });
 
     await this.prisma.auditLog.create({
       data: { actorId, action: 'role.updated', entity: 'Role', entityId: roleId, detail: input },
     });
 
-    if (input.isActive !== undefined) await this.invalidateRoleMembers(roleId);
+    return updated;
+  }
+
+  /** Admin: activate/deactivate a role — deactivating stops it granting
+   *  permissions to its members without deleting it. System roles are protected. */
+  async setRoleStatus(roleId: string, input: SetRoleStatusInput, actorId: string) {
+    const role = await this.prisma.role.findUnique({ where: { id: roleId } });
+    if (!role) throw AppError.notFound('Role', roleId);
+    if (role.isSystem) throw AppError.forbidden('System roles cannot be modified');
+
+    const updated = await this.prisma.role.update({ where: { id: roleId }, data: { isActive: input.isActive } });
+
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'role.status_changed', entity: 'Role', entityId: roleId, detail: input },
+    });
+
+    await this.invalidateRoleMembers(roleId);
     return updated;
   }
 

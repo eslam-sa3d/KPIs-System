@@ -14,6 +14,8 @@ import {
   RecordEvaluationAreaEntryInput,
   SCORE_FIELD_TYPES,
   ScoreFieldType,
+  SetEvaluationAreaStatusInput,
+  SetKpiStatusInput,
   TeamMemberBreakdown,
   TeamMemberKpiArea,
   TeamOverview,
@@ -165,11 +167,23 @@ export class KpisService {
     return serializeKpi(updated);
   }
 
+  /** Separate from updateKpi so activating/deactivating is its own permission
+   *  (kpis:activate_deactivate) instead of bundled with editing. */
+  async setKpiStatus(id: string, input: SetKpiStatusInput, actorId: string) {
+    const kpi = await this.prisma.kpi.findUnique({ where: { id } });
+    if (!kpi) throw AppError.notFound('KPI', id);
+    const updated = await this.prisma.kpi.update({ where: { id }, data: { isActive: input.isActive } });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'kpi.status_changed', entity: 'Kpi', entityId: id, detail: input },
+    });
+    return serializeKpi(updated);
+  }
+
   /** Hard delete — cascades to its Evaluation Areas, their entries, and
    *  assignments. Blocked once any entry has ever been recorded under it, so
    *  scored history can't be silently destroyed — deactivate instead, or
    *  pass force to delete it (and that history) anyway. Both paths require
-   *  kpis:manage; force-deletes are audit-logged distinctly, with the
+   *  kpis:delete; force-deletes are audit-logged distinctly, with the
    *  destroyed entry count, since there's no undoing this one. */
   async deleteKpi(id: string, actorId: string, force = false) {
     const kpi = await this.prisma.kpi.findUnique({
@@ -233,7 +247,7 @@ export class KpisService {
     // ever show active KPIs), this powers the admin management page — the
     // one place a deactivated KPI or Evaluation Area needs to still be
     // visible, or its own "reactivate" action would be unreachable.
-    const restricted = await this.rbac.isReadScopeRestricted(userId, 'kpis');
+    const restricted = await this.rbac.isViewScopeRestricted(userId, 'kpis');
     const where = { ...(restricted ? await this.myAssignmentFilter(userId) : {}) };
     const [totalItems, items] = await this.prisma.$transaction([
       this.prisma.kpi.count({ where }),
@@ -349,7 +363,18 @@ export class KpisService {
    * anyone never scored, so the dashboard can tell "pending" apart from
    * "scored a 0".
    */
-  async getTeamOverview(): Promise<TeamOverview> {
+  async getTeamOverview(userId: string): Promise<TeamOverview> {
+    // null = unrestricted; [] = restricted with nothing selected (sees no one);
+    // non-empty = restricted to whichever Performance Level bands are allowed.
+    const allowedLevelIds = await this.rbac.allowedDashboardLevelIds(userId);
+    const allowedRanges =
+      allowedLevelIds === null
+        ? null
+        : await this.prisma.performanceLevel.findMany({
+            where: { id: { in: allowedLevelIds } },
+            select: { minScore: true, maxScore: true },
+          });
+
     const [users, kpis, entries] = await Promise.all([
       this.prisma.user.findMany({
         where: { isActive: true, isKpiApplicable: true },
@@ -441,7 +466,21 @@ export class KpisService {
       };
     });
 
-    return { totalActiveUsers: users.length, members };
+    // dashboards:view scope='level': narrow the roster to people whose current
+    // finalScore falls inside one of the caller's allowed Performance Level
+    // ranges. allowedRanges === null means unrestricted (skip filtering
+    // entirely); [] means restricted-but-nothing-selected, so everyone with no
+    // matching range (i.e. everyone) is dropped.
+    const visibleMembers =
+      allowedRanges === null
+        ? members
+        : members.filter(
+            (m) =>
+              m.finalScore !== null &&
+              allowedRanges.some((r) => m.finalScore! >= Number(r.minScore) && m.finalScore! <= Number(r.maxScore)),
+          );
+
+    return { totalActiveUsers: visibleMembers.length, members: visibleMembers };
   }
 
   /**
@@ -676,6 +715,25 @@ export class KpisService {
     const updated = await this.prisma.evaluationArea.update({ where: { id: areaId }, data: input });
     await this.prisma.auditLog.create({
       data: { actorId, action: 'evaluation_area.updated', entity: 'EvaluationArea', entityId: areaId, detail: input },
+    });
+    return updated;
+  }
+
+  /** Separate from updateEvaluationArea — see setKpiStatus. */
+  async setEvaluationAreaStatus(
+    kpiId: string,
+    areaId: string,
+    input: SetEvaluationAreaStatusInput,
+    actorId: string,
+  ) {
+    const area = await this.prisma.evaluationArea.findFirst({ where: { id: areaId, kpiId } });
+    if (!area) throw AppError.notFound('Evaluation area', areaId);
+    const updated = await this.prisma.evaluationArea.update({
+      where: { id: areaId },
+      data: { isActive: input.isActive },
+    });
+    await this.prisma.auditLog.create({
+      data: { actorId, action: 'evaluation_area.status_changed', entity: 'EvaluationArea', entityId: areaId, detail: input },
     });
     return updated;
   }

@@ -47,7 +47,7 @@ const hasherStub = {
   verify: vi.fn(async (hash: string, plain: string) => hash === `hashed:${plain}`),
 };
 const rbacStub = {
-  getEffectivePermissions: vi.fn(async () => new Set(['kpis:read', 'forms:read'])),
+  getEffectivePermissions: vi.fn(async () => new Set(['kpis:view', 'forms:view'])),
 };
 const mailerStub = { send: vi.fn() };
 
@@ -81,7 +81,7 @@ describe('AuthService', () => {
           id: 'user-1',
           email: activeUser.email,
           roles: ['admin'],
-          permissions: ['kpis:read', 'forms:read'],
+          permissions: ['kpis:view', 'forms:view'],
         },
       });
       expect(refreshToken).toHaveLength(64); // 48 random bytes, base64url

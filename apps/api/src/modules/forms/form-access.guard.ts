@@ -71,7 +71,7 @@ export class FormAccessGuard implements CanActivate {
 
     if (form.restricted && !isOwner && !collaborator) {
       const granted = await this.rbac.getEffectivePermissions(user.id);
-      if (!granted.has('forms:manage')) {
+      if (!granted.has('forms:edit')) {
         throw AppError.forbidden('This form is restricted to specific people');
       }
     }
@@ -80,7 +80,7 @@ export class FormAccessGuard implements CanActivate {
       if (isOwner || collaborator?.canManage) return true;
       if (action === 'view' && collaborator?.canViewResponses) return true;
       const granted = await this.rbac.getEffectivePermissions(user.id);
-      const required = action === 'manage' ? 'form_submissions:manage' : 'form_submissions:read';
+      const required = action === 'manage' ? 'form_submissions:edit' : 'form_submissions:view';
       if (!granted.has(required)) {
         throw AppError.forbidden(`Missing permission to ${action} this form's responses`);
       }

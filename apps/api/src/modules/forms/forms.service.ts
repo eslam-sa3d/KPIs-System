@@ -381,7 +381,7 @@ export class FormsService {
     if (isOwner || isManagingCollaborator) return form;
 
     const granted = await this.rbac.getEffectivePermissions(actorId);
-    if (granted.has('forms:manage')) return form;
+    if (granted.has('forms:edit')) return form;
 
     throw AppError.forbidden('Only the form owner, a co-owner, or an admin can manage this form');
   }

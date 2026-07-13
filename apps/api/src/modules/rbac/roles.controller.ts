@@ -3,8 +3,11 @@ import {
   ACTIONS,
   CreateRoleInput,
   RESOURCES,
+  SCOPES,
+  SetRoleStatusInput,
   UpdateRoleInput,
   createRoleSchema,
+  setRoleStatusSchema,
   updateRoleSchema,
 } from '@pulse/contracts';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
@@ -16,20 +19,20 @@ export class RolesController {
   constructor(private readonly rbac: RbacService) {}
 
   @Get()
-  @RequirePermissions('roles:read')
+  @RequirePermissions('roles:view')
   list() {
     return this.rbac.listRoles();
   }
 
   /** The composable permission catalog the role editor renders. */
   @Get('permission-catalog')
-  @RequirePermissions('roles:read')
+  @RequirePermissions('roles:view')
   catalog() {
-    return { resources: RESOURCES, actions: ACTIONS };
+    return { resources: RESOURCES, actions: ACTIONS, scopes: SCOPES };
   }
 
   @Post()
-  @RequirePermissions('roles:manage')
+  @RequirePermissions('roles:edit')
   createRole(
     @Body(new ZodValidationPipe(createRoleSchema)) input: CreateRoleInput,
     @Req() req: { user: { id: string } },
@@ -38,7 +41,7 @@ export class RolesController {
   }
 
   @Patch(':roleId')
-  @RequirePermissions('roles:manage')
+  @RequirePermissions('roles:edit')
   updateRole(
     @Param('roleId') roleId: string,
     @Body(new ZodValidationPipe(updateRoleSchema)) input: UpdateRoleInput,
@@ -47,14 +50,24 @@ export class RolesController {
     return this.rbac.updateRole(roleId, input, req.user.id);
   }
 
+  @Patch(':roleId/status')
+  @RequirePermissions('roles:activate_deactivate')
+  setStatus(
+    @Param('roleId') roleId: string,
+    @Body(new ZodValidationPipe(setRoleStatusSchema)) input: SetRoleStatusInput,
+    @Req() req: { user: { id: string } },
+  ) {
+    return this.rbac.setRoleStatus(roleId, input, req.user.id);
+  }
+
   @Delete(':roleId')
-  @RequirePermissions('roles:manage')
+  @RequirePermissions('roles:delete')
   deleteRole(@Param('roleId') roleId: string, @Req() req: { user: { id: string } }) {
     return this.rbac.deleteRole(roleId, req.user.id);
   }
 
   @Put(':roleId/permissions')
-  @RequirePermissions('roles:manage')
+  @RequirePermissions('roles:edit')
   updatePermissions(
     @Param('roleId') roleId: string,
     @Body(new ZodValidationPipe(createRoleSchema.shape.permissions))
@@ -65,13 +78,13 @@ export class RolesController {
   }
 
   @Post(':roleId/users/:userId')
-  @RequirePermissions('roles:manage', 'users:write')
+  @RequirePermissions('roles:edit', 'users:edit')
   assignRole(@Param('roleId') roleId: string, @Param('userId') userId: string, @Req() req: { user: { id: string } }) {
     return this.rbac.assignRoleToUser(userId, roleId, req.user.id);
   }
 
   @Delete(':roleId/users/:userId')
-  @RequirePermissions('roles:manage', 'users:write')
+  @RequirePermissions('roles:edit', 'users:edit')
   unassignRole(@Param('roleId') roleId: string, @Param('userId') userId: string, @Req() req: { user: { id: string } }) {
     return this.rbac.unassignRoleFromUser(userId, roleId, req.user.id);
   }

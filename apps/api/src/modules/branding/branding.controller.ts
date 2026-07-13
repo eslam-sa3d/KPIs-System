@@ -29,7 +29,7 @@ export class BrandingController {
   }
 
   @Put()
-  @RequirePermissions('branding:write')
+  @RequirePermissions('branding:edit')
   async update(
     @Body(new ZodValidationPipe(brandIdentitySchema)) identity: BrandIdentity,
     @Req() req: { user: { id: string } },

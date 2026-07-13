@@ -61,10 +61,10 @@ describe('FormAccessGuard', () => {
     await expect(guard.canActivate(makeContext({ formId: 'f1' }, { id: 'guest' }))).resolves.toBe(true);
   });
 
-  it('allows a global forms:manage holder even without an invite', async () => {
+  it('allows a global forms:edit holder even without an invite', async () => {
     prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: true, createdById: 'owner' });
     prisma.formCollaborator.findUnique.mockResolvedValue(null);
-    rbac.getEffectivePermissions.mockResolvedValue(new Set(['forms:manage']));
+    rbac.getEffectivePermissions.mockResolvedValue(new Set(['forms:edit']));
     await expect(guard.canActivate(makeContext({ formId: 'f1' }, { id: 'admin' }))).resolves.toBe(true);
   });
 
@@ -102,19 +102,19 @@ describe('FormAccessGuard', () => {
       await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'coowner' }))).resolves.toBe(true);
     });
 
-    it('falls back to global form_submissions:read for the view tier', async () => {
+    it('falls back to global form_submissions:view for the view tier', async () => {
       setAction('view');
       prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
       prisma.formCollaborator.findUnique.mockResolvedValue(null);
-      rbac.getEffectivePermissions.mockResolvedValue(new Set(['form_submissions:read']));
+      rbac.getEffectivePermissions.mockResolvedValue(new Set(['form_submissions:view']));
       await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'admin' }))).resolves.toBe(true);
     });
 
-    it('falls back to global form_submissions:manage for the manage tier', async () => {
+    it('falls back to global form_submissions:edit for the manage tier', async () => {
       setAction('manage');
       prisma.form.findUnique.mockResolvedValue({ id: 'f1', restricted: false, createdById: 'owner' });
       prisma.formCollaborator.findUnique.mockResolvedValue(null);
-      rbac.getEffectivePermissions.mockResolvedValue(new Set(['form_submissions:manage']));
+      rbac.getEffectivePermissions.mockResolvedValue(new Set(['form_submissions:edit']));
       await expect(guard.canActivate(makeContext({ slug: 'demo' }, { id: 'admin' }))).resolves.toBe(true);
     });
 

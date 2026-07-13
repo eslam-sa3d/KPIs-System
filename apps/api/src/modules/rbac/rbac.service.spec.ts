@@ -36,19 +36,19 @@ describe('RbacService.getEffectivePermissions', () => {
 
   it('unions permissions across all of a user roles', async () => {
     prisma.userRole.findMany.mockResolvedValue([
-      ...userWithRoles([['kpis', 'read']]),
+      ...userWithRoles([['kpis', 'view']]),
       ...userWithRoles([
-        ['forms', 'write'],
-        ['kpis', 'read'],
+        ['forms', 'edit'],
+        ['kpis', 'view'],
       ]),
     ]);
 
     const permissions = await service.getEffectivePermissions('user-1');
-    expect(permissions).toEqual(new Set(['kpis:read', 'forms:write']));
+    expect(permissions).toEqual(new Set(['kpis:view', 'forms:edit']));
   });
 
   it('serves from cache on the second call without hitting the database', async () => {
-    prisma.userRole.findMany.mockResolvedValue(userWithRoles([['dashboards', 'read']]));
+    prisma.userRole.findMany.mockResolvedValue(userWithRoles([['dashboards', 'view']]));
 
     await service.getEffectivePermissions('user-1');
     await service.getEffectivePermissions('user-1');
@@ -65,20 +65,20 @@ describe('RbacService.getEffectivePermissions', () => {
 
   it('degrades to a DB-only read instead of throwing when Redis GET fails', async () => {
     redis.get.mockRejectedValue(new Error('connection refused'));
-    prisma.userRole.findMany.mockResolvedValue(userWithRoles([['kpis', 'read']]));
+    prisma.userRole.findMany.mockResolvedValue(userWithRoles([['kpis', 'view']]));
 
     const permissions = await service.getEffectivePermissions('user-3');
 
-    expect(permissions).toEqual(new Set(['kpis:read']));
+    expect(permissions).toEqual(new Set(['kpis:view']));
   });
 
   it('still returns the freshly computed permissions when Redis SET fails', async () => {
     redis.set.mockRejectedValue(new Error('connection refused'));
-    prisma.userRole.findMany.mockResolvedValue(userWithRoles([['forms', 'read']]));
+    prisma.userRole.findMany.mockResolvedValue(userWithRoles([['forms', 'view']]));
 
     const permissions = await service.getEffectivePermissions('user-4');
 
-    expect(permissions).toEqual(new Set(['forms:read']));
+    expect(permissions).toEqual(new Set(['forms:view']));
   });
 });
 
@@ -194,13 +194,13 @@ describe('RbacService.updateRole / deleteRole', () => {
     await expect(service.updateRole('role-1', { name: 'taken' }, 'admin-1')).rejects.toThrow('already exists');
   });
 
-  it('updateRole invalidates every member cache when toggling isActive', async () => {
+  it('setRoleStatus invalidates every member cache when toggling isActive', async () => {
     prisma.role.findUnique.mockResolvedValue({ id: 'role-1', name: 'x', isSystem: false });
     prisma.userRole.findMany.mockResolvedValue([{ userId: 'user-1' }, { userId: 'user-2' }]);
     redis.store.set('rbac:perms:user-1', '[]');
     redis.store.set('rbac:perms:user-2', '[]');
 
-    await service.updateRole('role-1', { isActive: false }, 'admin-1');
+    await service.setRoleStatus('role-1', { isActive: false }, 'admin-1');
 
     expect(redis.store.has('rbac:perms:user-1')).toBe(false);
     expect(redis.store.has('rbac:perms:user-2')).toBe(false);

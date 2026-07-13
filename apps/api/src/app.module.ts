@@ -17,7 +17,7 @@ import { PerformanceLevelsController } from './modules/configuration/performance
 import { PerformanceLevelsService } from './modules/configuration/performance-levels.service';
 import { DemoDataService } from './modules/settings/demo-data.service';
 import { SettingsController } from './modules/settings/settings.controller';
-import { DepartmentsController, UsersController } from './modules/users/users.controller';
+import { DepartmentsController, ProjectGroupsController, UsersController } from './modules/users/users.controller';
 import { UsersService } from './modules/users/users.service';
 import { FormsController, PublicFormsController } from './modules/forms/forms.controller';
 import { AssetsService } from './modules/forms/assets.service';
@@ -57,6 +57,7 @@ import { RolesController } from './modules/rbac/roles.controller';
     AuthController,
     UsersController,
     DepartmentsController,
+    ProjectGroupsController,
     RolesController,
     KpisController,
     FormsController,

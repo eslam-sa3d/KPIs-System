@@ -13,19 +13,21 @@ datasource db {
 // ─────────────────────────── Identity & Dynamic RBAC ───────────────────────────
 
 model User {
-  id              String      @id @default(uuid())
-  email           String      @unique
+  id              String        @id @default(uuid())
+  email           String        @unique
   passwordHash    String
   displayName     String
   departmentId    String?
-  department      Department? @relation(fields: [departmentId], references: [id])
-  isActive        Boolean     @default(true)
+  department      Department?   @relation(fields: [departmentId], references: [id])
+  projectGroupId  String?
+  projectGroup    ProjectGroup? @relation(fields: [projectGroupId], references: [id])
+  isActive        Boolean       @default(true)
   /// Whether this person should be scored/tracked by the KPI system at all —
   /// set at creation, editable after. When false, they're excluded from the
   /// dashboard's team overview regardless of role/department KPI mappings.
-  isKpiApplicable Boolean     @default(true)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  isKpiApplicable Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   roles                   UserRole[]
   sessions                Session[]
@@ -40,6 +42,7 @@ model User {
   formCollaboratorInvites FormCollaborator[]    @relation("FormCollaboratorAddedBy")
 
   @@index([departmentId])
+  @@index([projectGroupId])
 }
 
 model Department {
@@ -47,6 +50,16 @@ model Department {
   name    String          @unique
   users   User[]
   kpiMaps KpiAssignment[]
+}
+
+/// Parallel grouping to Department — a user belongs to at most one project
+/// group, independent of their department. Same shape as Department; kept as
+/// a separate model rather than a Department subtype since the two are
+/// assigned/managed independently.
+model ProjectGroup {
+  id    String @id @default(uuid())
+  name  String @unique
+  users User[]
 }
 
 /// Dynamic roles: created by admins at runtime, never hard-coded.
@@ -69,7 +82,7 @@ model Role {
 model Permission {
   id       String @id @default(uuid())
   resource String // e.g. "forms", "kpis", "dashboards"
-  action   String // "read" | "write" | "execute" | "manage"
+  action   String // "view" | "edit" | "activate_deactivate" | "delete"
 
   roles RolePermission[]
 
@@ -79,8 +92,11 @@ model Permission {
 model RolePermission {
   roleId       String
   permissionId String
-  /// Row-level scope: "all" | "department" | "own"
-  scope        String @default("all")
+  /// Row-level scope: "all" | "department" | "project_group" | "own" | "level"
+  scope        String   @default("all")
+  /// Only meaningful when scope = "level" (dashboards:view): the PerformanceLevel
+  /// ids this grant is restricted to. Empty/ignored for every other scope value.
+  scopeValues  String[] @default([])
 
   role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)

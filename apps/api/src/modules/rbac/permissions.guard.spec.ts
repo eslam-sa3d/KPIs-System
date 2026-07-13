@@ -37,23 +37,23 @@ describe('PermissionsGuard', () => {
   });
 
   it('rejects an unauthenticated request (no user on it) with UNAUTHENTICATED', async () => {
-    const { reflector, context } = makeContext({ required: ['kpis:read'], user: null });
+    const { reflector, context } = makeContext({ required: ['kpis:view'], user: null });
     const guard = new PermissionsGuard(reflector as never, rbac as never);
 
     await expect(guard.canActivate(context)).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
   });
 
   it('rejects a caller missing the single required permission with FORBIDDEN', async () => {
-    const { reflector, context } = makeContext({ required: ['kpis:manage'], user: { id: 'user-1' } });
-    rbac.getEffectivePermissions.mockResolvedValue(new Set(['kpis:read']));
+    const { reflector, context } = makeContext({ required: ['kpis:delete'], user: { id: 'user-1' } });
+    rbac.getEffectivePermissions.mockResolvedValue(new Set(['kpis:view']));
     const guard = new PermissionsGuard(reflector as never, rbac as never);
 
     await expect(guard.canActivate(context)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('allows a caller who holds the single required permission', async () => {
-    const { reflector, context } = makeContext({ required: ['kpis:read'], user: { id: 'user-1' } });
-    rbac.getEffectivePermissions.mockResolvedValue(new Set(['kpis:read', 'forms:read']));
+    const { reflector, context } = makeContext({ required: ['kpis:view'], user: { id: 'user-1' } });
+    rbac.getEffectivePermissions.mockResolvedValue(new Set(['kpis:view', 'forms:view']));
     const guard = new PermissionsGuard(reflector as never, rbac as never);
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
@@ -61,10 +61,10 @@ describe('PermissionsGuard', () => {
 
   it('rejects when a route requires multiple permissions and the caller is missing even one (e.g. the KPI series endpoint)', async () => {
     const { reflector, context } = makeContext({
-      required: ['kpis:read', 'kpi_entries:read'],
+      required: ['kpis:view', 'kpi_entries:view'],
       user: { id: 'user-1' },
     });
-    rbac.getEffectivePermissions.mockResolvedValue(new Set(['kpis:read'])); // missing kpi_entries:read
+    rbac.getEffectivePermissions.mockResolvedValue(new Set(['kpis:view'])); // missing kpi_entries:read
     const guard = new PermissionsGuard(reflector as never, rbac as never);
 
     await expect(guard.canActivate(context)).rejects.toMatchObject({ code: 'FORBIDDEN' });
@@ -72,17 +72,17 @@ describe('PermissionsGuard', () => {
 
   it('allows when the caller holds every one of multiple required permissions', async () => {
     const { reflector, context } = makeContext({
-      required: ['kpis:read', 'kpi_entries:read'],
+      required: ['kpis:view', 'kpi_entries:view'],
       user: { id: 'user-1' },
     });
-    rbac.getEffectivePermissions.mockResolvedValue(new Set(['kpis:read', 'kpi_entries:read']));
+    rbac.getEffectivePermissions.mockResolvedValue(new Set(['kpis:view', 'kpi_entries:view']));
     const guard = new PermissionsGuard(reflector as never, rbac as never);
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
   });
 
   it('rejects a caller with zero granted permissions attempting a manage-tier action (e.g. deleting a role)', async () => {
-    const { reflector, context } = makeContext({ required: ['roles:manage'], user: { id: 'user-1' } });
+    const { reflector, context } = makeContext({ required: ['roles:delete'], user: { id: 'user-1' } });
     rbac.getEffectivePermissions.mockResolvedValue(new Set());
     const guard = new PermissionsGuard(reflector as never, rbac as never);
 

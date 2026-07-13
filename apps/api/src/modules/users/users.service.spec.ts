@@ -163,17 +163,17 @@ describe('UsersService', () => {
   });
 
   describe('list — RolePermission.scope enforcement', () => {
-    it('shows every user when the caller holds an "all"-scoped users:read grant', async () => {
+    it('shows every user when the caller holds an "all"-scoped users:view grant', async () => {
       prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'all' }]);
       prisma.user.count.mockResolvedValue(2);
       prisma.user.findMany.mockResolvedValue([]);
 
       await service.list({}, 'user-1');
 
-      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: [{}, {}] } }));
     });
 
-    it('filters to the caller\'s own department when every users:read grant is scoped narrower than "all"', async () => {
+    it('filters to the caller\'s own department when every users:view grant is scoped narrower than "all"', async () => {
       prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'department' }]);
       prisma.user.findUnique.mockResolvedValue({ departmentId: 'dept-1' });
       prisma.user.count.mockResolvedValue(1);
@@ -181,11 +181,13 @@ describe('UsersService', () => {
 
       await service.list({}, 'user-1');
 
-      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { departmentId: 'dept-1' } }));
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ OR: [{ departmentId: 'dept-1' }] }, {}] } }),
+      );
     });
 
     it('sees no one (not everyone) when restricted with no department of their own', async () => {
-      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'own' }]);
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'department' }]);
       prisma.user.findUnique.mockResolvedValue({ departmentId: null });
       prisma.user.count.mockResolvedValue(0);
       prisma.user.findMany.mockResolvedValue([]);
@@ -193,7 +195,19 @@ describe('UsersService', () => {
       await service.list({}, 'user-1');
 
       expect(prisma.user.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { departmentId: '__none__' } }),
+        expect.objectContaining({ where: { AND: [{ OR: [{ departmentId: '__none__' }] }, {}] } }),
+      );
+    });
+
+    it('restricts to the caller alone when scoped "own"', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'own' }]);
+      prisma.user.count.mockResolvedValue(1);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await service.list({}, 'user-1');
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ OR: [{ id: 'user-1' }] }, {}] } }),
       );
     });
 
@@ -207,9 +221,14 @@ describe('UsersService', () => {
       expect(prisma.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            OR: [
-              { displayName: { contains: 'Ana', mode: 'insensitive' } },
-              { email: { contains: 'Ana', mode: 'insensitive' } },
+            AND: [
+              {},
+              {
+                OR: [
+                  { displayName: { contains: 'Ana', mode: 'insensitive' } },
+                  { email: { contains: 'Ana', mode: 'insensitive' } },
+                ],
+              },
             ],
           },
         }),
@@ -223,7 +242,9 @@ describe('UsersService', () => {
 
       await service.list({ departmentId: 'dept-2' }, 'user-1');
 
-      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { departmentId: 'dept-2' } }));
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ departmentId: 'dept-2' }, {}] } }),
+      );
     });
 
     it('ignores a requested departmentId when the caller is restricted to their own department', async () => {
@@ -234,7 +255,9 @@ describe('UsersService', () => {
 
       await service.list({ departmentId: 'dept-2' }, 'user-1');
 
-      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { departmentId: 'dept-1' } }));
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{ OR: [{ departmentId: 'dept-1' }] }, {}] } }),
+      );
     });
   });
 
@@ -263,8 +286,10 @@ describe('UsersService', () => {
 
       await service.stats('user-1');
 
-      expect(prisma.user.count).toHaveBeenNthCalledWith(1, { where: { departmentId: 'dept-1' } });
-      expect(prisma.user.count).toHaveBeenNthCalledWith(2, { where: { departmentId: 'dept-1', isActive: true } });
+      expect(prisma.user.count).toHaveBeenNthCalledWith(1, { where: { OR: [{ departmentId: 'dept-1' }] } });
+      expect(prisma.user.count).toHaveBeenNthCalledWith(2, {
+        where: { OR: [{ departmentId: 'dept-1' }], isActive: true },
+      });
     });
   });
 });

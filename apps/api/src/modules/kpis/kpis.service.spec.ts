@@ -11,7 +11,14 @@ function makePrismaStub() {
   return {
     kpi: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), count: vi.fn() },
     kpiAssignment: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
-    rolePermission: { findMany: vi.fn(), findFirst: vi.fn(async (): Promise<{ roleId: string } | null> => null) },
+    rolePermission: {
+      // Default: unrestricted (an 'all'-scoped grant) — matches calling these
+      // services directly in a test, bypassing the @RequirePermissions guard
+      // that would otherwise guarantee the caller holds a real grant. Tests
+      // exercising scope restriction override this per-case.
+      findMany: vi.fn(async (): Promise<Array<{ scope: string; scopeValues?: string[] }>> => [{ scope: 'all' }]),
+      findFirst: vi.fn(async (): Promise<{ roleId: string } | null> => null),
+    },
     evaluationArea: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     subCriteria: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     evaluationAreaEntry: {
@@ -184,14 +191,27 @@ describe('KpisService', () => {
 
     it('updates an area scoped to its KPI and audit-logs it', async () => {
       prisma.evaluationArea.findFirst.mockResolvedValue(activeArea);
-      await service.updateEvaluationArea('kpi-1', 'area-1', { isActive: false }, actorId);
+      await service.updateEvaluationArea('kpi-1', 'area-1', { name: 'Renamed' }, actorId);
+      expect(prisma.evaluationArea.findFirst).toHaveBeenCalledWith({ where: { id: 'area-1', kpiId: 'kpi-1' } });
+      expect(prisma.evaluationArea.update).toHaveBeenCalledWith({
+        where: { id: 'area-1' },
+        data: { name: 'Renamed' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ actorId, action: 'evaluation_area.updated', entityId: 'area-1' }),
+      });
+    });
+
+    it('sets area status scoped to its KPI and audit-logs it', async () => {
+      prisma.evaluationArea.findFirst.mockResolvedValue(activeArea);
+      await service.setEvaluationAreaStatus('kpi-1', 'area-1', { isActive: false }, actorId);
       expect(prisma.evaluationArea.findFirst).toHaveBeenCalledWith({ where: { id: 'area-1', kpiId: 'kpi-1' } });
       expect(prisma.evaluationArea.update).toHaveBeenCalledWith({
         where: { id: 'area-1' },
         data: { isActive: false },
       });
       expect(prisma.auditLog.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ actorId, action: 'evaluation_area.updated', entityId: 'area-1' }),
+        data: expect.objectContaining({ actorId, action: 'evaluation_area.status_changed', entityId: 'area-1' }),
       });
     });
 
@@ -643,7 +663,7 @@ describe('KpisService', () => {
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
 
-      const { members } = await service.getTeamOverview();
+      const { members } = await service.getTeamOverview(actorId);
 
       expect(members).toEqual([
         expect.objectContaining({ id: 'user-2', hasKpi: false, finalScore: null, lastUpdated: null }),
@@ -655,7 +675,7 @@ describe('KpisService', () => {
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
 
-      const { members } = await service.getTeamOverview();
+      const { members } = await service.getTeamOverview(actorId);
 
       expect(members).toEqual([
         expect.objectContaining({ id: 'user-1', hasKpi: true, finalScore: null, lastUpdated: null }),
@@ -710,7 +730,7 @@ describe('KpisService', () => {
         },
       ]);
 
-      const { members } = await service.getTeamOverview();
+      const { members } = await service.getTeamOverview(actorId);
 
       // area-1 latest avg = 4, area-2 latest avg = 2 → final score = 3
       expect(members[0]!.finalScore).toBe(3);
@@ -739,7 +759,7 @@ describe('KpisService', () => {
         },
       ]);
 
-      const { members } = await service.getTeamOverview();
+      const { members } = await service.getTeamOverview(actorId);
 
       expect(members[0]!.finalScore).toBe(4);
       expect(members[0]!.previousScore).toBeNull();
@@ -750,7 +770,7 @@ describe('KpisService', () => {
       prisma.kpi.findMany.mockResolvedValue([{ ...coveringKpi, evaluationAreas: [] }]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
 
-      const { members } = await service.getTeamOverview();
+      const { members } = await service.getTeamOverview(actorId);
 
       expect(members[0]!.hasKpi).toBe(false);
     });
@@ -760,7 +780,7 @@ describe('KpisService', () => {
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
 
-      const { members } = await service.getTeamOverview();
+      const { members } = await service.getTeamOverview(actorId);
 
       expect(members[0]!.department).toBe('Quality Assurance');
       expect(members[0]!.roles).toEqual(['QA Engineer']);
@@ -771,7 +791,7 @@ describe('KpisService', () => {
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([]);
 
-      const { totalActiveUsers } = await service.getTeamOverview();
+      const { totalActiveUsers } = await service.getTeamOverview(actorId);
 
       expect(totalActiveUsers).toBe(2);
       expect(prisma.user.findMany).toHaveBeenCalledWith(

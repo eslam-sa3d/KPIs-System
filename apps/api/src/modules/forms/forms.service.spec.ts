@@ -50,9 +50,9 @@ describe('FormsService.archiveForm / unarchiveForm / deleteForm', () => {
       expect(prisma.form.update).not.toHaveBeenCalled();
     });
 
-    it('allows a global forms:manage holder even without ownership', async () => {
+    it('allows a global forms:edit holder even without ownership', async () => {
       prisma.form.findUnique.mockResolvedValue(ownedForm);
-      rbac.getEffectivePermissions.mockResolvedValue(new Set(['forms:manage']));
+      rbac.getEffectivePermissions.mockResolvedValue(new Set(['forms:edit']));
 
       await service.archiveForm('form-1', 'admin-1');
       expect(prisma.form.update).toHaveBeenCalled();

@@ -76,64 +76,64 @@ export class FormsController {
   ) {}
 
   @Get()
-  @RequirePermissions('forms:read')
+  @RequirePermissions('forms:view')
   listForms() {
     return this.forms.listForms();
   }
 
   @Post()
-  @RequirePermissions('forms:write')
+  @RequirePermissions('forms:edit')
   createForm(@Body() body: { slug: string; definition: unknown }, @Req() req: AuthedRequest) {
     return this.forms.createForm(body.slug, body.definition, req.user.id);
   }
 
   @Post(':formId/versions')
-  @RequirePermissions('forms:write')
+  @RequirePermissions('forms:edit')
   publishNewVersion(@Param('formId') formId: string, @Body() body: { definition: unknown }) {
     return this.forms.publishNewVersion(formId, body.definition);
   }
 
   @Patch(':formId/settings')
-  @RequirePermissions('forms:write')
+  @RequirePermissions('forms:edit')
   updateSettings(@Param('formId') formId: string, @Body() body: unknown, @Req() req: AuthedRequest) {
     return this.forms.updateSettings(formId, body, req.user.id);
   }
 
   @Post(':formId/share-link')
-  @RequirePermissions('forms:manage')
+  @RequirePermissions('forms:edit')
   setShareLink(@Param('formId') formId: string, @Body() body: { enabled: boolean }, @Req() req: AuthedRequest) {
     return this.forms.setShareLink(formId, Boolean(body?.enabled), req.user.id);
   }
 
   @Post(':formId/export-link')
-  @RequirePermissions('forms:manage')
+  @RequirePermissions('forms:edit')
   setExportLink(@Param('formId') formId: string, @Body() body: { enabled: boolean }, @Req() req: AuthedRequest) {
     return this.forms.setExportLink(formId, Boolean(body?.enabled), req.user.id);
   }
 
-  /** Restricts portal access to the creator, collaborators, and forms:manage holders.
-   *  forms:write is the coarse gate; FormsService.getOwnedForm enforces the real ownership check. */
+  /** Restricts portal access to the creator, collaborators, and forms:edit holders.
+   *  forms:edit is the coarse gate; FormsService.getOwnedForm enforces the real ownership check. */
   @Post(':formId/restricted')
-  @RequirePermissions('forms:write')
+  @RequirePermissions('forms:edit')
   setRestricted(@Param('formId') formId: string, @Body() body: { restricted: boolean }, @Req() req: AuthedRequest) {
     return this.forms.setRestricted(formId, Boolean(body?.restricted), req.user.id);
   }
 
   @Get(':formId/collaborators')
-  @RequirePermissions('forms:write')
+  @RequirePermissions('forms:edit')
   listCollaborators(@Param('formId') formId: string) {
     return this.forms.listCollaborators(formId);
   }
 
   /** Free-text folder tag shown in the forms list filter. */
   @Post(':formId/folder')
-  @RequirePermissions('forms:write')
+  @RequirePermissions('forms:edit')
   setFolder(@Param('formId') formId: string, @Body() body: { folder: string | null }, @Req() req: AuthedRequest) {
     return this.forms.setFolder(formId, body?.folder?.trim() || null, req.user.id);
   }
 
   @Post(':formId/collaborators')
-  @RequirePermissions('forms:write')
+  @RequirePermissions('forms:edit')
   inviteCollaborator(
     @Param('formId') formId: string,
     @Body() body: { userId: string; canManage?: boolean; canViewResponses?: boolean },
@@ -149,13 +149,13 @@ export class FormsController {
   }
 
   @Delete(':formId/collaborators/:userId')
-  @RequirePermissions('forms:write')
+  @RequirePermissions('forms:edit')
   removeCollaborator(@Param('formId') formId: string, @Param('userId') userId: string, @Req() req: AuthedRequest) {
     return this.forms.removeCollaborator(formId, userId, req.user.id);
   }
 
   @Post(':formId/duplicate')
-  @RequirePermissions('forms:write')
+  @RequirePermissions('forms:edit')
   duplicate(@Param('formId') formId: string, @Req() req: AuthedRequest) {
     return this.forms.duplicate(formId, req.user.id);
   }
@@ -163,13 +163,13 @@ export class FormsController {
   /** Hides the form from the default list and closes its public/export links
    *  to further use, without touching submission history. */
   @Post(':formId/archive')
-  @RequirePermissions('forms:manage')
+  @RequirePermissions('forms:activate_deactivate')
   archiveForm(@Param('formId') formId: string, @Req() req: AuthedRequest) {
     return this.forms.archiveForm(formId, req.user.id);
   }
 
   @Post(':formId/unarchive')
-  @RequirePermissions('forms:manage')
+  @RequirePermissions('forms:activate_deactivate')
   unarchiveForm(@Param('formId') formId: string, @Req() req: AuthedRequest) {
     return this.forms.unarchiveForm(formId, req.user.id);
   }
@@ -177,7 +177,7 @@ export class FormsController {
   /** Permanently removes the form. Blocked once it has any submissions —
    *  archive it instead so response history can't be silently destroyed. */
   @Delete(':formId')
-  @RequirePermissions('forms:manage')
+  @RequirePermissions('forms:delete')
   deleteForm(@Param('formId') formId: string, @Req() req: AuthedRequest) {
     return this.forms.deleteForm(formId, req.user.id);
   }
@@ -185,13 +185,13 @@ export class FormsController {
   /** The Forms→KPI bridge: which of this form's own fields supplies the evaluatee
    *  vs. the score, for a given Evaluation Area — see FormKpiMappingsService. */
   @Get(':formId/kpi-mappings')
-  @RequirePermissions('forms:manage', 'kpis:write')
+  @RequirePermissions('forms:view', 'kpis:view')
   listKpiMappings(@Param('formId') formId: string) {
     return this.kpiMappings.list(formId);
   }
 
   @Post(':formId/kpi-mappings')
-  @RequirePermissions('forms:manage', 'kpis:write')
+  @RequirePermissions('forms:edit', 'kpis:edit')
   createKpiMapping(
     @Param('formId') formId: string,
     @Body(new ZodValidationPipe(createFormKpiMappingSchema)) body: CreateFormKpiMappingInput,
@@ -201,7 +201,7 @@ export class FormsController {
   }
 
   @Post(':formId/kpi-mappings/bulk')
-  @RequirePermissions('forms:manage', 'kpis:write')
+  @RequirePermissions('forms:edit', 'kpis:edit')
   bulkCreateKpiMappings(
     @Param('formId') formId: string,
     @Body(new ZodValidationPipe(bulkCreateFormKpiMappingSchema)) body: BulkCreateFormKpiMappingInput,
@@ -211,7 +211,7 @@ export class FormsController {
   }
 
   @Delete(':formId/kpi-mappings/:mappingId')
-  @RequirePermissions('forms:manage', 'kpis:write')
+  @RequirePermissions('forms:edit', 'kpis:edit')
   deleteKpiMapping(@Param('formId') formId: string, @Param('mappingId') mappingId: string, @Req() req: AuthedRequest) {
     return this.kpiMappings.delete(formId, mappingId, req.user.id);
   }
@@ -219,19 +219,19 @@ export class FormsController {
   /** Retroactively scores every existing submission against a mapping created
    *  after they were collected — see SubmissionsService.backfillMapping. */
   @Post(':formId/kpi-mappings/:mappingId/backfill')
-  @RequirePermissions('forms:manage', 'kpis:write')
+  @RequirePermissions('forms:edit', 'kpis:edit')
   backfillKpiMapping(@Param('formId') formId: string, @Param('mappingId') mappingId: string) {
     return this.submissions.backfillMapping(formId, mappingId);
   }
 
   @Get(':slug')
-  @RequirePermissions('forms:read')
+  @RequirePermissions('forms:view')
   getForm(@Param('slug') slug: string) {
     return this.forms.getLatestVersion(slug);
   }
 
   @Post(':slug/submissions')
-  @RequirePermissions('form_submissions:write')
+  @RequirePermissions('form_submissions:edit')
   submit(
     @Param('slug') slug: string,
     @Body(new ZodValidationPipe(submissionAnswersSchema)) answers: SubmissionAnswers,
@@ -286,7 +286,7 @@ export class FormsController {
 
   /** Uploaded while a form is still a draft (no formId yet) — claimed on publish, see FormsService. */
   @Post('assets')
-  @RequirePermissions('forms:write')
+  @RequirePermissions('forms:edit')
   @UseInterceptors(ASSET_INTERCEPTOR)
   uploadAsset(@UploadedFile() file: Express.Multer.File, @Req() req: AuthedRequest) {
     return this.assets.upload(file, req.user.id);
@@ -301,7 +301,7 @@ export class FormsController {
   }
 
   @Post(':slug/uploads/:fieldKey')
-  @RequirePermissions('form_submissions:write')
+  @RequirePermissions('form_submissions:edit')
   @UseInterceptors(UPLOAD_INTERCEPTOR)
   uploadFile(
     @Param('slug') slug: string,
@@ -314,7 +314,7 @@ export class FormsController {
 
   /** Streams the raw file — deliberately outside the JSON envelope, like the CSV export. */
   @Get(':slug/uploads/:uploadId')
-  @RequirePermissions('form_submissions:read')
+  @RequirePermissions('form_submissions:view')
   async downloadFile(@Param('slug') slug: string, @Param('uploadId') uploadId: string, @Res() res: Response) {
     const upload = await this.uploads.getForDownload(slug, uploadId);
     res
