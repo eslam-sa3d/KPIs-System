@@ -20,7 +20,6 @@ import { PrismaService } from '../../infra/prisma.service';
 import { compileAnswerValidator } from './answer-validator';
 import { FormsService } from './forms.service';
 import { QuizScore, scoreSubmission } from './quiz-scoring';
-import { buildSummaryPdf } from './report-export';
 import { TurnstileService } from './turnstile.service';
 
 /**
@@ -695,22 +694,6 @@ export class SubmissionsService {
     for (const row of rows) sheet.addRow(row);
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
-  }
-
-  /** PDF report built from the already-computed per-field summary — no new aggregation. */
-  async exportPdf(formSlug: string, actorId: string | null): Promise<Buffer> {
-    const { definition } = await this.forms.getLatestVersion(formSlug);
-    const summary = await this.summary(formSlug);
-    await this.prisma.auditLog.create({
-      data: {
-        actorId,
-        action: 'submissions.exported_pdf',
-        entity: 'Form',
-        entityId: formSlug,
-        detail: { count: summary.responses },
-      },
-    });
-    return buildSummaryPdf(definition.title, summary);
   }
 
   /** See MAX_SUBMISSIONS_FOR_SYNC_REPORT — guards summary()/buildExportTable()

@@ -286,14 +286,6 @@ function FormView() {
                 <Download size={14} aria-hidden="true" />
                 export xlsx
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.pdf`, `${slug}-summary.pdf`)}
-              >
-                <Download size={14} aria-hidden="true" />
-                export PDF
-              </Button>
               {canModerate &&
                 (rows?.length ?? 0) > 0 &&
                 (confirmDeleteAll ? (
