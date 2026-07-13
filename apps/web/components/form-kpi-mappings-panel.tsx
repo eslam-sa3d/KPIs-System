@@ -8,7 +8,7 @@ import type {
   KpiOptionSummary,
   ReviewType,
 } from '@pulse/contracts';
-import { REVIEW_TYPES } from '@pulse/contracts';
+import { isEvaluateeField, REVIEW_TYPES } from '@pulse/contracts';
 import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -93,6 +93,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [kpiId, setKpiId] = useState('');
   const [evaluationAreaId, setEvaluationAreaId] = useState('');
   const [scoreFieldKey, setScoreFieldKey] = useState('');
+  const [evaluateeFieldKey, setEvaluateeFieldKey] = useState('');
   const [reviewType, setReviewType] = useState<ReviewType>('peer');
   const [anonymous, setAnonymous] = useState(false);
   const [contextFieldKey, setContextFieldKey] = useState('');
@@ -104,6 +105,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [backfillingId, setBackfillingId] = useState<string | null>(null);
 
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkEvaluateeFieldKey, setBulkEvaluateeFieldKey] = useState('');
   const [bulkReviewType, setBulkReviewType] = useState<ReviewType>('peer');
   const [bulkAnonymous, setBulkAnonymous] = useState(false);
   const [bulkContextFieldKey, setBulkContextFieldKey] = useState('');
@@ -114,6 +116,9 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const scoreFields = definition.fields.filter(
     (f) => f.type === 'rating' || f.type === 'nps' || f.type === 'slider' || f.type === 'performance_level',
   );
+  // A 'person' field, or a 'select' field with at least one option added via
+  // "select a user" in the builder — either can supply the evaluatee's id.
+  const evaluateeFields = definition.fields.filter(isEvaluateeField);
 
   function reload() {
     api<MappingRow[]>(`/v1/forms/${formId}/kpi-mappings`)
@@ -159,6 +164,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
           scoreFieldKey,
           reviewType,
           anonymous,
+          ...(evaluateeFieldKey ? { evaluateeFieldKey } : {}),
           ...(contextFieldKey ? { contextFieldKey } : {}),
           ...(commentFieldKey ? { commentFieldKey } : {}),
         }),
@@ -166,6 +172,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
       setKpiId('');
       setEvaluationAreaId('');
       setScoreFieldKey('');
+      setEvaluateeFieldKey('');
       setReviewType('peer');
       setAnonymous(false);
       setContextFieldKey('');
@@ -237,6 +244,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         body: JSON.stringify({
           reviewType: bulkReviewType,
           anonymous: bulkAnonymous,
+          ...(bulkEvaluateeFieldKey ? { evaluateeFieldKey: bulkEvaluateeFieldKey } : {}),
           ...(bulkContextFieldKey ? { contextFieldKey: bulkContextFieldKey } : {}),
           ...(bulkCommentFieldKey ? { commentFieldKey: bulkCommentFieldKey } : {}),
           mappings: unmappedScoreFields
@@ -261,8 +269,9 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
       </CardHeader>
       <CardContent>
         <p className="muted">
-          connect this survey to a KPI Evaluation Area: pick which field supplies the score. Every future submission
-          upserts a self-assessment entry for the submitter and period automatically.
+          connect this survey to a KPI Evaluation Area: pick which field supplies the score, and — for a peer, manager,
+          or 360 review — which field says who it&apos;s about. Left as self-assessment, every future submission scores
+          the submitter themselves. Every future submission upserts an entry automatically.
         </p>
         {error && (
           <Alert variant="destructive">
@@ -372,6 +381,19 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                 ))}
               </SelectContent>
             </Select>
+            <Select value={evaluateeFieldKey || NONE} onValueChange={(v) => setEvaluateeFieldKey(v === NONE ? '' : v)}>
+              <SelectTrigger aria-label="who this is about">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>self-assessment (submitter scores themselves)</SelectItem>
+                {evaluateeFields.map((f) => (
+                  <SelectItem key={f.key} value={f.key}>
+                    who this is about: {f.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={reviewType} onValueChange={(v) => setReviewType(v as ReviewType)}>
               <SelectTrigger aria-label="review type">
                 <SelectValue />
@@ -450,6 +472,22 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                         {REVIEW_TYPES.map((t) => (
                           <SelectItem key={t} value={t}>
                             {REVIEW_TYPE_LABEL[t]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={bulkEvaluateeFieldKey || NONE}
+                      onValueChange={(v) => setBulkEvaluateeFieldKey(v === NONE ? '' : v)}
+                    >
+                      <SelectTrigger aria-label="who this batch is about">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE}>self-assessment (submitter scores themselves)</SelectItem>
+                        {evaluateeFields.map((f) => (
+                          <SelectItem key={f.key} value={f.key}>
+                            who this is about: {f.label}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EvaluationAreaCadence } from './kpi';
+import type { FormField } from './form-schema';
 
 /**
  * Maps a form to a KPI Evaluation Area: one field supplies the score. On
@@ -18,9 +19,9 @@ import { EvaluationAreaCadence } from './kpi';
  * field.
  *
  * `evaluateeFieldKey` optionally names a field whose answer is the
- * evaluatee's user id (a 'person' field, from an older form that still has
- * one). Omitted — the normal case now — means self-assessment: the
- * submitter scores themselves.
+ * evaluatee's user id — a 'person' field, or a 'select' field with at least
+ * one user-linked option (see isEvaluateeField below). Omitted means
+ * self-assessment: the submitter scores themselves.
  *
  * Deliberately out of scope for this pass: more than one mapping per
  * (form, evaluationArea) pair.
@@ -61,6 +62,18 @@ export const createFormKpiMappingSchema = z.object({
 });
 
 export type CreateFormKpiMappingInput = z.infer<typeof createFormKpiMappingSchema>;
+
+/** Whether a field can supply `evaluateeFieldKey`'s answer: a dedicated
+ *  'person' field, or a 'select' field with at least one option that
+ *  resolves to a real user's id (see optionItem.userId in form-schema.ts —
+ *  the "select a user" option in the form builder). Shared between the
+ *  mapping-creation UI (which fields) and the API's own validation (which
+ *  fields, for real) so the two can't drift apart. */
+export function isEvaluateeField(field: FormField): boolean {
+  if (field.type === 'person') return true;
+  if (field.type === 'select') return field.options.some((o) => o.userId);
+  return false;
+}
 
 export interface FormKpiMapping {
   id: string;

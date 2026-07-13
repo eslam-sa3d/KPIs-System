@@ -10,6 +10,30 @@ const definition = formDefinitionSchema.parse({
     { key: 'score2', label: 'Communication', type: 'rating', scale: 5, required: true },
     { key: 'notes', label: 'Notes', type: 'short_text', required: false },
     { key: 'heading', label: 'Section heading', type: 'section_header', required: false },
+    {
+      key: 'evaluatee_choice',
+      label: 'Who does this concern?',
+      type: 'select',
+      required: true,
+      options: [
+        {
+          value: '11111111-1111-4111-8111-111111111111',
+          label: 'Alice',
+          userId: '11111111-1111-4111-8111-111111111111',
+        },
+        { value: 'Someone else', label: 'Someone else' },
+      ],
+    },
+    {
+      key: 'plain_choice',
+      label: 'Sprint',
+      type: 'select',
+      required: false,
+      options: [
+        { value: 'Sprint 1', label: 'Sprint 1' },
+        { value: 'Sprint 2', label: 'Sprint 2' },
+      ],
+    },
   ],
 });
 
@@ -124,6 +148,23 @@ describe('FormKpiMappingsService.create', () => {
     expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ evaluateeFieldKey: undefined }),
     });
+  });
+
+  it('accepts a "select" field as the evaluatee source when it has a user-linked option', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await service.create('form-1', { ...validInput, evaluateeFieldKey: 'evaluatee_choice' }, 'admin-1');
+
+    expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ evaluateeFieldKey: 'evaluatee_choice' }),
+    });
+  });
+
+  it('rejects a "select" field with no user-linked options as the evaluatee source', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await expect(
+      service.create('form-1', { ...validInput, evaluateeFieldKey: 'plain_choice' }, 'admin-1'),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
   });
 
   it('allows linking a field type with no live-scoring formula (e.g. short_text) — it just never scores', async () => {
@@ -319,6 +360,22 @@ describe('FormKpiMappingsService.bulkCreate', () => {
       service.bulkCreate('form-1', { ...bulkInput, evaluateeFieldKey: 'notes' }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a "select" field with a user-linked option as the batch evaluatee source', async () => {
+    const prisma = makeBulkPrismaStub();
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+
+    const result = await service.bulkCreate(
+      'form-1',
+      { ...bulkInput, evaluateeFieldKey: 'evaluatee_choice' },
+      'admin-1',
+    );
+
+    expect(result.created).toHaveLength(2);
+    expect(prisma.formKpiMapping.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ evaluateeFieldKey: 'evaluatee_choice' }) }),
+    );
   });
 
   it('creates every row as self-assessment when evaluateeFieldKey is omitted', async () => {

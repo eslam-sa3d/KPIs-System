@@ -4,6 +4,7 @@ import {
   BulkCreateFormKpiMappingInput,
   BulkCreateFormKpiMappingResult,
   CreateFormKpiMappingInput,
+  isEvaluateeField,
 } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
@@ -34,9 +35,12 @@ export class FormKpiMappingsService {
 
     if (input.evaluateeFieldKey) {
       const evaluateeField = definition.fields.find((f) => f.key === input.evaluateeFieldKey);
-      if (!evaluateeField || evaluateeField.type !== 'person') {
+      if (!evaluateeField || !isEvaluateeField(evaluateeField)) {
         throw AppError.validation([
-          { path: 'evaluateeFieldKey', message: 'must reference a "person" field on this form' },
+          {
+            path: 'evaluateeFieldKey',
+            message: 'must reference a "person" field, or a "select" field with at least one user-linked option',
+          },
         ]);
       }
     }
@@ -114,9 +118,12 @@ export class FormKpiMappingsService {
 
     if (input.evaluateeFieldKey) {
       const evaluateeField = definition.fields.find((f) => f.key === input.evaluateeFieldKey);
-      if (!evaluateeField || evaluateeField.type !== 'person') {
+      if (!evaluateeField || !isEvaluateeField(evaluateeField)) {
         throw AppError.validation([
-          { path: 'evaluateeFieldKey', message: 'must reference a "person" field on this form' },
+          {
+            path: 'evaluateeFieldKey',
+            message: 'must reference a "person" field, or a "select" field with at least one user-linked option',
+          },
         ]);
       }
     }
