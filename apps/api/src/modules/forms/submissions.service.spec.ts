@@ -940,6 +940,33 @@ describe('SubmissionsService.summary', () => {
     expect(summary.fields.map((f) => f.key)).toEqual(['notes']);
   });
 
+  it('drops the same context fields even with incidental spacing differences in the label', async () => {
+    const prisma = makePrismaStub();
+    const definition = formDefinitionSchema.parse({
+      title: 'qa eval',
+      fields: [
+        { key: 'period', label: 'Period (e.g., Q2 , H1 , Annual 2026)', type: 'short_text' },
+        { key: 'notes', label: 'Notes', type: 'long_text' },
+      ],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v1' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    prisma.formSubmission.findMany.mockResolvedValue([
+      { answers: { period: 'Q2', notes: 'fine' }, createdAt: new Date() },
+    ]);
+
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+    const summary = await service.summary('qa-eval');
+
+    expect(summary.fields.map((f) => f.key)).toEqual(['notes']);
+  });
+
   it('resolves a "person" field\'s answers to display names instead of raw user ids', async () => {
     const prisma = makePrismaStub();
     const definition = formDefinitionSchema.parse({
@@ -968,5 +995,100 @@ describe('SubmissionsService.summary', () => {
     );
     const evaluatee = summary.fields.find((f) => f.key === 'evaluatee')!;
     expect(evaluatee.samples).toEqual(['(deleted user)', 'Ana Ivanova']);
+  });
+
+  it("resolves a UUID-shaped answer to a display name even on a field not typed 'person'", async () => {
+    const prisma = makePrismaStub();
+    const definition = formDefinitionSchema.parse({
+      title: 'per-area evaluatee',
+      fields: [{ key: 'area_owner', label: 'Root Cause Analysis', type: 'short_text' }],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v1' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    const uuid = 'aba51f55-559d-4372-87a3-dcafe0b302eb';
+    prisma.formSubmission.findMany.mockResolvedValue([
+      { answers: { area_owner: uuid }, createdAt: new Date() },
+      { answers: { area_owner: 'just a normal text answer' }, createdAt: new Date() },
+    ]);
+    prisma.user.findMany.mockResolvedValue([{ id: uuid, displayName: 'Sam Reyes' }]);
+
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+    const summary = await service.summary('per-area-evaluatee');
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: [uuid] } } }));
+    const area = summary.fields.find((f) => f.key === 'area_owner')!;
+    expect(area.samples).toEqual(['just a normal text answer', 'Sam Reyes']);
+  });
+
+  it('leaves a UUID-shaped answer as-is when it does not match any user (not a false "(deleted user)")', async () => {
+    const prisma = makePrismaStub();
+    const definition = formDefinitionSchema.parse({
+      title: 'coincidental uuid',
+      fields: [{ key: 'ref_code', label: 'Reference Code', type: 'short_text' }],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v1' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    const uuid = '11111111-2222-3333-4444-555555555555';
+    prisma.formSubmission.findMany.mockResolvedValue([{ answers: { ref_code: uuid }, createdAt: new Date() }]);
+    prisma.user.findMany.mockResolvedValue([]);
+
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+    const summary = await service.summary('coincidental-uuid');
+
+    const field = summary.fields.find((f) => f.key === 'ref_code')!;
+    expect(field.samples).toEqual([uuid]);
+  });
+});
+
+describe('SubmissionsService.exportCsv', () => {
+  it("resolves a 'person' field and a UUID-shaped text field to display names, leaving other cells alone", async () => {
+    const prisma = makePrismaStub();
+    const definition = formDefinitionSchema.parse({
+      title: 'export repro',
+      fields: [
+        { key: 'evaluatee', label: 'Evaluatee', type: 'person' },
+        { key: 'root_cause', label: 'Root Cause Analysis', type: 'short_text' },
+        { key: 'notes', label: 'Notes', type: 'long_text' },
+      ],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v1' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    const uuid = 'aba51f55-559d-4372-87a3-dcafe0b302eb';
+    prisma.formSubmission.findMany.mockResolvedValue([
+      {
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        submittedBy: { email: 'respondent@pulse.local' },
+        answers: { evaluatee: 'user-1', root_cause: uuid, notes: 'plain text' },
+      },
+    ]);
+    prisma.user.findMany.mockResolvedValue([
+      { id: 'user-1', displayName: 'Ana Ivanova' },
+      { id: uuid, displayName: 'Sam Reyes' },
+    ]);
+
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+    const csv = await service.exportCsv('export-repro', 'admin-1');
+
+    const [header, row] = csv.split('\n');
+    expect(header).toBe('submitted_at,submitted_by,evaluatee,root_cause,notes');
+    expect(row).toBe('2026-01-01T00:00:00.000Z,respondent@pulse.local,Ana Ivanova,Sam Reyes,plain text');
   });
 });

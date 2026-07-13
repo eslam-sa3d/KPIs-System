@@ -21,6 +21,7 @@ import { FormKpiMappingsPanel } from '../../../components/form-kpi-mappings-pane
 import { ResponseSummary, ResponseSummaryData } from '../../../components/response-summary';
 import { ResponseDetailModal } from '../../../components/response-detail-modal';
 import { apiPaged, api, downloadFile } from '../../../lib/api-client';
+import { resolvePersonAnswer } from '../../../lib/resolve-person-answer';
 import { useSession } from '../../../lib/use-session';
 
 interface FormDetail {
@@ -67,8 +68,9 @@ function FormView() {
   const [confirmDeleteRowId, setConfirmDeleteRowId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   // 'person' answers are a User's id, not a displayable string — resolved once per
-  // form load (only if it actually has a 'person' field) so cells/modal can show
-  // who was picked instead of their opaque id.
+  // form load so cells/modal can show who was picked instead of their opaque id.
+  // Fetched unconditionally (not just when a 'person' field exists): some forms
+  // store a per-area evaluatee id in an ordinary text field instead.
   const [personNames, setPersonNames] = useState<Record<string, string>>({});
 
   const reloadDetail = useCallback(() => {
@@ -80,7 +82,7 @@ function FormView() {
   }, [user, reloadDetail]);
 
   useEffect(() => {
-    if (!detail?.definition.fields.some((f) => f.type === 'person')) return;
+    if (!detail) return;
     void api<Array<{ id: string; displayName: string }>>('/v1/users?pageSize=200').then((users) => {
       setPersonNames(Object.fromEntries(users.map((u) => [u.id, u.displayName])));
     });
@@ -368,8 +370,8 @@ function FormView() {
                                   </Button>
                                 ))}
                               </span>
-                            ) : f.type === 'person' && typeof value === 'string' && value ? (
-                              (personNames[value] ?? '(deleted user)')
+                            ) : typeof value === 'string' && value ? (
+                              resolvePersonAnswer(value, personNames, f.type === 'person')
                             ) : Array.isArray(value) ? (
                               value.join(', ')
                             ) : typeof value === 'object' && value !== null ? (

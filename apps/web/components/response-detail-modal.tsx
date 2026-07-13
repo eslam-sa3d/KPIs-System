@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, downloadFile } from '../lib/api-client';
+import { resolvePersonAnswer } from '../lib/resolve-person-answer';
 import { FieldInput, type SubmissionScore } from './form-renderer';
 
 export interface DetailedSubmission {
@@ -22,9 +23,9 @@ function formatAnswer(
   personNames: Record<string, string>,
 ): string {
   if (value === undefined || value === null || value === '') return '—';
-  // 'person' answers are a User's id, not a displayable string — show who was
-  // picked, not the id, the same resolution the submissions table applies.
-  if (field.type === 'person' && typeof value === 'string') return personNames[value] ?? '(deleted user)';
+  // 'person' (or UUID-shaped) answers are a User's id, not a displayable string —
+  // show who was picked, the same resolution the submissions table applies.
+  if (typeof value === 'string') return resolvePersonAnswer(value, personNames, field.type === 'person');
   if (Array.isArray(value)) return value.join(', ');
   if (typeof value === 'object') {
     return Object.entries(value)

@@ -36,6 +36,11 @@ import { TurnstileService } from './turnstile.service';
  */
 const MAX_SUBMISSIONS_FOR_SYNC_REPORT = 20_000;
 
+/** Detects a raw User id stored where a display name is expected — a 'person' field's
+ *  answer always matches; some forms also store a per-area evaluatee id in an ordinary
+ *  text field, so this is checked against every field, not just ones typed 'person'. */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Submission engine: validates answers against the form version's compiled
  * schema, enforces the form's collection settings, persists, and serves the
@@ -512,12 +517,12 @@ export class SubmissionsService {
 
   /** Context/metadata questions (evaluation type, period, respondent's own role) carry
    *  no meaningful response distribution — every submission answers them the same
-   *  routine way, so a chart card is just noise next to the actual evaluation questions. */
-  private static readonly SUMMARY_EXCLUDED_LABELS = new Set([
-    'evaluation type',
-    'period (e.g., q2, h1, annual 2026)',
-    'your role',
-  ]);
+   *  routine way, so a chart card is just noise next to the actual evaluation questions.
+   *  Matched with whitespace collapsed so incidental spacing differences around the
+   *  parenthetical example (e.g. "Q2 , H1" vs "Q2, H1") don't slip past the filter. */
+  private static readonly SUMMARY_EXCLUDED_LABELS = new Set(
+    ['evaluation type', 'period (e.g., q2, h1, annual 2026)', 'your role'].map(normalizeLabel),
+  );
 
   /** MS-Forms-style per-question aggregates for the summary dashboard. */
   async summary(formSlug: string): Promise<FormResponseSummary> {
@@ -530,23 +535,26 @@ export class SubmissionsService {
     });
 
     // 'person' answers are a User's id, not a displayable string — resolve every
-    // one referenced by this form's submissions in one batch instead of N+1.
+    // one referenced by this form's submissions in one batch instead of N+1. Also
+    // scan every OTHER field's raw values for a UUID shape: some forms store a
+    // per-area evaluatee id in an ordinary text field rather than a dedicated
+    // 'person' field, and those need the same name resolution to avoid leaking
+    // a raw user id into a summary card.
     const personFieldKeys = new Set(definition.fields.filter((f) => f.type === 'person').map((f) => f.key));
-    const personIds = new Set<string>();
-    if (personFieldKeys.size > 0) {
-      for (const s of submissions) {
-        const answers = s.answers as SubmissionAnswers;
-        for (const key of personFieldKeys) {
-          const v = answers[key];
-          if (typeof v === 'string' && v) personIds.add(v);
-        }
+    const candidateIds = new Set<string>();
+    for (const s of submissions) {
+      const answers = s.answers as SubmissionAnswers;
+      for (const field of definition.fields) {
+        const v = answers[field.key];
+        if (typeof v !== 'string' || !v) continue;
+        if (personFieldKeys.has(field.key) || UUID_PATTERN.test(v)) candidateIds.add(v);
       }
     }
-    const personNames = personIds.size
+    const personNames = candidateIds.size
       ? new Map(
           (
             await this.prisma.user.findMany({
-              where: { id: { in: [...personIds] } },
+              where: { id: { in: [...candidateIds] } },
               select: { id: true, displayName: true },
             })
           ).map((u) => [u.id, u.displayName]),
@@ -555,7 +563,7 @@ export class SubmissionsService {
 
     const fields: FormFieldSummary[] = definition.fields
       .filter((field) => field.type !== 'section_header') // display-only, never has an answer
-      .filter((field) => !SubmissionsService.SUMMARY_EXCLUDED_LABELS.has(field.label.trim().toLowerCase()))
+      .filter((field) => !SubmissionsService.SUMMARY_EXCLUDED_LABELS.has(normalizeLabel(field.label)))
       .map((field) => {
         const values = submissions
           .map((s) => (s.answers as SubmissionAnswers)[field.key])
@@ -659,7 +667,11 @@ export class SubmissionsService {
             return { ...base, samples: names.slice(-5).reverse() };
           }
           default: {
-            return { ...base, samples: (values as string[]).slice(-5).reverse() };
+            // A UUID-shaped answer in a non-'person' field is still, in practice, someone's
+            // id (see the candidateIds scan above) — resolve it the same way rather than
+            // showing the raw id just because this field wasn't built as a dedicated picker.
+            const samples = (values as string[]).map((v) => (UUID_PATTERN.test(v) ? (personNames.get(v) ?? v) : v));
+            return { ...base, samples: samples.slice(-5).reverse() };
           }
         }
       });
@@ -784,23 +796,23 @@ export class SubmissionsService {
     });
 
     // Same batch id -> displayName resolution as summary() — an exported 'person'
-    // answer should read as who was picked, not the User row's opaque id.
+    // answer (or a UUID-shaped answer in any other field) should read as who was
+    // picked, not the User row's opaque id.
     const personFieldKeys = new Set(definition.fields.filter((f) => f.type === 'person').map((f) => f.key));
-    const personIds = new Set<string>();
-    if (personFieldKeys.size > 0) {
-      for (const s of submissions) {
-        const answers = s.answers as SubmissionAnswers;
-        for (const key of personFieldKeys) {
-          const v = answers[key];
-          if (typeof v === 'string' && v) personIds.add(v);
-        }
+    const candidateIds = new Set<string>();
+    for (const s of submissions) {
+      const answers = s.answers as SubmissionAnswers;
+      for (const field of definition.fields) {
+        const v = answers[field.key];
+        if (typeof v !== 'string' || !v) continue;
+        if (personFieldKeys.has(field.key) || UUID_PATTERN.test(v)) candidateIds.add(v);
       }
     }
-    const personNames = personIds.size
+    const personNames = candidateIds.size
       ? new Map(
           (
             await this.prisma.user.findMany({
-              where: { id: { in: [...personIds] } },
+              where: { id: { in: [...candidateIds] } },
               select: { id: true, displayName: true },
             })
           ).map((u) => [u.id, u.displayName]),
@@ -814,11 +826,12 @@ export class SubmissionsService {
       return [
         s.createdAt.toISOString(),
         s.submittedBy?.email ?? 'anonymous',
-        ...keys.map((k) =>
-          personFieldKeys.has(k)
-            ? (personNames.get(answers[k] as string) ?? (answers[k] ? '(deleted user)' : ''))
-            : serializeCsvCell(answers[k]),
-        ),
+        ...keys.map((k) => {
+          const v = answers[k];
+          if (personFieldKeys.has(k)) return personNames.get(v as string) ?? (v ? '(deleted user)' : '');
+          if (typeof v === 'string' && UUID_PATTERN.test(v)) return personNames.get(v) ?? v;
+          return serializeCsvCell(v);
+        }),
       ];
     });
     return { header, rows };
@@ -957,4 +970,10 @@ function serializeCsvCell(value: unknown): string {
 
 function escapeCsv(cell: string): string {
   return /[",\n]/.test(cell) ? `"${cell.replaceAll('"', '""')}"` : cell;
+}
+
+/** All whitespace stripped, not just collapsed — "Q2 , H1" and "Q2, H1" must
+ *  compare equal, and this is only ever used for exact-match lookups, never displayed. */
+function normalizeLabel(label: string): string {
+  return label.toLowerCase().replace(/\s+/g, '');
 }
