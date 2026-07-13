@@ -1,6 +1,23 @@
 'use client';
 
 import { Fragment, FormEvent, useState } from 'react';
+import {
+  ArrowLeft,
+  Building2,
+  ClipboardList,
+  FileText,
+  FolderKanban,
+  Inbox,
+  LayoutDashboard,
+  Palette,
+  Plus,
+  Settings2,
+  ShieldCheck,
+  SlidersHorizontal,
+  Target,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -64,6 +81,25 @@ const ACTION_LABEL: Record<string, string> = {
   delete: 'delete',
 };
 
+/** One small glance-cue per resource card — purely visual, matching this
+ *  page's existing sparing use of lucide icons (see the "new role" button)
+ *  rather than introducing a heavier icon language the rest of the app
+ *  (plain text nav, no icons) doesn't otherwise use. */
+const RESOURCE_ICON: Record<string, LucideIcon> = {
+  users: Users,
+  roles: ShieldCheck,
+  departments: Building2,
+  project_groups: FolderKanban,
+  kpis: Target,
+  kpi_entries: ClipboardList,
+  forms: FileText,
+  form_submissions: Inbox,
+  dashboards: LayoutDashboard,
+  branding: Palette,
+  settings: Settings2,
+  configuration: SlidersHorizontal,
+};
+
 /** Only these resources' `view` grant has a row a "department"/"project_group"/
  *  "own" scope can correctly filter by (User.departmentId/projectGroupId,
  *  KpiAssignment.departmentId) — every other resource's access model (forms'
@@ -105,81 +141,93 @@ function PermissionFields({
   const [dashboardScope, setDashboardScope] = useState(byKey.get(DASHBOARD_SCOPE_KEY)?.scope ?? 'all');
 
   return (
-    <div className="perm-grid">
-      {catalog.resources
-        .filter((resource) => resource !== 'dashboards')
-        .map((resource) => (
-          <fieldset key={resource} className="perm-resource">
-            <legend>{RESOURCE_LABEL[resource] ?? resource.replace('_', ' ')}</legend>
-            {catalog.actions.map((action) => {
-              const key = permKey(resource, action);
-              const scopable = DEPARTMENT_GROUP_SCOPABLE_GRANTS.has(key);
-              const existing = byKey.get(key);
-              return (
-                <label key={action} className="check-item">
-                  <Checkbox name="permissions" value={key} defaultChecked={Boolean(existing)} />
-                  {ACTION_LABEL[action] ?? action}
-                  {scopable && (
-                    <select
-                      name={`scope:${key}`}
-                      defaultValue={existing?.scope ?? 'all'}
-                      aria-label={`${key} scope`}
-                      style={{ fontSize: 12, marginInlineStart: 4 }}
-                    >
-                      {DEPARTMENT_GROUP_SCOPE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </label>
-              );
-            })}
-          </fieldset>
-        ))}
+    <div>
+      <p className="perm-grid-hint">grouped by resource — check an action to grant it</p>
+      <div className="perm-grid">
+        {catalog.resources
+          .filter((resource) => resource !== 'dashboards')
+          .map((resource) => {
+            const ResourceIcon = RESOURCE_ICON[resource];
+            return (
+              <fieldset key={resource} className="perm-resource">
+                <legend>
+                  {ResourceIcon && <ResourceIcon size={14} aria-hidden="true" className="perm-resource-icon" />}
+                  {RESOURCE_LABEL[resource] ?? resource.replace('_', ' ')}
+                </legend>
+                {catalog.actions.map((action) => {
+                  const key = permKey(resource, action);
+                  const scopable = DEPARTMENT_GROUP_SCOPABLE_GRANTS.has(key);
+                  const existing = byKey.get(key);
+                  return (
+                    <label key={action} className="check-item" data-action={action}>
+                      <Checkbox name="permissions" value={key} defaultChecked={Boolean(existing)} />
+                      {ACTION_LABEL[action] ?? action}
+                      {scopable && (
+                        <select
+                          name={`scope:${key}`}
+                          defaultValue={existing?.scope ?? 'all'}
+                          aria-label={`${key} scope`}
+                          className="perm-scope-select"
+                        >
+                          {DEPARTMENT_GROUP_SCOPE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </label>
+                  );
+                })}
+              </fieldset>
+            );
+          })}
 
-      {/* dashboards:view gets its own block — "all" or restricted to specific
-          Performance Level bands, not the department/project_group scopes above. */}
-      <fieldset className="perm-resource">
-        <legend>{RESOURCE_LABEL.dashboards}</legend>
-        <label className="check-item">
-          <Checkbox
-            name="permissions"
-            value={DASHBOARD_SCOPE_KEY}
-            defaultChecked={Boolean(byKey.get(DASHBOARD_SCOPE_KEY))}
-          />
-          view
-          <select
-            name={`scope:${DASHBOARD_SCOPE_KEY}`}
-            value={dashboardScope}
-            onChange={(e) => setDashboardScope(e.target.value)}
-            aria-label={`${DASHBOARD_SCOPE_KEY} scope`}
-            style={{ fontSize: 12, marginInlineStart: 4 }}
-          >
-            <option value="all">all levels</option>
-            <option value="level">specific level(s)</option>
-          </select>
-        </label>
-        {dashboardScope === 'level' && (
-          <div className="check-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-            {performanceLevels.length === 0 ? (
-              <span className="muted">no performance levels configured yet</span>
-            ) : (
-              performanceLevels.map((level) => (
-                <label key={level.id} className="check-item" style={{ marginInlineStart: 20 }}>
-                  <Checkbox
-                    name={`scopeValues:${DASHBOARD_SCOPE_KEY}`}
-                    value={level.id}
-                    defaultChecked={byKey.get(DASHBOARD_SCOPE_KEY)?.scopeValues.includes(level.id) ?? false}
-                  />
-                  {level.label}
-                </label>
-              ))
-            )}
-          </div>
-        )}
-      </fieldset>
+        {/* dashboards:view gets its own block — "all" or restricted to specific
+            Performance Level bands, not the department/project_group scopes above. */}
+        <fieldset className="perm-resource">
+          <legend>
+            <LayoutDashboard size={14} aria-hidden="true" className="perm-resource-icon" />
+            {RESOURCE_LABEL.dashboards}
+          </legend>
+          <label className="check-item" data-action="view">
+            <Checkbox
+              name="permissions"
+              value={DASHBOARD_SCOPE_KEY}
+              defaultChecked={Boolean(byKey.get(DASHBOARD_SCOPE_KEY))}
+            />
+            view
+            <select
+              name={`scope:${DASHBOARD_SCOPE_KEY}`}
+              value={dashboardScope}
+              onChange={(e) => setDashboardScope(e.target.value)}
+              aria-label={`${DASHBOARD_SCOPE_KEY} scope`}
+              className="perm-scope-select"
+            >
+              <option value="all">all levels</option>
+              <option value="level">specific level(s)</option>
+            </select>
+          </label>
+          {dashboardScope === 'level' && (
+            <div className="check-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+              {performanceLevels.length === 0 ? (
+                <span className="muted">no performance levels configured yet</span>
+              ) : (
+                performanceLevels.map((level) => (
+                  <label key={level.id} className="check-item" style={{ marginInlineStart: 20 }}>
+                    <Checkbox
+                      name={`scopeValues:${DASHBOARD_SCOPE_KEY}`}
+                      value={level.id}
+                      defaultChecked={byKey.get(DASHBOARD_SCOPE_KEY)?.scopeValues.includes(level.id) ?? false}
+                    />
+                    {level.label}
+                  </label>
+                ))
+              )}
+            </div>
+          )}
+        </fieldset>
+      </div>
     </div>
   );
 }
@@ -203,6 +251,7 @@ export default function RolesAdminPage() {
   const { data: catalog } = useResource<Catalog>(user ? '/v1/roles/permission-catalog' : null);
   const { data: performanceLevels } = useResource<PerformanceLevelOption[]>(user ? '/v1/performance-levels' : null);
   const [error, setError] = useState<string | null>(null);
+  const [creatingRole, setCreatingRole] = useState(false);
   const [renamingRoleId, setRenamingRoleId] = useState<string | null>(null);
   const [editingPermissionsRoleId, setEditingPermissionsRoleId] = useState<string | null>(null);
   const [confirmDeleteRoleId, setConfirmDeleteRoleId] = useState<string | null>(null);
@@ -265,6 +314,7 @@ export default function RolesAdminPage() {
         }),
       });
       (event.target as HTMLFormElement).reset();
+      setCreatingRole(false);
       reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Creating the role failed');
@@ -290,25 +340,53 @@ export default function RolesAdminPage() {
 
   return (
     <PortalShell user={user}>
-      <h1>roles</h1>
+      <div className="page-title-row">
+        <h1>roles</h1>
+        {canEdit && catalog && !creatingRole && (
+          <Button
+            type="button"
+            variant="outline"
+            className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
+            onClick={() => setCreatingRole(true)}
+          >
+            <Plus size={16} aria-hidden="true" />
+            new role
+          </Button>
+        )}
+      </div>
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      {canEdit && catalog && (
+      {canEdit && catalog && creatingRole && (
         <Card>
           <CardContent className="pt-6">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mb-2 -ml-2 text-muted-foreground hover:text-foreground"
+              onClick={() => setCreatingRole(false)}
+            >
+              <ArrowLeft size={16} aria-hidden="true" />
+              back to roles
+            </Button>
             <form className="builder" onSubmit={onCreate}>
               <h2 className="text-lg font-semibold mb-2">new role</h2>
               <label htmlFor="r-name">role name</label>
-              <Input id="r-name" name="name" required minLength={2} />
+              <Input id="r-name" name="name" required minLength={2} autoFocus />
               <label htmlFor="r-desc">description</label>
               <Input id="r-desc" name="description" />
               <span className="field-label">permissions</span>
               <PermissionFields catalog={catalog} performanceLevels={performanceLevels ?? []} defaultPermissions={[]} />
-              <Button type="submit">create role</Button>
+              <span className="builder-field-actions">
+                <Button type="submit">create role</Button>
+                <Button type="button" variant="ghost" onClick={() => setCreatingRole(false)}>
+                  cancel
+                </Button>
+              </span>
             </form>
           </CardContent>
         </Card>
