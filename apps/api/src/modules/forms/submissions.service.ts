@@ -20,6 +20,7 @@ import { PrismaService } from '../../infra/prisma.service';
 import { compileAnswerValidator } from './answer-validator';
 import { FormsService } from './forms.service';
 import { QuizScore, scoreSubmission } from './quiz-scoring';
+import { answerToText, resolveEvaluateeId } from './score-resolution';
 import { TurnstileService } from './turnstile.service';
 
 /**
@@ -299,9 +300,8 @@ export class SubmissionsService {
   ): Promise<boolean> {
     if (!mapping.evaluationArea.isActive) return false;
 
-    // no evaluateeFieldKey => self-assessment: the submitter scores themselves
-    const evaluateeId = mapping.evaluateeFieldKey ? answers[mapping.evaluateeFieldKey] : enteredById;
-    if (typeof evaluateeId !== 'string') return false;
+    const evaluateeId = resolveEvaluateeId(mapping.evaluateeFieldKey, answers, enteredById);
+    if (evaluateeId === null) return false;
     const rawScore = answers[mapping.scoreFieldKey];
     if (rawScore === undefined || rawScore === null) return false;
 
@@ -912,18 +912,6 @@ function normalizeScore(
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-/** Renders any answer shape (string, number, boolean, array, or a likert
- *  index map) as display text for a mapping's context/comment snapshot —
- *  these fields are read verbatim, not type-checked against a field type,
- *  since a context field can legitimately be any question type. */
-function answerToText(raw: unknown): string | null {
-  if (raw === undefined || raw === null || raw === '') return null;
-  if (typeof raw === 'string') return raw;
-  if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw);
-  if (Array.isArray(raw)) return raw.map((v) => String(v)).join(', ');
-  return JSON.stringify(raw);
 }
 
 /** Calendar-boundary period containing `at`, in UTC, for the given Evaluation Area cadence. */

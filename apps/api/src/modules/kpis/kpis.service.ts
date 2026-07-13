@@ -16,8 +16,8 @@ import {
   ScoreFieldType,
   SetEvaluationAreaStatusInput,
   SetKpiStatusInput,
+  SubmissionAnswers,
   TeamMemberBreakdown,
-  TeamMemberKpiArea,
   TeamOverview,
   UpdateEvaluationAreaEntryInput,
   UpdateEvaluationAreaInput,
@@ -29,6 +29,7 @@ import {
 import { AppError } from '../../common/app-error';
 import { paged } from '../../common/envelope.interceptor';
 import { PrismaService } from '../../infra/prisma.service';
+import { answerToText, describeAnswer, resolveEvaluateeId } from '../forms/score-resolution';
 import { RbacService } from '../rbac/rbac.service';
 
 /** How many recent entries per area feed the dashboard's trend/aggregate views.
@@ -95,6 +96,34 @@ type EntryWithEvaluator = {
 function scrubAnonymousEntry<T extends EntryWithEvaluator>(entry: T, canSeeEvaluators: boolean): T {
   if (!entry.anonymous || canSeeEvaluators) return entry;
   return { ...entry, enteredById: '', enteredBy: { id: '', displayName: 'anonymous' } };
+}
+
+/** One (FormKpiMapping, FormSubmission) pair that resolved to a real score —
+ *  see loadScoredSubmissions. `enteredById`/`enteredBy` (not `evaluatorId`)
+ *  to match EntryWithEvaluator/scrubAnonymousEntry's existing shape. */
+export interface ScoredSubmission {
+  /** The originating FormKpiMapping's own id — two submissions only compare
+   *  meaningfully (e.g. for a trend) when they came through the SAME
+   *  mapping, since different mappings can score different field types/
+   *  scales even under the same Evaluation Area (a form-level, not
+   *  area-level, uniqueness constraint). */
+  mappingId: string;
+  evaluationAreaId: string;
+  evaluationAreaName: string;
+  kpiId: string;
+  kpiName: string;
+  personId: string;
+  personName: string;
+  enteredById: string;
+  enteredBy: { id: string; displayName: string };
+  anonymous: boolean;
+  reviewType: string;
+  raw: unknown;
+  display: string;
+  context: string | null;
+  comment: string | null;
+  submittedAt: Date;
+  submissionId: string;
 }
 
 function avg(values: number[]): number {
@@ -240,6 +269,133 @@ export class KpisService {
     return { assignments: { some: { OR: scope } } };
   }
 
+  /**
+   * Loads every (mapping, submission) pair that resolves to a real, active,
+   * KPI-applicable evaluatee with a describable raw score — the read-side
+   * equivalent of what SubmissionsService.applyOneMapping computes at write
+   * time, without writing anything. Every dashboard widget that used to read
+   * EvaluationAreaEntry sources from this instead, so what's shown is always
+   * traceable to one real FormSubmission — never blended or normalized
+   * across mappings (see describeAnswer). Optionally scoped to a set of
+   * Evaluation Areas; every active mapping org-wide when omitted. Sorted
+   * most-recent-submission-first.
+   */
+  private async loadScoredSubmissions(evaluationAreaIds?: string[]): Promise<ScoredSubmission[]> {
+    const mappings = await this.prisma.formKpiMapping.findMany({
+      where: evaluationAreaIds ? { evaluationAreaId: { in: evaluationAreaIds } } : undefined,
+      include: {
+        evaluationArea: {
+          select: { id: true, name: true, isActive: true, kpiId: true, kpi: { select: { name: true } } },
+        },
+      },
+    });
+    const activeMappings = mappings.filter((m) => m.evaluationArea.isActive);
+    if (activeMappings.length === 0) return [];
+
+    const formIds = [...new Set(activeMappings.map((m) => m.formId))];
+    const [forms, submissions] = await Promise.all([
+      this.prisma.form.findMany({
+        where: { id: { in: formIds } },
+        select: { id: true, versions: { orderBy: { version: 'desc' }, take: 1, select: { definition: true } } },
+      }),
+      this.prisma.formSubmission.findMany({
+        where: { formVersion: { formId: { in: formIds } }, submittedById: { not: null } },
+        select: {
+          id: true,
+          answers: true,
+          submittedById: true,
+          createdAt: true,
+          formVersion: { select: { formId: true } },
+        },
+      }),
+    ]);
+
+    const definitionByFormId = new Map(
+      forms.map((f) => [f.id, f.versions[0]?.definition as unknown as FormDefinition | undefined]),
+    );
+    const submissionsByFormId = new Map<string, typeof submissions>();
+    for (const s of submissions) {
+      const list = submissionsByFormId.get(s.formVersion.formId);
+      if (list) list.push(s);
+      else submissionsByFormId.set(s.formVersion.formId, [s]);
+    }
+
+    // performance_level answers resolve against the live PerformanceLevel
+    // table — only fetched when at least one mapping's score field actually
+    // needs it, same lazy-fetch rule as SubmissionsService.applyOneMapping.
+    const needsPerformanceLevels = activeMappings.some((m) => {
+      const field = definitionByFormId.get(m.formId)?.fields.find((f) => f.key === m.scoreFieldKey);
+      return field?.type === 'performance_level';
+    });
+    const performanceLevels = needsPerformanceLevels
+      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
+      : undefined;
+
+    type Candidate = {
+      mapping: (typeof activeMappings)[number];
+      submission: (typeof submissions)[number];
+      evaluateeId: string;
+      described: { raw: unknown; display: string };
+    };
+    const candidates: Candidate[] = [];
+    for (const mapping of activeMappings) {
+      const definition = definitionByFormId.get(mapping.formId);
+      const scoreField = definition?.fields.find((f) => f.key === mapping.scoreFieldKey);
+      if (!scoreField) continue;
+      for (const submission of submissionsByFormId.get(mapping.formId) ?? []) {
+        const answers = submission.answers as SubmissionAnswers;
+        const evaluateeId = resolveEvaluateeId(mapping.evaluateeFieldKey, answers, submission.submittedById!);
+        if (evaluateeId === null) continue;
+        const rawScore = answers[mapping.scoreFieldKey];
+        if (rawScore === undefined || rawScore === null) continue;
+        const described = describeAnswer(scoreField, rawScore, performanceLevels);
+        if (described === null) continue;
+        candidates.push({ mapping, submission, evaluateeId, described });
+      }
+    }
+    if (candidates.length === 0) return [];
+
+    const userIds = new Set<string>();
+    for (const c of candidates) {
+      userIds.add(c.evaluateeId);
+      userIds.add(c.submission.submittedById!);
+    }
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [...userIds] } },
+      select: { id: true, displayName: true, isActive: true, isKpiApplicable: true },
+    });
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    const results: ScoredSubmission[] = [];
+    for (const c of candidates) {
+      const evaluatee = userById.get(c.evaluateeId);
+      if (!evaluatee || !evaluatee.isActive || !evaluatee.isKpiApplicable) continue;
+      const evaluatorId = c.submission.submittedById!;
+      const evaluator = userById.get(evaluatorId);
+      const answers = c.submission.answers as SubmissionAnswers;
+      results.push({
+        mappingId: c.mapping.id,
+        evaluationAreaId: c.mapping.evaluationAreaId,
+        evaluationAreaName: c.mapping.evaluationArea.name,
+        kpiId: c.mapping.evaluationArea.kpiId,
+        kpiName: c.mapping.evaluationArea.kpi.name,
+        personId: evaluatee.id,
+        personName: evaluatee.displayName,
+        enteredById: evaluatorId,
+        enteredBy: { id: evaluatorId, displayName: evaluator?.displayName ?? 'unknown' },
+        anonymous: c.mapping.anonymous,
+        reviewType: c.mapping.reviewType,
+        raw: c.described.raw,
+        display: c.described.display,
+        context: c.mapping.contextFieldKey ? answerToText(answers[c.mapping.contextFieldKey]) : null,
+        comment: c.mapping.commentFieldKey ? answerToText(answers[c.mapping.commentFieldKey]) : null,
+        submittedAt: c.submission.createdAt,
+        submissionId: c.submission.id,
+      });
+    }
+    return results.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
+  }
+
   async list(query: PageQuery, userId: string) {
     const { page, pageSize } = resolvePageBounds(query);
 
@@ -305,12 +461,21 @@ export class KpisService {
   }
 
   /**
-   * The KPIs relevant to the caller: assigned to any of their roles OR their
-   * department. Scope is derived server-side from the user record — the
-   * client cannot widen it. Each KPI comes with its Evaluation Areas and
-   * each area's most recent entries (with the evaluatee's display name) —
-   * enough for the dashboard to compute both a per-KPI aggregate and a
-   * per-person breakdown client-side, no extra endpoint needed.
+   * The KPIs relevant to the caller: assigned to any of their roles or their
+   * department. Each Evaluation Area comes with its own recent raw
+   * submissions (see loadScoredSubmissions) — each one traceable to a real
+   * FormSubmission, never blended into one number — so the dashboard can
+   * render both a per-KPI view and a per-person breakdown from one fetch,
+   * same as before, just sourced from submissions instead of materialized
+   * EvaluationAreaEntry rows.
+   *
+   * Each KPI also carries `latestValue` — the old normalized 0-5 blend,
+   * still read from EvaluationAreaEntry (which the write path keeps
+   * populating regardless) — purely so the dashboard's status strip can
+   * bucket KPIs into Outstanding/Meets/Needs improvement/Below/Pending.
+   * That bucketing has no equivalent on raw, cross-type submission values,
+   * so this stays a second, parallel signal rather than replacing
+   * `recentSubmissions` — display data is raw everywhere else.
    */
   async listMine(userId: string) {
     const [kpis, canSeeEvaluators] = await Promise.all([
@@ -320,34 +485,49 @@ export class KpisService {
         include: {
           evaluationAreas: {
             where: { isActive: true },
-            include: {
-              entries: {
-                // Historical entries can outlive a person's isKpiApplicable
-                // flag being turned off — exclude them here so a no-longer-
-                // applicable person doesn't linger in the dashboard's
-                // aggregate/per-person breakdowns.
-                where: { person: { isKpiApplicable: true } },
-                orderBy: { periodStart: 'desc' },
-                take: RECENT_ENTRIES_TAKE,
-                include: {
-                  person: { select: { id: true, displayName: true } },
-                  enteredBy: { select: { id: true, displayName: true } },
-                },
-              },
-              subCriteria: { orderBy: { name: 'asc' } },
-            },
+            include: { subCriteria: { orderBy: { name: 'asc' } } },
           },
         },
       }),
       this.canSeeAnonymousEvaluators(userId),
     ]);
-    return kpis.map((kpi) => ({
-      ...serializeKpi(kpi),
-      evaluationAreas: kpi.evaluationAreas.map((area) => ({
-        ...area,
-        entries: area.entries.map((entry) => scrubAnonymousEntry(entry, canSeeEvaluators)),
-      })),
-    }));
+
+    const areaIds = kpis.flatMap((kpi) => kpi.evaluationAreas.map((a) => a.id));
+    const [scored, legacyEntries] = await Promise.all([
+      this.loadScoredSubmissions(areaIds),
+      this.prisma.evaluationAreaEntry.findMany({
+        where: { evaluationAreaId: { in: areaIds }, person: { isKpiApplicable: true } },
+        select: { evaluationAreaId: true, value: true, periodStart: true },
+      }),
+    ]);
+    const scoredByArea = new Map<string, ScoredSubmission[]>();
+    for (const s of scored) {
+      const list = scoredByArea.get(s.evaluationAreaId);
+      if (list) list.push(s);
+      else scoredByArea.set(s.evaluationAreaId, [s]);
+    }
+    const legacyEntriesByArea = new Map<string, typeof legacyEntries>();
+    for (const e of legacyEntries) {
+      const list = legacyEntriesByArea.get(e.evaluationAreaId);
+      if (list) list.push(e);
+      else legacyEntriesByArea.set(e.evaluationAreaId, [e]);
+    }
+
+    return kpis.map((kpi) => {
+      const areaLatestValues = kpi.evaluationAreas
+        .map((area) => blendedAreaValues(legacyEntriesByArea.get(area.id) ?? []).latestValue)
+        .filter((v): v is number => v !== null);
+      return {
+        ...serializeKpi(kpi),
+        latestValue: areaLatestValues.length > 0 ? round2(avg(areaLatestValues)) : null,
+        evaluationAreas: kpi.evaluationAreas.map((area) => ({
+          ...area,
+          recentSubmissions: (scoredByArea.get(area.id) ?? [])
+            .slice(0, RECENT_ENTRIES_TAKE)
+            .map((s) => scrubAnonymousEntry(s, canSeeEvaluators)),
+        })),
+      };
+    });
   }
 
   /**
@@ -356,16 +536,22 @@ export class KpisService {
    * after; excludes people who shouldn't be tracked at all regardless of
    * role/department) with whether an active KPI covers their role/department
    * on top of that (the same matching myAssignmentFilter uses for a single
-   * caller, just run for everyone at once), plus a final score blended the
-   * same way computeKpi does client-side — each of the person's evaluation
-   * areas contributes its own latest-period average, then those area
-   * averages are themselves averaged. finalScore stays null (not zero) for
-   * anyone never scored, so the dashboard can tell "pending" apart from
-   * "scored a 0".
+   * caller, just run for everyone at once), plus their single most recent
+   * scored submission — raw, on its own scale, never blended with any other
+   * mapping's — and, when the submission before that came through the SAME
+   * mapping, that one too (for the trend indicator). `latestSubmission` is
+   * null (not a zero) for anyone never scored, so the dashboard can tell
+   * "pending" apart from "scored a 0". Also carries `score` — the normalized
+   * 0-5 blend across all their EvaluationAreaEntry rows — which powers the
+   * status cards, distinct from every other raw, per-submission field here.
    */
   async getTeamOverview(userId: string): Promise<TeamOverview> {
     // null = unrestricted; [] = restricted with nothing selected (sees no one);
     // non-empty = restricted to whichever Performance Level bands are allowed.
+    // The gate runs on the old normalized 0-5 blend — also returned to the
+    // client as `score` now, to power the dashboard's status cards — because
+    // a Performance Level range is defined on that same 0-5 scale and has
+    // nothing else to compare a raw, per-mapping answer against.
     const allowedLevelIds = await this.rbac.allowedDashboardLevelIds(userId);
     const allowedRanges =
       allowedLevelIds === null
@@ -375,7 +561,7 @@ export class KpisService {
             select: { minScore: true, maxScore: true },
           });
 
-    const [users, kpis, entries] = await Promise.all([
+    const [users, kpis, legacyEntries, scored] = await Promise.all([
       this.prisma.user.findMany({
         where: { isActive: true, isKpiApplicable: true },
         select: {
@@ -397,23 +583,38 @@ export class KpisService {
       }),
       this.prisma.evaluationAreaEntry.findMany({
         where: { person: { isActive: true }, periodStart: { gte: teamOverviewLookbackCutoff() } },
-        select: {
-          personId: true,
-          evaluationAreaId: true,
-          value: true,
-          periodStart: true,
-          periodEnd: true,
-          createdAt: true,
-        },
+        select: { personId: true, evaluationAreaId: true, value: true, periodStart: true },
       }),
+      this.loadScoredSubmissions(),
     ]);
 
-    const entriesByPerson = new Map<string, typeof entries>();
-    for (const entry of entries) {
-      const list = entriesByPerson.get(entry.personId);
-      if (list) list.push(entry);
-      else entriesByPerson.set(entry.personId, [entry]);
+    const scoredByPerson = new Map<string, ScoredSubmission[]>();
+    for (const s of scored) {
+      const list = scoredByPerson.get(s.personId);
+      if (list) list.push(s);
+      else scoredByPerson.set(s.personId, [s]);
     }
+
+    // Visibility-gate-only blend, exactly as before — see the comment above.
+    const legacyEntriesByPerson = new Map<string, typeof legacyEntries>();
+    for (const entry of legacyEntries) {
+      const list = legacyEntriesByPerson.get(entry.personId);
+      if (list) list.push(entry);
+      else legacyEntriesByPerson.set(entry.personId, [entry]);
+    }
+    const legacyFinalScore = (personId: string): number | null => {
+      const personEntries = legacyEntriesByPerson.get(personId) ?? [];
+      const byArea = new Map<string, typeof personEntries>();
+      for (const entry of personEntries) {
+        const list = byArea.get(entry.evaluationAreaId);
+        if (list) list.push(entry);
+        else byArea.set(entry.evaluationAreaId, [entry]);
+      }
+      const latestValues = [...byArea.values()]
+        .map((areaEntries) => blendedAreaValues(areaEntries).latestValue)
+        .filter((v): v is number => v !== null);
+      return latestValues.length > 0 ? round2(avg(latestValues)) : null;
+    };
 
     const members = users.map((user) => {
       const roleIds = new Set(user.roles.map((r) => r.roleId));
@@ -425,33 +626,13 @@ export class KpisService {
           ),
       );
 
-      const personEntries = entriesByPerson.get(user.id) ?? [];
-      const byArea = new Map<string, typeof personEntries>();
-      for (const entry of personEntries) {
-        const list = byArea.get(entry.evaluationAreaId);
-        if (list) list.push(entry);
-        else byArea.set(entry.evaluationAreaId, [entry]);
-      }
-      // Same per-area blend as getPersonBreakdown, averaged across areas both
-      // for the current period (finalScore) and the period before that
-      // (previousScore) — the latter powers the team table's trend arrow.
-      // Only areas that actually have a prior period contribute to
-      // previousScore, so a person with just one area newly scored doesn't
-      // read as "no change" (null previousScore means "not enough history
-      // yet", not zero movement).
-      const areaValues = [...byArea.values()].map((areaEntries) => blendedAreaValues(areaEntries));
-      const latestValues = areaValues.map((v) => v.latestValue).filter((v): v is number => v !== null);
-      const previousValues = areaValues.map((v) => v.previousValue).filter((v): v is number => v !== null);
-      const finalScore = latestValues.length > 0 ? round2(avg(latestValues)) : null;
-      const previousScore = previousValues.length > 0 ? round2(avg(previousValues)) : null;
-      // The date this person was last actually scored (when the entry was
-      // submitted), not periodEnd — periodEnd is the scoring period's own
-      // boundary and can be backdated/future-dated relative to when the
-      // rater actually entered the score.
-      const lastUpdated = personEntries.reduce<Date | null>(
-        (max, e) => (max === null || e.createdAt > max ? e.createdAt : max),
-        null,
-      );
+      // Most recent first (loadScoredSubmissions' own sort order).
+      const personScored = scoredByPerson.get(user.id) ?? [];
+      const latest = personScored[0] ?? null;
+      // Only meaningful as a trend when it came through the exact same
+      // mapping as latest — a different mapping can be a different field
+      // type/scale even under the same Evaluation Area.
+      const previous = latest ? (personScored.find((s, i) => i > 0 && s.mappingId === latest.mappingId) ?? null) : null;
 
       return {
         id: user.id,
@@ -460,78 +641,90 @@ export class KpisService {
         department: user.department?.name ?? null,
         roles: user.roles.map((r) => r.role.name),
         hasKpi,
-        finalScore,
-        previousScore,
-        lastUpdated: lastUpdated ? lastUpdated.toISOString() : null,
+        score: legacyFinalScore(user.id),
+        latestSubmission: latest
+          ? {
+              raw: latest.raw,
+              display: latest.display,
+              areaName: latest.evaluationAreaName,
+              kpiName: latest.kpiName,
+              submittedAt: latest.submittedAt.toISOString(),
+            }
+          : null,
+        previousSubmission: previous
+          ? { raw: previous.raw, display: previous.display, submittedAt: previous.submittedAt.toISOString() }
+          : null,
+        lastUpdated: latest ? latest.submittedAt.toISOString() : null,
       };
     });
 
-    // dashboards:view scope='level': narrow the roster to people whose current
-    // finalScore falls inside one of the caller's allowed Performance Level
-    // ranges. allowedRanges === null means unrestricted (skip filtering
-    // entirely); [] means restricted-but-nothing-selected, so everyone with no
-    // matching range (i.e. everyone) is dropped.
+    // dashboards:view scope='level': narrow the roster to people whose
+    // blended score falls inside one of the caller's allowed Performance
+    // Level ranges. allowedRanges === null means unrestricted (skip
+    // filtering entirely); [] means restricted-but-nothing-selected, so
+    // everyone with no matching range (i.e. everyone) is dropped.
     const visibleMembers =
       allowedRanges === null
         ? members
         : members.filter(
             (m) =>
-              m.finalScore !== null &&
-              allowedRanges.some((r) => m.finalScore! >= Number(r.minScore) && m.finalScore! <= Number(r.maxScore)),
+              m.score !== null &&
+              allowedRanges.some((r) => m.score! >= Number(r.minScore) && m.score! <= Number(r.maxScore)),
           );
 
     return { totalActiveUsers: visibleMembers.length, members: visibleMembers };
   }
 
   /**
-   * One team member's own rate across every KPI that covers them — the
-   * team-overview table's row, expanded. Each area's value is the same
-   * blended (multi-rater) average used everywhere else, never split out by
-   * who entered which score.
+   * One team member's own scored submissions across every KPI that covers
+   * them, most recent first — the team-overview table's row, expanded into
+   * a chronological feed rather than one blended value per area, since two
+   * submissions are only comparable when they came through the same mapping
+   * (see loadScoredSubmissions). `callerId` decides whether an anonymous
+   * mapping's evaluator identity is withheld, same rule as listMine — this
+   * endpoint is dashboards:view, broader than kpis:manage, so unlike
+   * getRecentFeedback it can't assume every caller is already entitled to
+   * see every evaluator.
    */
-  async getPersonBreakdown(personId: string): Promise<TeamMemberBreakdown> {
+  async getPersonBreakdown(personId: string, callerId: string): Promise<TeamMemberBreakdown> {
     const person = await this.prisma.user.findUnique({
       where: { id: personId },
       select: { id: true, displayName: true },
     });
     if (!person) throw AppError.notFound('User', personId);
 
-    const kpis = await this.prisma.kpi.findMany({
-      where: { isActive: true, ...(await this.myAssignmentFilter(personId)) },
-      orderBy: { name: 'asc' },
-      include: {
-        evaluationAreas: {
-          where: { isActive: true },
-          orderBy: { name: 'asc' },
-          include: {
-            entries: {
-              where: { personId },
-              orderBy: { periodStart: 'desc' },
-              take: RECENT_ENTRIES_TAKE,
-              select: { value: true, periodStart: true },
-            },
-          },
-        },
-      },
-    });
+    const [kpis, canSeeEvaluators] = await Promise.all([
+      this.prisma.kpi.findMany({
+        where: { isActive: true, ...(await this.myAssignmentFilter(personId)) },
+        select: { evaluationAreas: { where: { isActive: true }, select: { id: true } } },
+      }),
+      this.canSeeAnonymousEvaluators(callerId),
+    ]);
+    const areaIds = kpis.flatMap((kpi) => kpi.evaluationAreas.map((a) => a.id));
+
+    const scored = await this.loadScoredSubmissions(areaIds);
+    const personScored = scored.filter((s) => s.personId === personId).slice(0, RECENT_ENTRIES_TAKE);
 
     return {
       personId: person.id,
       displayName: person.displayName,
-      kpis: kpis.map((kpi) => ({
-        id: kpi.id,
-        name: kpi.name,
-        areas: kpi.evaluationAreas.map((area) => {
-          const { latestValue, previousValue } = blendedAreaValues(area.entries);
-          return {
-            id: area.id,
-            name: area.name,
-            cadence: area.cadence as TeamMemberKpiArea['cadence'],
-            latestValue,
-            previousValue,
-          };
-        }),
-      })),
+      submissions: personScored.map((s) => {
+        const scrubbed = scrubAnonymousEntry(s, canSeeEvaluators);
+        return {
+          kpiId: scrubbed.kpiId,
+          kpiName: scrubbed.kpiName,
+          areaId: scrubbed.evaluationAreaId,
+          areaName: scrubbed.evaluationAreaName,
+          raw: scrubbed.raw,
+          display: scrubbed.display,
+          submittedAt: scrubbed.submittedAt.toISOString(),
+          evaluatorName: scrubbed.enteredBy.displayName,
+          anonymous: scrubbed.anonymous,
+          reviewType: scrubbed.reviewType,
+          context: scrubbed.context,
+          comment: scrubbed.comment,
+        };
+      }),
     };
   }
 
@@ -544,7 +737,7 @@ export class KpisService {
    * everyone or a form whose answers never reach a KPI at all.
    */
   async getMeasurementGaps(): Promise<MeasurementGaps> {
-    const [forms, kpis] = await Promise.all([
+    const [forms, kpis, scored] = await Promise.all([
       this.prisma.form.findMany({
         where: { status: 'published' },
         select: {
@@ -558,18 +751,17 @@ export class KpisService {
         select: {
           id: true,
           name: true,
-          evaluationAreas: {
-            where: { isActive: true },
-            select: {
-              id: true,
-              name: true,
-              cadence: true,
-              entries: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
-            },
-          },
+          evaluationAreas: { where: { isActive: true }, select: { id: true, name: true, cadence: true } },
         },
       }),
+      // Most-recent-submission-per-area — see loadScoredSubmissions; it's
+      // already sorted most-recent-first, so the first hit per area is its latest.
+      this.loadScoredSubmissions(),
     ]);
+    const latestByArea = new Map<string, Date>();
+    for (const s of scored) {
+      if (!latestByArea.has(s.evaluationAreaId)) latestByArea.set(s.evaluationAreaId, s.submittedAt);
+    }
 
     const unmappedQuestions: MeasurementGaps['unmappedQuestions']['items'] = [];
     for (const form of forms) {
@@ -595,8 +787,8 @@ export class KpisService {
       for (const area of kpi.evaluationAreas) {
         const cadence = area.cadence as EvaluationAreaCadence;
         const graceDays = STALE_GRACE_DAYS_BY_CADENCE[cadence] ?? STALE_GRACE_DAYS_BY_CADENCE.monthly;
-        const lastEntry = area.entries[0];
-        const isStale = !lastEntry || now - lastEntry.createdAt.getTime() > graceDays * 24 * 60 * 60 * 1000;
+        const lastScoredAt = latestByArea.get(area.id) ?? null;
+        const isStale = !lastScoredAt || now - lastScoredAt.getTime() > graceDays * 24 * 60 * 60 * 1000;
         if (!isStale) continue;
         staleAreas.push({
           kpiId: kpi.id,
@@ -604,7 +796,7 @@ export class KpisService {
           areaId: area.id,
           areaName: area.name,
           cadence,
-          lastScoredAt: lastEntry ? lastEntry.createdAt.toISOString() : null,
+          lastScoredAt: lastScoredAt ? lastScoredAt.toISOString() : null,
         });
       }
     }
@@ -622,69 +814,69 @@ export class KpisService {
    * The free-text context/comment an evaluator leaves alongside a score,
    * across the org (or one KPI), most recent first — real qualitative
    * signal that today only exists one entry at a time inside a person's own
-   * drawer. Callers reach this at all only with kpis:manage, which already
-   * entitles them to see every evaluator's identity regardless of that
-   * entry's own anonymous flag (same rule as scrubAnonymousEntry elsewhere)
-   * — so unlike listMine(), nothing here needs scrubbing; `anonymous` is
-   * just returned as a label for the UI.
+   * drawer. Gated on dashboards:view at the controller (pre-existing —
+   * unchanged by this rewrite): evaluator identity isn't scrubbed here even
+   * for an anonymous-marked entry, same as before; `anonymous` is just
+   * returned as a label for the UI.
    */
   async getRecentFeedback(kpiId?: string): Promise<RecentFeedback> {
-    const entries = await this.prisma.evaluationAreaEntry.findMany({
-      where: {
-        OR: [{ context: { not: null } }, { comment: { not: null } }],
-        ...(kpiId ? { evaluationArea: { kpiId } } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      take: RECENT_FEEDBACK_TAKE,
-      select: {
-        id: true,
-        anonymous: true,
-        context: true,
-        comment: true,
-        createdAt: true,
-        person: { select: { displayName: true } },
-        enteredBy: { select: { displayName: true } },
-        evaluationArea: { select: { name: true, kpiId: true, kpi: { select: { name: true } } } },
-      },
-    });
+    const scored = await this.loadScoredSubmissions();
+    const withFeedback = scored
+      .filter((s) => (s.context !== null || s.comment !== null) && (!kpiId || s.kpiId === kpiId))
+      .slice(0, RECENT_FEEDBACK_TAKE);
 
     return {
-      entries: entries.map((e) => ({
-        id: e.id,
-        kpiId: e.evaluationArea.kpiId,
-        kpiName: e.evaluationArea.kpi.name,
-        areaName: e.evaluationArea.name,
-        personName: e.person.displayName,
-        evaluatorName: e.enteredBy.displayName,
-        anonymous: e.anonymous,
-        context: e.context,
-        comment: e.comment,
-        createdAt: e.createdAt.toISOString(),
+      entries: withFeedback.map((s) => ({
+        // Synthetic: one submission can feed more than one mapping/area, so
+        // submissionId alone isn't unique across this list.
+        id: `${s.submissionId}-${s.mappingId}`,
+        kpiId: s.kpiId,
+        kpiName: s.kpiName,
+        areaName: s.evaluationAreaName,
+        personName: s.personName,
+        evaluatorName: s.enteredBy.displayName,
+        anonymous: s.anonymous,
+        context: s.context,
+        comment: s.comment,
+        createdAt: s.submittedAt.toISOString(),
       })),
     };
   }
 
   /**
-   * A weekly count of new Evaluation Area entries, org-wide, over the last
-   * ACTIVITY_TREND_WEEKS weeks — nothing else in the system tracks
-   * submission/evaluation volume over time at all (the only timestamps that
-   * exist elsewhere are single snapshots like a form's first/last response).
-   * Every week in the window is present even at 0, so a gap in activity
-   * reads as a flat line, not a missing bar.
+   * A weekly count of new submissions to a KPI-mapped form, org-wide, over
+   * the last ACTIVITY_TREND_WEEKS weeks — every submission to a mapped form,
+   * not just ones that resolved to a real score (an inactive evaluatee or an
+   * unanswered score field still represents real evaluation activity, just
+   * activity that didn't land anywhere yet), which is a more honest signal
+   * than counting only successfully-scored ones. Every week in the window is
+   * present even at 0, so a gap in activity reads as a flat line, not a
+   * missing bar.
    */
   async getActivityTrend(): Promise<ActivityTrend> {
     const currentWeekStart = mondayOf(new Date());
     const earliestWeekStart = new Date(currentWeekStart);
     earliestWeekStart.setUTCDate(earliestWeekStart.getUTCDate() - (ACTIVITY_TREND_WEEKS - 1) * 7);
 
-    const entries = await this.prisma.evaluationAreaEntry.findMany({
-      where: { createdAt: { gte: earliestWeekStart } },
-      select: { createdAt: true },
+    const mappedFormIds = await this.prisma.formKpiMapping.findMany({
+      where: { evaluationArea: { isActive: true } },
+      select: { formId: true },
+      distinct: ['formId'],
     });
+    const submissions = mappedFormIds.length
+      ? await this.prisma.formSubmission.findMany({
+          where: {
+            formVersion: { formId: { in: mappedFormIds.map((m) => m.formId) } },
+            submittedById: { not: null },
+            createdAt: { gte: earliestWeekStart },
+          },
+          select: { createdAt: true },
+        })
+      : [];
 
     const counts = new Map<string, number>();
-    for (const entry of entries) {
-      const key = mondayOf(entry.createdAt).toISOString().slice(0, 10);
+    for (const submission of submissions) {
+      const key = mondayOf(submission.createdAt).toISOString().slice(0, 10);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
 
@@ -720,12 +912,7 @@ export class KpisService {
   }
 
   /** Separate from updateEvaluationArea — see setKpiStatus. */
-  async setEvaluationAreaStatus(
-    kpiId: string,
-    areaId: string,
-    input: SetEvaluationAreaStatusInput,
-    actorId: string,
-  ) {
+  async setEvaluationAreaStatus(kpiId: string, areaId: string, input: SetEvaluationAreaStatusInput, actorId: string) {
     const area = await this.prisma.evaluationArea.findFirst({ where: { id: areaId, kpiId } });
     if (!area) throw AppError.notFound('Evaluation area', areaId);
     const updated = await this.prisma.evaluationArea.update({
@@ -733,7 +920,13 @@ export class KpisService {
       data: { isActive: input.isActive },
     });
     await this.prisma.auditLog.create({
-      data: { actorId, action: 'evaluation_area.status_changed', entity: 'EvaluationArea', entityId: areaId, detail: input },
+      data: {
+        actorId,
+        action: 'evaluation_area.status_changed',
+        entity: 'EvaluationArea',
+        entityId: areaId,
+        detail: input,
+      },
     });
     return updated;
   }

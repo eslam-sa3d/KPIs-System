@@ -1,32 +1,29 @@
 'use client';
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { STATUS_COLOR } from '../lib/kpi-status';
 
-export interface DistributionRow {
-  level: string;
-  outstanding: number;
-  meets: number;
-  improve: number;
-  below: number;
+export interface CountRow {
+  label: string;
+  count: number;
 }
 
-const SERIES: Array<{ key: keyof Omit<DistributionRow, 'level'>; label: string; color: string }> = [
-  { key: 'outstanding', label: 'Outstanding', color: STATUS_COLOR.outstanding },
-  { key: 'meets', label: 'Meet expectations', color: STATUS_COLOR.meets },
-  { key: 'improve', label: 'Needs improvement', color: STATUS_COLOR.improve },
-  { key: 'below', label: 'Below expectations', color: STATUS_COLOR.below },
-];
-
-/** Stacked bar: KPI status distribution per level (cadence group). */
-export default function KpiDistributionChart({
+/** Single-series bar chart: a plain count per label — cadence, person, or
+ *  department. Replaces the old 4-status stacked distribution chart, which
+ *  depended on a normalized 0-5 score to bucket into status bands; this
+ *  dashboard shows raw, unnormalized submissions instead, so there's no
+ *  status to bucket by, just how much activity there is. */
+export default function CountBarChart({
   data,
   textColor,
   gridColor,
+  barColor,
+  countLabel = 'count',
 }: {
-  data: DistributionRow[];
+  data: CountRow[];
   textColor: string;
   gridColor: string;
+  barColor: string;
+  countLabel?: string;
 }) {
   return (
     <div style={{ width: '100%', height: 220 }}>
@@ -34,7 +31,7 @@ export default function KpiDistributionChart({
         <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: -20 }}>
           <CartesianGrid stroke={gridColor} vertical={false} />
           <XAxis
-            dataKey="level"
+            dataKey="label"
             tick={{ fill: textColor, fontSize: 11 }}
             tickLine={false}
             axisLine={{ stroke: gridColor }}
@@ -42,11 +39,10 @@ export default function KpiDistributionChart({
           <YAxis allowDecimals={false} tick={{ fill: textColor, fontSize: 11 }} tickLine={false} axisLine={false} />
           <Tooltip
             cursor={{ fill: 'transparent' }}
+            formatter={(value: number) => [value, countLabel]}
             contentStyle={{ borderRadius: 8, fontSize: 12, fontFamily: 'inherit' }}
           />
-          {SERIES.map((s) => (
-            <Bar key={s.key} dataKey={s.key} name={s.label} stackId="status" fill={s.color} radius={0} />
-          ))}
+          <Bar dataKey="count" name={countLabel} fill={barColor} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

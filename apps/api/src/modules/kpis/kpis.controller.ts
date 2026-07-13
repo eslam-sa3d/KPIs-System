@@ -65,8 +65,8 @@ export class KpisController {
   /** One team member's own rate across every covering KPI — powers the team overview table's row detail drawer. */
   @Get('team-overview/:personId')
   @RequirePermissions('dashboards:view')
-  getPersonBreakdown(@Param('personId') personId: string) {
-    return this.kpis.getPersonBreakdown(personId);
+  getPersonBreakdown(@Param('personId') personId: string, @Req() req: AuthedRequest) {
+    return this.kpis.getPersonBreakdown(personId, req.user.id);
   }
 
   /** Unmapped score-eligible questions + stale Evaluation Areas, org-wide — powers the dashboard's measurement-gap panel. */

@@ -23,19 +23,9 @@ import { downloadCsv } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 import { useResource } from '../../lib/use-resource';
 import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusBadgeStyle, statusOf } from '../../lib/kpi-status';
-import {
-  avg,
-  computeKpi,
-  latestAreaValue,
-  latestPeriodEntries,
-  previousAreaValue,
-  round2,
-  type ComputedKpi,
-  type RawKpi,
-} from './scoring';
 
 // Lazy-loaded: recharts only ships once the dashboard actually renders a chart.
-const KpiDistributionChart = dynamic(() => import('../../components/kpi-distribution-chart'), {
+const CountBarChart = dynamic(() => import('../../components/count-bar-chart'), {
   ssr: false,
   loading: () => <LoadingState label="loading chart…" />,
 });
@@ -44,40 +34,54 @@ const ActivityTrendChart = dynamic(() => import('../../components/activity-trend
   loading: () => <LoadingState label="loading chart…" />,
 });
 
-type SortKey = 'name' | 'latestValue' | 'status' | 'updated';
-type MemberSortKey = 'name' | 'department' | 'finalScore' | 'trend' | 'updated';
-
-/** finalScore vs. previousScore — null unless both sides have a value, so
- *  "not enough history yet" never reads as "no change" (a real, motionless 0). */
-function memberTrend(finalScore: number | null, previousScore: number | null): number | null {
-  if (finalScore === null || previousScore === null) return null;
-  return Math.round((finalScore - previousScore) * 100) / 100;
+/** A single (FormKpiMapping, FormSubmission) pair, exactly as KpisService's
+ *  loadScoredSubmissions produces it — raw, on its own scale, never blended
+ *  with any other mapping's answer. `submittedAt` arrives as an ISO string
+ *  (Date serializes that way over JSON). */
+interface RawSubmission {
+  mappingId: string;
+  evaluationAreaId: string;
+  evaluationAreaName: string;
+  kpiId: string;
+  kpiName: string;
+  personId: string;
+  personName: string;
+  enteredById: string;
+  enteredBy: { id: string; displayName: string };
+  anonymous: boolean;
+  reviewType: string;
+  raw: unknown;
+  display: string;
+  context: string | null;
+  comment: string | null;
+  submittedAt: string;
+  submissionId: string;
 }
 
-function TrendIndicator({ trend }: { trend: number | null }) {
-  if (trend === null) {
-    return (
-      <span className="muted" style={{ fontSize: 11 }}>
-        —
-      </span>
-    );
-  }
-  if (trend === 0) {
-    return (
-      <span className="muted" style={{ fontSize: 11 }}>
-        no change
-      </span>
-    );
-  }
-  const up = trend > 0;
-  return (
-    <span
-      style={{ fontSize: 11, color: up ? 'var(--green)' : 'var(--red)', fontFamily: 'var(--mono)', fontWeight: 600 }}
-    >
-      {up ? '▲' : '▼'} {Math.abs(trend).toLocaleString()}
-    </span>
-  );
+interface RawEvaluationArea {
+  id: string;
+  name: string;
+  cadence: string;
+  isActive: boolean;
+  recentSubmissions: RawSubmission[];
 }
+
+interface RawKpi {
+  id: string;
+  name: string;
+  isActive: boolean;
+  weight: number | null;
+  /** Old normalized 0-5 blend, still computed server-side from
+   *  EvaluationAreaEntry — purely so the status strip can bucket this KPI
+   *  into Outstanding/Meets/Needs improvement/Below/Pending. Every other
+   *  display on this page uses raw, per-submission values instead. */
+  latestValue: number | null;
+  evaluationAreas: RawEvaluationArea[];
+}
+
+type KpiSortKey = 'name' | 'latest' | 'updated';
+type MemberSortKey = 'name' | 'department' | 'latest' | 'trend' | 'updated';
+type CoverageFilter = 'all' | 'scored' | 'pending';
 
 const CADENCE_LABEL: Record<string, string> = {
   weekly: 'Weekly',
@@ -93,22 +97,72 @@ const REVIEW_TYPE_LABEL: Record<string, string> = {
   '360': '360',
 };
 
+/** Every submission across a KPI's areas, most recent first — loadScoredSubmissions
+ *  already sorts each area's own list, so this just merges and re-sorts across areas. */
+function allSubmissions(kpi: RawKpi): RawSubmission[] {
+  return kpi.evaluationAreas
+    .flatMap((a) => a.recentSubmissions)
+    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+}
+
+function TrendIndicator({
+  latest,
+  previous,
+}: {
+  latest: { raw: unknown; display: string } | null;
+  previous: { raw: unknown; display: string } | null;
+}) {
+  if (!latest || !previous) {
+    return (
+      <span className="muted" style={{ fontSize: 11 }}>
+        —
+      </span>
+    );
+  }
+  // Only rating/nps/slider/number/boolean answers are plain numbers — a
+  // select/multi_select/likert/performance_level raw value has no single
+  // magnitude to diff, so those just show both values without an arrow.
+  if (typeof latest.raw !== 'number' || typeof previous.raw !== 'number') {
+    return (
+      <span className="muted" style={{ fontSize: 11 }}>
+        {previous.display} → {latest.display}
+      </span>
+    );
+  }
+  const diff = Math.round((latest.raw - previous.raw) * 100) / 100;
+  if (diff === 0) {
+    return (
+      <span className="muted" style={{ fontSize: 11 }}>
+        no change
+      </span>
+    );
+  }
+  const up = diff > 0;
+  return (
+    <span
+      style={{ fontSize: 11, color: up ? 'var(--green)' : 'var(--red)', fontFamily: 'var(--mono)', fontWeight: 600 }}
+    >
+      {up ? '▲' : '▼'} {Math.abs(diff).toLocaleString()}
+    </span>
+  );
+}
+
 export default function DashboardPage() {
   const user = useSession();
   const [level, setLevel] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'latestValue', dir: -1 });
+  const [sort, setSort] = useState<{ key: KpiSortKey; dir: 1 | -1 }>({ key: 'updated', dir: -1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [memberCoverageFilter, setMemberCoverageFilter] = useState<CoverageFilter>('all');
   const [memberStatusFilter, setMemberStatusFilter] = useState<StatusKey | 'all'>('all');
-  const [memberSort, setMemberSort] = useState<{ key: MemberSortKey; dir: 1 | -1 }>({ key: 'finalScore', dir: -1 });
+  const [memberSort, setMemberSort] = useState<{ key: MemberSortKey; dir: 1 | -1 }>({ key: 'updated', dir: -1 });
   const [memberFilter, setMemberFilter] = useState('');
   const canSeeTeamOverview = can(user, 'dashboards:view');
 
-  const { data: rawKpis } = useResource<RawKpi[]>(user ? '/v1/kpis/my' : null);
-  const kpis = useMemo(() => rawKpis?.map(computeKpi) ?? null, [rawKpis]);
+  const { data: kpis } = useResource<RawKpi[]>(user ? '/v1/kpis/my' : null);
 
-  // org-wide roster with KPI coverage/final score/last-updated — admin-only, powers the team coverage cards and table below
+  // org-wide roster with KPI coverage/latest submission/last-updated — admin-only, powers the team coverage cards and table below
   const { data: teamOverview } = useResource<TeamOverview>(
     user && canSeeTeamOverview ? '/v1/kpis/team-overview' : null,
   );
@@ -124,14 +178,13 @@ export default function DashboardPage() {
     user && canSeeTeamOverview ? '/v1/kpis/recent-feedback' : null,
   );
 
-  // weekly count of new scores, org-wide — nothing else tracks evaluation
-  // volume over time at all
+  // weekly count of new submissions to a mapped form, org-wide
   const { data: activityTrend } = useResource<ActivityTrend>(
     user && canSeeTeamOverview ? '/v1/kpis/activity-trend' : null,
   );
 
-  // fetched on demand when a team member row is clicked — their own blended
-  // rate per area, across every KPI that covers them
+  // fetched on demand when a team member row is clicked — their own scored
+  // submissions, across every KPI that covers them
   const { data: memberBreakdown, error: memberBreakdownError } = useResource<TeamMemberBreakdown>(
     selectedMemberId ? `/v1/kpis/team-overview/${selectedMemberId}` : null,
   );
@@ -144,155 +197,136 @@ export default function DashboardPage() {
   // to KPIs that have at least one area on that cadence, rather than a single KPI-wide value
   const levels = useMemo(() => {
     if (!kpis) return [];
-    return [...new Set(kpis.flatMap((k) => k.areas.map((a) => a.cadence)))].sort();
+    return [...new Set(kpis.flatMap((k) => k.evaluationAreas.map((a) => a.cadence)))].sort();
   }, [kpis]);
 
   const levelData = useMemo(() => {
     if (!kpis) return [];
-    return level === 'all' ? kpis : kpis.filter((k) => k.areas.some((a) => a.cadence === level));
+    return level === 'all' ? kpis : kpis.filter((k) => k.evaluationAreas.some((a) => a.cadence === level));
   }, [kpis, level]);
 
+  const areasFlat = useMemo(
+    () => levelData.flatMap((k) => k.evaluationAreas.map((a) => ({ ...a, kpiId: k.id, kpiName: k.name }))),
+    [levelData],
+  );
+  const totalSubmissionCount = areasFlat.reduce((sum, a) => sum + a.recentSubmissions.length, 0);
+
+  const teamMembers = teamOverview?.members ?? [];
+  // Status strip: counts *people*, not KPI records — anyone with an active
+  // KPI mapped to their role/department, bucketed by their own blended
+  // score. Someone with no KPI mapped at all isn't "pending" here; that gap
+  // is the separate "No KPI assigned" card below.
+  const kpiCoveredMembers = useMemo(() => teamMembers.filter((m) => m.hasKpi), [teamMembers]);
   const stats = useMemo(() => {
     const counts: Record<StatusKey, number> = { outstanding: 0, meets: 0, improve: 0, below: 0, pending: 0 };
-    levelData.forEach((k) => counts[k.status]++);
+    kpiCoveredMembers.forEach((m) => counts[statusOf(m.score)]++);
     return counts;
-  }, [levelData]);
+  }, [kpiCoveredMembers]);
+  // Each card's headline number is the *average* score of the people in that
+  // band, not how many of them there are — the member count moves to
+  // subtext instead. Pending has no score to average (statusOf(null) is the
+  // only way into that band), so it keeps showing its member count.
+  const bandScoreAvg = useMemo(() => {
+    const scoresByStatus: Record<StatusKey, number[]> = {
+      outstanding: [],
+      meets: [],
+      improve: [],
+      below: [],
+      pending: [],
+    };
+    kpiCoveredMembers.forEach((m) => {
+      if (m.score !== null) scoresByStatus[statusOf(m.score)].push(m.score);
+    });
+    const avg: Record<StatusKey, number | null> = {
+      outstanding: null,
+      meets: null,
+      improve: null,
+      below: null,
+      pending: null,
+    };
+    (Object.keys(scoresByStatus) as StatusKey[]).forEach((s) => {
+      const scores = scoresByStatus[s];
+      avg[s] = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    });
+    return avg;
+  }, [kpiCoveredMembers]);
 
-  const tableData = useMemo(() => {
-    let data = statusFilter === 'all' ? levelData : levelData.filter((k) => k.status === statusFilter);
+  const kpiTableData = useMemo(() => {
+    let data = statusFilter === 'all' ? levelData : levelData.filter((k) => statusOf(k.latestValue) === statusFilter);
     data = [...data].sort((a, b) => {
       const dir = sort.dir;
       switch (sort.key) {
         case 'name':
           return a.name.localeCompare(b.name) * dir;
-        case 'status':
-          return STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) * dir;
         case 'updated':
-          return (a.lastUpdated ?? '').localeCompare(b.lastUpdated ?? '') * dir;
-        case 'latestValue':
+        case 'latest':
         default: {
-          const av = a.latestValue;
-          const bv = b.latestValue;
-          if (av === null && bv === null) return 0;
-          if (av === null) return 1;
-          if (bv === null) return -1;
-          return (av - bv) * dir;
+          const av = allSubmissions(a)[0]?.submittedAt ?? '';
+          const bv = allSubmissions(b)[0]?.submittedAt ?? '';
+          return av.localeCompare(bv) * dir;
         }
       }
     });
     return data;
   }, [levelData, statusFilter, sort]);
 
-  // "KPI status by cadence": groups EVALUATION AREAS (not KPIs — a KPI can span
-  // several cadences) by their own cadence, stacking each area's latest status.
-  const areaStatuses = useMemo(
-    () => levelData.flatMap((k) => k.areas.map((a) => ({ cadence: a.cadence, status: statusOf(latestAreaValue(a)) }))),
-    [levelData],
-  );
-
-  // Weighted composite: each scored KPI contributes latestValue × weight, where an
-  // unweighted KPI (Kpi.weight left unset) defaults to a weight of 1 — an even
-  // baseline against any KPI an admin has explicitly weighted heavier.
-  const compositeScore = useMemo(() => {
-    const scored = levelData.filter((k): k is ComputedKpi & { latestValue: number } => k.latestValue !== null);
-    if (scored.length === 0) return null;
-    const totalWeight = scored.reduce((sum, k) => sum + (k.weight ?? 1), 0);
-    if (totalWeight === 0) return null;
-    const weightedSum = scored.reduce((sum, k) => sum + k.latestValue * (k.weight ?? 1), 0);
-    return round2(weightedSum / totalWeight);
-  }, [levelData]);
-
-  // Tally each rater's reviewType across every area's latest period, so the
-  // dashboard shows the self/peer/manager/360 mix behind the numbers above.
+  // Tally each rater's reviewType across every area's most recent
+  // submissions, so the dashboard shows the self/peer/manager/360 mix
+  // behind the raw values above.
   const reviewMix = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const kpi of levelData) {
-      for (const area of kpi.areas) {
-        for (const entry of latestPeriodEntries(area)) {
-          const key = entry.reviewType ?? 'peer';
-          counts[key] = (counts[key] ?? 0) + 1;
-        }
+    for (const area of areasFlat) {
+      for (const s of area.recentSubmissions) {
+        counts[s.reviewType] = (counts[s.reviewType] ?? 0) + 1;
       }
     }
     return counts;
-  }, [levelData]);
+  }, [areasFlat]);
   const reviewMixTotal = Object.values(reviewMix).reduce((a, b) => a + b, 0);
 
-  const distributionData = useMemo(() => {
+  const submissionsByCadence = useMemo(() => {
     const groups = level === 'all' ? levels : [level];
-    return groups.map((g) => {
-      const inGroup = areaStatuses.filter((a) => a.cadence === g);
-      return {
-        level: CADENCE_LABEL[g] ?? g,
-        outstanding: inGroup.filter((a) => a.status === 'outstanding').length,
-        meets: inGroup.filter((a) => a.status === 'meets').length,
-        improve: inGroup.filter((a) => a.status === 'improve').length,
-        below: inGroup.filter((a) => a.status === 'below').length,
-      };
-    });
-  }, [areaStatuses, level, levels]);
+    return groups.map((g) => ({
+      label: CADENCE_LABEL[g] ?? g,
+      count: areasFlat.filter((a) => a.cadence === g).reduce((sum, a) => sum + a.recentSubmissions.length, 0),
+    }));
+  }, [areasFlat, level, levels]);
+  const hasSubmissionsByCadence = submissionsByCadence.some((g) => g.count > 0);
 
-  const hasDistributionData = distributionData.some((g) => g.outstanding + g.meets + g.improve + g.below > 0);
-
-  // "KPI by Person": each distinct evaluatee's own average latest score → status,
-  // stacked into the same 4-tier bars as the cadence chart above (same component,
-  // just grouped by person instead of cadence).
-  const byPersonData = useMemo(() => {
-    const byPerson = new Map<string, { name: string; values: number[] }>();
-    for (const kpi of levelData) {
-      for (const area of kpi.areas) {
-        for (const entry of latestPeriodEntries(area)) {
-          const bucket = byPerson.get(entry.person.id) ?? { name: entry.person.displayName, values: [] };
-          bucket.values.push(Number(entry.value));
-          byPerson.set(entry.person.id, bucket);
-        }
+  const submissionsByPerson = useMemo(() => {
+    const byPerson = new Map<string, number>();
+    for (const area of areasFlat) {
+      for (const s of area.recentSubmissions) {
+        byPerson.set(s.personName, (byPerson.get(s.personName) ?? 0) + 1);
       }
     }
-    return [...byPerson.values()].map(({ name, values }) => {
-      const status = statusOf(avg(values));
-      return {
-        level: name,
-        outstanding: status === 'outstanding' ? 1 : 0,
-        meets: status === 'meets' ? 1 : 0,
-        improve: status === 'improve' ? 1 : 0,
-        below: status === 'below' ? 1 : 0,
-      };
-    });
-  }, [levelData]);
+    return [...byPerson.entries()].map(([label, count]) => ({ label, count }));
+  }, [areasFlat]);
+  const hasSubmissionsByPerson = submissionsByPerson.length > 0;
 
-  const hasByPersonData = byPersonData.length > 0;
-
-  const teamMembers = teamOverview?.members ?? [];
   const noKpiMembers = useMemo(() => teamMembers.filter((m) => !m.hasKpi), [teamMembers]);
-  const pendingMembers = useMemo(() => teamMembers.filter((m) => m.hasKpi && m.finalScore === null), [teamMembers]);
+  const pendingMembers = useMemo(
+    () => teamMembers.filter((m) => m.hasKpi && m.latestSubmission === null),
+    [teamMembers],
+  );
 
-  // "Score by Department": same stacked-status-band shape as KPI status by
-  // cadence / KPI by Person above, grouped by department instead — the whole
-  // org's roster, not scoped to the cadence tab (department composition has
-  // nothing to do with which cadence is selected).
-  const byDepartmentData = useMemo(() => {
-    const byDept = new Map<string, StatusKey[]>();
+  // "Submissions by department": how many team members in each department
+  // have at least one scored submission — a coverage view, not a performance one.
+  const submissionsByDepartment = useMemo(() => {
+    const byDept = new Map<string, number>();
     for (const m of teamMembers) {
+      if (m.latestSubmission === null) continue;
       const key = m.department ?? 'no department';
-      const list = byDept.get(key) ?? [];
-      list.push(statusOf(m.finalScore));
-      byDept.set(key, list);
+      byDept.set(key, (byDept.get(key) ?? 0) + 1);
     }
-    return [...byDept.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([dept, statuses]) => ({
-        level: dept,
-        outstanding: statuses.filter((s) => s === 'outstanding').length,
-        meets: statuses.filter((s) => s === 'meets').length,
-        improve: statuses.filter((s) => s === 'improve').length,
-        below: statuses.filter((s) => s === 'below').length,
-      }));
+    return [...byDept.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([label, count]) => ({ label, count }));
   }, [teamMembers]);
-  const hasByDepartmentData = byDepartmentData.some((d) => d.outstanding + d.meets + d.improve + d.below > 0);
+  const hasSubmissionsByDepartment = submissionsByDepartment.length > 0;
 
   const memberTableData = useMemo(() => {
     let data = teamMembers.filter((m) => {
-      if (memberStatusFilter !== 'all' && statusOf(m.finalScore) !== memberStatusFilter) return false;
+      if (coverageFilterMatches(memberCoverageFilter, m.latestSubmission !== null) === false) return false;
+      if (memberStatusFilter !== 'all' && statusOf(m.score) !== memberStatusFilter) return false;
       if (!memberFilter.trim()) return true;
       const haystack = `${m.displayName} ${m.email} ${m.department ?? ''} ${m.roles.join(' ')}`.toLowerCase();
       return haystack.includes(memberFilter.trim().toLowerCase());
@@ -302,70 +336,57 @@ export default function DashboardPage() {
       switch (memberSort.key) {
         case 'department':
           return (a.department ?? '').localeCompare(b.department ?? '') * dir;
-        case 'updated':
-          return (a.lastUpdated ?? '').localeCompare(b.lastUpdated ?? '') * dir;
-        case 'finalScore': {
-          const av = a.finalScore;
-          const bv = b.finalScore;
-          if (av === null && bv === null) return 0;
-          if (av === null) return 1;
-          if (bv === null) return -1;
-          return (av - bv) * dir;
-        }
         case 'trend': {
-          const av = memberTrend(a.finalScore, a.previousScore);
-          const bv = memberTrend(b.finalScore, b.previousScore);
-          if (av === null && bv === null) return 0;
-          if (av === null) return 1;
-          if (bv === null) return -1;
+          const av = a.previousSubmission ? 1 : 0;
+          const bv = b.previousSubmission ? 1 : 0;
           return (av - bv) * dir;
         }
+        case 'updated':
+        case 'latest':
+          return (a.lastUpdated ?? '').localeCompare(b.lastUpdated ?? '') * dir;
         case 'name':
         default:
           return a.displayName.localeCompare(b.displayName) * dir;
       }
     });
     return data;
-  }, [teamMembers, memberStatusFilter, memberFilter, memberSort]);
+  }, [teamMembers, memberCoverageFilter, memberStatusFilter, memberFilter, memberSort]);
 
   function sortMembersBy(key: MemberSortKey) {
     setMemberSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
   }
 
   function onExportMembersCsv() {
-    const header = ['name', 'email', 'department', 'roles', 'final_score', 'status', 'last_updated'];
+    const header = ['name', 'email', 'department', 'roles', 'status', 'latest', 'last_updated'];
     const rows = memberTableData.map((m) => [
       m.displayName,
       m.email,
       m.department ?? '',
       m.roles.join('; '),
-      m.finalScore ?? '',
-      STATUS_LABEL[statusOf(m.finalScore)],
+      STATUS_LABEL[statusOf(m.score)],
+      m.latestSubmission?.display ?? '',
       m.lastUpdated ?? '',
     ]);
     downloadCsv('team-members-export.csv', [header, ...rows]);
   }
 
-  function sortBy(key: SortKey) {
+  function sortBy(key: KpiSortKey) {
     setSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
   }
 
   const selected = kpis?.find((k) => k.id === selectedId) ?? null;
   // This KPI's own review-type mix and anonymous rate, scoped to its own
-  // latest-period entries — distinct from the org-wide reviewMix above,
-  // which is one flat tally across every KPI in the current cadence view.
+  // recent submissions — distinct from the org-wide reviewMix above, which
+  // is one flat tally across every KPI in the current cadence view.
   const selectedReviewStats = useMemo(() => {
     if (!selected) return { reviewMix: {} as Record<string, number>, anonymousRate: null as number | null };
     const counts: Record<string, number> = {};
     let anonymousCount = 0;
     let total = 0;
-    for (const area of selected.areas) {
-      for (const entry of latestPeriodEntries(area)) {
-        const key = entry.reviewType ?? 'peer';
-        counts[key] = (counts[key] ?? 0) + 1;
-        if (entry.anonymous) anonymousCount += 1;
-        total += 1;
-      }
+    for (const s of allSubmissions(selected)) {
+      counts[s.reviewType] = (counts[s.reviewType] ?? 0) + 1;
+      if (s.anonymous) anonymousCount += 1;
+      total += 1;
     }
     return { reviewMix: counts, anonymousRate: total > 0 ? Math.round((anonymousCount / total) * 100) : null };
   }, [selected]);
@@ -374,24 +395,21 @@ export default function DashboardPage() {
     ? {
         id: selected.id,
         name: selected.name,
-        status: selected.status,
         reviewMix: selectedReviewStats.reviewMix,
         anonymousRate: selectedReviewStats.anonymousRate,
-        areas: selected.areas.map((a) => ({
+        areas: selected.evaluationAreas.map((a) => ({
           id: a.id,
           name: a.name,
           cadence: CADENCE_LABEL[a.cadence] ?? a.cadence,
-          latestValue: latestAreaValue(a),
-          previousValue: previousAreaValue(a),
-          entries: [...a.entries].reverse().map((e) => ({
-            label: new Date(e.periodStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-            value: Number(e.value),
-            personName: e.person.displayName,
-            evaluatorName: e.enteredBy.displayName,
-            reviewType: e.reviewType,
-            anonymous: e.anonymous,
-            context: e.context,
-            comment: e.comment,
+          submissions: a.recentSubmissions.map((s) => ({
+            display: s.display,
+            personName: s.personName,
+            evaluatorName: s.enteredBy.displayName,
+            reviewType: s.reviewType,
+            anonymous: s.anonymous,
+            context: s.context,
+            comment: s.comment,
+            submittedAt: s.submittedAt,
           })),
         })),
       }
@@ -419,7 +437,7 @@ export default function DashboardPage() {
             {levels.map((l) => (
               <Badge key={l} asChild variant={level === l ? 'default' : 'outline'} className="cursor-pointer py-1">
                 <button onClick={() => setLevel(l)}>
-                  {CADENCE_LABEL[l] ?? l} ({kpis.filter((k) => k.areas.some((a) => a.cadence === l)).length})
+                  {CADENCE_LABEL[l] ?? l} ({kpis.filter((k) => k.evaluationAreas.some((a) => a.cadence === l)).length})
                 </button>
               </Badge>
             ))}
@@ -441,36 +459,40 @@ export default function DashboardPage() {
                 below will fill in as soon as one is.
               </p>
             )}
-            <div className="p-kpi-strip">
-              {STATUS_ORDER.map((s) => (
-                <button
-                  key={s}
-                  className={`p-kpi-card p-status-${s}${statusFilter === s ? ' active' : ''}`}
-                  onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}
-                >
-                  <div className="p-kpi-icon">{STATUS_ICON[s]}</div>
-                  <div className="p-kpi-label">{STATUS_LABEL[s]}</div>
-                  <div className="p-kpi-val">{stats[s]}</div>
-                  <div className="p-kpi-sub">
-                    {s === 'pending'
-                      ? 'no entries yet'
-                      : `${levelData.length ? Math.round((stats[s] / levelData.length) * 100) : 0}% of KPIs`}
-                  </div>
-                </button>
-              ))}
-            </div>
+            {canSeeTeamOverview && teamOverview && (
+              <div className="p-kpi-strip">
+                {STATUS_ORDER.map((s) => (
+                  <button
+                    key={s}
+                    className={`p-kpi-card p-status-${s}${memberStatusFilter === s ? ' active' : ''}`}
+                    onClick={() => setMemberStatusFilter(memberStatusFilter === s ? 'all' : s)}
+                  >
+                    <div className="p-kpi-icon">{STATUS_ICON[s]}</div>
+                    <div className="p-kpi-label">{STATUS_LABEL[s]}</div>
+                    <div className="p-kpi-val">
+                      {s === 'pending' || bandScoreAvg[s] === null ? stats[s] : bandScoreAvg[s]!.toFixed(1)}
+                    </div>
+                    <div className="p-kpi-sub">
+                      {s === 'pending'
+                        ? 'no entries yet'
+                        : `${stats[s]} member${stats[s] === 1 ? '' : 's'} · ${
+                            kpiCoveredMembers.length ? Math.round((stats[s] / kpiCoveredMembers.length) * 100) : 0
+                          }% of team`}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="p-card" style={{ marginBottom: 16 }}>
-              <div className="p-card-title">Composite score</div>
+              <div className="p-card-title">Activity</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
-                <span
-                  className={`p-score-ring p-status-${statusOf(compositeScore)}`}
-                  style={{ width: 64, height: 44, fontSize: 15 }}
-                >
-                  {compositeScore !== null ? compositeScore.toLocaleString() : '—'}
+                <span className="p-score-ring p-status-meets" style={{ width: 64, height: 44, fontSize: 15 }}>
+                  {totalSubmissionCount}
                 </span>
                 <span className="muted" style={{ fontSize: 11 }}>
-                  weighted average of every scored KPI in this view (KPIs without a set weight count as 1)
+                  scored submission{totalSubmissionCount === 1 ? '' : 's'} across {areasFlat.length} evaluation area
+                  {areasFlat.length === 1 ? '' : 's'} in this view
                 </span>
               </div>
               {reviewMixTotal > 0 && (
@@ -490,7 +512,7 @@ export default function DashboardPage() {
                   type="button"
                   className="p-card"
                   style={{ textAlign: 'left', cursor: 'pointer' }}
-                  onClick={() => setMemberStatusFilter('pending')}
+                  onClick={() => setMemberCoverageFilter('pending')}
                 >
                   <div className="p-card-title">Pending evaluation</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
@@ -536,9 +558,15 @@ export default function DashboardPage() {
 
             {canSeeTeamOverview && teamOverview && (
               <div className="p-card" style={{ marginBottom: 16 }}>
-                <div className="p-card-title">Score by department</div>
-                {hasByDepartmentData ? (
-                  <KpiDistributionChart data={byDepartmentData} textColor="var(--text-3)" gridColor="var(--border)" />
+                <div className="p-card-title">Submissions by department</div>
+                {hasSubmissionsByDepartment ? (
+                  <CountBarChart
+                    data={submissionsByDepartment}
+                    textColor="var(--text-3)"
+                    gridColor="var(--border)"
+                    barColor="var(--accent)"
+                    countLabel="team members scored"
+                  />
                 ) : (
                   <p className="muted" style={{ fontSize: 12 }}>
                     no scored team members yet.
@@ -645,7 +673,7 @@ export default function DashboardPage() {
                   />
                 ) : (
                   <p className="muted" style={{ fontSize: 12 }}>
-                    no scores recorded in the last 12 weeks.
+                    no submissions to a mapped form in the last 12 weeks.
                   </p>
                 )}
               </div>
@@ -653,43 +681,33 @@ export default function DashboardPage() {
 
             <div className="p-charts-row">
               <div className="p-card">
-                <div className="p-card-title">KPI status by cadence</div>
-                {hasDistributionData ? (
-                  <>
-                    <KpiDistributionChart data={distributionData} textColor="var(--text-3)" gridColor="var(--border)" />
-                    <div className="p-legend-row">
-                      <div className="p-legend-item">
-                        <span className="p-legend-dot" style={{ background: 'var(--purple)' }} />
-                        Outstanding
-                      </div>
-                      <div className="p-legend-item">
-                        <span className="p-legend-dot" style={{ background: 'var(--green)' }} />
-                        Meet expectations
-                      </div>
-                      <div className="p-legend-item">
-                        <span className="p-legend-dot" style={{ background: 'var(--amber)' }} />
-                        Needs improvement
-                      </div>
-                      <div className="p-legend-item">
-                        <span className="p-legend-dot" style={{ background: 'var(--red)' }} />
-                        Below expectations
-                      </div>
-                    </div>
-                  </>
+                <div className="p-card-title">Submissions by cadence</div>
+                {hasSubmissionsByCadence ? (
+                  <CountBarChart
+                    data={submissionsByCadence}
+                    textColor="var(--text-3)"
+                    gridColor="var(--border)"
+                    barColor="var(--accent)"
+                  />
                 ) : (
                   <p className="muted" style={{ fontSize: 12 }}>
-                    no scored KPIs in this view yet.
+                    no scored submissions in this view yet.
                   </p>
                 )}
               </div>
 
               <div className="p-card">
-                <div className="p-card-title">KPI by Person</div>
-                {hasByPersonData ? (
-                  <KpiDistributionChart data={byPersonData} textColor="var(--text-3)" gridColor="var(--border)" />
+                <div className="p-card-title">Submissions by person</div>
+                {hasSubmissionsByPerson ? (
+                  <CountBarChart
+                    data={submissionsByPerson}
+                    textColor="var(--text-3)"
+                    gridColor="var(--border)"
+                    barColor="var(--accent)"
+                  />
                 ) : (
                   <p className="muted" style={{ fontSize: 12 }}>
-                    no scored KPIs in this view yet.
+                    no scored submissions in this view yet.
                   </p>
                 )}
               </div>
@@ -727,9 +745,9 @@ export default function DashboardPage() {
                     <TableHead>areas</TableHead>
                     <TableHead
                       className="p-th-sortable"
-                      aria-sort={sort.key === 'latestValue' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
+                      aria-sort={sort.key === 'latest' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
                     >
-                      <button type="button" onClick={() => sortBy('latestValue')}>
+                      <button type="button" onClick={() => sortBy('latest')}>
                         latest
                       </button>
                     </TableHead>
@@ -746,64 +764,75 @@ export default function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {tableData.length === 0 ? (
+                  {kpiTableData.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="muted" style={{ textAlign: 'center' }}>
                         {kpis.length === 0 ? 'no KPIs assigned yet.' : 'no KPIs match this filter.'}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    tableData.map((k) => (
-                      <TableRow
-                        key={k.id}
-                        tabIndex={0}
-                        role="button"
-                        aria-label={`view ${k.name}`}
-                        onClick={() => setSelectedId(k.id)}
-                        onKeyDown={(e) => {
-                          if (e.target !== e.currentTarget) return;
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setSelectedId(k.id);
-                          }
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <TableCell style={{ fontWeight: 500 }}>{k.name}</TableCell>
-                        <TableCell className="muted">{k.areas.length}</TableCell>
-                        <TableCell>
-                          <span className={`p-score-ring p-status-${k.status}`}>
-                            {k.latestValue !== null ? k.latestValue.toLocaleString() : '—'}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className="border-transparent" style={statusBadgeStyle(k.status)}>
-                            {STATUS_LABEL[k.status]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
-                          {k.lastUpdated ? new Date(k.lastUpdated).toLocaleDateString() : '—'}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
+                    kpiTableData.map((k) => {
+                      const latest = allSubmissions(k)[0] ?? null;
+                      const status = statusOf(k.latestValue);
+                      return (
+                        <TableRow
+                          key={k.id}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`view ${k.name}`}
+                          onClick={() => setSelectedId(k.id)}
+                          onKeyDown={(e) => {
+                            if (e.target !== e.currentTarget) return;
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
                               setSelectedId(k.id);
-                            }}
-                          >
-                            View →
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                            }
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <TableCell style={{ fontWeight: 500 }}>{k.name}</TableCell>
+                          <TableCell className="muted">{k.evaluationAreas.length}</TableCell>
+                          <TableCell>
+                            {latest ? (
+                              <span className="p-score-ring p-status-meets">{latest.display}</span>
+                            ) : (
+                              <span className="p-score-ring p-status-pending">—</span>
+                            )}
+                            {latest && (
+                              <span className="muted" style={{ marginLeft: 8, fontSize: 11 }}>
+                                {latest.evaluationAreaName}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className="border-transparent" style={statusBadgeStyle(status)}>
+                              {STATUS_LABEL[status]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
+                            {latest ? new Date(latest.submittedAt).toLocaleDateString() : '—'}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedId(k.id);
+                              }}
+                            >
+                              View →
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
               <div className="p-table-footer">
                 <span className="p-tf-count">
-                  showing {tableData.length} of {levelData.length} KPIs
+                  showing {kpiTableData.length} of {levelData.length} KPIs
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => setStatusFilter('all')}>
                   clear filters
@@ -814,6 +843,18 @@ export default function DashboardPage() {
             {canSeeTeamOverview && teamOverview && (
               <div className="p-table-card" style={{ marginTop: 16 }}>
                 <div className="p-table-header">
+                  <div className="p-filter-pills">
+                    {(['all', 'scored', 'pending'] as const).map((s) => (
+                      <Badge
+                        key={s}
+                        asChild
+                        variant={memberCoverageFilter === s ? 'default' : 'outline'}
+                        className="cursor-pointer py-1"
+                      >
+                        <button onClick={() => setMemberCoverageFilter(s)}>{s === 'all' ? 'All' : s}</button>
+                      </Badge>
+                    ))}
+                  </div>
                   <div className="p-filter-pills">
                     {(['all', ...STATUS_ORDER] as const).map((s) => (
                       <Badge
@@ -868,14 +909,15 @@ export default function DashboardPage() {
                         </button>
                       </TableHead>
                       <TableHead>role</TableHead>
+                      <TableHead>status</TableHead>
                       <TableHead
                         className="p-th-sortable"
                         aria-sort={
-                          memberSort.key === 'finalScore' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
+                          memberSort.key === 'latest' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
                         }
                       >
-                        <button type="button" onClick={() => sortMembersBy('finalScore')}>
-                          final score
+                        <button type="button" onClick={() => sortMembersBy('latest')}>
+                          latest
                         </button>
                       </TableHead>
                       <TableHead
@@ -903,13 +945,13 @@ export default function DashboardPage() {
                   <TableBody>
                     {memberTableData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="muted" style={{ textAlign: 'center' }}>
+                        <TableCell colSpan={7} className="muted" style={{ textAlign: 'center' }}>
                           {teamMembers.length === 0 ? 'no active team members.' : 'no team members match this filter.'}
                         </TableCell>
                       </TableRow>
                     ) : (
                       memberTableData.map((m) => {
-                        const status = statusOf(m.finalScore);
+                        const memberStatus = statusOf(m.score);
                         return (
                           <TableRow
                             key={m.id}
@@ -930,12 +972,19 @@ export default function DashboardPage() {
                             <TableCell className="muted">{m.department ?? '—'}</TableCell>
                             <TableCell className="muted">{m.roles.join(', ') || '—'}</TableCell>
                             <TableCell>
-                              <span className={`p-score-ring p-status-${status}`}>
-                                {m.finalScore !== null ? m.finalScore.toLocaleString() : '—'}
-                              </span>
+                              <Badge className="border-transparent" style={statusBadgeStyle(memberStatus)}>
+                                {STATUS_LABEL[memberStatus]}
+                              </Badge>
                             </TableCell>
                             <TableCell>
-                              <TrendIndicator trend={memberTrend(m.finalScore, m.previousScore)} />
+                              {m.latestSubmission ? (
+                                <span className="p-score-ring p-status-meets">{m.latestSubmission.display}</span>
+                              ) : (
+                                <span className="p-score-ring p-status-pending">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <TrendIndicator latest={m.latestSubmission} previous={m.previousSubmission} />
                             </TableCell>
                             <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
                               {m.lastUpdated ? new Date(m.lastUpdated).toLocaleDateString() : '—'}
@@ -954,6 +1003,7 @@ export default function DashboardPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => {
+                      setMemberCoverageFilter('all');
                       setMemberStatusFilter('all');
                       setMemberFilter('');
                     }}
@@ -976,4 +1026,9 @@ export default function DashboardPage() {
       </div>
     </PortalShell>
   );
+}
+
+function coverageFilterMatches(filter: CoverageFilter, isScored: boolean): boolean {
+  if (filter === 'all') return true;
+  return filter === 'scored' ? isScored : !isScored;
 }

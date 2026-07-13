@@ -17,6 +17,18 @@ export interface KpiOptionSummary {
   }>;
 }
 
+/** A single scored form submission, shown on its own native scale — e.g.
+ *  "4/5" for a rating field, "8/10" for NPS. Never blended with any other
+ *  mapping's answer, so what's displayed always traces back to one real
+ *  FormSubmission. `raw` is the field's native answer shape (number,
+ *  string, string[], or a likert index map) — only meaningful to compare
+ *  against another `raw` from the exact same mapping. */
+export interface ScoredSubmissionSummary {
+  raw: unknown;
+  display: string;
+  submittedAt: string;
+}
+
 /** One row of KpisService.getTeamOverview()'s org-wide roster. */
 export interface TeamMember {
   id: string;
@@ -25,12 +37,22 @@ export interface TeamMember {
   department: string | null;
   roles: string[];
   hasKpi: boolean;
-  /** null (not 0) when the person has never been scored — "pending", not "scored a 0". */
-  finalScore: number | null;
-  /** The same blend as finalScore, one period back — null when there isn't a
-   *  prior period yet for any area, not when the change happens to be zero.
-   *  Powers the team table's trend indicator (finalScore vs. previousScore). */
-  previousScore: number | null;
+  /** Normalized 0-5 blend across every EvaluationAreaEntry covering this
+   *  person (same computation the write path has always produced) — null
+   *  when they have none. Powers the dashboard's Outstanding/Meets/Needs
+   *  improvement/Below/Pending status cards and the Performance-Level
+   *  visibility gate; every other field on this type is a raw, per-submission
+   *  value on its own native scale. */
+  score: number | null;
+  /** The person's single most recent scored submission, across every KPI
+   *  area that covers them — null when they've never been scored ("pending",
+   *  not "scored a 0"). Includes which area/KPI it was for since a person
+   *  can be covered by more than one. */
+  latestSubmission: (ScoredSubmissionSummary & { areaName: string; kpiName: string }) | null;
+  /** Only set when the submission immediately before `latestSubmission` came
+   *  through the exact same mapping (same field, same scale) — otherwise
+   *  there's nothing valid to compare against, so no trend is shown. */
+  previousSubmission: ScoredSubmissionSummary | null;
   lastUpdated: string | null;
 }
 
@@ -41,30 +63,28 @@ export interface TeamOverview {
   members: TeamMember[];
 }
 
-/** One Evaluation Area's blended rate for a single team member — the same
- *  multi-rater average used everywhere else (see latestAreaValue client-side,
- *  or the equivalent blending in getTeamOverview), not split out per rater. */
-export interface TeamMemberKpiArea {
-  id: string;
-  name: string;
-  cadence: EvaluationAreaCadence;
-  latestValue: number | null;
-  previousValue: number | null;
-}
-
-export interface TeamMemberKpi {
-  id: string;
-  name: string;
-  areas: TeamMemberKpiArea[];
+/** One of a team member's own scored submissions, for the detail drawer's
+ *  chronological feed — not blended with any other submission, even within
+ *  the same Evaluation Area (see ScoredSubmissionSummary). */
+export interface PersonSubmission extends ScoredSubmissionSummary {
+  kpiId: string;
+  kpiName: string;
+  areaId: string;
+  areaName: string;
+  evaluatorName: string;
+  anonymous: boolean;
+  reviewType: string;
+  context: string | null;
+  comment: string | null;
 }
 
 /** Response of GET /v1/kpis/team-overview/:personId — a single team member's
- *  own rate across every KPI that covers them, for the dashboard's team
- *  member detail drawer. */
+ *  own scored submissions across every KPI that covers them, most recent
+ *  first, for the dashboard's team member detail drawer. */
 export interface TeamMemberBreakdown {
   personId: string;
   displayName: string;
-  kpis: TeamMemberKpi[];
+  submissions: PersonSubmission[];
 }
 
 /** A score-eligible question on a published form with no FormKpiMapping
