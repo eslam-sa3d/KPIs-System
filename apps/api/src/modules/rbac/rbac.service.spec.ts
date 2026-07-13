@@ -82,6 +82,27 @@ describe('RbacService.getEffectivePermissions', () => {
   });
 });
 
+describe('RbacService.myProjectGroupIds', () => {
+  it('returns every group the user is a member of, not just one', async () => {
+    const prisma = { projectGroupMember: { findMany: vi.fn() } };
+    prisma.projectGroupMember.findMany.mockResolvedValue([{ groupId: 'group-1' }, { groupId: 'group-2' }]);
+    const service = new RbacService(prisma as never, makeRedisStub() as never);
+
+    await expect(service.myProjectGroupIds('user-1')).resolves.toEqual(['group-1', 'group-2']);
+    expect(prisma.projectGroupMember.findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+      select: { groupId: true },
+    });
+  });
+
+  it('returns an empty array for a user in no project group', async () => {
+    const prisma = { projectGroupMember: { findMany: vi.fn().mockResolvedValue([]) } };
+    const service = new RbacService(prisma as never, makeRedisStub() as never);
+
+    await expect(service.myProjectGroupIds('user-1')).resolves.toEqual([]);
+  });
+});
+
 describe('RbacService role assignment', () => {
   let redis: ReturnType<typeof makeRedisStub>;
   let prisma: {

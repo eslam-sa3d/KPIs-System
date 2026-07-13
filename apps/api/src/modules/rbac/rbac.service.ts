@@ -99,11 +99,12 @@ export class RbacService {
     return user.departmentId;
   }
 
-  /** Same shape as myDepartmentId, for a "project_group"-scoped grant. */
-  async myProjectGroupId(userId: string): Promise<string | null> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { projectGroupId: true } });
-    if (!user) throw AppError.notFound('User', userId);
-    return user.projectGroupId;
+  /** Same purpose as myDepartmentId, for a "project_group"-scoped grant — but
+   *  a user can belong to several project groups at once, so this returns
+   *  every group id they're a member of rather than a single value. */
+  async myProjectGroupIds(userId: string): Promise<string[]> {
+    const memberships = await this.prisma.projectGroupMember.findMany({ where: { userId }, select: { groupId: true } });
+    return memberships.map((m) => m.groupId);
   }
 
   /** Users-specific: unlike isViewScopeRestricted's single all-or-restricted

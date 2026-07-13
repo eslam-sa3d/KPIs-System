@@ -19,8 +19,6 @@ model User {
   displayName     String
   departmentId    String?
   department      Department?   @relation(fields: [departmentId], references: [id])
-  projectGroupId  String?
-  projectGroup    ProjectGroup? @relation(fields: [projectGroupId], references: [id])
   isActive        Boolean       @default(true)
   /// Whether this person should be scored/tracked by the KPI system at all —
   /// set at creation, editable after. When false, they're excluded from the
@@ -44,9 +42,9 @@ model User {
   formAssets              FormAsset[]
   formCollaborations      FormCollaborator[]    @relation("FormCollaboratorUser")
   formCollaboratorInvites FormCollaborator[]    @relation("FormCollaboratorAddedBy")
+  projectGroupMemberships ProjectGroupMember[]
 
   @@index([departmentId])
-  @@index([projectGroupId])
 }
 
 model Department {
@@ -56,14 +54,29 @@ model Department {
   kpiMaps KpiAssignment[]
 }
 
-/// Parallel grouping to Department — a user belongs to at most one project
-/// group, independent of their department. Same shape as Department; kept as
-/// a separate model rather than a Department subtype since the two are
-/// assigned/managed independently.
+/// Parallel grouping to Department — independent of it, and unlike
+/// Department a user may belong to several project groups at once (e.g.
+/// staffed on multiple projects), so membership is a join table rather than
+/// a single FK on User.
 model ProjectGroup {
-  id    String @id @default(uuid())
-  name  String @unique
-  users User[]
+  id      String               @id @default(uuid())
+  name    String               @unique
+  members ProjectGroupMember[]
+}
+
+/// Join table for ProjectGroup <-> User membership. A row's existence IS the
+/// membership; changes are audited separately via AuditLog
+/// (project_group.member_added/member_removed) rather than tracked here.
+model ProjectGroupMember {
+  userId    String
+  groupId   String
+  createdAt DateTime     @default(now())
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     ProjectGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+  @@index([groupId])
+  @@index([userId])
 }
 
 /// Dynamic roles: created by admins at runtime, never hard-coded.

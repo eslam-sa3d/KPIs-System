@@ -22,6 +22,8 @@ function makePrismaStub() {
       delete: vi.fn(),
       count: vi.fn(),
     },
+    projectGroup: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    projectGroupMember: { findMany: vi.fn(), count: vi.fn(), createMany: vi.fn(), deleteMany: vi.fn() },
     rolePermission: { findMany: vi.fn() },
     session: { updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -290,6 +292,135 @@ describe('UsersService', () => {
       expect(prisma.user.count).toHaveBeenNthCalledWith(1, { where: { OR: [{ departmentId: 'dept-1' }] } });
       expect(prisma.user.count).toHaveBeenNthCalledWith(2, {
         where: { OR: [{ departmentId: 'dept-1' }], isActive: true },
+      });
+    });
+  });
+
+  describe('list — project_group scope enforcement', () => {
+    it("filters to every group the caller belongs to when scoped to project_group", async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'project_group' }]);
+      prisma.projectGroupMember.findMany.mockResolvedValue([{ groupId: 'group-1' }, { groupId: 'group-2' }]);
+      prisma.user.count.mockResolvedValue(1);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await service.list({}, 'user-1');
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { AND: [{ OR: [{ projectGroupMemberships: { some: { groupId: { in: ['group-1', 'group-2'] } } } }] }, {}] },
+        }),
+      );
+    });
+
+    it('sees no one when restricted to project_group but a member of none', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'project_group' }]);
+      prisma.projectGroupMember.findMany.mockResolvedValue([]);
+      prisma.user.count.mockResolvedValue(0);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await service.list({}, 'user-1');
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { AND: [{ OR: [{ projectGroupMemberships: { some: { groupId: { in: [] } } } }] }, {}] },
+        }),
+      );
+    });
+  });
+
+  describe('deleteProjectGroup', () => {
+    it('deletes and audits when no member is assigned', async () => {
+      prisma.projectGroup.findUnique.mockResolvedValue({ id: 'group-1', name: 'Empty Group' });
+      prisma.projectGroupMember.count.mockResolvedValue(0);
+
+      await service.deleteProjectGroup('group-1', 'admin-1');
+
+      expect(prisma.projectGroup.delete).toHaveBeenCalledWith({ where: { id: 'group-1' } });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ action: 'project_group.deleted', entityId: 'group-1' }),
+      });
+    });
+
+    it('refuses to delete a group that still has members', async () => {
+      prisma.projectGroup.findUnique.mockResolvedValue({ id: 'group-1', name: 'Staffed Group' });
+      prisma.projectGroupMember.count.mockResolvedValue(2);
+
+      await expect(service.deleteProjectGroup('group-1', 'admin-1')).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(prisma.projectGroup.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('project group membership', () => {
+    it('listProjectGroupMembers returns the members of an existing group', async () => {
+      prisma.projectGroup.findUnique.mockResolvedValue({ id: 'group-1', name: 'Group' });
+      prisma.projectGroupMember.findMany.mockResolvedValue([
+        { user: { id: 'user-1', email: 'a@pulse.local', displayName: 'Ana' } },
+      ]);
+
+      const members = await service.listProjectGroupMembers('group-1');
+
+      expect(members).toEqual([{ id: 'user-1', email: 'a@pulse.local', displayName: 'Ana' }]);
+    });
+
+    it('listProjectGroupMembers rejects an unknown group with NOT_FOUND', async () => {
+      prisma.projectGroup.findUnique.mockResolvedValue(null);
+      await expect(service.listProjectGroupMembers('ghost')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('addProjectGroupMembers adds each user and audit-logs one entry per user', async () => {
+      prisma.projectGroup.findUnique.mockResolvedValue({ id: 'group-1', name: 'Group' });
+      prisma.user.findMany.mockResolvedValue([{ id: 'user-1' }, { id: 'user-2' }]);
+      prisma.projectGroupMember.findMany.mockResolvedValue([]);
+
+      await service.addProjectGroupMembers('group-1', ['user-1', 'user-2'], 'admin-1');
+
+      expect(prisma.projectGroupMember.createMany).toHaveBeenCalledWith({
+        data: [
+          { userId: 'user-1', groupId: 'group-1' },
+          { userId: 'user-2', groupId: 'group-1' },
+        ],
+        skipDuplicates: true,
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: {
+          actorId: 'admin-1',
+          action: 'project_group.member_added',
+          entity: 'User',
+          entityId: 'user-1',
+          detail: { groupId: 'group-1' },
+        },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ entityId: 'user-2' }),
+      });
+    });
+
+    it('addProjectGroupMembers rejects unknown user ids', async () => {
+      prisma.projectGroup.findUnique.mockResolvedValue({ id: 'group-1', name: 'Group' });
+      prisma.user.findMany.mockResolvedValue([{ id: 'user-1' }]);
+
+      await expect(service.addProjectGroupMembers('group-1', ['user-1', 'ghost'], 'admin-1')).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+      });
+      expect(prisma.projectGroupMember.createMany).not.toHaveBeenCalled();
+    });
+
+    it('removeProjectGroupMember removes the membership and audit-logs it', async () => {
+      prisma.projectGroup.findUnique.mockResolvedValue({ id: 'group-1', name: 'Group' });
+
+      await service.removeProjectGroupMember('group-1', 'user-1', 'admin-1');
+
+      expect(prisma.projectGroupMember.deleteMany).toHaveBeenCalledWith({
+        where: { groupId: 'group-1', userId: 'user-1' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: {
+          actorId: 'admin-1',
+          action: 'project_group.member_removed',
+          entity: 'User',
+          entityId: 'user-1',
+          detail: { groupId: 'group-1' },
+        },
       });
     });
   });

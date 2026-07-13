@@ -26,7 +26,6 @@ interface UserRow {
   isActive: boolean;
   isKpiApplicable: boolean;
   department: { id: string; name: string } | null;
-  projectGroup: { id: string; name: string } | null;
   roles: Array<{ id: string; name: string }>;
 }
 
@@ -36,11 +35,6 @@ interface RoleRow {
 }
 
 interface DepartmentRow {
-  id: string;
-  name: string;
-}
-
-interface ProjectGroupRow {
   id: string;
   name: string;
 }
@@ -64,7 +58,6 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
-  const [projectGroups, setProjectGroups] = useState<ProjectGroupRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -75,7 +68,6 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
     displayName: '',
     email: '',
     departmentId: '',
-    projectGroupId: '',
     isKpiApplicable: true,
   });
   const [savingInfo, setSavingInfo] = useState(false);
@@ -122,7 +114,6 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
     if (!user) return;
     if (can(user, 'roles:view')) void api<RoleRow[]>('/v1/roles').then(setRoles);
     if (can(user, 'departments:view')) void api<DepartmentRow[]>('/v1/departments').then(setDepartments);
-    if (can(user, 'project_groups:view')) void api<ProjectGroupRow[]>('/v1/project-groups').then(setProjectGroups);
   }, [user]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
@@ -138,7 +129,6 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
           displayName: form.get('displayName'),
           password: form.get('password'),
           departmentId: form.get('departmentId') || undefined,
-          projectGroupId: form.get('projectGroupId') || undefined,
           roleIds: form.getAll('roleIds'),
           isKpiApplicable: form.get('isKpiApplicable') === 'on',
         }),
@@ -219,7 +209,6 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
       displayName: row.displayName,
       email: row.email,
       departmentId: row.department?.id ?? '',
-      projectGroupId: row.projectGroup?.id ?? '',
       isKpiApplicable: row.isKpiApplicable,
     });
   }
@@ -238,7 +227,6 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
           displayName: infoDraft.displayName,
           email: infoDraft.email,
           departmentId: infoDraft.departmentId || null,
-          projectGroupId: infoDraft.projectGroupId || null,
           isKpiApplicable: infoDraft.isKpiApplicable,
         }),
       });
@@ -349,23 +337,6 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                   </Select>
                 </>
               )}
-              {projectGroups.length > 0 && (
-                <>
-                  <label htmlFor="u-group">project group</label>
-                  <Select name="projectGroupId">
-                    <SelectTrigger id="u-group">
-                      <SelectValue placeholder="— none —" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projectGroups.map((g) => (
-                        <SelectItem key={g.id} value={g.id}>
-                          {g.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </>
-              )}
               {roles.length > 0 && (
                 <>
                   <span className="field-label">roles</span>
@@ -444,7 +415,6 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
               <TableHead>name</TableHead>
               <TableHead>email</TableHead>
               <TableHead>department</TableHead>
-              <TableHead>project group</TableHead>
               <TableHead>roles</TableHead>
               <TableHead>status</TableHead>
               <TableHead>KPI applicable</TableHead>
@@ -497,28 +467,6 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                     </Select>
                   ) : (
                     (row.department?.name ?? '—')
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingInfoId === row.id ? (
-                    <Select
-                      value={infoDraft.projectGroupId || '__none__'}
-                      onValueChange={(v) => setInfoDraft((d) => ({ ...d, projectGroupId: v === '__none__' ? '' : v }))}
-                    >
-                      <SelectTrigger aria-label="project group" size="sm" className="w-[160px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— none —</SelectItem>
-                        {projectGroups.map((g) => (
-                          <SelectItem key={g.id} value={g.id}>
-                            {g.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    (row.projectGroup?.name ?? '—')
                   )}
                 </TableCell>
                 <TableCell>

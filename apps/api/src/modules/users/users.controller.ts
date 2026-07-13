@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
+  AddProjectGroupMembersInput,
   CreateDepartmentInput,
   CreateProjectGroupInput,
   CreateUserInput,
@@ -8,6 +9,7 @@ import {
   UpdateDepartmentInput,
   UpdateProjectGroupInput,
   UpdateUserInput,
+  addProjectGroupMembersSchema,
   createDepartmentSchema,
   createProjectGroupSchema,
   createUserSchema,
@@ -133,5 +135,27 @@ export class ProjectGroupsController {
   @RequirePermissions('project_groups:delete')
   remove(@Param('groupId') groupId: string, @Req() req: AuthedRequest) {
     return this.users.deleteProjectGroup(groupId, req.user.id);
+  }
+
+  @Get(':groupId/members')
+  @RequirePermissions('project_groups:view')
+  listMembers(@Param('groupId') groupId: string) {
+    return this.users.listProjectGroupMembers(groupId);
+  }
+
+  @Post(':groupId/members')
+  @RequirePermissions('project_groups:edit')
+  addMembers(
+    @Param('groupId') groupId: string,
+    @Body(new ZodValidationPipe(addProjectGroupMembersSchema)) input: AddProjectGroupMembersInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.users.addProjectGroupMembers(groupId, input.userIds, req.user.id);
+  }
+
+  @Delete(':groupId/members/:userId')
+  @RequirePermissions('project_groups:edit')
+  removeMember(@Param('groupId') groupId: string, @Param('userId') userId: string, @Req() req: AuthedRequest) {
+    return this.users.removeProjectGroupMember(groupId, userId, req.user.id);
   }
 }

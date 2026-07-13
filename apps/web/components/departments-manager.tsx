@@ -1,9 +1,10 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, Fragment, ReactNode, useCallback, useEffect, useState } from 'react';
 import type { AuthenticatedUser } from '@pulse/contracts';
 import { Building2, Pencil } from 'lucide-react';
 import { can } from './portal-shell';
+import { ProjectGroupMembers } from './project-group-members';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,6 +27,7 @@ function EntityGroupManager({
   endpoint,
   resource,
   noun,
+  renderMembers,
 }: {
   user: AuthenticatedUser | null;
   /** e.g. '/v1/departments' */
@@ -34,12 +36,16 @@ function EntityGroupManager({
   resource: string;
   /** singular display noun, e.g. 'department' | 'project group' */
   noun: string;
+  /** When provided, adds a per-row "members" toggle that expands this
+   *  underneath the row — only ProjectGroupsManager passes it. */
+  renderMembers?: (group: GroupRow) => ReactNode;
 }) {
   const [groups, setGroups] = useState<GroupRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const canEdit = can(user, `${resource}:edit`);
   const canDelete = can(user, `${resource}:delete`);
@@ -135,64 +141,86 @@ function EntityGroupManager({
           </TableHeader>
           <TableBody>
             {groups.map((g) => (
-              <TableRow key={g.id}>
-                <TableCell>
-                  {renamingId === g.id ? (
-                    <form className="inline-form" onSubmit={(e) => onRename(g.id, e)}>
-                      <Input name="name" defaultValue={g.name} required minLength={2} autoFocus />
-                      <Button type="submit" variant="ghost" size="sm">
-                        save
-                      </Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingId(null)}>
-                        cancel
-                      </Button>
-                    </form>
-                  ) : (
-                    g.name
-                  )}
-                </TableCell>
-                {(canEdit || canDelete) && (
+              <Fragment key={g.id}>
+                <TableRow>
                   <TableCell>
-                    {renamingId !== g.id && (
-                      <span className="row-actions">
-                        {canEdit && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`rename ${g.name}`}
-                            onClick={() => setRenamingId(g.id)}
-                          >
-                            <Pencil size={14} aria-hidden="true" />
-                          </Button>
-                        )}
-                        {canDelete &&
-                          (confirmDeleteId === g.id ? (
-                            <>
-                              <span className="muted">delete?</span>
-                              <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(g.id)}>
-                                confirm
-                              </Button>
-                              <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
-                                cancel
-                              </Button>
-                            </>
-                          ) : (
+                    {renamingId === g.id ? (
+                      <form className="inline-form" onSubmit={(e) => onRename(g.id, e)}>
+                        <Input name="name" defaultValue={g.name} required minLength={2} autoFocus />
+                        <Button type="submit" variant="ghost" size="sm">
+                          save
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingId(null)}>
+                          cancel
+                        </Button>
+                      </form>
+                    ) : (
+                      g.name
+                    )}
+                  </TableCell>
+                  {(canEdit || canDelete || renderMembers) && (
+                    <TableCell>
+                      {renamingId !== g.id && (
+                        <span className="row-actions">
+                          {renderMembers && (
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => setConfirmDeleteId(g.id)}
+                              onClick={() => setExpandedId(expandedId === g.id ? null : g.id)}
                             >
-                              delete
+                              {expandedId === g.id ? 'hide members' : 'members'}
                             </Button>
-                          ))}
-                      </span>
-                    )}
-                  </TableCell>
+                          )}
+                          {canEdit && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`rename ${g.name}`}
+                              onClick={() => setRenamingId(g.id)}
+                            >
+                              <Pencil size={14} aria-hidden="true" />
+                            </Button>
+                          )}
+                          {canDelete &&
+                            (confirmDeleteId === g.id ? (
+                              <>
+                                <span className="muted">delete?</span>
+                                <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(g.id)}>
+                                  confirm
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                >
+                                  cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setConfirmDeleteId(g.id)}
+                              >
+                                delete
+                              </Button>
+                            ))}
+                        </span>
+                      )}
+                    </TableCell>
+                  )}
+                </TableRow>
+                {renderMembers && expandedId === g.id && (
+                  <TableRow>
+                    <TableCell colSpan={2}>{renderMembers(g)}</TableCell>
+                  </TableRow>
                 )}
-              </TableRow>
+              </Fragment>
             ))}
           </TableBody>
         </Table>
@@ -206,7 +234,14 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
 }
 
 export function ProjectGroupsManager({ user }: { user: AuthenticatedUser | null }) {
+  const canEditMembers = can(user, 'project_groups:edit');
   return (
-    <EntityGroupManager user={user} endpoint="/v1/project-groups" resource="project_groups" noun="project group" />
+    <EntityGroupManager
+      user={user}
+      endpoint="/v1/project-groups"
+      resource="project_groups"
+      noun="project group"
+      renderMembers={(g) => <ProjectGroupMembers groupId={g.id} canEdit={canEditMembers} />}
+    />
   );
 }

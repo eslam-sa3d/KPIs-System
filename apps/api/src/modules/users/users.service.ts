@@ -44,7 +44,10 @@ export class UsersService {
       conditions.push({ departmentId: (await this.rbac.myDepartmentId(userId)) ?? '__none__' });
     }
     if (kinds.includes('project_group')) {
-      conditions.push({ projectGroupId: (await this.rbac.myProjectGroupId(userId)) ?? '__none__' });
+      // An empty groupIds array already matches zero rows via `IN ()`, so no
+      // '__none__' sentinel is needed here the way the single-FK department
+      // filter above needs one.
+      conditions.push({ projectGroupMemberships: { some: { groupId: { in: await this.rbac.myProjectGroupIds(userId) } } } });
     }
     if (kinds.includes('own')) conditions.push({ id: userId });
     return conditions.length > 0 ? { OR: conditions } : { id: '__none__' };
@@ -87,7 +90,6 @@ export class UsersService {
           isKpiApplicable: true,
           createdAt: true,
           department: { select: { id: true, name: true } },
-          projectGroup: { select: { id: true, name: true } },
           roles: { select: { role: { select: { id: true, name: true } } } },
         },
       }),
@@ -124,7 +126,6 @@ export class UsersService {
           displayName: input.displayName,
           passwordHash,
           departmentId: input.departmentId,
-          projectGroupId: input.projectGroupId,
           isKpiApplicable: input.isKpiApplicable,
           // the password an admin sets here is the "temporary password" the
           // create-user form labels it — force a change on first login
@@ -162,7 +163,6 @@ export class UsersService {
         ...(input.email !== undefined ? { email: input.email } : {}),
         ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
         ...(input.departmentId !== undefined ? { departmentId: input.departmentId } : {}),
-        ...(input.projectGroupId !== undefined ? { projectGroupId: input.projectGroupId } : {}),
         ...(input.isKpiApplicable !== undefined ? { isKpiApplicable: input.isKpiApplicable } : {}),
       },
       select: {
@@ -172,7 +172,6 @@ export class UsersService {
         isActive: true,
         isKpiApplicable: true,
         department: { select: { id: true, name: true } },
-        projectGroup: { select: { id: true, name: true } },
       },
     });
     await this.prisma.auditLog.create({
@@ -302,17 +301,73 @@ export class UsersService {
   async deleteProjectGroup(groupId: string, actorId: string) {
     const group = await this.prisma.projectGroup.findUnique({ where: { id: groupId } });
     if (!group) throw AppError.notFound('ProjectGroup', groupId);
-    const memberCount = await this.prisma.user.count({ where: { projectGroupId: groupId } });
+    const memberCount = await this.prisma.projectGroupMember.count({ where: { groupId } });
     if (memberCount > 0) {
       throw new AppError(
         'CONFLICT',
-        `"${group.name}" still has ${memberCount} member${memberCount === 1 ? '' : 's'} — move them to another project group first`,
+        `"${group.name}" still has ${memberCount} member${memberCount === 1 ? '' : 's'} — remove them first`,
       );
     }
     await this.prisma.projectGroup.delete({ where: { id: groupId } });
     await this.prisma.auditLog.create({
       data: { actorId, action: 'project_group.deleted', entity: 'ProjectGroup', entityId: groupId },
     });
+    return null;
+  }
+
+  async listProjectGroupMembers(groupId: string) {
+    const group = await this.prisma.projectGroup.findUnique({ where: { id: groupId } });
+    if (!group) throw AppError.notFound('ProjectGroup', groupId);
+    const members = await this.prisma.projectGroupMember.findMany({
+      where: { groupId },
+      orderBy: { user: { displayName: 'asc' } },
+      select: { user: { select: { id: true, email: true, displayName: true } } },
+    });
+    return members.map(({ user }) => user);
+  }
+
+  /** Adds every listed user to the group (idempotent — re-adding a current
+   *  member is a no-op) and writes one audit entry per user, same
+   *  per-assignment granularity as RbacService.assignRoleToUser. */
+  async addProjectGroupMembers(groupId: string, userIds: string[], actorId: string) {
+    const group = await this.prisma.projectGroup.findUnique({ where: { id: groupId } });
+    if (!group) throw AppError.notFound('ProjectGroup', groupId);
+
+    const existingUsers = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true },
+    });
+    const missing = userIds.filter((id) => !existingUsers.some((u) => u.id === id));
+    if (missing.length > 0) {
+      throw new AppError('VALIDATION_ERROR', `Unknown user id(s): ${missing.join(', ')}`);
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.projectGroupMember.createMany({
+        data: userIds.map((userId) => ({ userId, groupId })),
+        skipDuplicates: true,
+      }),
+      ...userIds.map((userId) =>
+        this.prisma.auditLog.create({
+          data: { actorId, action: 'project_group.member_added', entity: 'User', entityId: userId, detail: { groupId } },
+        }),
+      ),
+    ]);
+    return this.listProjectGroupMembers(groupId);
+  }
+
+  /** Idempotent no-op if the user isn't currently a member — same shape as
+   *  AuthService.logout's "unknown token is a no-op" pattern. */
+  async removeProjectGroupMember(groupId: string, userId: string, actorId: string) {
+    const group = await this.prisma.projectGroup.findUnique({ where: { id: groupId } });
+    if (!group) throw AppError.notFound('ProjectGroup', groupId);
+
+    await this.prisma.$transaction([
+      this.prisma.projectGroupMember.deleteMany({ where: { groupId, userId } }),
+      this.prisma.auditLog.create({
+        data: { actorId, action: 'project_group.member_removed', entity: 'User', entityId: userId, detail: { groupId } },
+      }),
+    ]);
     return null;
   }
 }
