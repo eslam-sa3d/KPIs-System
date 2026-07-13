@@ -173,7 +173,11 @@ jobs:
         env:
           JWT_SECRET: ci-only-secret
           NEXT_PUBLIC_API_URL: http://localhost:4000
-      - run: pnpm test:e2e -- --project=chromium
+      # Invoked directly (not via `pnpm test:e2e --`) — pnpm inserts its own
+      # literal `--` ahead of ours, which Playwright's CLI doesn't parse as
+      # the `--project` flag, so it silently fell through to running every
+      # project (including webkit, which this job no longer installs).
+      - run: npx playwright test --config e2e/playwright.config.ts --project=chromium
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
