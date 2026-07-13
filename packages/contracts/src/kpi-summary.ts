@@ -14,6 +14,7 @@ export interface KpiOptionSummary {
     name: string;
     cadence: EvaluationAreaCadence;
     isActive: boolean;
+    subCriteria: Array<{ id: string; name: string }>;
   }>;
 }
 

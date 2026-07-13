@@ -25,7 +25,10 @@ export class FormKpiMappingsService {
   async list(formId: string) {
     return this.prisma.formKpiMapping.findMany({
       where: { formId },
-      include: { evaluationArea: { select: { id: true, name: true, kpiId: true, cadence: true } } },
+      include: {
+        evaluationArea: { select: { id: true, name: true, kpiId: true, cadence: true } },
+        subCriteria: { select: { id: true, name: true } },
+      },
       orderBy: { createdAt: 'asc' },
     });
   }
@@ -55,6 +58,10 @@ export class FormKpiMappingsService {
     const area = await this.prisma.evaluationArea.findUnique({ where: { id: input.evaluationAreaId } });
     if (!area) throw AppError.notFound('Evaluation area', input.evaluationAreaId);
 
+    if (input.subCriteriaId) {
+      await this.requireSubCriteriaInArea(input.subCriteriaId, input.evaluationAreaId);
+    }
+
     const existing = await this.prisma.formKpiMapping.findUnique({
       where: { formId_evaluationAreaId: { formId, evaluationAreaId: input.evaluationAreaId } },
     });
@@ -66,6 +73,7 @@ export class FormKpiMappingsService {
       data: {
         formId,
         evaluationAreaId: input.evaluationAreaId,
+        subCriteriaId: input.subCriteriaId,
         evaluateeFieldKey: input.evaluateeFieldKey,
         scoreFieldKey: input.scoreFieldKey,
         reviewType: input.reviewType,
@@ -84,6 +92,18 @@ export class FormKpiMappingsService {
       },
     });
     return mapping;
+  }
+
+  /** A mapping's subCriteriaId must actually belong to the Evaluation Area
+   *  it's mapped to — otherwise the "narrows the area" tag would silently
+   *  point at an unrelated part of the KPI tree. */
+  private async requireSubCriteriaInArea(subCriteriaId: string, evaluationAreaId: string): Promise<void> {
+    const subCriteria = await this.prisma.subCriteria.findUnique({ where: { id: subCriteriaId } });
+    if (!subCriteria || subCriteria.evaluationAreaId !== evaluationAreaId) {
+      throw AppError.validation([
+        { path: 'subCriteriaId', message: 'must reference a sub-criteria under the selected evaluation area' },
+      ]);
+    }
   }
 
   /** contextFieldKey/commentFieldKey are optional and deliberately untyped

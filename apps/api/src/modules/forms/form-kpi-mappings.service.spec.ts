@@ -60,6 +60,16 @@ function makePrismaStub() {
       })),
       findMany: vi.fn(),
     },
+    subCriteria: {
+      findUnique: vi.fn(
+        async (_args: {
+          where: { id: string };
+        }): Promise<{ id: string; evaluationAreaId: string } | null> => ({
+          id: 'sub-1',
+          evaluationAreaId: 'area-1',
+        }),
+      ),
+    },
     auditLog: { create: vi.fn() },
   };
 }
@@ -194,6 +204,33 @@ describe('FormKpiMappingsService.create', () => {
     await expect(service.create('form-1', validInput, 'admin-1')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+
+  it('creates a mapping with a subCriteriaId that belongs to the mapped area', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await service.create('form-1', { ...validInput, subCriteriaId: 'sub-1' }, 'admin-1');
+
+    expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ subCriteriaId: 'sub-1' }),
+    });
+  });
+
+  it('rejects a subCriteriaId that belongs to a different evaluation area', async () => {
+    prisma.subCriteria.findUnique.mockResolvedValue({ id: 'sub-1', evaluationAreaId: 'area-2' });
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await expect(
+      service.create('form-1', { ...validInput, subCriteriaId: 'sub-1' }, 'admin-1'),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown subCriteriaId', async () => {
+    prisma.subCriteria.findUnique.mockResolvedValue(null);
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await expect(
+      service.create('form-1', { ...validInput, subCriteriaId: 'ghost-sub' }, 'admin-1'),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
   });
 
   it('rejects a duplicate mapping for the same (form, evaluationArea) pair', async () => {

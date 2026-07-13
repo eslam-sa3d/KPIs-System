@@ -116,7 +116,13 @@ function NewFormPage() {
         // of blocking the whole form load
         try {
           const mappings = await api<
-            Array<{ id: string; evaluationAreaId: string; scoreFieldKey: string; evaluationArea: { kpiId: string } }>
+            Array<{
+              id: string;
+              evaluationAreaId: string;
+              subCriteriaId: string | null;
+              scoreFieldKey: string;
+              evaluationArea: { kpiId: string };
+            }>
           >(`/v1/forms/${form.id}/kpi-mappings`);
           if (cancelled) return;
           setFields((current) =>
@@ -128,6 +134,7 @@ function NewFormPage() {
                     ...f,
                     kpiId: match.evaluationArea.kpiId,
                     evaluationAreaId: match.evaluationAreaId,
+                    subCriteriaId: match.subCriteriaId ?? '',
                     kpiMappingId: match.id,
                   }
                 : f;
@@ -252,14 +259,14 @@ function NewFormPage() {
     });
   }
 
-  async function onLinkFieldToKpi(index: number, kpiId: string, evaluationAreaId: string) {
+  async function onLinkFieldToKpi(index: number, kpiId: string, evaluationAreaId: string, subCriteriaId?: string) {
     const field = fields[index];
     const scoreFieldKey = keyedFields[index]?.key;
     if (!field || !scoreFieldKey) return;
     setKpiLinkError(index, null);
 
     if (!editingForm) {
-      updateField(index, { kpiId, evaluationAreaId });
+      updateField(index, { kpiId, evaluationAreaId, subCriteriaId: subCriteriaId ?? '' });
       return;
     }
 
@@ -279,9 +286,9 @@ function NewFormPage() {
       // submitter scores themselves; see SubmissionsService.applyOneMapping).
       const mapping = await api<{ id: string }>(`/v1/forms/${editingForm.id}/kpi-mappings`, {
         method: 'POST',
-        body: JSON.stringify({ evaluationAreaId, scoreFieldKey }),
+        body: JSON.stringify({ evaluationAreaId, subCriteriaId, scoreFieldKey }),
       });
-      updateField(index, { kpiId, evaluationAreaId, kpiMappingId: mapping.id });
+      updateField(index, { kpiId, evaluationAreaId, subCriteriaId: subCriteriaId ?? '', kpiMappingId: mapping.id });
     } catch (cause) {
       setKpiLinkError(index, cause instanceof Error ? cause.message : 'linking this question to a KPI failed');
     }
@@ -299,7 +306,7 @@ function NewFormPage() {
         return;
       }
     }
-    updateField(index, { kpiId: '', evaluationAreaId: '', kpiMappingId: '' });
+    updateField(index, { kpiId: '', evaluationAreaId: '', subCriteriaId: '', kpiMappingId: '' });
   }
 
   function moveField(index: number, delta: number) {
@@ -331,6 +338,7 @@ function NewFormPage() {
         key: undefined,
         kpiId: '',
         evaluationAreaId: '',
+        subCriteriaId: '',
         kpiMappingId: '',
       });
       return next;
@@ -483,6 +491,7 @@ function NewFormPage() {
           capturedFromUrlParam: '',
           kpiId: '',
           evaluationAreaId: '',
+          subCriteriaId: '',
           kpiMappingId: '',
         })),
       ]);
@@ -558,7 +567,11 @@ function NewFormPage() {
       try {
         await api(`/v1/forms/${formId}/kpi-mappings`, {
           method: 'POST',
-          body: JSON.stringify({ evaluationAreaId: field.evaluationAreaId, scoreFieldKey }),
+          body: JSON.stringify({
+            evaluationAreaId: field.evaluationAreaId,
+            subCriteriaId: field.subCriteriaId || undefined,
+            scoreFieldKey,
+          }),
         });
       } catch {
         // best-effort, see above
@@ -1348,8 +1361,9 @@ function NewFormPage() {
                                         kpis={kpis}
                                         kpiId={field.kpiId}
                                         evaluationAreaId={field.evaluationAreaId}
-                                        onSelect={(kpiId, evaluationAreaId) =>
-                                          void onLinkFieldToKpi(index, kpiId, evaluationAreaId)
+                                        subCriteriaId={field.subCriteriaId}
+                                        onSelect={(kpiId, evaluationAreaId, subCriteriaId) =>
+                                          void onLinkFieldToKpi(index, kpiId, evaluationAreaId, subCriteriaId)
                                         }
                                         onClear={() => void onUnlinkFieldFromKpi(index)}
                                       />

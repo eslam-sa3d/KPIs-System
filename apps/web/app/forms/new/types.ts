@@ -87,9 +87,12 @@ export interface DraftField {
    *  kpiId only narrows the evaluation-area picker; evaluationAreaId is what
    *  actually drives mapping creation. kpiMappingId is set once a real
    *  mapping exists (hydrated from an existing form, or just created) — its
-   *  presence is what "linked" means, not kpiId/evaluationAreaId alone. */
+   *  presence is what "linked" means, not kpiId/evaluationAreaId alone.
+   *  subCriteriaId is purely descriptive (narrows evaluationAreaId to one of
+   *  its Sub-Criteria for tagging) and never affects scoring. */
   kpiId: string;
   evaluationAreaId: string;
+  subCriteriaId: string;
   kpiMappingId: string;
 }
 

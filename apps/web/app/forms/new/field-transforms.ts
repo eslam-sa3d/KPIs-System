@@ -58,6 +58,7 @@ export const emptyField = (): DraftField => ({
   capturedFromUrlParam: '',
   kpiId: '',
   evaluationAreaId: '',
+  subCriteriaId: '',
   kpiMappingId: '',
 });
 

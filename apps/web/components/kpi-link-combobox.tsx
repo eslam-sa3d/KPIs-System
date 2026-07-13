@@ -13,12 +13,16 @@ export type KpiComboboxOption = KpiOptionSummary;
 /** Searchable "link to KPI" picker — one control instead of a KPI select
  *  feeding an evaluation-area select, since most KPIs only ever have a
  *  handful of areas and typing beats two levels of clicking. Evaluation
- *  areas are still the actual selectable leaf (that's what a FormKpiMapping
- *  points at), just grouped and searchable by their parent KPI's name. */
+ *  Area is still the actual selectable leaf that scoring cares about (that's
+ *  what a FormKpiMapping points at) — Sub-Criteria, when an area has any, is
+ *  an optional extra level underneath purely for tagging/precision; picking
+ *  one still maps against the same parent area (see subCriteriaId's doc
+ *  comment in packages/contracts/src/form-kpi-mapping.ts). */
 export function KpiLinkCombobox({
   kpis,
   kpiId,
   evaluationAreaId,
+  subCriteriaId,
   onSelect,
   onClear,
   disabled,
@@ -26,14 +30,18 @@ export function KpiLinkCombobox({
   kpis: KpiComboboxOption[] | null;
   kpiId: string;
   evaluationAreaId: string;
-  onSelect: (kpiId: string, evaluationAreaId: string) => void;
+  subCriteriaId?: string;
+  onSelect: (kpiId: string, evaluationAreaId: string, subCriteriaId?: string) => void;
   onClear: () => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selectedKpi = kpis?.find((k) => k.id === kpiId);
   const selectedArea = selectedKpi?.evaluationAreas.find((a) => a.id === evaluationAreaId);
-  const label = selectedKpi && selectedArea ? `${selectedKpi.name} — ${selectedArea.name}` : 'not linked';
+  const selectedSubCriteria = selectedArea?.subCriteria.find((s) => s.id === subCriteriaId);
+  const label = selectedKpi && selectedArea
+    ? `${selectedKpi.name} — ${selectedArea.name}${selectedSubCriteria ? ` — ${selectedSubCriteria.name}` : ''}`
+    : 'not linked';
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -76,19 +84,44 @@ export function KpiLinkCombobox({
                   {kpi.evaluationAreas
                     .filter((a) => a.isActive)
                     .map((area) => (
-                      <CommandItem
-                        key={area.id}
-                        value={`${kpi.name} ${area.name}`}
-                        onSelect={() => {
-                          onSelect(kpi.id, area.id);
-                          setOpen(false);
-                        }}
-                      >
-                        <Check
-                          className={cn('mr-2 size-4', area.id === evaluationAreaId ? 'opacity-100' : 'opacity-0')}
-                        />
-                        {area.name}
-                      </CommandItem>
+                      <div key={area.id}>
+                        <CommandItem
+                          value={`${kpi.name} ${area.name}`}
+                          onSelect={() => {
+                            onSelect(kpi.id, area.id, undefined);
+                            setOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              'mr-2 size-4',
+                              area.id === evaluationAreaId && !subCriteriaId ? 'opacity-100' : 'opacity-0',
+                            )}
+                          />
+                          {area.name}
+                        </CommandItem>
+                        {area.subCriteria.map((subCriteria) => (
+                          <CommandItem
+                            key={subCriteria.id}
+                            value={`${kpi.name} ${area.name} ${subCriteria.name}`}
+                            className="pl-8"
+                            onSelect={() => {
+                              onSelect(kpi.id, area.id, subCriteria.id);
+                              setOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                'mr-2 size-4',
+                                area.id === evaluationAreaId && subCriteria.id === subCriteriaId
+                                  ? 'opacity-100'
+                                  : 'opacity-0',
+                              )}
+                            />
+                            {subCriteria.name}
+                          </CommandItem>
+                        ))}
+                      </div>
                     ))}
                 </CommandGroup>
               ))}

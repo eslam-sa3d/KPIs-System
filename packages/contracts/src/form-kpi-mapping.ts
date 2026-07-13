@@ -47,6 +47,10 @@ export type ReviewType = (typeof REVIEW_TYPES)[number];
 
 export const createFormKpiMappingSchema = z.object({
   evaluationAreaId: z.string().uuid(),
+  /** Purely descriptive — narrows which Sub-Criteria under evaluationAreaId
+   *  this question is meant for. Never read by scoring; must belong to
+   *  evaluationAreaId (validated server-side). */
+  subCriteriaId: z.string().uuid().optional(),
   evaluateeFieldKey: z.string().min(1).max(64).optional(),
   scoreFieldKey: z.string().min(1).max(64),
   reviewType: z.enum(REVIEW_TYPES).default('peer'),
@@ -79,6 +83,7 @@ export interface FormKpiMapping {
   id: string;
   formId: string;
   evaluationAreaId: string;
+  subCriteriaId: string | null;
   evaluateeFieldKey: string | null;
   scoreFieldKey: string;
   reviewType: ReviewType;
@@ -94,6 +99,7 @@ export interface FormKpiMapping {
  *  returns this — create()/bulkCreate() return plain FormKpiMapping rows. */
 export interface FormKpiMappingWithArea extends FormKpiMapping {
   evaluationArea: { id: string; name: string; kpiId: string; cadence: EvaluationAreaCadence };
+  subCriteria: { id: string; name: string } | null;
 }
 
 /**

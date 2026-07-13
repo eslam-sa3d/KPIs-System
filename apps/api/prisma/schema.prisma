@@ -229,6 +229,8 @@ model SubCriteria {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
+  formMappings FormKpiMapping[]
+
   @@index([evaluationAreaId])
 }
 
@@ -354,10 +356,18 @@ model FormKpiMapping {
   /// Optional extra form field (normally long_text) snapshotted onto each
   /// entry as its qualitative comment.
   commentFieldKey   String?
+  /// Purely descriptive tag — narrows which Sub-Criteria under the mapped
+  /// Evaluation Area this question is meant for. Never read by scoring
+  /// (SubmissionsService/score-resolution still resolve off evaluationAreaId
+  /// alone); SetNull on delete so removing a Sub-Criteria just clears the
+  /// tag instead of destroying the mapping.
+  subCriteriaId     String?
+  subCriteria       SubCriteria?   @relation(fields: [subCriteriaId], references: [id], onDelete: SetNull)
   createdAt         DateTime       @default(now())
 
   @@unique([formId, evaluationAreaId])
   @@index([evaluationAreaId])
+  @@index([subCriteriaId])
 }
 
 /// Immutable versions: editing a published form creates a new version, so old
