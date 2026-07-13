@@ -1878,8 +1878,34 @@ h3 {
   gap: var(--space-2);
 }
 
+.option-row.is-dragging {
+  opacity: 0.5;
+}
+
 .option-row input {
   flex: 1 1 auto;
+}
+
+.option-row-drag-handle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: grab;
+}
+
+.option-row-drag-handle:active {
+  cursor: grabbing;
+}
+
+.option-row-drag-handle:hover {
+  color: var(--pulse-purple);
 }
 
 .option-row-mark {

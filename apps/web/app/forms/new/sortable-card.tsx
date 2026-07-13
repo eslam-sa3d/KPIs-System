@@ -41,3 +41,26 @@ export function SortableCard({
     </fieldset>
   );
 }
+
+/** A drag-sortable <div> wrapper — same shape as SortableCard, for lighter-weight
+ *  rows (e.g. option rows within a field) that shouldn't be a nested <fieldset>. */
+export function SortableRow({
+  id,
+  className,
+  children,
+}: {
+  id: string | number;
+  className: string;
+  children: (drag: DragHandleProps) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`${className}${isDragging ? ' is-dragging' : ''}`}
+    >
+      {children({ attributes, listeners })}
+    </div>
+  );
+}

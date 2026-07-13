@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Copy,
+  GripVertical,
   MoreVertical,
   SeparatorHorizontal,
   Trash2,
@@ -55,7 +56,7 @@ import {
   fromDefinitionField,
   fromDefinitionSection,
 } from './field-transforms';
-import { SortableCard } from './sortable-card';
+import { SortableCard, SortableRow } from './sortable-card';
 
 function NewFormPage() {
   const user = useSession();
@@ -380,6 +381,26 @@ function NewFormPage() {
   function onFieldDragEnd({ active, over }: DragEndEvent) {
     if (!over || active.id === over.id) return;
     reorderFieldByDrag(Number(active.id), Number(over.id));
+  }
+
+  // Options are stored as a single comma-joined string on the field; optionGoTo/
+  // optionUserIds are keyed by option TEXT, not position, so reordering the parsed
+  // list and rejoining is enough — those maps stay correct without touching them.
+  function reorderOptionByDrag(fieldIndex: number, from: number, to: number) {
+    setFields((current) =>
+      current.map((f, i) => {
+        if (i !== fieldIndex) return f;
+        const list = parseList(f.options);
+        const [moved] = list.splice(from, 1);
+        list.splice(to, 0, moved!);
+        return { ...f, options: list.join(', ') };
+      }),
+    );
+  }
+
+  function onOptionDragEnd(fieldIndex: number, { active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
+    reorderOptionByDrag(fieldIndex, Number(active.id), Number(over.id));
   }
 
   async function onImportExcel(event: React.ChangeEvent<HTMLInputElement>) {
@@ -896,115 +917,143 @@ function NewFormPage() {
                                     <>
                                       <label>options</label>
                                       <div className="option-rows">
-                                        {parseList(field.options).map((optionValue, optionIndex) => (
-                                          <div key={optionIndex} className="option-row">
-                                            <span
-                                              className={`option-row-mark${
-                                                field.type === 'multi_select'
-                                                  ? ' is-checkbox'
-                                                  : field.type === 'ranking'
-                                                    ? ' is-rank'
-                                                    : ''
-                                              }`}
-                                            >
-                                              {field.type === 'ranking' ? optionIndex + 1 : ''}
-                                            </span>
-                                            <Input
-                                              value={optionValue}
-                                              onChange={(e) => {
-                                                const list = parseList(field.options);
-                                                const previous = list[optionIndex]!;
-                                                list[optionIndex] = e.target.value;
-                                                const renamed = previous !== e.target.value;
-                                                updateField(index, {
-                                                  options: list.join(', '),
-                                                  // keep this option's "go to" mapping and user link keyed to its (possibly renamed) text
-                                                  ...(renamed && previous in field.optionGoTo
-                                                    ? {
-                                                        optionGoTo: Object.fromEntries(
-                                                          Object.entries(field.optionGoTo).map(([k, v]) =>
-                                                            k === previous ? [e.target.value, v] : [k, v],
-                                                          ),
-                                                        ),
-                                                      }
-                                                    : {}),
-                                                  ...(renamed && previous in field.optionUserIds
-                                                    ? {
-                                                        optionUserIds: Object.fromEntries(
-                                                          Object.entries(field.optionUserIds).map(([k, v]) =>
-                                                            k === previous ? [e.target.value, v] : [k, v],
-                                                          ),
-                                                        ),
-                                                      }
-                                                    : {}),
-                                                });
-                                              }}
-                                              placeholder={`Option ${optionIndex + 1}`}
-                                            />
-                                            {field.optionUserIds[optionValue] && (
-                                              <span
-                                                className="option-row-user-mark"
-                                                title="linked to a user — the answer will be that person's id"
-                                              >
-                                                <UserIcon size={14} aria-hidden="true" />
-                                              </span>
-                                            )}
-                                            {field.type === 'select' &&
-                                              laterSectionsForField.length > 0 &&
-                                              branchingOpen && (
-                                                <Select
-                                                  value={field.optionGoTo[optionValue] || '__none__'}
-                                                  onValueChange={(v) =>
-                                                    updateField(index, {
-                                                      optionGoTo: {
-                                                        ...field.optionGoTo,
-                                                        [optionValue]: v === '__none__' ? '' : v,
-                                                      },
-                                                    })
-                                                  }
-                                                >
-                                                  <SelectTrigger
-                                                    className="option-row-goto"
-                                                    aria-label={`go to section after "${optionValue}"`}
-                                                  >
-                                                    <SelectValue />
-                                                  </SelectTrigger>
-                                                  <SelectContent>
-                                                    <SelectItem value="__none__">continue to next section</SelectItem>
-                                                    {laterSectionsForField.map((t) => (
-                                                      <SelectItem key={t.id} value={t.id}>
-                                                        go to {t.title.trim() || t.id}
-                                                      </SelectItem>
-                                                    ))}
-                                                    <SelectItem value={END_OF_FORM}>submit form</SelectItem>
-                                                  </SelectContent>
-                                                </Select>
-                                              )}
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="icon-xs"
-                                              className="option-row-remove"
-                                              title="remove option"
-                                              aria-label={`remove option ${optionIndex + 1}`}
-                                              onClick={() => {
-                                                const list = parseList(field.options).filter(
-                                                  (_, i) => i !== optionIndex,
-                                                );
-                                                const { [optionValue]: _removed, ...optionGoTo } = field.optionGoTo;
-                                                const { [optionValue]: _removedUser, ...optionUserIds } =
-                                                  field.optionUserIds;
-                                                updateField(index, {
-                                                  options: list.join(', '),
-                                                  optionGoTo,
-                                                  optionUserIds,
-                                                });
-                                              }}
-                                            >
-                                              <X size={12} aria-hidden="true" />
-                                            </Button>
-                                          </div>
-                                        ))}
+                                        <DndContext
+                                          sensors={dragSensors}
+                                          collisionDetection={closestCenter}
+                                          onDragEnd={(event) => onOptionDragEnd(index, event)}
+                                        >
+                                          <SortableContext
+                                            items={parseList(field.options).map((_, i) => i)}
+                                            strategy={verticalListSortingStrategy}
+                                          >
+                                            {parseList(field.options).map((optionValue, optionIndex) => (
+                                              <SortableRow key={optionIndex} id={optionIndex} className="option-row">
+                                                {(optionDrag) => (
+                                                  <>
+                                                    <button
+                                                      type="button"
+                                                      className="option-row-drag-handle"
+                                                      title="drag to reorder"
+                                                      aria-label={`drag to reorder option ${optionIndex + 1}`}
+                                                      {...optionDrag.attributes}
+                                                      {...optionDrag.listeners}
+                                                    >
+                                                      <GripVertical size={14} aria-hidden="true" />
+                                                    </button>
+                                                    <span
+                                                      className={`option-row-mark${
+                                                        field.type === 'multi_select'
+                                                          ? ' is-checkbox'
+                                                          : field.type === 'ranking'
+                                                            ? ' is-rank'
+                                                            : ''
+                                                      }`}
+                                                    >
+                                                      {field.type === 'ranking' ? optionIndex + 1 : ''}
+                                                    </span>
+                                                    <Input
+                                                      value={optionValue}
+                                                      onChange={(e) => {
+                                                        const list = parseList(field.options);
+                                                        const previous = list[optionIndex]!;
+                                                        list[optionIndex] = e.target.value;
+                                                        const renamed = previous !== e.target.value;
+                                                        updateField(index, {
+                                                          options: list.join(', '),
+                                                          // keep this option's "go to" mapping and user link keyed to its (possibly renamed) text
+                                                          ...(renamed && previous in field.optionGoTo
+                                                            ? {
+                                                                optionGoTo: Object.fromEntries(
+                                                                  Object.entries(field.optionGoTo).map(([k, v]) =>
+                                                                    k === previous ? [e.target.value, v] : [k, v],
+                                                                  ),
+                                                                ),
+                                                              }
+                                                            : {}),
+                                                          ...(renamed && previous in field.optionUserIds
+                                                            ? {
+                                                                optionUserIds: Object.fromEntries(
+                                                                  Object.entries(field.optionUserIds).map(([k, v]) =>
+                                                                    k === previous ? [e.target.value, v] : [k, v],
+                                                                  ),
+                                                                ),
+                                                              }
+                                                            : {}),
+                                                        });
+                                                      }}
+                                                      placeholder={`Option ${optionIndex + 1}`}
+                                                    />
+                                                    {field.optionUserIds[optionValue] && (
+                                                      <span
+                                                        className="option-row-user-mark"
+                                                        title="linked to a user — the answer will be that person's id"
+                                                      >
+                                                        <UserIcon size={14} aria-hidden="true" />
+                                                      </span>
+                                                    )}
+                                                    {field.type === 'select' &&
+                                                      laterSectionsForField.length > 0 &&
+                                                      branchingOpen && (
+                                                        <Select
+                                                          value={field.optionGoTo[optionValue] || '__none__'}
+                                                          onValueChange={(v) =>
+                                                            updateField(index, {
+                                                              optionGoTo: {
+                                                                ...field.optionGoTo,
+                                                                [optionValue]: v === '__none__' ? '' : v,
+                                                              },
+                                                            })
+                                                          }
+                                                        >
+                                                          <SelectTrigger
+                                                            className="option-row-goto"
+                                                            aria-label={`go to section after "${optionValue}"`}
+                                                          >
+                                                            <SelectValue />
+                                                          </SelectTrigger>
+                                                          <SelectContent>
+                                                            <SelectItem value="__none__">
+                                                              continue to next section
+                                                            </SelectItem>
+                                                            {laterSectionsForField.map((t) => (
+                                                              <SelectItem key={t.id} value={t.id}>
+                                                                go to {t.title.trim() || t.id}
+                                                              </SelectItem>
+                                                            ))}
+                                                            <SelectItem value={END_OF_FORM}>submit form</SelectItem>
+                                                          </SelectContent>
+                                                        </Select>
+                                                      )}
+                                                    <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="icon-xs"
+                                                      className="option-row-remove"
+                                                      title="remove option"
+                                                      aria-label={`remove option ${optionIndex + 1}`}
+                                                      onClick={() => {
+                                                        const list = parseList(field.options).filter(
+                                                          (_, i) => i !== optionIndex,
+                                                        );
+                                                        const { [optionValue]: _removed, ...optionGoTo } =
+                                                          field.optionGoTo;
+                                                        const { [optionValue]: _removedUser, ...optionUserIds } =
+                                                          field.optionUserIds;
+                                                        updateField(index, {
+                                                          options: list.join(', '),
+                                                          optionGoTo,
+                                                          optionUserIds,
+                                                        });
+                                                      }}
+                                                    >
+                                                      <X size={12} aria-hidden="true" />
+                                                    </Button>
+                                                  </>
+                                                )}
+                                              </SortableRow>
+                                            ))}
+                                          </SortableContext>
+                                        </DndContext>
                                         {(field.type === 'select' || field.type === 'multi_select') &&
                                           field.allowOther && (
                                             <div className="option-row option-row-other">
