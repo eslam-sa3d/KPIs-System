@@ -28,6 +28,14 @@ export class UsersController {
     return this.users.list(query, req.user.id);
   }
 
+  /** Headline counts for the users page's stat widgets — computed by aggregate
+   *  query rather than derived from a (possibly filtered/paginated) list page. */
+  @Get('stats')
+  @RequirePermissions('users:read')
+  stats(@Req() req: AuthedRequest) {
+    return this.users.stats(req.user.id);
+  }
+
   @Post()
   @RequirePermissions('users:write')
   create(@Body(new ZodValidationPipe(createUserSchema)) input: CreateUserInput, @Req() req: AuthedRequest) {

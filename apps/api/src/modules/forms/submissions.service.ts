@@ -510,6 +510,15 @@ export class SubmissionsService {
     return paged(items, buildPaginationMeta(page, pageSize, totalItems));
   }
 
+  /** Context/metadata questions (evaluation type, period, respondent's own role) carry
+   *  no meaningful response distribution — every submission answers them the same
+   *  routine way, so a chart card is just noise next to the actual evaluation questions. */
+  private static readonly SUMMARY_EXCLUDED_LABELS = new Set([
+    'evaluation type',
+    'period (e.g., q2, h1, annual 2026)',
+    'your role',
+  ]);
+
   /** MS-Forms-style per-question aggregates for the summary dashboard. */
   async summary(formSlug: string): Promise<FormResponseSummary> {
     const { version, definition } = await this.forms.getLatestVersion(formSlug);
@@ -520,8 +529,33 @@ export class SubmissionsService {
       orderBy: { createdAt: 'asc' },
     });
 
+    // 'person' answers are a User's id, not a displayable string — resolve every
+    // one referenced by this form's submissions in one batch instead of N+1.
+    const personFieldKeys = new Set(definition.fields.filter((f) => f.type === 'person').map((f) => f.key));
+    const personIds = new Set<string>();
+    if (personFieldKeys.size > 0) {
+      for (const s of submissions) {
+        const answers = s.answers as SubmissionAnswers;
+        for (const key of personFieldKeys) {
+          const v = answers[key];
+          if (typeof v === 'string' && v) personIds.add(v);
+        }
+      }
+    }
+    const personNames = personIds.size
+      ? new Map(
+          (
+            await this.prisma.user.findMany({
+              where: { id: { in: [...personIds] } },
+              select: { id: true, displayName: true },
+            })
+          ).map((u) => [u.id, u.displayName]),
+        )
+      : new Map<string, string>();
+
     const fields: FormFieldSummary[] = definition.fields
       .filter((field) => field.type !== 'section_header') // display-only, never has an answer
+      .filter((field) => !SubmissionsService.SUMMARY_EXCLUDED_LABELS.has(field.label.trim().toLowerCase()))
       .map((field) => {
         const values = submissions
           .map((s) => (s.answers as SubmissionAnswers)[field.key])
@@ -619,6 +653,10 @@ export class SubmissionsService {
               }
             }
             return { ...base, matrix };
+          }
+          case 'person': {
+            const names = (values as string[]).map((id) => personNames.get(id) ?? '(deleted user)');
+            return { ...base, samples: names.slice(-5).reverse() };
           }
           default: {
             return { ...base, samples: (values as string[]).slice(-5).reverse() };
@@ -745,6 +783,30 @@ export class SubmissionsService {
       },
     });
 
+    // Same batch id -> displayName resolution as summary() — an exported 'person'
+    // answer should read as who was picked, not the User row's opaque id.
+    const personFieldKeys = new Set(definition.fields.filter((f) => f.type === 'person').map((f) => f.key));
+    const personIds = new Set<string>();
+    if (personFieldKeys.size > 0) {
+      for (const s of submissions) {
+        const answers = s.answers as SubmissionAnswers;
+        for (const key of personFieldKeys) {
+          const v = answers[key];
+          if (typeof v === 'string' && v) personIds.add(v);
+        }
+      }
+    }
+    const personNames = personIds.size
+      ? new Map(
+          (
+            await this.prisma.user.findMany({
+              where: { id: { in: [...personIds] } },
+              select: { id: true, displayName: true },
+            })
+          ).map((u) => [u.id, u.displayName]),
+        )
+      : new Map<string, string>();
+
     const keys = definition.fields.map((f) => f.key);
     const header = ['submitted_at', 'submitted_by', ...keys];
     const rows = submissions.map((s) => {
@@ -752,7 +814,11 @@ export class SubmissionsService {
       return [
         s.createdAt.toISOString(),
         s.submittedBy?.email ?? 'anonymous',
-        ...keys.map((k) => serializeCsvCell(answers[k])),
+        ...keys.map((k) =>
+          personFieldKeys.has(k)
+            ? (personNames.get(answers[k] as string) ?? (answers[k] ? '(deleted user)' : ''))
+            : serializeCsvCell(answers[k]),
+        ),
       ];
     });
     return { header, rows };

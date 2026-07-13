@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { FormDefinition, SubmissionAnswers } from '@pulse/contracts';
+import type { FormDefinition, FormField, SubmissionAnswers } from '@pulse/contracts';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -16,8 +16,15 @@ export interface DetailedSubmission {
   score?: SubmissionScore | null;
 }
 
-function formatAnswer(value: SubmissionAnswers[string] | undefined): string {
+function formatAnswer(
+  value: SubmissionAnswers[string] | undefined,
+  field: FormField,
+  personNames: Record<string, string>,
+): string {
   if (value === undefined || value === null || value === '') return '—';
+  // 'person' answers are a User's id, not a displayable string — show who was
+  // picked, not the id, the same resolution the submissions table applies.
+  if (field.type === 'person' && typeof value === 'string') return personNames[value] ?? '(deleted user)';
   if (Array.isArray(value)) return value.join(', ');
   if (typeof value === 'object') {
     return Object.entries(value)
@@ -35,6 +42,7 @@ export function ResponseDetailModal({
   total,
   slug,
   canEdit,
+  personNames,
   onClose,
   onPrev,
   onNext,
@@ -48,6 +56,8 @@ export function ResponseDetailModal({
   slug: string;
   /** admin-correction: requires form_submissions:manage, same bar as delete */
   canEdit: boolean;
+  /** 'person' field id -> display name, so a picked evaluatee shows their name, not their id */
+  personNames: Record<string, string>;
   onClose: () => void;
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
@@ -183,7 +193,7 @@ export function ResponseDetailModal({
                           ))}
                         </span>
                       ) : (
-                        formatAnswer(value)
+                        formatAnswer(value, field, personNames)
                       )}
                     </dd>
                   </div>

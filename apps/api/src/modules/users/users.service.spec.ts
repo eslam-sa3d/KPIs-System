@@ -14,7 +14,14 @@ function makePrismaStub() {
   return {
     tx,
     user: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn(), update: vi.fn() },
-    department: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    department: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      count: vi.fn(),
+    },
     rolePermission: { findMany: vi.fn() },
     session: { updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -228,6 +235,36 @@ describe('UsersService', () => {
       await service.list({ departmentId: 'dept-2' }, 'user-1');
 
       expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { departmentId: 'dept-1' } }));
+    });
+  });
+
+  describe('stats', () => {
+    it('reports total/active/inactive/department counts for an unrestricted caller', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'all' }]);
+      prisma.user.count
+        .mockResolvedValueOnce(10) // total
+        .mockResolvedValueOnce(7) // active
+        .mockResolvedValueOnce(6); // assigned to a department
+      prisma.department.count.mockResolvedValue(3);
+
+      const result = await service.stats('user-1');
+
+      expect(prisma.user.count).toHaveBeenNthCalledWith(1, { where: {} });
+      expect(prisma.user.count).toHaveBeenNthCalledWith(2, { where: { isActive: true } });
+      expect(prisma.user.count).toHaveBeenNthCalledWith(3, { where: { departmentId: { not: null } } });
+      expect(result).toEqual({ total: 10, active: 7, inactive: 3, departments: 3, assignedToDepartment: 6 });
+    });
+
+    it('scopes counts to the caller\'s own department when restricted', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'department' }]);
+      prisma.user.findUnique.mockResolvedValue({ departmentId: 'dept-1' });
+      prisma.user.count.mockResolvedValueOnce(4).mockResolvedValueOnce(4).mockResolvedValueOnce(4);
+      prisma.department.count.mockResolvedValue(3);
+
+      await service.stats('user-1');
+
+      expect(prisma.user.count).toHaveBeenNthCalledWith(1, { where: { departmentId: 'dept-1' } });
+      expect(prisma.user.count).toHaveBeenNthCalledWith(2, { where: { departmentId: 'dept-1', isActive: true } });
     });
   });
 });

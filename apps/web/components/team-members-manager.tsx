@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { Building2, UserCheck, UserX, Users as UsersIcon } from 'lucide-react';
 import type { AuthenticatedUser, PaginationMeta } from '@pulse/contracts';
 import { can } from './portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -38,6 +39,14 @@ interface DepartmentRow {
   name: string;
 }
 
+interface UserStats {
+  total: number;
+  active: number;
+  inactive: number;
+  departments: number;
+  assignedToDepartment: number;
+}
+
 /** Create accounts, assign roles, and manage access tiers — shared between
  *  the standalone /admin/users page and the settings "team members" tab. */
 export function TeamMembersManager({ user }: { user: AuthenticatedUser | null }) {
@@ -57,6 +66,17 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   const [editingInfoId, setEditingInfoId] = useState<string | null>(null);
   const [infoDraft, setInfoDraft] = useState({ displayName: '', email: '', departmentId: '', isKpiApplicable: true });
   const [savingInfo, setSavingInfo] = useState(false);
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [creatingUser, setCreatingUser] = useState(false);
+
+  // Headline counts, not derived from the current (possibly filtered/paginated)
+  // page — reloaded whenever a mutation could move total/active/inactive counts.
+  const reloadStats = useCallback(() => api<UserStats>('/v1/users/stats').then(setStats), []);
+
+  useEffect(() => {
+    if (!user) return;
+    void reloadStats();
+  }, [user, reloadStats]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
@@ -110,12 +130,14 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
       });
       (event.target as HTMLFormElement).reset();
       setNotice('user created');
+      setCreatingUser(false);
       // New users sort first (createdAt desc) — jump to page 1 so the one
       // just created is actually visible instead of landing on whatever
       // page was open before. Reload directly when already there, since
       // setPage(1) is a no-op and wouldn't otherwise re-trigger the fetch.
       if (page === 1) await reload();
       else setPage(1);
+      void reloadStats();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Creating the user failed');
     }
@@ -129,6 +151,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
         body: JSON.stringify({ isActive: !row.isActive }),
       });
       await reload();
+      void reloadStats();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Updating status failed');
     }
@@ -204,6 +227,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
       });
       setEditingInfoId(null);
       await reload();
+      void reloadStats(); // department reassignment moves the "assigned" count
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Updating the user failed');
     } finally {
@@ -215,7 +239,67 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
 
   return (
     <>
+      {stats && (
+        <div className="insights-row">
+          <div className="insight-card tone-purple">
+            <span className="hierarchy-icon hierarchy-icon-sm">
+              <UsersIcon size={15} aria-hidden="true" />
+            </span>
+            <span className="insight-card-body">
+              <strong>{stats.total}</strong>
+              <span>{stats.total === 1 ? 'user' : 'users'}</span>
+            </span>
+          </div>
+          <div className="insight-card tone-blue">
+            <span className="hierarchy-icon hierarchy-icon-sm">
+              <Building2 size={15} aria-hidden="true" />
+            </span>
+            <span className="insight-card-body">
+              <strong>{stats.departments}</strong>
+              <span>
+                {stats.departments === 1 ? 'department' : 'departments'} · {stats.assignedToDepartment} assigned
+              </span>
+            </span>
+          </div>
+          <div className="insight-card tone-green">
+            <span className="hierarchy-icon hierarchy-icon-sm">
+              <UserCheck size={15} aria-hidden="true" />
+            </span>
+            <span className="insight-card-body">
+              <strong>{stats.active}</strong>
+              <span>activated</span>
+            </span>
+          </div>
+          <div className="insight-card tone-amber">
+            <span className="hierarchy-icon hierarchy-icon-sm">
+              <UserX size={15} aria-hidden="true" />
+            </span>
+            <span className="insight-card-body">
+              <strong>{stats.inactive}</strong>
+              <span>deactivated</span>
+            </span>
+          </div>
+        </div>
+      )}
+
       {can(user, 'users:write') && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-2)' }}>
+          {!creatingUser && <Button onClick={() => setCreatingUser(true)}>new user</Button>}
+        </div>
+      )}
+
+      {notice && (
+        <Alert>
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
+      )}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {can(user, 'users:write') && creatingUser && (
         <Card>
           <CardContent className="pt-6">
             <form className="builder" onSubmit={onCreate}>
@@ -263,17 +347,12 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                   <Checkbox name="isKpiApplicable" defaultChecked /> KPI applicable
                 </label>
               </span>
-              <Button type="submit">create user</Button>
-              {notice && (
-                <Alert>
-                  <AlertDescription>{notice}</AlertDescription>
-                </Alert>
-              )}
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+              <span className="row-actions">
+                <Button type="submit">create user</Button>
+                <Button type="button" variant="ghost" onClick={() => setCreatingUser(false)}>
+                  cancel
+                </Button>
+              </span>
             </form>
           </CardContent>
         </Card>

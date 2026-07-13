@@ -27,7 +27,7 @@ function makePrismaStub() {
       findMany: vi.fn(async (): Promise<unknown[]> => []),
       findFirst: vi.fn(),
     },
-    user: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn(), findMany: vi.fn(async (): Promise<unknown[]> => []) },
     evaluationAreaEntry: {
       upsert: vi.fn(),
       findFirst: vi.fn(async (): Promise<{ id: string } | null> => null),
@@ -909,5 +909,64 @@ describe('SubmissionsService.summary', () => {
     // a: positions [1,2,1] avg 1.33; b: positions [2,1,2] avg 1.67
     expect(prio.averagePosition!.a).toBeCloseTo(4 / 3, 5);
     expect(prio.averagePosition!.b).toBeCloseTo(5 / 3, 5);
+  });
+
+  it('drops routine context fields (evaluation type, period, respondent role) from the summary', async () => {
+    const prisma = makePrismaStub();
+    const definition = formDefinitionSchema.parse({
+      title: 'qa eval',
+      fields: [
+        { key: 'eval_type', label: 'Evaluation Type', type: 'short_text' },
+        { key: 'period', label: 'Period (e.g., Q2, H1, Annual 2026)', type: 'short_text' },
+        { key: 'role', label: 'Your Role', type: 'short_text' },
+        { key: 'notes', label: 'Notes', type: 'long_text' },
+      ],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v1' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    prisma.formSubmission.findMany.mockResolvedValue([
+      { answers: { eval_type: 'QA', period: 'Q2', role: 'Lead', notes: 'fine' }, createdAt: new Date() },
+    ]);
+
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+    const summary = await service.summary('qa-eval');
+
+    expect(summary.fields.map((f) => f.key)).toEqual(['notes']);
+  });
+
+  it('resolves a "person" field\'s answers to display names instead of raw user ids', async () => {
+    const prisma = makePrismaStub();
+    const definition = formDefinitionSchema.parse({
+      title: 'eval',
+      fields: [{ key: 'evaluatee', label: 'Evaluatee', type: 'person' }],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v1' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    prisma.formSubmission.findMany.mockResolvedValue([
+      { answers: { evaluatee: 'user-1' }, createdAt: new Date() },
+      { answers: { evaluatee: 'user-deleted' }, createdAt: new Date() },
+    ]);
+    prisma.user.findMany.mockResolvedValue([{ id: 'user-1', displayName: 'Ana Ivanova' }]);
+
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+    const summary = await service.summary('eval');
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: expect.arrayContaining(['user-1', 'user-deleted']) } } }),
+    );
+    const evaluatee = summary.fields.find((f) => f.key === 'evaluatee')!;
+    expect(evaluatee.samples).toEqual(['(deleted user)', 'Ana Ivanova']);
   });
 });

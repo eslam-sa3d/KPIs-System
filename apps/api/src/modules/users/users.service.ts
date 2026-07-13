@@ -78,6 +78,23 @@ export class UsersService {
     return paged(items, buildPaginationMeta(page, pageSize, totalItems));
   }
 
+  /** Headline counts for the users page's stat widgets — same read-scope
+   *  restriction as list(), but an unfiltered aggregate rather than a page. */
+  async stats(userId: string) {
+    const restricted = await this.rbac.isReadScopeRestricted(userId, 'users');
+    const ownDepartmentId = restricted ? await this.rbac.myDepartmentId(userId) : undefined;
+    const where = restricted ? { departmentId: ownDepartmentId ?? '__none__' } : {};
+
+    const [total, active, assignedToDepartment, departments] = await this.prisma.$transaction([
+      this.prisma.user.count({ where }),
+      this.prisma.user.count({ where: { ...where, isActive: true } }),
+      this.prisma.user.count({ where: { ...where, departmentId: { not: null } } }),
+      this.prisma.department.count(),
+    ]);
+
+    return { total, active, inactive: total - active, departments, assignedToDepartment };
+  }
+
   async create(input: CreateUserInput, actorId: string) {
     const existing = await this.prisma.user.findUnique({ where: { email: input.email } });
     if (existing) throw new AppError('CONFLICT', `A user with email "${input.email}" already exists`);

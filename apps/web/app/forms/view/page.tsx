@@ -66,6 +66,10 @@ function FormView() {
   const [fieldFilter, setFieldFilter] = useState<{ key: string; label: string; value: string } | null>(null);
   const [confirmDeleteRowId, setConfirmDeleteRowId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  // 'person' answers are a User's id, not a displayable string — resolved once per
+  // form load (only if it actually has a 'person' field) so cells/modal can show
+  // who was picked instead of their opaque id.
+  const [personNames, setPersonNames] = useState<Record<string, string>>({});
 
   const reloadDetail = useCallback(() => {
     if (slug) void api<FormDetail>(`/v1/forms/${encodeURIComponent(slug)}`).then(setDetail);
@@ -74,6 +78,13 @@ function FormView() {
   useEffect(() => {
     if (user) reloadDetail();
   }, [user, reloadDetail]);
+
+  useEffect(() => {
+    if (!detail?.definition.fields.some((f) => f.type === 'person')) return;
+    void api<Array<{ id: string; displayName: string }>>('/v1/users?pageSize=200').then((users) => {
+      setPersonNames(Object.fromEntries(users.map((u) => [u.id, u.displayName])));
+    });
+  }, [detail]);
 
   const loadSubmissions = useCallback(() => {
     const qs = fieldFilter
@@ -357,6 +368,8 @@ function FormView() {
                                   </Button>
                                 ))}
                               </span>
+                            ) : f.type === 'person' && typeof value === 'string' && value ? (
+                              (personNames[value] ?? '(deleted user)')
                             ) : Array.isArray(value) ? (
                               value.join(', ')
                             ) : typeof value === 'object' && value !== null ? (
@@ -454,6 +467,7 @@ function FormView() {
                   total={filteredRows.length}
                   slug={slug}
                   canEdit={canModerate}
+                  personNames={personNames}
                   onClose={() => setSelectedRowId(null)}
                   onPrev={selectedIndex > 0 ? () => setSelectedRowId(filteredRows[selectedIndex - 1]!.id) : null}
                   onNext={

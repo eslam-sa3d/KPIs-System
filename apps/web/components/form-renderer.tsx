@@ -991,6 +991,14 @@ export function FormRenderer({
               setSubmitted(false);
               setSubmittedScore(null);
               setSubmittedEditToken(null);
+              // Otherwise a multi-page form reopens on whatever section the
+              // respondent submitted from, instead of back at the first page.
+              if (hasSections) {
+                const freshPath = resolveSectionPath(renderDefinition, {}).visitedSectionIds;
+                setPath(freshPath);
+                setCurrentSectionId(freshPath[0] ?? null);
+              }
+              window.scrollTo({ top: 0 });
             }}
           >
             submit another response
