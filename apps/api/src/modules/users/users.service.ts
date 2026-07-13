@@ -126,6 +126,9 @@ export class UsersService {
           departmentId: input.departmentId,
           projectGroupId: input.projectGroupId,
           isKpiApplicable: input.isKpiApplicable,
+          // the password an admin sets here is the "temporary password" the
+          // create-user form labels it — force a change on first login
+          mustChangePassword: true,
           roles: { create: input.roleIds.map((roleId) => ({ roleId })) },
         },
         select: { id: true, email: true, displayName: true, isActive: true, isKpiApplicable: true },

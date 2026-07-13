@@ -21,8 +21,8 @@ export default function LoginPage() {
     setPending(true);
     const form = new FormData(event.currentTarget);
     try {
-      await login(String(form.get('email')), String(form.get('password')));
-      router.push('/dashboard');
+      const user = await login(String(form.get('email')), String(form.get('password')));
+      router.push(user.mustChangePassword ? '/change-password' : '/dashboard');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Something went wrong — please retry');
       setPending(false);

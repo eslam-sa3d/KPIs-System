@@ -62,6 +62,7 @@ describe('UsersService', () => {
     const data = prisma.tx.user.create.mock.calls[0]![0].data as Record<string, unknown>;
     expect(data.passwordHash).toBe('hashed:S3cretPass!');
     expect(data).not.toHaveProperty('password');
+    expect(data.mustChangePassword).toBe(true);
     expect(data.roles).toEqual({ create: [{ roleId: 'role-1' }] });
     expect(prisma.tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ action: 'user.created' }),

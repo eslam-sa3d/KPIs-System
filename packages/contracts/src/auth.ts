@@ -41,6 +41,10 @@ export interface AuthenticatedUser {
   /** Effective permission keys (`resource:action`), union across roles —
    *  the UI uses these to gate navigation and controls. */
   permissions: string[];
+  /** True when an admin issued this account's current password (e.g. a
+   *  freshly created user) — the web app forces a change-password screen
+   *  before anything else until this clears. */
+  mustChangePassword: boolean;
 }
 
 /** Body of POST /auth/login and /auth/refresh. The refresh token itself

@@ -14,6 +14,7 @@ const activeUser = {
   displayName: 'Admin',
   passwordHash: 'hashed:correct-password',
   isActive: true,
+  mustChangePassword: false,
   roles: [{ role: { name: 'admin' } }],
 };
 
@@ -82,6 +83,7 @@ describe('AuthService', () => {
           email: activeUser.email,
           roles: ['admin'],
           permissions: ['kpis:view', 'forms:view'],
+          mustChangePassword: false,
         },
       });
       expect(refreshToken).toHaveLength(64); // 48 random bytes, base64url
@@ -89,6 +91,14 @@ describe('AuthService', () => {
       const stored = prisma.session.create.mock.calls[0]![0].data;
       expect(stored.refreshTokenHash).toMatch(/^[0-9a-f]{64}$/); // sha256 hex
       expect(stored.refreshTokenHash).not.toContain(refreshToken);
+    });
+
+    it('surfaces mustChangePassword so the web app can force a change screen', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...activeUser, mustChangePassword: true });
+
+      const { grant } = await service.login(activeUser.email, 'correct-password', context);
+
+      expect(grant.user.mustChangePassword).toBe(true);
     });
 
     it.each([
@@ -196,7 +206,7 @@ describe('AuthService', () => {
   });
 
   describe('changePassword', () => {
-    it('verifies the current password, rehashes, and revokes every other session', async () => {
+    it('verifies the current password, rehashes, clears mustChangePassword, and revokes every other session', async () => {
       prisma.user.findUnique.mockResolvedValue(activeUser);
 
       await service.changePassword('user-1', 'correct-password', 'new-password');
@@ -204,7 +214,7 @@ describe('AuthService', () => {
       expect(hasherStub.verify).toHaveBeenCalledWith(activeUser.passwordHash, 'correct-password');
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
-        data: { passwordHash: 'hashed:new-password' },
+        data: { passwordHash: 'hashed:new-password', mustChangePassword: false },
       });
       expect(prisma.session.updateMany).toHaveBeenCalledWith({
         where: { userId: 'user-1', revokedAt: null },
@@ -261,14 +271,14 @@ describe('AuthService', () => {
       expiresAt: new Date(Date.now() + 60_000),
     };
 
-    it('rehashes the password, marks the token used, and revokes every session', async () => {
+    it('rehashes the password, clears mustChangePassword, marks the token used, and revokes every session', async () => {
       prisma.passwordResetToken.findUnique.mockResolvedValue(liveToken);
 
       await service.resetPassword('raw-token', 'new-password');
 
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
-        data: { passwordHash: 'hashed:new-password' },
+        data: { passwordHash: 'hashed:new-password', mustChangePassword: false },
       });
       expect(prisma.passwordResetToken.update).toHaveBeenCalledWith({
         where: { id: 'reset-1' },

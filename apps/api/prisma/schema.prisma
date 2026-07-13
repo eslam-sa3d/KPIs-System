@@ -26,6 +26,10 @@ model User {
   /// set at creation, editable after. When false, they're excluded from the
   /// dashboard's team overview regardless of role/department KPI mappings.
   isKpiApplicable Boolean       @default(true)
+  /// Set true whenever an admin issues this account's password (creation
+  /// today — see UsersService.create) so the next login forces a change
+  /// before anything else is usable. Cleared by AuthService.changePassword.
+  mustChangePassword Boolean    @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
