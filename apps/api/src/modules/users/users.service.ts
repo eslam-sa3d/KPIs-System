@@ -47,7 +47,9 @@ export class UsersService {
       // An empty groupIds array already matches zero rows via `IN ()`, so no
       // '__none__' sentinel is needed here the way the single-FK department
       // filter above needs one.
-      conditions.push({ projectGroupMemberships: { some: { groupId: { in: await this.rbac.myProjectGroupIds(userId) } } } });
+      conditions.push({
+        projectGroupMemberships: { some: { groupId: { in: await this.rbac.myProjectGroupIds(userId) } } },
+      });
     }
     if (kinds.includes('own')) conditions.push({ id: userId });
     return conditions.length > 0 ? { OR: conditions } : { id: '__none__' };
@@ -349,7 +351,13 @@ export class UsersService {
       }),
       ...userIds.map((userId) =>
         this.prisma.auditLog.create({
-          data: { actorId, action: 'project_group.member_added', entity: 'User', entityId: userId, detail: { groupId } },
+          data: {
+            actorId,
+            action: 'project_group.member_added',
+            entity: 'User',
+            entityId: userId,
+            detail: { groupId },
+          },
         }),
       ),
     ]);
@@ -365,7 +373,13 @@ export class UsersService {
     await this.prisma.$transaction([
       this.prisma.projectGroupMember.deleteMany({ where: { groupId, userId } }),
       this.prisma.auditLog.create({
-        data: { actorId, action: 'project_group.member_removed', entity: 'User', entityId: userId, detail: { groupId } },
+        data: {
+          actorId,
+          action: 'project_group.member_removed',
+          entity: 'User',
+          entityId: userId,
+          detail: { groupId },
+        },
       }),
     ]);
     return null;

@@ -297,7 +297,7 @@ describe('UsersService', () => {
   });
 
   describe('list — project_group scope enforcement', () => {
-    it("filters to every group the caller belongs to when scoped to project_group", async () => {
+    it('filters to every group the caller belongs to when scoped to project_group', async () => {
       prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'project_group' }]);
       prisma.projectGroupMember.findMany.mockResolvedValue([{ groupId: 'group-1' }, { groupId: 'group-2' }]);
       prisma.user.count.mockResolvedValue(1);
@@ -307,7 +307,9 @@ describe('UsersService', () => {
 
       expect(prisma.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { AND: [{ OR: [{ projectGroupMemberships: { some: { groupId: { in: ['group-1', 'group-2'] } } } }] }, {}] },
+          where: {
+            AND: [{ OR: [{ projectGroupMemberships: { some: { groupId: { in: ['group-1', 'group-2'] } } } }] }, {}],
+          },
         }),
       );
     });
