@@ -62,9 +62,7 @@ function makePrismaStub() {
     },
     subCriteria: {
       findUnique: vi.fn(
-        async (_args: {
-          where: { id: string };
-        }): Promise<{ id: string; evaluationAreaId: string } | null> => ({
+        async (_args: { where: { id: string } }): Promise<{ id: string; evaluationAreaId: string } | null> => ({
           id: 'sub-1',
           evaluationAreaId: 'area-1',
         }),
@@ -218,9 +216,9 @@ describe('FormKpiMappingsService.create', () => {
   it('rejects a subCriteriaId that belongs to a different evaluation area', async () => {
     prisma.subCriteria.findUnique.mockResolvedValue({ id: 'sub-1', evaluationAreaId: 'area-2' });
     const service = new FormKpiMappingsService(prisma as never, forms as never);
-    await expect(
-      service.create('form-1', { ...validInput, subCriteriaId: 'sub-1' }, 'admin-1'),
-    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(service.create('form-1', { ...validInput, subCriteriaId: 'sub-1' }, 'admin-1')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
     expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
   });
 

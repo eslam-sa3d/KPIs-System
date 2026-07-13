@@ -39,9 +39,10 @@ export function KpiLinkCombobox({
   const selectedKpi = kpis?.find((k) => k.id === kpiId);
   const selectedArea = selectedKpi?.evaluationAreas.find((a) => a.id === evaluationAreaId);
   const selectedSubCriteria = selectedArea?.subCriteria.find((s) => s.id === subCriteriaId);
-  const label = selectedKpi && selectedArea
-    ? `${selectedKpi.name} — ${selectedArea.name}${selectedSubCriteria ? ` — ${selectedSubCriteria.name}` : ''}`
-    : 'not linked';
+  const label =
+    selectedKpi && selectedArea
+      ? `${selectedKpi.name} — ${selectedArea.name}${selectedSubCriteria ? ` — ${selectedSubCriteria.name}` : ''}`
+      : 'not linked';
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
