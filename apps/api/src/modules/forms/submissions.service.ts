@@ -322,6 +322,20 @@ export class SubmissionsService {
     const context = mapping.contextFieldKey ? answerToText(answers[mapping.contextFieldKey]) : null;
     const comment = mapping.commentFieldKey ? answerToText(answers[mapping.commentFieldKey]) : null;
 
+    // personId is part of the upsert's own unique key below, so if this same
+    // submission previously resolved to a DIFFERENT evaluatee (a mapping that
+    // used to be self-assessment and is now evaluatee-based, a changed
+    // evaluatee-field answer on a resubmission, or a mapping's evaluatee
+    // field being reconfigured before a backfill) the upsert would silently
+    // leave that old entry behind under the wrong person instead of moving
+    // it — nothing else in this codebase ever cleans that up. Reconcile by
+    // submissionId first: this submission owns at most one entry per area.
+    const stale = await this.prisma.evaluationAreaEntry.findFirst({
+      where: { submissionId, evaluationAreaId: mapping.evaluationAreaId, personId: { not: evaluateeId } },
+      select: { id: true },
+    });
+    if (stale) await this.prisma.evaluationAreaEntry.delete({ where: { id: stale.id } });
+
     // enteredById is part of the key: one row PER EVALUATOR per period, so a
     // second rater scoring the same person/area/period adds a distinct entry
     // instead of overwriting the first — see EvaluationAreaEntry's schema

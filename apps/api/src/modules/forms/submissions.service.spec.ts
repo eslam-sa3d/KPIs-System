@@ -28,7 +28,11 @@ function makePrismaStub() {
       findFirst: vi.fn(),
     },
     user: { findUnique: vi.fn() },
-    evaluationAreaEntry: { upsert: vi.fn() },
+    evaluationAreaEntry: {
+      upsert: vi.fn(),
+      findFirst: vi.fn(async (): Promise<{ id: string } | null> => null),
+      delete: vi.fn(),
+    },
     performanceLevel: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(async (arg: unknown) => (Array.isArray(arg) ? Promise.all(arg) : (arg as () => unknown)())),
@@ -515,6 +519,44 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
     const call = prisma.evaluationAreaEntry.upsert.mock.calls[0]![0];
     expect(call.create.personId).toBe('evaluator-1');
     expect(call.create.enteredById).toBe('evaluator-1');
+  });
+
+  it('deletes a stale entry left under a different personId by an earlier resolution of the same submission', async () => {
+    const prisma = makePrismaStub();
+    prisma.formKpiMapping.findMany.mockResolvedValue([mapping]);
+    prisma.user.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', isActive: true });
+    // this submission previously scored a DIFFERENT person for this same area
+    // (e.g. the mapping used to be self-assessment, or the evaluatee answer changed)
+    prisma.evaluationAreaEntry.findFirst.mockResolvedValue({ id: 'stale-entry-1' });
+    const forms = makeKpiFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4 }, 'evaluator-1');
+
+    expect(prisma.evaluationAreaEntry.findFirst).toHaveBeenCalledWith({
+      where: {
+        submissionId: 'sub-new',
+        evaluationAreaId: 'area-1',
+        personId: { not: '11111111-1111-4111-8111-111111111111' },
+      },
+      select: { id: true },
+    });
+    expect(prisma.evaluationAreaEntry.delete).toHaveBeenCalledWith({ where: { id: 'stale-entry-1' } });
+    expect(prisma.evaluationAreaEntry.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not delete anything when the resolved evaluatee has not changed', async () => {
+    const prisma = makePrismaStub();
+    prisma.formKpiMapping.findMany.mockResolvedValue([mapping]);
+    prisma.user.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', isActive: true });
+    prisma.evaluationAreaEntry.findFirst.mockResolvedValue(null);
+    const forms = makeKpiFormsStub();
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit('demo', { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4 }, 'evaluator-1');
+
+    expect(prisma.evaluationAreaEntry.delete).not.toHaveBeenCalled();
+    expect(prisma.evaluationAreaEntry.upsert).toHaveBeenCalledTimes(1);
   });
 
   it('skips mapping application for anonymous public submissions (no enteredById)', async () => {
