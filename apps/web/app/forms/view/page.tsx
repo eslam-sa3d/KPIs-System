@@ -186,8 +186,8 @@ function FormView() {
     return haystack.includes(filter.toLowerCase());
   });
 
-  const canManage = can(user, 'forms:write');
-  const canModerate = can(user, 'form_submissions:manage');
+  const canManage = can(user, 'forms:edit');
+  const canModerate = can(user, 'form_submissions:edit');
 
   return (
     <PortalShell user={user}>

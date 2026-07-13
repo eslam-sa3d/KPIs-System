@@ -103,7 +103,7 @@ export default function DashboardPage() {
   const [memberStatusFilter, setMemberStatusFilter] = useState<StatusKey | 'all'>('all');
   const [memberSort, setMemberSort] = useState<{ key: MemberSortKey; dir: 1 | -1 }>({ key: 'finalScore', dir: -1 });
   const [memberFilter, setMemberFilter] = useState('');
-  const canSeeTeamOverview = can(user, 'kpis:manage');
+  const canSeeTeamOverview = can(user, 'dashboards:view');
 
   const { data: rawKpis } = useResource<RawKpi[]>(user ? '/v1/kpis/my' : null);
   const kpis = useMemo(() => rawKpis?.map(computeKpi) ?? null, [rawKpis]);

@@ -12,13 +12,13 @@ import { LoadingState } from './loading-state';
 import { ThemeToggle } from './theme-toggle';
 
 const NAV_ITEMS: Array<{ href: string; label: string; permission?: string }> = [
-  { href: '/dashboard', label: 'dashboard' },
+  { href: '/dashboard', label: 'dashboard', permission: 'dashboards:view' },
   { href: '/forms', label: 'forms' },
-  { href: '/admin/kpis', label: 'KPIs', permission: 'kpis:write' },
-  { href: '/admin/users', label: 'users', permission: 'users:read' },
-  { href: '/admin/roles', label: 'roles', permission: 'roles:read' },
-  { href: '/admin/settings', label: 'settings', permission: 'settings:manage' },
-  { href: '/admin/configuration', label: 'configuration', permission: 'configuration:read' },
+  { href: '/admin/kpis', label: 'KPIs', permission: 'kpis:edit' },
+  { href: '/admin/users', label: 'users', permission: 'users:view' },
+  { href: '/admin/roles', label: 'roles', permission: 'roles:view' },
+  { href: '/admin/settings', label: 'settings', permission: 'settings:edit' },
+  { href: '/admin/configuration', label: 'configuration', permission: 'configuration:view' },
 ];
 
 export const can = (user: AuthenticatedUser | null, permission: string): boolean =>

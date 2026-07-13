@@ -156,7 +156,7 @@ function NewFormPage() {
     scale: f.scale,
     likertScale: parseList(f.likertScale),
   }));
-  const canLinkKpis = can(user, 'forms:manage') && can(user, 'kpis:write');
+  const canLinkKpis = can(user, 'forms:edit') && can(user, 'kpis:edit');
 
   // Derives each page's actual field list from where it starts and where the NEXT page starts,
   // in the form's own question order — a page is nothing but "everything between two breaks", so

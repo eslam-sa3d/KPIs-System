@@ -88,10 +88,27 @@ function WeightRing({ value, size = 'md' }: { value: number; size?: 'md' | 'sm' 
 /** Toggles isActive via the same PATCH every level already uses — styled as
  *  a status pill (dot + label) instead of a text button whose label is
  *  always the opposite of the current state ("deactivate" while active). */
-function StatusPill({ isActive, onToggle, size }: { isActive: boolean; onToggle: () => void; size?: 'sm' }) {
+function StatusPill({
+  isActive,
+  onToggle,
+  size,
+  disabled,
+}: {
+  isActive: boolean;
+  onToggle: () => void;
+  size?: 'sm';
+  /** Renders the badge read-only (status still visible) when the caller lacks
+   *  kpis:activate_deactivate — showing status shouldn't require edit rights. */
+  disabled?: boolean;
+}) {
   return (
     <Badge asChild variant="outline" className={size === 'sm' ? 'gap-1.5 py-0.5 text-xs' : 'gap-1.5 py-1'}>
-      <button type="button" onClick={onToggle} className={isActive ? '' : 'text-muted-foreground'}>
+      <button
+        type="button"
+        onClick={disabled ? undefined : onToggle}
+        disabled={disabled}
+        className={isActive ? '' : 'text-muted-foreground'}
+      >
         <span
           className="size-[7px] shrink-0 rounded-full"
           style={{ background: isActive ? 'var(--color-success)' : 'var(--color-text-muted)' }}
@@ -221,7 +238,7 @@ export default function KpisAdminPage() {
 
   function onToggleKpiActive(kpi: KpiRow) {
     report(
-      api(`/v1/kpis/${kpi.id}`, { method: 'PATCH', body: JSON.stringify({ isActive: !kpi.isActive }) }),
+      api(`/v1/kpis/${kpi.id}/status`, { method: 'PATCH', body: JSON.stringify({ isActive: !kpi.isActive }) }),
       kpi.isActive ? 'KPI deactivated' : 'KPI reactivated',
     );
   }
@@ -294,7 +311,7 @@ export default function KpisAdminPage() {
 
   function onToggleAreaActive(kpiId: string, area: EvaluationAreaRow) {
     report(
-      api(`/v1/kpis/${kpiId}/areas/${area.id}`, {
+      api(`/v1/kpis/${kpiId}/areas/${area.id}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ isActive: !area.isActive }),
       }),
@@ -370,8 +387,9 @@ export default function KpisAdminPage() {
 
   const selectedKpi = useMemo(() => kpis?.find((k) => k.id === selectedKpiId) ?? null, [kpis, selectedKpiId]);
   const firstInactiveKpiId = useMemo(() => kpis?.find((k) => !k.isActive)?.id ?? null, [kpis]);
-  const canWrite = can(user, 'kpis:write');
-  const canManage = can(user, 'kpis:manage');
+  const canWrite = can(user, 'kpis:edit');
+  const canManage = can(user, 'kpis:delete');
+  const canToggleStatus = can(user, 'kpis:activate_deactivate');
 
   return (
     <PortalShell user={user}>
@@ -650,7 +668,11 @@ export default function KpisAdminPage() {
                       </div>
                       {canWrite && (
                         <span className="row-actions">
-                          <StatusPill isActive={selectedKpi.isActive} onToggle={() => onToggleKpiActive(selectedKpi)} />
+                          <StatusPill
+                            isActive={selectedKpi.isActive}
+                            onToggle={() => onToggleKpiActive(selectedKpi)}
+                            disabled={!canToggleStatus}
+                          />
                           {canManage &&
                             (confirmDeleteKpiId === selectedKpi.id ? (
                               <>
@@ -862,6 +884,7 @@ export default function KpisAdminPage() {
                                   isActive={area.isActive}
                                   onToggle={() => onToggleAreaActive(selectedKpi.id, area)}
                                   size="sm"
+                                  disabled={!canToggleStatus}
                                 />
                                 {canManage &&
                                   (confirmDeleteAreaId === area.id ? (

@@ -33,7 +33,8 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const canManage = can(user, 'configuration:manage');
+  const canEdit = can(user, 'configuration:edit');
+  const canDelete = can(user, 'configuration:delete');
 
   const reload = useCallback(() => api<PerformanceLevelRow[]>('/v1/performance-levels').then(setLevels), []);
 
@@ -98,7 +99,7 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
     <>
       <p className="muted">name the bands a 0–5 evaluation score falls into</p>
 
-      {canManage && (
+      {canEdit && (
         <Card>
           <CardContent className="pt-6">
             <form className="inline-form" onSubmit={onCreate}>
@@ -157,14 +158,14 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
             <TableRow>
               <TableHead>range</TableHead>
               <TableHead>label</TableHead>
-              {canManage && <TableHead />}
+              {(canEdit || canDelete) && <TableHead />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {levels.map((level) =>
               editingId === level.id ? (
                 <TableRow key={level.id}>
-                  <TableCell colSpan={canManage ? 3 : 2}>
+                  <TableCell colSpan={canEdit || canDelete ? 3 : 2}>
                     <form className="inline-form" onSubmit={(e) => onUpdate(level.id, e)}>
                       <Input
                         name="minScore"
@@ -203,39 +204,47 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
                 <TableRow key={level.id}>
                   <TableCell className="tabular-nums">{formatRange(level)}</TableCell>
                   <TableCell>{level.label}</TableCell>
-                  {canManage && (
+                  {(canEdit || canDelete) && (
                     <TableCell>
                       <span className="row-actions">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`edit ${level.label}`}
-                          onClick={() => setEditingId(level.id)}
-                        >
-                          <Pencil size={14} aria-hidden="true" />
-                        </Button>
-                        {confirmDeleteId === level.id ? (
-                          <>
-                            <span className="muted">delete?</span>
-                            <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(level.id)}>
-                              confirm
-                            </Button>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
-                              cancel
-                            </Button>
-                          </>
-                        ) : (
+                        {canEdit && (
                           <Button
                             type="button"
                             variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setConfirmDeleteId(level.id)}
+                            size="icon-sm"
+                            aria-label={`edit ${level.label}`}
+                            onClick={() => setEditingId(level.id)}
                           >
-                            delete
+                            <Pencil size={14} aria-hidden="true" />
                           </Button>
                         )}
+                        {canDelete &&
+                          (confirmDeleteId === level.id ? (
+                            <>
+                              <span className="muted">delete?</span>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => onDelete(level.id)}
+                              >
+                                confirm
+                              </Button>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
+                                cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setConfirmDeleteId(level.id)}
+                            >
+                              delete
+                            </Button>
+                          ))}
                       </span>
                     </TableCell>
                   )}

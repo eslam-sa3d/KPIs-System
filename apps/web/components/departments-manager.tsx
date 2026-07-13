@@ -12,22 +12,39 @@ import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../lib/api-client';
 
-interface DepartmentRow {
+interface GroupRow {
   id: string;
   name: string;
 }
 
-/** List, create, rename, and delete departments — the settings "departments" tab. */
-export function DepartmentsManager({ user }: { user: AuthenticatedUser | null }) {
-  const [departments, setDepartments] = useState<DepartmentRow[] | null>(null);
+/** List, create, rename, and delete a flat named grouping (Department or
+ *  Project Group) — same shape, different endpoint/permission resource, so
+ *  DepartmentsManager and ProjectGroupsManager below are thin wrappers around
+ *  this one implementation instead of two near-duplicate components. */
+function EntityGroupManager({
+  user,
+  endpoint,
+  resource,
+  noun,
+}: {
+  user: AuthenticatedUser | null;
+  /** e.g. '/v1/departments' */
+  endpoint: string;
+  /** RBAC resource prefix, e.g. 'departments' | 'project_groups' */
+  resource: string;
+  /** singular display noun, e.g. 'department' | 'project group' */
+  noun: string;
+}) {
+  const [groups, setGroups] = useState<GroupRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const canManage = can(user, 'departments:manage');
+  const canEdit = can(user, `${resource}:edit`);
+  const canDelete = can(user, `${resource}:delete`);
 
-  const reload = useCallback(() => api<DepartmentRow[]>('/v1/departments').then(setDepartments), []);
+  const reload = useCallback(() => api<GroupRow[]>(endpoint).then(setGroups), [endpoint]);
 
   useEffect(() => {
     if (user) void reload();
@@ -39,56 +56,50 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
     setNotice(null);
     const form = new FormData(event.currentTarget);
     try {
-      await api('/v1/departments', { method: 'POST', body: JSON.stringify({ name: form.get('name') }) });
+      await api(endpoint, { method: 'POST', body: JSON.stringify({ name: form.get('name') }) });
       (event.target as HTMLFormElement).reset();
-      setNotice('department created');
+      setNotice(`${noun} created`);
       await reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Creating the department failed');
+      setError(cause instanceof Error ? cause.message : `Creating the ${noun} failed`);
     }
   }
 
-  async function onRename(departmentId: string, event: FormEvent<HTMLFormElement>) {
+  async function onRename(groupId: string, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     const form = new FormData(event.currentTarget);
     try {
-      await api(`/v1/departments/${departmentId}`, {
+      await api(`${endpoint}/${groupId}`, {
         method: 'PATCH',
         body: JSON.stringify({ name: form.get('name') }),
       });
       setRenamingId(null);
       await reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Renaming the department failed');
+      setError(cause instanceof Error ? cause.message : `Renaming the ${noun} failed`);
     }
   }
 
-  async function onDelete(departmentId: string) {
+  async function onDelete(groupId: string) {
     setError(null);
     try {
-      await api(`/v1/departments/${departmentId}`, { method: 'DELETE' });
+      await api(`${endpoint}/${groupId}`, { method: 'DELETE' });
       setConfirmDeleteId(null);
       await reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Deleting the department failed');
+      setError(cause instanceof Error ? cause.message : `Deleting the ${noun} failed`);
     }
   }
 
   return (
     <>
-      {canManage && (
+      {canEdit && (
         <Card>
           <CardContent className="pt-6">
             <form className="inline-form" onSubmit={onCreate}>
-              <Input
-                name="name"
-                required
-                minLength={2}
-                placeholder="new department name"
-                aria-label="department name"
-              />
-              <Button type="submit">create department</Button>
+              <Input name="name" required minLength={2} placeholder={`new ${noun} name`} aria-label={`${noun} name`} />
+              <Button type="submit">create {noun}</Button>
             </form>
             {notice && (
               <Alert className="mt-4">
@@ -104,31 +115,31 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
         </Card>
       )}
 
-      {departments === null ? (
+      {groups === null ? (
         <LoadingState />
-      ) : departments.length === 0 ? (
+      ) : groups.length === 0 ? (
         <div className="empty-state">
           <span className="empty-state-icon">
             <Building2 size={22} aria-hidden="true" />
           </span>
-          <h2>no departments yet</h2>
-          <p className="muted">create the first department above to start assigning users and KPIs to it.</p>
+          <h2>no {noun}s yet</h2>
+          <p className="muted">create the first {noun} above to start assigning users to it.</p>
         </div>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>name</TableHead>
-              {canManage && <TableHead />}
+              {(canEdit || canDelete) && <TableHead />}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {departments.map((d) => (
-              <TableRow key={d.id}>
+            {groups.map((g) => (
+              <TableRow key={g.id}>
                 <TableCell>
-                  {renamingId === d.id ? (
-                    <form className="inline-form" onSubmit={(e) => onRename(d.id, e)}>
-                      <Input name="name" defaultValue={d.name} required minLength={2} autoFocus />
+                  {renamingId === g.id ? (
+                    <form className="inline-form" onSubmit={(e) => onRename(g.id, e)}>
+                      <Input name="name" defaultValue={g.name} required minLength={2} autoFocus />
                       <Button type="submit" variant="ghost" size="sm">
                         save
                       </Button>
@@ -137,43 +148,46 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
                       </Button>
                     </form>
                   ) : (
-                    d.name
+                    g.name
                   )}
                 </TableCell>
-                {canManage && (
+                {(canEdit || canDelete) && (
                   <TableCell>
-                    {renamingId !== d.id && (
+                    {renamingId !== g.id && (
                       <span className="row-actions">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`rename ${d.name}`}
-                          onClick={() => setRenamingId(d.id)}
-                        >
-                          <Pencil size={14} aria-hidden="true" />
-                        </Button>
-                        {confirmDeleteId === d.id ? (
-                          <>
-                            <span className="muted">delete?</span>
-                            <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(d.id)}>
-                              confirm
-                            </Button>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
-                              cancel
-                            </Button>
-                          </>
-                        ) : (
+                        {canEdit && (
                           <Button
                             type="button"
                             variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setConfirmDeleteId(d.id)}
+                            size="icon-sm"
+                            aria-label={`rename ${g.name}`}
+                            onClick={() => setRenamingId(g.id)}
                           >
-                            delete
+                            <Pencil size={14} aria-hidden="true" />
                           </Button>
                         )}
+                        {canDelete &&
+                          (confirmDeleteId === g.id ? (
+                            <>
+                              <span className="muted">delete?</span>
+                              <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(g.id)}>
+                                confirm
+                              </Button>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
+                                cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setConfirmDeleteId(g.id)}
+                            >
+                              delete
+                            </Button>
+                          ))}
                       </span>
                     )}
                   </TableCell>
@@ -184,5 +198,15 @@ export function DepartmentsManager({ user }: { user: AuthenticatedUser | null })
         </Table>
       )}
     </>
+  );
+}
+
+export function DepartmentsManager({ user }: { user: AuthenticatedUser | null }) {
+  return <EntityGroupManager user={user} endpoint="/v1/departments" resource="departments" noun="department" />;
+}
+
+export function ProjectGroupsManager({ user }: { user: AuthenticatedUser | null }) {
+  return (
+    <EntityGroupManager user={user} endpoint="/v1/project-groups" resource="project_groups" noun="project group" />
   );
 }

@@ -26,6 +26,7 @@ interface UserRow {
   isActive: boolean;
   isKpiApplicable: boolean;
   department: { id: string; name: string } | null;
+  projectGroup: { id: string; name: string } | null;
   roles: Array<{ id: string; name: string }>;
 }
 
@@ -35,6 +36,11 @@ interface RoleRow {
 }
 
 interface DepartmentRow {
+  id: string;
+  name: string;
+}
+
+interface ProjectGroupRow {
   id: string;
   name: string;
 }
@@ -58,13 +64,20 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
+  const [projectGroups, setProjectGroups] = useState<ProjectGroupRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [pendingRoleIds, setPendingRoleIds] = useState<Set<string>>(new Set());
   const [savingRoles, setSavingRoles] = useState(false);
   const [editingInfoId, setEditingInfoId] = useState<string | null>(null);
-  const [infoDraft, setInfoDraft] = useState({ displayName: '', email: '', departmentId: '', isKpiApplicable: true });
+  const [infoDraft, setInfoDraft] = useState({
+    displayName: '',
+    email: '',
+    departmentId: '',
+    projectGroupId: '',
+    isKpiApplicable: true,
+  });
   const [savingInfo, setSavingInfo] = useState(false);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [creatingUser, setCreatingUser] = useState(false);
@@ -107,8 +120,9 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
 
   useEffect(() => {
     if (!user) return;
-    if (can(user, 'roles:read') || can(user, 'roles:manage')) void api<RoleRow[]>('/v1/roles').then(setRoles);
-    if (can(user, 'departments:read')) void api<DepartmentRow[]>('/v1/departments').then(setDepartments);
+    if (can(user, 'roles:view')) void api<RoleRow[]>('/v1/roles').then(setRoles);
+    if (can(user, 'departments:view')) void api<DepartmentRow[]>('/v1/departments').then(setDepartments);
+    if (can(user, 'project_groups:view')) void api<ProjectGroupRow[]>('/v1/project-groups').then(setProjectGroups);
   }, [user]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
@@ -124,6 +138,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
           displayName: form.get('displayName'),
           password: form.get('password'),
           departmentId: form.get('departmentId') || undefined,
+          projectGroupId: form.get('projectGroupId') || undefined,
           roleIds: form.getAll('roleIds'),
           isKpiApplicable: form.get('isKpiApplicable') === 'on',
         }),
@@ -204,6 +219,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
       displayName: row.displayName,
       email: row.email,
       departmentId: row.department?.id ?? '',
+      projectGroupId: row.projectGroup?.id ?? '',
       isKpiApplicable: row.isKpiApplicable,
     });
   }
@@ -222,6 +238,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
           displayName: infoDraft.displayName,
           email: infoDraft.email,
           departmentId: infoDraft.departmentId || null,
+          projectGroupId: infoDraft.projectGroupId || null,
           isKpiApplicable: infoDraft.isKpiApplicable,
         }),
       });
@@ -235,7 +252,9 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
     }
   }
 
-  const canEditRoles = can(user, 'roles:manage') && can(user, 'users:write');
+  const canEditRoles = can(user, 'roles:edit') && can(user, 'users:edit');
+  const canEditUsers = can(user, 'users:edit');
+  const canToggleUserStatus = can(user, 'users:activate_deactivate');
 
   return (
     <>
@@ -282,7 +301,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
         </div>
       )}
 
-      {can(user, 'users:write') && (
+      {canEditUsers && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-2)' }}>
           {!creatingUser && <Button onClick={() => setCreatingUser(true)}>new user</Button>}
         </div>
@@ -299,7 +318,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
         </Alert>
       )}
 
-      {can(user, 'users:write') && creatingUser && (
+      {canEditUsers && creatingUser && (
         <Card>
           <CardContent className="pt-6">
             <form className="builder" onSubmit={onCreate}>
@@ -324,6 +343,23 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                       {departments.map((d) => (
                         <SelectItem key={d.id} value={d.id}>
                           {d.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
+              {projectGroups.length > 0 && (
+                <>
+                  <label htmlFor="u-group">project group</label>
+                  <Select name="projectGroupId">
+                    <SelectTrigger id="u-group">
+                      <SelectValue placeholder="— none —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projectGroups.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -408,10 +444,11 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
               <TableHead>name</TableHead>
               <TableHead>email</TableHead>
               <TableHead>department</TableHead>
+              <TableHead>project group</TableHead>
               <TableHead>roles</TableHead>
               <TableHead>status</TableHead>
               <TableHead>KPI applicable</TableHead>
-              {(can(user, 'users:manage') || can(user, 'users:write') || canEditRoles) && <TableHead />}
+              {(canToggleUserStatus || canEditUsers || canEditRoles) && <TableHead />}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -463,6 +500,28 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                   )}
                 </TableCell>
                 <TableCell>
+                  {editingInfoId === row.id ? (
+                    <Select
+                      value={infoDraft.projectGroupId || '__none__'}
+                      onValueChange={(v) => setInfoDraft((d) => ({ ...d, projectGroupId: v === '__none__' ? '' : v }))}
+                    >
+                      <SelectTrigger aria-label="project group" size="sm" className="w-[160px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— none —</SelectItem>
+                        {projectGroups.map((g) => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    (row.projectGroup?.name ?? '—')
+                  )}
+                </TableCell>
+                <TableCell>
                   {editingUserId === row.id ? (
                     <span className="check-group">
                       {roles.map((r) => (
@@ -493,10 +552,10 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                     'no'
                   )}
                 </TableCell>
-                {(can(user, 'users:manage') || can(user, 'users:write') || canEditRoles) && (
+                {(canToggleUserStatus || canEditUsers || canEditRoles) && (
                   <TableCell>
                     <span className="builder-field-actions">
-                      {can(user, 'users:write') &&
+                      {canEditUsers &&
                         (editingInfoId === row.id ? (
                           <>
                             <Button size="sm" disabled={savingInfo} onClick={() => onSaveInfo(row)}>
@@ -511,7 +570,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                             edit
                           </Button>
                         ))}
-                      {can(user, 'users:manage') && (
+                      {canToggleUserStatus && (
                         <Button variant="ghost" size="sm" onClick={() => onToggleStatus(row)}>
                           {row.isActive ? 'deactivate' : 'activate'}
                         </Button>

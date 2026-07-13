@@ -284,53 +284,52 @@ export default function FormsPage() {
                     </TableCell>
                     <TableCell>
                       <span className="row-actions hover-actions">
-                        {can(user, 'forms:write') && (
+                        {can(user, 'forms:edit') && (
                           <Button asChild variant="ghost" size="icon-sm" aria-label={`edit ${form.title}`}>
                             <Link href={`/forms/new?edit=${encodeURIComponent(form.slug)}`}>
                               <Pencil size={14} aria-hidden="true" />
                             </Link>
                           </Button>
                         )}
-                        {can(user, 'forms:manage') && (
-                          <>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="text-primary hover:text-primary"
-                              onClick={() => onArchiveToggle(form)}
-                            >
-                              {form.status === 'archived' ? 'unarchive' : 'archive'}
-                            </Button>
-                            {confirmDeleteId === form.id ? (
-                              <>
-                                <span className="muted">delete?</span>
-                                <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(form.id)}>
-                                  confirm
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-primary hover:text-primary"
-                                  onClick={() => setConfirmDeleteId(null)}
-                                >
-                                  cancel
-                                </Button>
-                              </>
-                            ) : (
+                        {can(user, 'forms:activate_deactivate') && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-primary hover:text-primary"
+                            onClick={() => onArchiveToggle(form)}
+                          >
+                            {form.status === 'archived' ? 'unarchive' : 'archive'}
+                          </Button>
+                        )}
+                        {can(user, 'forms:delete') &&
+                          (confirmDeleteId === form.id ? (
+                            <>
+                              <span className="muted">delete?</span>
+                              <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(form.id)}>
+                                confirm
+                              </Button>
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => setConfirmDeleteId(form.id)}
+                                className="text-primary hover:text-primary"
+                                onClick={() => setConfirmDeleteId(null)}
                               >
-                                delete
+                                cancel
                               </Button>
-                            )}
-                          </>
-                        )}
+                            </>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setConfirmDeleteId(form.id)}
+                            >
+                              delete
+                            </Button>
+                          ))}
                       </span>
                     </TableCell>
                   </TableRow>
