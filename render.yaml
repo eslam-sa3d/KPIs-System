@@ -83,10 +83,25 @@ services:
     # keys are byte-for-byte identical to what the table already has at that
     # point (form_kpi_mapping + kpi_multi_rater_and_review_type's ALTER), so
     # the desired end state already exists — Prisma just needs telling.
+    #
+    # user_must_change_password resolves as --rolled-back, unlike the three
+    # above — deliberately, and only safe because its own migration.sql was
+    # written with `ADD COLUMN IF NOT EXISTS` specifically so this is safe.
+    # It got stuck "started, never finished" on its first deploy (two
+    # concurrent deploys almost certainly raced and killed the first one
+    # mid-ALTER — the free tier has no shell, so this couldn't just be
+    # inspected and hand-fixed the way the three above originally were).
+    # Unlike kpi_multi_rater_and_review_type's cautionary tale above,
+    # --rolled-back here can't land on a column that already exists and then
+    # fail retrying it, because IF NOT EXISTS makes the retry a no-op either
+    # way — no need to know which of "never ran" or "ran but didn't record"
+    # actually happened, unlike the --applied cases above which all depended
+    # on knowing that.
     startCommand: >-
       pnpm --filter @pulse/api exec prisma migrate resolve --applied 20260710110000_kpi_multi_rater_and_review_type || true &&
       pnpm --filter @pulse/api exec prisma migrate resolve --applied 20260711120038_drop_form_kpi_mapping || true &&
       pnpm --filter @pulse/api exec prisma migrate resolve --applied 20260711140000_restore_form_kpi_mapping || true &&
+      pnpm --filter @pulse/api exec prisma migrate resolve --rolled-back 20260713190000_user_must_change_password || true &&
       pnpm --filter @pulse/api exec prisma migrate deploy &&
       pnpm db:seed &&
       node apps/api/dist/main.js
