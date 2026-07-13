@@ -255,7 +255,7 @@ describe('UsersService', () => {
       expect(result).toEqual({ total: 10, active: 7, inactive: 3, departments: 3, assignedToDepartment: 6 });
     });
 
-    it('scopes counts to the caller\'s own department when restricted', async () => {
+    it("scopes counts to the caller's own department when restricted", async () => {
       prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'department' }]);
       prisma.user.findUnique.mockResolvedValue({ departmentId: 'dept-1' });
       prisma.user.count.mockResolvedValueOnce(4).mockResolvedValueOnce(4).mockResolvedValueOnce(4);
