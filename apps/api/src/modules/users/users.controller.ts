@@ -24,7 +24,7 @@ export class UsersController {
 
   @Get()
   @RequirePermissions('users:read')
-  list(@Query() query: PageQuery, @Req() req: AuthedRequest) {
+  list(@Query() query: PageQuery & { search?: string; departmentId?: string }, @Req() req: AuthedRequest) {
     return this.users.list(query, req.user.id);
   }
 

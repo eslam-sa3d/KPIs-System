@@ -29,15 +29,30 @@ export class UsersService {
    *  a department/own scope (see RbacService.DEPARTMENT_SCOPABLE_RESOURCES)
    *  restricts the roster to the caller's own department, the same way
    *  KpisService.list() restricts KPIs to the caller's own assignments. */
-  async list(query: PageQuery, userId: string) {
+  async list(query: PageQuery & { search?: string; departmentId?: string }, userId: string) {
     const { page, pageSize } = resolvePageBounds(query);
 
     const restricted = await this.rbac.isReadScopeRestricted(userId, 'users');
     // A restricted caller with no department of their own sees no one —
     // `departmentId: null` would otherwise match every other departmentless
     // user, which is the opposite of "restricted".
-    const departmentId = restricted ? await this.rbac.myDepartmentId(userId) : undefined;
-    const where = restricted ? { departmentId: departmentId ?? '__none__' } : {};
+    const ownDepartmentId = restricted ? await this.rbac.myDepartmentId(userId) : undefined;
+    const search = query.search?.trim();
+    const where = {
+      ...(restricted
+        ? { departmentId: ownDepartmentId ?? '__none__' }
+        : query.departmentId
+          ? { departmentId: query.departmentId }
+          : {}),
+      ...(search
+        ? {
+            OR: [
+              { displayName: { contains: search, mode: 'insensitive' as const } },
+              { email: { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
 
     const [totalItems, users] = await this.prisma.$transaction([
       this.prisma.user.count({ where }),

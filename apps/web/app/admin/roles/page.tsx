@@ -116,7 +116,6 @@ export default function RolesAdminPage() {
   return (
     <PortalShell user={user}>
       <h1>roles</h1>
-      <p className="portal-subtitle">compose custom roles from the permission catalog — no deployment needed</p>
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>

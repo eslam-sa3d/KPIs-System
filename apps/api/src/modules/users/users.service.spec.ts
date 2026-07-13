@@ -189,5 +189,45 @@ describe('UsersService', () => {
         expect.objectContaining({ where: { departmentId: '__none__' } }),
       );
     });
+
+    it('filters by name/email substring, case-insensitively', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'all' }]);
+      prisma.user.count.mockResolvedValue(1);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await service.list({ search: '  Ana  ' }, 'user-1');
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            OR: [
+              { displayName: { contains: 'Ana', mode: 'insensitive' } },
+              { email: { contains: 'Ana', mode: 'insensitive' } },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('filters by an explicit departmentId when the caller is unrestricted', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'all' }]);
+      prisma.user.count.mockResolvedValue(1);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await service.list({ departmentId: 'dept-2' }, 'user-1');
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { departmentId: 'dept-2' } }));
+    });
+
+    it('ignores a requested departmentId when the caller is restricted to their own department', async () => {
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'department' }]);
+      prisma.user.findUnique.mockResolvedValue({ departmentId: 'dept-1' });
+      prisma.user.count.mockResolvedValue(1);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await service.list({ departmentId: 'dept-2' }, 'user-1');
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { departmentId: 'dept-1' } }));
+    });
   });
 });

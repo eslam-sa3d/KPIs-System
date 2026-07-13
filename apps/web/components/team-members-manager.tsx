@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import type { AuthenticatedUser } from '@pulse/contracts';
+import type { AuthenticatedUser, PaginationMeta } from '@pulse/contracts';
 import { can } from './portal-shell';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,12 @@ import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { api } from '../lib/api-client';
+import { apiPaged, api } from '../lib/api-client';
+
+const PAGE_SIZE = 25;
+// Keystrokes settle before firing a request, so typing a name doesn't
+// spray a request per character at the users:read endpoint.
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface UserRow {
   id: string;
@@ -37,6 +42,11 @@ interface DepartmentRow {
  *  the standalone /admin/users page and the settings "team members" tab. */
 export function TeamMembersManager({ user }: { user: AuthenticatedUser | null }) {
   const [users, setUsers] = useState<UserRow[] | null>(null);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -48,14 +58,38 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   const [infoDraft, setInfoDraft] = useState({ displayName: '', email: '', departmentId: '', isKpiApplicable: true });
   const [savingInfo, setSavingInfo] = useState(false);
 
-  const reload = useCallback(() => api<UserRow[]>('/v1/users?pageSize=100').then(setUsers), []);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // A new filter should always land back on page 1 — otherwise "filtered by
+  // X" can silently show "no results" just because the previous page number
+  // no longer has that many filtered rows.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, departmentFilter]);
+
+  const reload = useCallback(() => {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+    if (debouncedSearch) params.set('search', debouncedSearch);
+    if (departmentFilter) params.set('departmentId', departmentFilter);
+    return apiPaged<UserRow[]>(`/v1/users?${params.toString()}`).then(({ data, pagination: meta }) => {
+      setUsers(data);
+      setPagination(meta);
+    });
+  }, [page, debouncedSearch, departmentFilter]);
 
   useEffect(() => {
     if (!user) return;
     void reload();
+  }, [user, reload]);
+
+  useEffect(() => {
+    if (!user) return;
     if (can(user, 'roles:read') || can(user, 'roles:manage')) void api<RoleRow[]>('/v1/roles').then(setRoles);
     if (can(user, 'departments:read')) void api<DepartmentRow[]>('/v1/departments').then(setDepartments);
-  }, [user, reload]);
+  }, [user]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,7 +110,12 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
       });
       (event.target as HTMLFormElement).reset();
       setNotice('user created');
-      await reload();
+      // New users sort first (createdAt desc) — jump to page 1 so the one
+      // just created is actually visible instead of landing on whatever
+      // page was open before. Reload directly when already there, since
+      // setPage(1) is a no-op and wouldn't otherwise re-trigger the fetch.
+      if (page === 1) await reload();
+      else setPage(1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Creating the user failed');
     }
@@ -240,12 +279,48 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
         </Card>
       )}
 
+      <div className="page-title-row">
+        <Input
+          aria-label="search users"
+          placeholder="search by name or email…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {departments.length > 0 && (
+          <Select
+            value={departmentFilter || '__all__'}
+            onValueChange={(v) => setDepartmentFilter(v === '__all__' ? '' : v)}
+          >
+            <SelectTrigger aria-label="filter by department" className="w-[180px]">
+              <SelectValue placeholder="all departments" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">all departments</SelectItem>
+              {departments.map((d) => (
+                <SelectItem key={d.id} value={d.id}>
+                  {d.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
       {users === null ? (
         <LoadingState />
       ) : users.length === 0 ? (
         <div className="empty-state">
-          <h2>no users yet</h2>
-          <p className="muted">create the first account above to start granting access.</p>
+          {debouncedSearch || departmentFilter ? (
+            <>
+              <h2>no users match</h2>
+              <p className="muted">try a different search term or department.</p>
+            </>
+          ) : (
+            <>
+              <h2>no users yet</h2>
+              <p className="muted">create the first account above to start granting access.</p>
+            </>
+          )}
         </div>
       ) : (
         <Table>
@@ -384,6 +459,37 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
             ))}
           </TableBody>
         </Table>
+      )}
+
+      {pagination && pagination.totalItems > 0 && (
+        <div className="page-title-row" aria-label="users pagination">
+          <span className="muted">
+            showing {(pagination.page - 1) * pagination.pageSize + 1}
+            {'–'}
+            {Math.min(pagination.page * pagination.pageSize, pagination.totalItems)} of {pagination.totalItems}
+          </span>
+          <span className="row-actions">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagination.page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              previous
+            </Button>
+            <span className="muted">
+              page {pagination.page} of {pagination.totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagination.page >= pagination.totalPages}
+              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+            >
+              next
+            </Button>
+          </span>
+        </div>
       )}
     </>
   );
