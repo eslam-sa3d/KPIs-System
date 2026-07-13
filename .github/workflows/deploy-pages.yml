@@ -1,0 +1,53 @@
+name: Deploy to GitHub Pages
+
+# Gated on the CI/CD workflow's own success (which includes the Dependency
+# Audit job) rather than triggering on every push directly — a red CI run on
+# main no longer publishes a deploy. workflow_dispatch remains for a manual
+# re-publish (e.g. re-running after fixing an unrelated flaky check).
+on:
+  workflow_run:
+    workflows: ["CI/CD"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # pushes the gh-pages branch
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build & publish static export
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Pin to the exact commit CI validated, not whatever main HEAD is by
+          # the time this job starts — avoids deploying a newer, unvalidated push.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.event.workflow_run.head_sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pulse/contracts build
+      - name: Build web (static export)
+        run: pnpm --filter @pulse/web build
+        env:
+          # Project pages serve from /<repo>/ — computed, no hardcoding.
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+          # Point the portal at the hosted API (set in repo Variables).
+          # GitHub Pages is static-only, so the NestJS API must live elsewhere.
+          NEXT_PUBLIC_API_URL: ${{ vars.API_URL }}
+      # Publishing the gh-pages branch auto-enables Pages on first deploy —
+      # no admin token or manual Settings step required.
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: apps/web/out
+          force_orphan: true
