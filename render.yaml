@@ -48,13 +48,45 @@ services:
     # the same substitute for a one-off failed-migration fix: it only matters
     # if that exact migration is still stuck in a failed state, so `|| true`
     # makes it a safe no-op on every deploy after the first time it actually
-    # resolves something. drop_form_kpi_mapping resolves as --applied (not
-    # --rolled-back): its DROP TABLE had already taken effect on the database
-    # despite Prisma recording the migration as failed, so retrying it as
-    # "rolled back" only re-fails forever against a table that's already gone.
+    # resolves something — all three below are `--applied`, never
+    # `--rolled-back`: on every pulse-db this history has actually touched
+    # (the original, a from-empty recreate, and a pg_dump/restore clone of
+    # the original), each of these migrations' real schema effects were
+    # already present, so telling Prisma "not applied" is always the wrong
+    # answer and (proven the hard way — see below) actively corrupts state.
+    #
+    # kpi_multi_rater_and_review_type used to resolve --rolled-back, back
+    # when this line only ever ran against a fresh empty database where the
+    # migration hadn't been recorded yet (resolve silently no-ops via
+    # `|| true`, then `migrate deploy` applies it normally). The first time
+    # this ran against a database where it was already correctly applied
+    # (an old-account → new-account pg_dump/restore clone, which carries
+    # `_prisma_migrations` over verbatim), --rolled-back succeeded at
+    # actually flipping a correct "applied" record to "not applied" — so the
+    # next `migrate deploy` would have tried to re-run its ALTER TABLE ADD
+    # COLUMN statements against columns that already exist. --applied avoids
+    # that regardless of which of these three histories the target database
+    # actually has.
+    #
+    # drop_form_kpi_mapping resolves as --applied: its DROP TABLE had
+    # already taken effect on the original database despite Prisma
+    # recording the migration as failed, so resolving it "rolled back"
+    # only re-fails forever against a table that's already gone.
+    #
+    # restore_form_kpi_mapping resolves as --applied for a related reason,
+    # discovered when pulse-db got recreated from empty (free-tier Postgres
+    # expiry) and every migration ran fresh in order: resolving
+    # drop_form_kpi_mapping as --applied above skips running its actual DROP
+    # TABLE, so on a brand-new database the table it was supposed to remove
+    # is still there — and restore_form_kpi_mapping's CREATE TABLE then
+    # collides with it (P3018/42P07). Its column list, indexes, and foreign
+    # keys are byte-for-byte identical to what the table already has at that
+    # point (form_kpi_mapping + kpi_multi_rater_and_review_type's ALTER), so
+    # the desired end state already exists — Prisma just needs telling.
     startCommand: >-
-      pnpm --filter @pulse/api exec prisma migrate resolve --rolled-back 20260710110000_kpi_multi_rater_and_review_type || true &&
+      pnpm --filter @pulse/api exec prisma migrate resolve --applied 20260710110000_kpi_multi_rater_and_review_type || true &&
       pnpm --filter @pulse/api exec prisma migrate resolve --applied 20260711120038_drop_form_kpi_mapping || true &&
+      pnpm --filter @pulse/api exec prisma migrate resolve --applied 20260711140000_restore_form_kpi_mapping || true &&
       pnpm --filter @pulse/api exec prisma migrate deploy &&
       pnpm db:seed &&
       node apps/api/dist/main.js
