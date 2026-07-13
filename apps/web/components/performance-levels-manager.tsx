@@ -222,12 +222,7 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
                           (confirmDeleteId === level.id ? (
                             <>
                               <span className="muted">delete?</span>
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => onDelete(level.id)}
-                              >
+                              <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(level.id)}>
                                 confirm
                               </Button>
                               <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>

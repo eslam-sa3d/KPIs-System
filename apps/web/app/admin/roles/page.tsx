@@ -144,7 +144,11 @@ function PermissionFields({
       <fieldset className="perm-resource">
         <legend>{RESOURCE_LABEL.dashboards}</legend>
         <label className="check-item">
-          <Checkbox name="permissions" value={DASHBOARD_SCOPE_KEY} defaultChecked={Boolean(byKey.get(DASHBOARD_SCOPE_KEY))} />
+          <Checkbox
+            name="permissions"
+            value={DASHBOARD_SCOPE_KEY}
+            defaultChecked={Boolean(byKey.get(DASHBOARD_SCOPE_KEY))}
+          />
           view
           <select
             name={`scope:${DASHBOARD_SCOPE_KEY}`}
@@ -357,7 +361,8 @@ export default function RolesAdminPage() {
                       {role.permissions.map((p) => (
                         <code key={permKey(p.resource, p.action)} className="perm-chip">
                           {RESOURCE_LABEL[p.resource] ?? p.resource}:{ACTION_LABEL[p.action] ?? p.action}
-                          {p.scope !== 'all' && ` (${p.scope}${p.scope === 'level' ? `: ${p.scopeValues.length}` : ''})`}
+                          {p.scope !== 'all' &&
+                            ` (${p.scope}${p.scope === 'level' ? `: ${p.scopeValues.length}` : ''})`}
                         </code>
                       ))}
                     </span>
@@ -422,11 +427,7 @@ export default function RolesAdminPage() {
                 {editingPermissionsRoleId === role.id && catalog && (
                   <TableRow key={`${role.id}-edit-permissions`}>
                     <TableCell colSpan={canManageColumn ? 4 : 3}>
-                      <form
-                        key={role.id}
-                        className="builder"
-                        onSubmit={(e) => onSavePermissions(role.id, e)}
-                      >
+                      <form key={role.id} className="builder" onSubmit={(e) => onSavePermissions(role.id, e)}>
                         <PermissionFields
                           catalog={catalog}
                           performanceLevels={performanceLevels ?? []}
