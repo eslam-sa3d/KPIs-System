@@ -18,10 +18,15 @@ import type { FormField } from './form-schema';
  * grid, section_header) has no numeric interpretation and can't be a score
  * field.
  *
- * `evaluateeFieldKey` optionally names a field whose answer is the
- * evaluatee's user id — a 'person' field, or a 'select' field with at least
- * one user-linked option (see isEvaluateeField below). Omitted means
- * self-assessment: the submitter scores themselves.
+ * `evaluateeFieldKeys` optionally names one or more candidate fields whose
+ * answer is the evaluatee's user id — each a 'person' field, or a 'select'
+ * field with at least one user-linked option (see isEvaluateeField below).
+ * They're tried in order and the first one actually answered wins — useful
+ * when a form has several mutually-exclusive "who is this about" fields
+ * (e.g. one per project) and only one is filled in per submission. Omitted
+ * or empty means self-assessment: the submitter scores themselves. If
+ * candidates are configured but none were answered, no evaluatee resolves —
+ * scoring does NOT fall back to self in that case.
  *
  * Deliberately out of scope for this pass: more than one mapping per
  * (form, evaluationArea) pair.
@@ -51,7 +56,7 @@ export const createFormKpiMappingSchema = z.object({
    *  this question is meant for. Never read by scoring; must belong to
    *  evaluationAreaId (validated server-side). */
   subCriteriaId: z.string().uuid().optional(),
-  evaluateeFieldKey: z.string().min(1).max(64).optional(),
+  evaluateeFieldKeys: z.array(z.string().min(1).max(64)).max(20).optional(),
   scoreFieldKey: z.string().min(1).max(64),
   reviewType: z.enum(REVIEW_TYPES).default('peer'),
   /** Withholds the evaluator's identity from anyone without kpis:manage
@@ -67,7 +72,7 @@ export const createFormKpiMappingSchema = z.object({
 
 export type CreateFormKpiMappingInput = z.infer<typeof createFormKpiMappingSchema>;
 
-/** Whether a field can supply `evaluateeFieldKey`'s answer: a dedicated
+/** Whether a field can supply a candidate `evaluateeFieldKeys` answer: a dedicated
  *  'person' field, or a 'select' field with at least one option that
  *  resolves to a real user's id (see optionItem.userId in form-schema.ts —
  *  the "select a user" option in the form builder). Shared between the
@@ -84,7 +89,7 @@ export interface FormKpiMapping {
   formId: string;
   evaluationAreaId: string;
   subCriteriaId: string | null;
-  evaluateeFieldKey: string | null;
+  evaluateeFieldKeys: string[];
   scoreFieldKey: string;
   reviewType: ReviewType;
   anonymous: boolean;
@@ -114,7 +119,7 @@ export interface FormKpiMappingWithArea extends FormKpiMapping {
  * batch — see BulkCreateFormKpiMappingResult.
  */
 export const bulkCreateFormKpiMappingSchema = z.object({
-  evaluateeFieldKey: z.string().min(1).max(64).optional(),
+  evaluateeFieldKeys: z.array(z.string().min(1).max(64)).max(20).optional(),
   reviewType: z.enum(REVIEW_TYPES).default('peer'),
   anonymous: z.boolean().default(false),
   contextFieldKey: z.string().min(1).max(64).optional(),

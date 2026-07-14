@@ -348,7 +348,7 @@ export class KpisService {
       if (!scoreField) continue;
       for (const submission of submissionsByFormId.get(mapping.formId) ?? []) {
         const answers = submission.answers as SubmissionAnswers;
-        const evaluateeId = resolveEvaluateeId(mapping.evaluateeFieldKey, answers, submission.submittedById!);
+        const evaluateeId = resolveEvaluateeId(mapping.evaluateeFieldKeys, answers, submission.submittedById!);
         if (evaluateeId === null) continue;
         const rawScore = answers[mapping.scoreFieldKey];
         if (rawScore === undefined || rawScore === null) continue;

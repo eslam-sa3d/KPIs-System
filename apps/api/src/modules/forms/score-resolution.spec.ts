@@ -3,20 +3,34 @@ import type { FormField } from '@pulse/contracts';
 import { describeAnswer, resolveEvaluateeId } from './score-resolution';
 
 describe('resolveEvaluateeId', () => {
-  it('resolves to the submitter when evaluateeFieldKey is unset (self-assessment)', () => {
-    expect(resolveEvaluateeId(null, {}, 'user-1')).toBe('user-1');
+  it('resolves to the submitter when evaluateeFieldKeys is empty (self-assessment)', () => {
+    expect(resolveEvaluateeId([], {}, 'user-1')).toBe('user-1');
   });
 
-  it("resolves to the named field's answer when evaluateeFieldKey is set", () => {
-    expect(resolveEvaluateeId('evaluatee', { evaluatee: 'user-2' }, 'user-1')).toBe('user-2');
+  it("resolves to the named field's answer when one candidate is configured", () => {
+    expect(resolveEvaluateeId(['evaluatee'], { evaluatee: 'user-2' }, 'user-1')).toBe('user-2');
   });
 
   it('returns null when the named field has no answer', () => {
-    expect(resolveEvaluateeId('evaluatee', {}, 'user-1')).toBeNull();
+    expect(resolveEvaluateeId(['evaluatee'], {}, 'user-1')).toBeNull();
   });
 
   it('returns null when the named field answer is not a string', () => {
-    expect(resolveEvaluateeId('evaluatee', { evaluatee: 5 }, 'user-1')).toBeNull();
+    expect(resolveEvaluateeId(['evaluatee'], { evaluatee: 5 }, 'user-1')).toBeNull();
+  });
+
+  it('resolves to the first-answered candidate among several', () => {
+    expect(resolveEvaluateeId(['tester1', 'tester2', 'tester3'], { tester2: 'user-2' }, 'user-1')).toBe('user-2');
+  });
+
+  it('tries candidates in order, preferring the earliest answered one', () => {
+    expect(resolveEvaluateeId(['tester1', 'tester2'], { tester1: 'user-1a', tester2: 'user-2a' }, 'user-1')).toBe(
+      'user-1a',
+    );
+  });
+
+  it('returns null (not the submitter) when candidates are configured but none were answered', () => {
+    expect(resolveEvaluateeId(['tester1', 'tester2', 'tester3'], {}, 'user-1')).toBeNull();
   });
 });
 

@@ -93,7 +93,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [kpiId, setKpiId] = useState('');
   const [evaluationAreaId, setEvaluationAreaId] = useState('');
   const [scoreFieldKey, setScoreFieldKey] = useState('');
-  const [evaluateeFieldKey, setEvaluateeFieldKey] = useState('');
+  const [evaluateeFieldKeys, setEvaluateeFieldKeys] = useState<Set<string>>(new Set());
   const [reviewType, setReviewType] = useState<ReviewType>('peer');
   const [anonymous, setAnonymous] = useState(false);
   const [contextFieldKey, setContextFieldKey] = useState('');
@@ -105,7 +105,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [backfillingId, setBackfillingId] = useState<string | null>(null);
 
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkEvaluateeFieldKey, setBulkEvaluateeFieldKey] = useState('');
+  const [bulkEvaluateeFieldKeys, setBulkEvaluateeFieldKeys] = useState<Set<string>>(new Set());
   const [bulkReviewType, setBulkReviewType] = useState<ReviewType>('peer');
   const [bulkAnonymous, setBulkAnonymous] = useState(false);
   const [bulkContextFieldKey, setBulkContextFieldKey] = useState('');
@@ -158,6 +158,24 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
     return definition.fields.find((f) => f.key === key)?.label ?? key;
   }
 
+  function onToggleEvaluateeField(key: string) {
+    setEvaluateeFieldKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function onToggleBulkEvaluateeField(key: string) {
+    setBulkEvaluateeFieldKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   function areaName(id: string) {
     return allAreasIncludingInactive.find((a) => a.id === id)?.name ?? id;
   }
@@ -174,7 +192,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
           scoreFieldKey,
           reviewType,
           anonymous,
-          ...(evaluateeFieldKey ? { evaluateeFieldKey } : {}),
+          ...(evaluateeFieldKeys.size > 0 ? { evaluateeFieldKeys: [...evaluateeFieldKeys] } : {}),
           ...(contextFieldKey ? { contextFieldKey } : {}),
           ...(commentFieldKey ? { commentFieldKey } : {}),
         }),
@@ -182,7 +200,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
       setKpiId('');
       setEvaluationAreaId('');
       setScoreFieldKey('');
-      setEvaluateeFieldKey('');
+      setEvaluateeFieldKeys(new Set());
       setReviewType('peer');
       setAnonymous(false);
       setContextFieldKey('');
@@ -254,7 +272,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         body: JSON.stringify({
           reviewType: bulkReviewType,
           anonymous: bulkAnonymous,
-          ...(bulkEvaluateeFieldKey ? { evaluateeFieldKey: bulkEvaluateeFieldKey } : {}),
+          ...(bulkEvaluateeFieldKeys.size > 0 ? { evaluateeFieldKeys: [...bulkEvaluateeFieldKeys] } : {}),
           ...(bulkContextFieldKey ? { contextFieldKey: bulkContextFieldKey } : {}),
           ...(bulkCommentFieldKey ? { commentFieldKey: bulkCommentFieldKey } : {}),
           mappings: unmappedScoreFields
@@ -310,7 +328,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     <strong>{m.evaluationArea.name}</strong> ({m.evaluationArea.cadence}) —{' '}
                     {REVIEW_TYPE_LABEL[m.reviewType]}
                     {m.anonymous && ' · anonymous'} · evaluatee:{' '}
-                    {m.evaluateeFieldKey ? fieldLabel(m.evaluateeFieldKey) : 'self'}, score:{' '}
+                    {m.evaluateeFieldKeys.length > 0 ? m.evaluateeFieldKeys.map(fieldLabel).join(', ') : 'self'}, score:{' '}
                     {fieldLabel(m.scoreFieldKey)}{' '}
                     <Button
                       type="button"
@@ -391,19 +409,28 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                 ))}
               </SelectContent>
             </Select>
-            <Select value={evaluateeFieldKey || NONE} onValueChange={(v) => setEvaluateeFieldKey(v === NONE ? '' : v)}>
-              <SelectTrigger aria-label="who this is about">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>self-assessment (submitter scores themselves)</SelectItem>
+            <label>
+              who this is about — check every candidate field; whichever one is actually answered on a submission wins
+              (leave all unchecked for self-assessment)
+            </label>
+            {evaluateeFields.length === 0 ? (
+              <p className="muted">
+                no eligible field on this form — add a &quot;person&quot; field, or a &quot;select&quot; field with a
+                user-linked option, to enable peer/manager/360 scoring.
+              </p>
+            ) : (
+              <span className="check-group">
                 {evaluateeFields.map((f) => (
-                  <SelectItem key={f.key} value={f.key}>
-                    who this is about: {f.label}
-                  </SelectItem>
+                  <label key={f.key} className="check-item">
+                    <Checkbox
+                      checked={evaluateeFieldKeys.has(f.key)}
+                      onCheckedChange={() => onToggleEvaluateeField(f.key)}
+                    />{' '}
+                    {f.label}
+                  </label>
                 ))}
-              </SelectContent>
-            </Select>
+              </span>
+            )}
             <Select value={reviewType} onValueChange={(v) => setReviewType(v as ReviewType)}>
               <SelectTrigger aria-label="review type">
                 <SelectValue />
@@ -486,22 +513,25 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                         ))}
                       </SelectContent>
                     </Select>
-                    <Select
-                      value={bulkEvaluateeFieldKey || NONE}
-                      onValueChange={(v) => setBulkEvaluateeFieldKey(v === NONE ? '' : v)}
-                    >
-                      <SelectTrigger aria-label="who this batch is about">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NONE}>self-assessment (submitter scores themselves)</SelectItem>
+                    <label>
+                      who this batch is about — check every candidate field; whichever one is actually answered on a
+                      submission wins (leave all unchecked for self-assessment)
+                    </label>
+                    {evaluateeFields.length === 0 ? (
+                      <p className="muted">no eligible field on this form.</p>
+                    ) : (
+                      <span className="check-group">
                         {evaluateeFields.map((f) => (
-                          <SelectItem key={f.key} value={f.key}>
-                            who this is about: {f.label}
-                          </SelectItem>
+                          <label key={f.key} className="check-item">
+                            <Checkbox
+                              checked={bulkEvaluateeFieldKeys.has(f.key)}
+                              onCheckedChange={() => onToggleBulkEvaluateeField(f.key)}
+                            />{' '}
+                            {f.label}
+                          </label>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </span>
+                    )}
                     <label className="check-item">
                       <Checkbox
                         checked={bulkAnonymous}

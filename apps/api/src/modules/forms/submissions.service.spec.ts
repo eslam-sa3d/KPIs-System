@@ -417,7 +417,7 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
     id: 'mapping-1',
     formId: 'form-1',
     evaluationAreaId: 'area-1',
-    evaluateeFieldKey: 'evaluatee',
+    evaluateeFieldKeys: ['evaluatee'],
     scoreFieldKey: 'score',
     reviewType: 'peer',
     anonymous: false,
@@ -530,9 +530,9 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
     expect(call.create.context).toBe('Helper Person');
   });
 
-  it('self-assessment: scores the submitter themselves when the mapping has no evaluateeFieldKey', async () => {
+  it('self-assessment: scores the submitter themselves when the mapping has no evaluateeFieldKeys', async () => {
     const prisma = makePrismaStub();
-    prisma.formKpiMapping.findMany.mockResolvedValue([{ ...mapping, evaluateeFieldKey: null }]);
+    prisma.formKpiMapping.findMany.mockResolvedValue([{ ...mapping, evaluateeFieldKeys: [] }]);
     prisma.user.findUnique.mockResolvedValue({ id: 'evaluator-1', isActive: true });
     const forms = makeKpiFormsStub();
     forms.getLatestVersion.mockResolvedValue({

@@ -58,7 +58,7 @@ function mockOneMapping(prisma: ReturnType<typeof makePrismaStub>, overrides: Re
     id: 'mapping-1',
     formId: 'form-1',
     evaluationAreaId: 'area-1',
-    evaluateeFieldKey: null as string | null,
+    evaluateeFieldKeys: [] as string[],
     scoreFieldKey: 'score',
     reviewType: 'peer',
     anonymous: false,
@@ -636,7 +636,7 @@ describe('KpisService', () => {
 
       const submission = kpi!.evaluationAreas[0]!.recentSubmissions[0]!;
       expect(submission.display).toBe('4/5');
-      expect(submission.personName).toBe('Peer One'); // self-assessment: evaluateeFieldKey unset
+      expect(submission.personName).toBe('Peer One'); // self-assessment: evaluateeFieldKeys unset
     });
 
     it('carries a normalized latestValue blended from EvaluationAreaEntry, for the status-strip widget', async () => {
@@ -664,7 +664,7 @@ describe('KpisService', () => {
     it('withholds the evaluator on an anonymous mapping from a caller without kpis:manage', async () => {
       prisma.user.findUnique.mockResolvedValue({ departmentId: null, roles: [] });
       prisma.kpi.findMany.mockResolvedValue(kpiWithOneArea());
-      mockOneMapping(prisma, { anonymous: true, evaluateeFieldKey: 'evaluatee' });
+      mockOneMapping(prisma, { anonymous: true, evaluateeFieldKeys: ['evaluatee'] });
       prisma.formSubmission.findMany.mockResolvedValue([
         submissionFixture({ answers: { score: 4, evaluatee: 'user-2' } }),
       ]);
@@ -684,7 +684,7 @@ describe('KpisService', () => {
     it('reveals the evaluator on an anonymous mapping to a caller with kpis:manage', async () => {
       prisma.user.findUnique.mockResolvedValue({ departmentId: null, roles: [] });
       prisma.kpi.findMany.mockResolvedValue(kpiWithOneArea());
-      mockOneMapping(prisma, { anonymous: true, evaluateeFieldKey: 'evaluatee' });
+      mockOneMapping(prisma, { anonymous: true, evaluateeFieldKeys: ['evaluatee'] });
       prisma.formSubmission.findMany.mockResolvedValue([
         submissionFixture({ answers: { score: 4, evaluatee: 'user-2' } }),
       ]);
@@ -922,7 +922,7 @@ describe('KpisService', () => {
     it("returns the person's own scored submissions, most recent first, raw", async () => {
       prisma.user.findUnique.mockResolvedValue(person);
       prisma.kpi.findMany.mockResolvedValue([{ evaluationAreas: [{ id: 'area-1' }] }]);
-      mockOneMapping(prisma, { evaluateeFieldKey: 'evaluatee' });
+      mockOneMapping(prisma, { evaluateeFieldKeys: ['evaluatee'] });
       prisma.formSubmission.findMany.mockResolvedValue([
         submissionFixture({
           id: 'sub-old',
@@ -962,7 +962,7 @@ describe('KpisService', () => {
     it('withholds the evaluator on an anonymous mapping from a caller without kpis:manage', async () => {
       prisma.user.findUnique.mockResolvedValue(person);
       prisma.kpi.findMany.mockResolvedValue([{ evaluationAreas: [{ id: 'area-1' }] }]);
-      mockOneMapping(prisma, { anonymous: true, evaluateeFieldKey: 'evaluatee' });
+      mockOneMapping(prisma, { anonymous: true, evaluateeFieldKeys: ['evaluatee'] });
       prisma.formSubmission.findMany.mockResolvedValue([
         submissionFixture({ answers: { score: 4, evaluatee: 'user-2' } }),
       ]);
@@ -1131,7 +1131,7 @@ describe('KpisService', () => {
           kpiId: 'kpi-1',
           kpiName: 'QA Lead Evaluation',
           areaName: 'Leadership',
-          // self-assessment (evaluateeFieldKey unset): submitter scores themselves
+          // self-assessment (evaluateeFieldKeys unset): submitter scores themselves
           personName: 'Rater One',
           evaluatorName: 'Rater One',
           anonymous: false,

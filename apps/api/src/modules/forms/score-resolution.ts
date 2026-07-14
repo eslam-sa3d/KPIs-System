@@ -1,16 +1,24 @@
 import type { FormField, SubmissionAnswers } from '@pulse/contracts';
 
-/** No evaluateeFieldKey => self-assessment: the submitter is the evaluatee.
- *  Shared between the write path (SubmissionsService.applyOneMapping) and
- *  the dashboard's read path (KpisService) so the two can never resolve
- *  "who is this submission about" differently. */
+/** An empty evaluateeFieldKeys => self-assessment: the submitter is the
+ *  evaluatee. Otherwise each candidate is tried in order and the first one
+ *  with a string answer wins — candidates configured but none answered
+ *  resolves to null (NOT a fallback to self; that was the bug this
+ *  multi-candidate support replaces). Shared between the write path
+ *  (SubmissionsService.applyOneMapping) and the dashboard's read path
+ *  (KpisService) so the two can never resolve "who is this submission
+ *  about" differently. */
 export function resolveEvaluateeId(
-  evaluateeFieldKey: string | null,
+  evaluateeFieldKeys: string[],
   answers: SubmissionAnswers,
   enteredById: string,
 ): string | null {
-  const evaluateeId = evaluateeFieldKey ? answers[evaluateeFieldKey] : enteredById;
-  return typeof evaluateeId === 'string' ? evaluateeId : null;
+  if (evaluateeFieldKeys.length === 0) return enteredById;
+  for (const key of evaluateeFieldKeys) {
+    const value = answers[key];
+    if (typeof value === 'string' && value) return value;
+  }
+  return null;
 }
 
 export interface AnswerDescription {

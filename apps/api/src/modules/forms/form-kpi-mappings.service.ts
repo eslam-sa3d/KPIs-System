@@ -4,6 +4,7 @@ import {
   BulkCreateFormKpiMappingInput,
   BulkCreateFormKpiMappingResult,
   CreateFormKpiMappingInput,
+  FormDefinition,
   isEvaluateeField,
 } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
@@ -36,17 +37,7 @@ export class FormKpiMappingsService {
   async create(formId: string, input: CreateFormKpiMappingInput, actorId: string) {
     const { definition } = await this.forms.getLatestVersion((await this.requireForm(formId)).slug);
 
-    if (input.evaluateeFieldKey) {
-      const evaluateeField = definition.fields.find((f) => f.key === input.evaluateeFieldKey);
-      if (!evaluateeField || !isEvaluateeField(evaluateeField)) {
-        throw AppError.validation([
-          {
-            path: 'evaluateeFieldKey',
-            message: 'must reference a "person" field, or a "select" field with at least one user-linked option',
-          },
-        ]);
-      }
-    }
+    this.validateEvaluateeFieldKeys(definition, input.evaluateeFieldKeys);
     // Any answerable field can be linked — see normalizeScore in SubmissionsService for which
     // types (SCORE_FIELD_TYPES) actually produce a live score; the rest just never do, silently.
     const scoreField = definition.fields.find((f) => f.key === input.scoreFieldKey);
@@ -74,7 +65,7 @@ export class FormKpiMappingsService {
         formId,
         evaluationAreaId: input.evaluationAreaId,
         subCriteriaId: input.subCriteriaId,
-        evaluateeFieldKey: input.evaluateeFieldKey,
+        evaluateeFieldKeys: input.evaluateeFieldKeys ?? [],
         scoreFieldKey: input.scoreFieldKey,
         reviewType: input.reviewType,
         anonymous: input.anonymous,
@@ -103,6 +94,23 @@ export class FormKpiMappingsService {
       throw AppError.validation([
         { path: 'subCriteriaId', message: 'must reference a sub-criteria under the selected evaluation area' },
       ]);
+    }
+  }
+
+  /** Every candidate in evaluateeFieldKeys must independently be a valid
+   *  evaluatee field — a 'person' field, or a 'select' field with at least
+   *  one user-linked option (see isEvaluateeField). */
+  private validateEvaluateeFieldKeys(definition: FormDefinition, evaluateeFieldKeys: string[] | undefined) {
+    for (const key of evaluateeFieldKeys ?? []) {
+      const field = definition.fields.find((f) => f.key === key);
+      if (!field || !isEvaluateeField(field)) {
+        throw AppError.validation([
+          {
+            path: 'evaluateeFieldKeys',
+            message: `"${key}" must reference a "person" field, or a "select" field with at least one user-linked option`,
+          },
+        ]);
+      }
     }
   }
 
@@ -136,17 +144,7 @@ export class FormKpiMappingsService {
   async bulkCreate(formId: string, input: BulkCreateFormKpiMappingInput, actorId: string) {
     const { definition } = await this.forms.getLatestVersion((await this.requireForm(formId)).slug);
 
-    if (input.evaluateeFieldKey) {
-      const evaluateeField = definition.fields.find((f) => f.key === input.evaluateeFieldKey);
-      if (!evaluateeField || !isEvaluateeField(evaluateeField)) {
-        throw AppError.validation([
-          {
-            path: 'evaluateeFieldKey',
-            message: 'must reference a "person" field, or a "select" field with at least one user-linked option',
-          },
-        ]);
-      }
-    }
+    this.validateEvaluateeFieldKeys(definition, input.evaluateeFieldKeys);
     this.validateExtraFieldKeys(definition, input.contextFieldKey, input.commentFieldKey);
 
     // Raw Prisma rows (createdAt: Date) — serialized to the wire-format
@@ -201,7 +199,7 @@ export class FormKpiMappingsService {
         data: {
           formId,
           evaluationAreaId: row.evaluationAreaId,
-          evaluateeFieldKey: input.evaluateeFieldKey,
+          evaluateeFieldKeys: input.evaluateeFieldKeys ?? [],
           scoreFieldKey: row.scoreFieldKey,
           reviewType: input.reviewType,
           anonymous: input.anonymous,
@@ -219,7 +217,7 @@ export class FormKpiMappingsService {
           action: 'form_kpi_mapping.bulk_created',
           entity: 'FormKpiMapping',
           entityId: formId,
-          detail: { evaluateeFieldKey: input.evaluateeFieldKey, count: result.created.length },
+          detail: { evaluateeFieldKeys: input.evaluateeFieldKeys, count: result.created.length },
         },
       });
     }

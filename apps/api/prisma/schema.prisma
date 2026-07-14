@@ -329,41 +329,46 @@ model FormCollaborator {
 }
 
 /// Bridges Forms and KPIs: on every submission to `formId`, the answer at
-/// `evaluateeFieldKey` (a 'person' field — the evaluatee) and the answer at
-/// `scoreFieldKey` (a rating/nps/slider field, normalized to 0-5) are upserted
-/// as an EvaluationAreaEntry against `evaluationAreaId`. See SubmissionsService.
+/// one of `evaluateeFieldKeys` (each a 'person' field — the evaluatee) and
+/// the answer at `scoreFieldKey` (a rating/nps/slider field, normalized to
+/// 0-5) are upserted as an EvaluationAreaEntry against `evaluationAreaId`.
+/// See SubmissionsService.
 model FormKpiMapping {
-  id                String         @id @default(uuid())
-  formId            String
-  form              Form           @relation(fields: [formId], references: [id], onDelete: Cascade)
-  evaluationAreaId  String
-  evaluationArea    EvaluationArea @relation(fields: [evaluationAreaId], references: [id], onDelete: Cascade)
-  /// Which field names the evaluatee — null means self-assessment: the
-  /// submitter scores themselves (see SubmissionsService.applyOneMapping).
-  evaluateeFieldKey String?
-  scoreFieldKey     String
+  id                 String         @id @default(uuid())
+  formId             String
+  form               Form           @relation(fields: [formId], references: [id], onDelete: Cascade)
+  evaluationAreaId   String
+  evaluationArea     EvaluationArea @relation(fields: [evaluationAreaId], references: [id], onDelete: Cascade)
+  /// Candidate fields that could name the evaluatee, tried in order,
+  /// first-answered-wins — e.g. a form with several per-project "Tester"
+  /// fields where only one is filled in per submission. An empty array means
+  /// self-assessment: the submitter scores themselves. If candidates are
+  /// configured but none were answered, no evaluatee resolves (the score
+  /// does NOT fall back to self) — see SubmissionsService.applyOneMapping.
+  evaluateeFieldKeys String[]       @default([])
+  scoreFieldKey      String
   /// Who this mapping's scores come from, relative to the evaluatee —
   /// 'self' | 'peer' | 'manager' | '360'. Drives the dashboard's per-type
   /// breakdown and is copied onto every entry it produces.
-  reviewType        String         @default("peer")
+  reviewType         String         @default("peer")
   /// When true, the evaluator's identity is withheld from anyone without
   /// kpis:manage when reading entries this mapping produced — standard
   /// practice for honest peer/360 feedback.
-  anonymous         Boolean        @default(false)
+  anonymous          Boolean        @default(false)
   /// Optional extra form field (any type) whose answer is snapshotted onto
   /// each entry as free-text context, e.g. the evaluatee's level.
-  contextFieldKey   String?
+  contextFieldKey    String?
   /// Optional extra form field (normally long_text) snapshotted onto each
   /// entry as its qualitative comment.
-  commentFieldKey   String?
+  commentFieldKey    String?
   /// Purely descriptive tag — narrows which Sub-Criteria under the mapped
   /// Evaluation Area this question is meant for. Never read by scoring
   /// (SubmissionsService/score-resolution still resolve off evaluationAreaId
   /// alone); SetNull on delete so removing a Sub-Criteria just clears the
   /// tag instead of destroying the mapping.
-  subCriteriaId     String?
-  subCriteria       SubCriteria?   @relation(fields: [subCriteriaId], references: [id], onDelete: SetNull)
-  createdAt         DateTime       @default(now())
+  subCriteriaId      String?
+  subCriteria        SubCriteria?   @relation(fields: [subCriteriaId], references: [id], onDelete: SetNull)
+  createdAt          DateTime       @default(now())
 
   @@unique([formId, evaluationAreaId])
   @@index([evaluationAreaId])
