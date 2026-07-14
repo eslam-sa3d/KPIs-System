@@ -19,7 +19,6 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { downloadCsv } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 import { useResource } from '../../lib/use-resource';
 import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusBadgeStyle, statusOf } from '../../lib/kpi-status';
@@ -354,20 +353,6 @@ export default function DashboardPage() {
 
   function sortMembersBy(key: MemberSortKey) {
     setMemberSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
-  }
-
-  function onExportMembersCsv() {
-    const header = ['name', 'email', 'department', 'roles', 'status', 'latest', 'last_updated'];
-    const rows = memberTableData.map((m) => [
-      m.displayName,
-      m.email,
-      m.department ?? '',
-      m.roles.join('; '),
-      STATUS_LABEL[statusOf(m.score)],
-      m.latestSubmission?.display ?? '',
-      m.lastUpdated ?? '',
-    ]);
-    downloadCsv('team-members-export.csv', [header, ...rows]);
   }
 
   function sortBy(key: KpiSortKey) {
@@ -881,9 +866,6 @@ export default function DashboardPage() {
                     onChange={(e) => setMemberFilter(e.target.value)}
                     style={{ maxWidth: 320 }}
                   />
-                  <Button variant="outline" size="sm" onClick={onExportMembersCsv}>
-                    Export CSV
-                  </Button>
                 </div>
                 <Table>
                   <TableHeader>
