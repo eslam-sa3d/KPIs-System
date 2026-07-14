@@ -220,7 +220,11 @@ jobs:
   deploy:
     name: Deploy (Render)
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # DISABLED 2026-07-15 at user request — do not trigger Render deploys
+    # (directly or via GitHub Actions) until the user explicitly asks to
+    # re-enable this job. Restore the condition below to turn it back on:
+    #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: false
     needs: [quality, unit, integration, e2e, security]
     steps:
       - name: Trigger Render deploys

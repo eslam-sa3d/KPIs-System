@@ -1,5 +1,9 @@
 name: Deploy to GitHub Pages
 
+# DISABLED 2026-07-15 at user request via `gh workflow disable` (repo Actions
+# settings) — GitHub Pages itself is also meant to be taken down. Re-enable
+# with `gh workflow enable "Deploy to GitHub Pages"` when the user asks.
+#
 # Gated on the CI/CD workflow's own success (which includes the Dependency
 # Audit job) rather than triggering on every push directly — a red CI run on
 # main no longer publishes a deploy. workflow_dispatch remains for a manual
