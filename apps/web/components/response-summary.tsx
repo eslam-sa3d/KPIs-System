@@ -31,10 +31,14 @@ function barColor(share: number): string {
 
 function BarBreakdown({
   counts,
+  optionLabels,
   total,
   onSegmentClick,
 }: {
   counts: Record<string, number>;
+  /** raw value -> display label — see PieBreakdown's own doc for why
+   *  onSegmentClick still receives the raw value, not the resolved label. */
+  optionLabels?: Record<string, string>;
   total: number;
   /** clicking a bar filters the submissions tab to that exact answer */
   onSegmentClick?: (value: string) => void;
@@ -43,14 +47,15 @@ function BarBreakdown({
   const max = Math.max(1, ...entries.map(([, n]) => n));
   return (
     <div className="summary-bars">
-      {entries.map(([label, count]) => {
+      {entries.map(([value, count]) => {
+        const label = optionLabels?.[value] ?? value;
         const Row = onSegmentClick ? 'button' : 'div';
         return (
           <Row
-            key={label}
+            key={value}
             type={onSegmentClick ? 'button' : undefined}
             className={`summary-bar-row${onSegmentClick ? ' summary-bar-row-clickable' : ''}`}
-            onClick={onSegmentClick ? () => onSegmentClick(label) : undefined}
+            onClick={onSegmentClick ? () => onSegmentClick(value) : undefined}
           >
             <span className="summary-bar-label">{label}</span>
             <div className="summary-bar-track">
@@ -127,6 +132,7 @@ export function ResponseSummary({
                 return (
                   <Breakdown
                     counts={field.counts}
+                    optionLabels={field.optionLabels}
                     total={field.answered}
                     // "other:" answers collapse to a single "other" bucket server-side and
                     // can't be exact-matched back to their free-text value — skip those
@@ -165,7 +171,7 @@ export function ResponseSummary({
                 <TableBody>
                   {Object.entries(field.matrix).map(([statement, dist]) => (
                     <TableRow key={statement}>
-                      <TableCell>{statement}</TableCell>
+                      <TableCell>{field.optionLabels?.[statement] ?? statement}</TableCell>
                       {field.scale!.map((_, idx) => (
                         <TableCell key={idx}>{dist[String(idx)] ?? 0}</TableCell>
                       ))}
@@ -187,14 +193,14 @@ export function ResponseSummary({
                       <TableRow>
                         <TableHead />
                         {columns.map((c) => (
-                          <TableHead key={c}>{c}</TableHead>
+                          <TableHead key={c}>{field.optionLabels?.[c] ?? c}</TableHead>
                         ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {Object.entries(field.matrix).map(([row, dist]) => (
                         <TableRow key={row}>
-                          <TableCell>{row}</TableCell>
+                          <TableCell>{field.optionLabels?.[row] ?? row}</TableCell>
                           {columns.map((c) => (
                             <TableCell key={c}>{dist[c] ?? 0}</TableCell>
                           ))}
@@ -211,7 +217,7 @@ export function ResponseSummary({
                   .sort((a, b) => a[1] - b[1])
                   .map(([value, avg]) => (
                     <li key={value}>
-                      {value} <span className="muted">avg. rank {avg.toFixed(1)}</span>
+                      {field.optionLabels?.[value] ?? value} <span className="muted">avg. rank {avg.toFixed(1)}</span>
                     </li>
                   ))}
               </ol>

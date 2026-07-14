@@ -20,7 +20,7 @@ import { PrismaService } from '../../infra/prisma.service';
 import { compileAnswerValidator } from './answer-validator';
 import { FormsService } from './forms.service';
 import { QuizScore, scoreSubmission } from './quiz-scoring';
-import { answerToText, resolveEvaluateeId } from './score-resolution';
+import { answerToText, describeAnswer, resolveEvaluateeId } from './score-resolution';
 import { TurnstileService } from './turnstile.service';
 
 /**
@@ -307,12 +307,17 @@ export class SubmissionsService {
 
     const scoreField = fieldsByKey.get(mapping.scoreFieldKey);
     if (!scoreField) return false;
-    // Only fetched when actually needed — every other score field type
-    // normalizes from the field definition alone, no DB round-trip required.
+    const contextField = mapping.contextFieldKey ? fieldsByKey.get(mapping.contextFieldKey) : undefined;
+    const commentField = mapping.commentFieldKey ? fieldsByKey.get(mapping.commentFieldKey) : undefined;
+    // Only fetched when actually needed — a context/comment field can be ANY
+    // field type (see form-kpi-mappings-panel.tsx), not just the score field.
     const performanceLevels =
-      scoreField.type === 'performance_level'
+      scoreField.type === 'performance_level' ||
+      contextField?.type === 'performance_level' ||
+      commentField?.type === 'performance_level'
         ? (await this.prisma.performanceLevel.findMany()).map((l) => ({
             id: l.id,
+            label: l.label,
             minScore: Number(l.minScore),
             maxScore: Number(l.maxScore),
           }))
@@ -323,9 +328,29 @@ export class SubmissionsService {
     const evaluatee = await this.prisma.user.findUnique({ where: { id: evaluateeId } });
     if (!evaluatee || !evaluatee.isActive) return false;
 
+    // A context/comment field can be a 'person' field too — resolve only the
+    // (at most two) ids actually referenced rather than a broad lookup.
+    const personIds = [
+      contextField?.type === 'person' ? answers[mapping.contextFieldKey!] : undefined,
+      commentField?.type === 'person' ? answers[mapping.commentFieldKey!] : undefined,
+    ].filter((v): v is string => typeof v === 'string');
+    const personNames = personIds.length
+      ? new Map(
+          (await this.prisma.user.findMany({ where: { id: { in: personIds } }, select: { id: true, displayName: true } })).map(
+            (u) => [u.id, u.displayName],
+          ),
+        )
+      : undefined;
+
     const { periodStart, periodEnd } = computePeriod(mapping.evaluationArea.cadence, at);
-    const context = mapping.contextFieldKey ? answerToText(answers[mapping.contextFieldKey]) : null;
-    const comment = mapping.commentFieldKey ? answerToText(answers[mapping.commentFieldKey]) : null;
+    const resolveContextText = (key: string | null, field: FormField | undefined) => {
+      if (!key) return null;
+      const raw = answers[key] ?? null;
+      const described = field && describeAnswer(field, raw, { performanceLevels, personNames });
+      return described?.display ?? answerToText(raw);
+    };
+    const context = resolveContextText(mapping.contextFieldKey, contextField);
+    const comment = resolveContextText(mapping.commentFieldKey, commentField);
 
     // personId is part of the upsert's own unique key below, so if this same
     // submission previously resolved to a DIFFERENT evaluatee (a mapping that
@@ -569,7 +594,7 @@ export class SubmissionsService {
           .map((s) => (s.answers as SubmissionAnswers)[field.key])
           .filter((v) => v !== undefined && v !== null && v !== '');
         const answered = values.length;
-        const base = { key: field.key, label: field.label, type: field.type, answered };
+        const base = { key: field.key, label: field.label, type: field.type, answered, optionLabels: optionLabelsFor(field) };
 
         switch (field.type) {
           case 'select': {
@@ -964,4 +989,27 @@ function escapeCsv(cell: string): string {
  *  compare equal, and this is only ever used for exact-match lookups, never displayed. */
 function normalizeLabel(label: string): string {
   return label.toLowerCase().replace(/\s+/g, '');
+}
+
+/** value -> label for every field type whose summary() case above keys its
+ *  counts/matrix/averagePosition by a raw stored value — a select option
+ *  built via the form builder's "link to a user" picker stores that user's
+ *  id AS the value (see apps/web's field-transforms.ts), so this is what
+ *  lets FormFieldSummary.optionLabels resolve it back to a name. Returns
+ *  undefined for field types with nothing to resolve. */
+function optionLabelsFor(field: FormField): Record<string, string> | undefined {
+  switch (field.type) {
+    case 'select':
+    case 'multi_select':
+    case 'ranking':
+      return Object.fromEntries(field.options.map((o) => [o.value, o.label]));
+    case 'likert':
+      return Object.fromEntries(field.statements.map((s) => [s.value, s.label]));
+    case 'grid':
+      return Object.fromEntries([...field.rows, ...field.columns].map((o) => [o.value, o.label]));
+    case 'hot_spot':
+      return Object.fromEntries(field.regions.map((r) => [r.value, r.label]));
+    default:
+      return undefined;
+  }
 }

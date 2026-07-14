@@ -18,6 +18,14 @@ export interface AnswerDescription {
   display: string;
 }
 
+export interface DescribeAnswerContext {
+  performanceLevels?: Array<{ id: string; label: string }>;
+  /** userId -> displayName, for resolving a 'person' field's answer (that
+   *  User's id) back to a name. Missing entries fall back to '(deleted
+   *  user)', same as summary()'s own person resolution. */
+  personNames?: Map<string, string>;
+}
+
 /** Renders any answer shape (string, number, boolean, array, or a likert
  *  index map) as display text for a mapping's context/comment snapshot —
  *  these fields are read verbatim, not type-checked against a field type,
@@ -45,8 +53,9 @@ export function answerToText(raw: unknown): string | null {
 export function describeAnswer(
   field: FormField,
   raw: SubmissionAnswers[string],
-  performanceLevels?: Array<{ id: string; label: string }>,
+  ctx: DescribeAnswerContext = {},
 ): AnswerDescription | null {
+  const { performanceLevels, personNames } = ctx;
   switch (field.type) {
     case 'rating':
       if (typeof raw !== 'number') return null;
@@ -95,6 +104,17 @@ export function describeAnswer(
       if (typeof raw !== 'string' || !performanceLevels) return null;
       const level = performanceLevels.find((l) => l.id === raw);
       return level ? { raw, display: level.label } : null;
+    }
+    case 'ranking': {
+      if (!Array.isArray(raw)) return null;
+      const labels = raw
+        .map((v) => (typeof v === 'string' ? field.options.find((o) => o.value === v)?.label : undefined))
+        .filter((l): l is string => Boolean(l));
+      return labels.length > 0 ? { raw, display: labels.join(', ') } : null;
+    }
+    case 'person': {
+      if (typeof raw !== 'string' || !personNames) return null;
+      return { raw, display: personNames.get(raw) ?? '(deleted user)' };
     }
     default:
       return null;

@@ -139,6 +139,16 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
     [kpis],
   );
 
+  // Unfiltered (unlike allAreas above, deliberately active-only for mapping
+  // suggestions) — areaName() needs every area, including deactivated ones,
+  // since a bulk-mapping "skipped" result can reference an area that's since
+  // been deactivated, and falling back to its raw id there is exactly the
+  // "shows a UUID instead of a label" bug this is fixing.
+  const allAreasIncludingInactive = useMemo(
+    () => (kpis ?? []).flatMap((k) => k.evaluationAreas.map((a) => ({ ...a, kpiName: k.name }))),
+    [kpis],
+  );
+
   const unmappedScoreFields = useMemo(
     () => scoreFields.filter((f) => !mappings?.some((m) => m.scoreFieldKey === f.key)),
     [scoreFields, mappings],
@@ -149,7 +159,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   }
 
   function areaName(id: string) {
-    return allAreas.find((a) => a.id === id)?.name ?? id;
+    return allAreasIncludingInactive.find((a) => a.id === id)?.name ?? id;
   }
 
   async function onCreate() {

@@ -59,6 +59,15 @@ export interface FormFieldSummary {
   averagePosition?: Record<string, number>;
   /** free-text types: a handful of recent answers, most recent first */
   samples?: string[];
+  /** raw value → display label, for every value key appearing in `counts`/
+   *  `matrix`/`averagePosition` above (select/multi_select/likert/ranking/
+   *  grid/hot_spot only). A select option built from the form builder's
+   *  "link to a user" picker stores that user's id as its value — this is
+   *  what lets the UI show the person's name instead. Consumers must look up
+   *  through this map for DISPLAY only; the raw value keys themselves are
+   *  still what drives click-to-filter (see ResponseSummary's onSegmentClick),
+   *  since that has to exact-match the stored answer, not its label. */
+  optionLabels?: Record<string, string>;
 }
 
 /** Present only for quiz-mode forms with at least one gradable response. */

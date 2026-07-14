@@ -83,9 +83,27 @@ function FormView() {
 
   useEffect(() => {
     if (!detail) return;
-    void api<Array<{ id: string; displayName: string }>>('/v1/users?pageSize=200').then((users) => {
-      setPersonNames(Object.fromEntries(users.map((u) => [u.id, u.displayName])));
-    });
+    let cancelled = false;
+    async function loadAllPersonNames() {
+      // The backend clamps pageSize at 100 (packages/contracts/src/envelope.ts)
+      // regardless of what's asked for, so a single request silently misses
+      // users past the first page in any org over 100 people — loop instead.
+      const names: Record<string, string> = {};
+      let page = 1;
+      for (;;) {
+        const { data: users, pagination } = await apiPaged<Array<{ id: string; displayName: string }>>(
+          `/v1/users?page=${page}&pageSize=100`,
+        );
+        for (const u of users) names[u.id] = u.displayName;
+        if (!pagination || page >= pagination.totalPages) break;
+        page += 1;
+      }
+      if (!cancelled) setPersonNames(names);
+    }
+    void loadAllPersonNames();
+    return () => {
+      cancelled = true;
+    };
   }, [detail]);
 
   const loadSubmissions = useCallback(() => {

@@ -497,6 +497,41 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
     expect(call.create.comment).toBe('digital-channels');
   });
 
+  it("resolves a 'person'-typed context field to a display name instead of the raw user id", async () => {
+    const prisma = makePrismaStub();
+    const helperId = '22222222-2222-4222-8222-222222222222';
+    prisma.formKpiMapping.findMany.mockResolvedValue([{ ...mapping, contextFieldKey: 'helper' }]);
+    prisma.user.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', isActive: true });
+    prisma.user.findMany.mockResolvedValue([{ id: helperId, displayName: 'Helper Person' }]);
+    const forms = makeKpiFormsStub();
+    forms.getLatestVersion.mockResolvedValue({
+      form: activeForm,
+      version: { id: 'version-1' },
+      definition: formDefinitionSchema.parse({
+        title: 'peer review',
+        fields: [
+          { key: 'evaluatee', label: 'Who are you reviewing?', type: 'person', required: true },
+          { key: 'score', label: 'Rating', type: 'rating', scale: 5, required: true },
+          { key: 'helper', label: 'Who else helped?', type: 'person', required: false },
+        ],
+      }),
+      settings: formSettingsSchema.parse({}),
+    });
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+
+    await service.submit(
+      'demo',
+      { evaluatee: '11111111-1111-4111-8111-111111111111', score: 4, helper: helperId },
+      'evaluator-1',
+    );
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: [helperId] } } }),
+    );
+    const call = prisma.evaluationAreaEntry.upsert.mock.calls[0]![0];
+    expect(call.create.context).toBe('Helper Person');
+  });
+
   it('self-assessment: scores the submitter themselves when the mapping has no evaluateeFieldKey', async () => {
     const prisma = makePrismaStub();
     prisma.formKpiMapping.findMany.mockResolvedValue([{ ...mapping, evaluateeFieldKey: null }]);
@@ -909,6 +944,8 @@ describe('SubmissionsService.summary', () => {
     // a: positions [1,2,1] avg 1.33; b: positions [2,1,2] avg 1.67
     expect(prio.averagePosition!.a).toBeCloseTo(4 / 3, 5);
     expect(prio.averagePosition!.b).toBeCloseTo(5 / 3, 5);
+    expect(prio.optionLabels).toEqual({ a: 'A', b: 'B' });
+    expect(mood.optionLabels).toEqual({ tools: 'Tools' });
   });
 
   it('drops routine context fields (evaluation type, period, respondent role) from the summary', async () => {
@@ -1049,6 +1086,47 @@ describe('SubmissionsService.summary', () => {
 
     const field = summary.fields.find((f) => f.key === 'ref_code')!;
     expect(field.samples).toEqual([uuid]);
+  });
+
+  it("keys a select field's counts by the raw option value but exposes optionLabels for display — including a 'link to a user' option whose value IS that user's id", async () => {
+    const prisma = makePrismaStub();
+    const userId = 'aba51f55-559d-4372-87a3-dcafe0b302eb';
+    const definition = formDefinitionSchema.parse({
+      title: 'user picker select',
+      fields: [
+        {
+          key: 'owner',
+          label: 'Owner',
+          type: 'select',
+          options: [
+            { value: userId, label: 'Sam Reyes' },
+            { value: 'other-team', label: 'Other Team' },
+          ],
+        },
+      ],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v1' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    prisma.formSubmission.findMany.mockResolvedValue([
+      { answers: { owner: userId }, createdAt: new Date() },
+      { answers: { owner: userId }, createdAt: new Date() },
+      { answers: { owner: 'other-team' }, createdAt: new Date() },
+    ]);
+
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+    const summary = await service.summary('user-picker-select');
+
+    const owner = summary.fields.find((f) => f.key === 'owner')!;
+    // counts stays keyed by the raw value — response-summary.tsx's click-to-filter
+    // exact-matches this against the stored answer, so it must not become the label.
+    expect(owner.counts).toEqual({ [userId]: 2, 'other-team': 1 });
+    expect(owner.optionLabels).toEqual({ [userId]: 'Sam Reyes', 'other-team': 'Other Team' });
   });
 });
 

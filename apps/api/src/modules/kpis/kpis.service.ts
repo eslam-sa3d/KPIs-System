@@ -321,11 +321,15 @@ export class KpisService {
     }
 
     // performance_level answers resolve against the live PerformanceLevel
-    // table — only fetched when at least one mapping's score field actually
-    // needs it, same lazy-fetch rule as SubmissionsService.applyOneMapping.
+    // table — only fetched when at least one mapping's score field, context
+    // field, or comment field actually needs it (a context/comment field can
+    // be ANY field type — see form-kpi-mappings-panel.tsx), same lazy-fetch
+    // rule as SubmissionsService.applyOneMapping.
     const needsPerformanceLevels = activeMappings.some((m) => {
-      const field = definitionByFormId.get(m.formId)?.fields.find((f) => f.key === m.scoreFieldKey);
-      return field?.type === 'performance_level';
+      const fields = definitionByFormId.get(m.formId)?.fields;
+      return [m.scoreFieldKey, m.contextFieldKey, m.commentFieldKey].some(
+        (key) => key && fields?.find((f) => f.key === key)?.type === 'performance_level',
+      );
     });
     const performanceLevels = needsPerformanceLevels
       ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
@@ -348,7 +352,7 @@ export class KpisService {
         if (evaluateeId === null) continue;
         const rawScore = answers[mapping.scoreFieldKey];
         if (rawScore === undefined || rawScore === null) continue;
-        const described = describeAnswer(scoreField, rawScore, performanceLevels);
+        const described = describeAnswer(scoreField, rawScore, { performanceLevels });
         if (described === null) continue;
         candidates.push({ mapping, submission, evaluateeId, described });
       }
@@ -359,12 +363,22 @@ export class KpisService {
     for (const c of candidates) {
       userIds.add(c.evaluateeId);
       userIds.add(c.submission.submittedById!);
+      // a context/comment field can be a 'person' field too — collect its
+      // answer so the resolution below isn't a raw user id.
+      const fields = definitionByFormId.get(c.mapping.formId)?.fields;
+      const answers = c.submission.answers as SubmissionAnswers;
+      for (const key of [c.mapping.contextFieldKey, c.mapping.commentFieldKey]) {
+        if (!key) continue;
+        const v = answers[key];
+        if (fields?.find((f) => f.key === key)?.type === 'person' && typeof v === 'string') userIds.add(v);
+      }
     }
     const users = await this.prisma.user.findMany({
       where: { id: { in: [...userIds] } },
       select: { id: true, displayName: true, isActive: true, isKpiApplicable: true },
     });
     const userById = new Map(users.map((u) => [u.id, u]));
+    const personNames = new Map(users.map((u) => [u.id, u.displayName]));
 
     const results: ScoredSubmission[] = [];
     for (const c of candidates) {
@@ -373,6 +387,14 @@ export class KpisService {
       const evaluatorId = c.submission.submittedById!;
       const evaluator = userById.get(evaluatorId);
       const answers = c.submission.answers as SubmissionAnswers;
+      const fields = definitionByFormId.get(c.mapping.formId)?.fields;
+      const resolveContextText = (key: string | null) => {
+        if (!key) return null;
+        const field = fields?.find((f) => f.key === key);
+        const raw = answers[key] ?? null;
+        const described = field && describeAnswer(field, raw, { performanceLevels, personNames });
+        return described?.display ?? answerToText(raw);
+      };
       results.push({
         mappingId: c.mapping.id,
         evaluationAreaId: c.mapping.evaluationAreaId,
@@ -387,8 +409,8 @@ export class KpisService {
         reviewType: c.mapping.reviewType,
         raw: c.described.raw,
         display: c.described.display,
-        context: c.mapping.contextFieldKey ? answerToText(answers[c.mapping.contextFieldKey]) : null,
-        comment: c.mapping.commentFieldKey ? answerToText(answers[c.mapping.commentFieldKey]) : null,
+        context: resolveContextText(c.mapping.contextFieldKey),
+        comment: resolveContextText(c.mapping.commentFieldKey),
         submittedAt: c.submission.createdAt,
         submissionId: c.submission.id,
       });

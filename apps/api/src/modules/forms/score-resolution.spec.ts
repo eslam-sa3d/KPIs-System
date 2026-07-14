@@ -165,7 +165,9 @@ describe('describeAnswer', () => {
 
   it("performance_level: shows the resolved level's own label", () => {
     const level: FormField = { key: 'q', label: 'Level', type: 'performance_level', required: true };
-    expect(describeAnswer(level, 'level-1', [{ id: 'level-1', label: 'Exceeds Expectations' }])).toEqual({
+    expect(
+      describeAnswer(level, 'level-1', { performanceLevels: [{ id: 'level-1', label: 'Exceeds Expectations' }] }),
+    ).toEqual({
       raw: 'level-1',
       display: 'Exceeds Expectations',
     });
@@ -174,6 +176,54 @@ describe('describeAnswer', () => {
   it('performance_level: returns null without a performanceLevels lookup', () => {
     const level: FormField = { key: 'q', label: 'Level', type: 'performance_level', required: true };
     expect(describeAnswer(level, 'level-1')).toBeNull();
+  });
+
+  it('ranking: joins matched option labels in submitted order', () => {
+    const ranking: FormField = {
+      key: 'q',
+      label: 'Rank these',
+      type: 'ranking',
+      required: true,
+      options: [
+        { value: 'a', label: 'Alpha' },
+        { value: 'b', label: 'Beta' },
+      ],
+      shuffleOptions: false,
+    };
+    expect(describeAnswer(ranking, ['b', 'a'])).toEqual({ raw: ['b', 'a'], display: 'Beta, Alpha' });
+  });
+
+  it('ranking: returns null when nothing matches a real option', () => {
+    const ranking: FormField = {
+      key: 'q',
+      label: 'Rank these',
+      type: 'ranking',
+      required: true,
+      options: [{ value: 'a', label: 'Alpha' }],
+      shuffleOptions: false,
+    };
+    expect(describeAnswer(ranking, ['ghost'])).toBeNull();
+  });
+
+  it("person: shows the resolved user's display name", () => {
+    const person: FormField = { key: 'q', label: 'Who helped?', type: 'person', required: true };
+    expect(describeAnswer(person, 'user-1', { personNames: new Map([['user-1', 'Jane Doe']]) })).toEqual({
+      raw: 'user-1',
+      display: 'Jane Doe',
+    });
+  });
+
+  it('person: falls back to "(deleted user)" for an id missing from the lookup', () => {
+    const person: FormField = { key: 'q', label: 'Who helped?', type: 'person', required: true };
+    expect(describeAnswer(person, 'user-ghost', { personNames: new Map() })).toEqual({
+      raw: 'user-ghost',
+      display: '(deleted user)',
+    });
+  });
+
+  it('person: returns null without a personNames lookup', () => {
+    const person: FormField = { key: 'q', label: 'Who helped?', type: 'person', required: true };
+    expect(describeAnswer(person, 'user-1')).toBeNull();
   });
 
   it('returns null for a field type with no numeric/display interpretation', () => {

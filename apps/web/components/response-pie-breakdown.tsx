@@ -12,16 +12,21 @@ import { chartSeries, palette } from '@pulse/theme';
  *  bundle (next/dynamic only supports a default export, hence that here). */
 export default function PieBreakdown({
   counts,
+  optionLabels,
   total,
   onSegmentClick,
 }: {
   counts: Record<string, number>;
+  /** raw value -> display label (e.g. a "link to a user" option's stored
+   *  value is that user's id) — display only, onSegmentClick still gets the
+   *  raw value so click-to-filter keeps exact-matching the stored answer. */
+  optionLabels?: Record<string, string>;
   total: number;
   onSegmentClick?: (value: string) => void;
 }) {
   const data = Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
-    .map(([label, count]) => ({ label, count }));
+    .map(([value, count]) => ({ value, label: optionLabels?.[value] ?? value, count }));
 
   return (
     <div className="summary-pie">
@@ -30,7 +35,7 @@ export default function PieBreakdown({
           <PieChart>
             <Pie data={data} dataKey="count" nameKey="label" outerRadius={80}>
               {data.map((entry, i) => (
-                <Cell key={entry.label} fill={chartSeries[i % chartSeries.length]} />
+                <Cell key={entry.value} fill={chartSeries[i % chartSeries.length]} />
               ))}
             </Pie>
             <RechartsTooltip
@@ -48,13 +53,13 @@ export default function PieBreakdown({
         </ResponsiveContainer>
       </div>
       <ul className="summary-pie-legend">
-        {data.map(({ label, count }, i) => (
-          <li key={label} className="summary-pie-legend-row">
+        {data.map(({ value, label, count }, i) => (
+          <li key={value} className="summary-pie-legend-row">
             {onSegmentClick ? (
               <button
                 type="button"
                 className="summary-pie-legend-row-inner summary-bar-row-clickable"
-                onClick={() => onSegmentClick(label)}
+                onClick={() => onSegmentClick(value)}
               >
                 <span className="summary-pie-swatch" style={{ background: chartSeries[i % chartSeries.length] }} />
                 <span className="summary-bar-label">{label}</span>
