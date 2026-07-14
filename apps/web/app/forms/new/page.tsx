@@ -30,6 +30,7 @@ import { END_OF_FORM, SCORE_FIELD_TYPES, type FormDefinition } from '@pulse/cont
 import { PortalShell, can } from '../../../components/portal-shell';
 import { KpiLinkCombobox } from '../../../components/kpi-link-combobox';
 import { UserPickerCombobox } from '../../../components/user-picker-combobox';
+import { SubCriteriaPickerCombobox } from '../../../components/sub-criteria-picker-combobox';
 import { LoadingState } from '../../../components/loading-state';
 import { api, assetUrl, uploadAsset } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
@@ -872,6 +873,10 @@ function NewFormPage() {
                                     value={field.label}
                                     onChange={(e) => updateField(index, { label: e.target.value })}
                                     placeholder="untitled question"
+                                  />
+                                  <SubCriteriaPickerCombobox
+                                    kpis={kpis}
+                                    onSelect={(subCriteria) => updateField(index, { label: subCriteria.name })}
                                   />
                                 </div>
                                 <div className="field-type-group">
