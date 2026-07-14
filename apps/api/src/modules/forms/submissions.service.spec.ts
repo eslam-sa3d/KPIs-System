@@ -1126,6 +1126,32 @@ describe('SubmissionsService.summary', () => {
     expect(owner.counts).toEqual({ [userId]: 2, 'other-team': 1 });
     expect(owner.optionLabels).toEqual({ [userId]: 'Sam Reyes', 'other-team': 'Other Team' });
   });
+
+  it("keys a performance_level field's counts by the raw level id and exposes optionLabels resolving it to that level's own label", async () => {
+    const prisma = makePrismaStub();
+    const levelId = 'aba51f55-559d-4372-87a3-dcafe0b302eb';
+    const definition = formDefinitionSchema.parse({
+      title: 'qc eval',
+      fields: [{ key: 'level', label: 'Levels', type: 'performance_level' }],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v1' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    prisma.performanceLevel.findMany.mockResolvedValue([{ id: levelId, label: 'Associate Expert (Project Lead)' }]);
+    prisma.formSubmission.findMany.mockResolvedValue([{ answers: { level: levelId }, createdAt: new Date() }]);
+
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+    const summary = await service.summary('qc-eval');
+
+    const level = summary.fields.find((f) => f.key === 'level')!;
+    expect(level.counts).toEqual({ [levelId]: 1 });
+    expect(level.optionLabels).toEqual({ [levelId]: 'Associate Expert (Project Lead)' });
+  });
 });
 
 describe('SubmissionsService.exportCsv', () => {

@@ -589,6 +589,14 @@ export class SubmissionsService {
         )
       : new Map<string, string>();
 
+    // performance_level answers store a PerformanceLevel id — fetched lazily,
+    // same rule as normalizeScore/describeAnswer, only when this form
+    // actually has one of these fields.
+    const needsPerformanceLevels = definition.fields.some((f) => f.type === 'performance_level');
+    const performanceLevels = needsPerformanceLevels
+      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
+      : [];
+
     const fields: FormFieldSummary[] = definition.fields
       .filter((field) => field.type !== 'section_header') // display-only, never has an answer
       .filter((field) => !SubmissionsService.SUMMARY_EXCLUDED_LABELS.has(normalizeLabel(field.label)))
@@ -602,7 +610,7 @@ export class SubmissionsService {
           label: field.label,
           type: field.type,
           answered,
-          optionLabels: optionLabelsFor(field),
+          optionLabels: optionLabelsFor(field, performanceLevels),
         };
 
         switch (field.type) {
@@ -699,6 +707,13 @@ export class SubmissionsService {
           case 'person': {
             const names = (values as string[]).map((id) => personNames.get(id) ?? '(deleted user)');
             return { ...base, samples: names.slice(-5).reverse() };
+          }
+          case 'performance_level': {
+            // same counts-by-raw-value shape as 'select' — optionLabels (built
+            // with performanceLevels above) resolves each id to its label.
+            const counts: Record<string, number> = {};
+            for (const v of values as string[]) counts[v] = (counts[v] ?? 0) + 1;
+            return { ...base, counts };
           }
           default: {
             // A UUID-shaped answer in a non-'person' field is still, in practice, someone's
@@ -1005,8 +1020,14 @@ function normalizeLabel(label: string): string {
  *  built via the form builder's "link to a user" picker stores that user's
  *  id AS the value (see apps/web's field-transforms.ts), so this is what
  *  lets FormFieldSummary.optionLabels resolve it back to a name. Returns
- *  undefined for field types with nothing to resolve. */
-function optionLabelsFor(field: FormField): Record<string, string> | undefined {
+ *  undefined for field types with nothing to resolve. `performanceLevels` is
+ *  only consulted for a 'performance_level' field — its options live in the
+ *  global PerformanceLevel table, not the field definition itself, unlike
+ *  every other case here. */
+function optionLabelsFor(
+  field: FormField,
+  performanceLevels: Array<{ id: string; label: string }>,
+): Record<string, string> | undefined {
   switch (field.type) {
     case 'select':
     case 'multi_select':
@@ -1018,6 +1039,8 @@ function optionLabelsFor(field: FormField): Record<string, string> | undefined {
       return Object.fromEntries([...field.rows, ...field.columns].map((o) => [o.value, o.label]));
     case 'hot_spot':
       return Object.fromEntries(field.regions.map((r) => [r.value, r.label]));
+    case 'performance_level':
+      return Object.fromEntries(performanceLevels.map((l) => [l.id, l.label]));
     default:
       return undefined;
   }
