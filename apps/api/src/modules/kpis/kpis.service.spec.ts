@@ -1135,6 +1135,7 @@ describe('KpisService', () => {
           personName: 'Rater One',
           evaluatorName: 'Rater One',
           anonymous: false,
+          display: '4/5',
           context: 'Senior',
           comment: 'Great communication this quarter.',
           createdAt: '2026-03-01T09:00:00.000Z',
