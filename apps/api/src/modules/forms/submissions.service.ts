@@ -336,9 +336,12 @@ export class SubmissionsService {
     ].filter((v): v is string => typeof v === 'string');
     const personNames = personIds.length
       ? new Map(
-          (await this.prisma.user.findMany({ where: { id: { in: personIds } }, select: { id: true, displayName: true } })).map(
-            (u) => [u.id, u.displayName],
-          ),
+          (
+            await this.prisma.user.findMany({
+              where: { id: { in: personIds } },
+              select: { id: true, displayName: true },
+            })
+          ).map((u) => [u.id, u.displayName]),
         )
       : undefined;
 
@@ -594,7 +597,13 @@ export class SubmissionsService {
           .map((s) => (s.answers as SubmissionAnswers)[field.key])
           .filter((v) => v !== undefined && v !== null && v !== '');
         const answered = values.length;
-        const base = { key: field.key, label: field.label, type: field.type, answered, optionLabels: optionLabelsFor(field) };
+        const base = {
+          key: field.key,
+          label: field.label,
+          type: field.type,
+          answered,
+          optionLabels: optionLabelsFor(field),
+        };
 
         switch (field.type) {
           case 'select': {

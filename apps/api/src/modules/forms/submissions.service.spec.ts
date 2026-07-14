@@ -525,9 +525,7 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
       'evaluator-1',
     );
 
-    expect(prisma.user.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: { in: [helperId] } } }),
-    );
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: [helperId] } } }));
     const call = prisma.evaluationAreaEntry.upsert.mock.calls[0]![0];
     expect(call.create.context).toBe('Helper Person');
   });
