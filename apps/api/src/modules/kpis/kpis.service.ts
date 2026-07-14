@@ -858,6 +858,7 @@ export class KpisService {
         personName: s.personName,
         evaluatorName: s.enteredBy.displayName,
         anonymous: s.anonymous,
+        display: s.display,
         context: s.context,
         comment: s.comment,
         createdAt: s.submittedAt.toISOString(),

@@ -322,6 +322,36 @@ export default function DashboardPage() {
   }, [teamMembers]);
   const hasSubmissionsByDepartment = submissionsByDepartment.length > 0;
 
+  // Each scored member's own overall blended score (0-5) — one bar per
+  // person, distinct from "submissions by person" below which counts raw
+  // activity, not this normalized score.
+  const scoreByPerson = useMemo(() => {
+    return teamMembers
+      .filter((m): m is typeof m & { score: number } => m.score !== null)
+      .map((m) => ({ label: m.displayName, count: Math.round(m.score * 10) / 10 }))
+      .sort((a, b) => b.count - a.count);
+  }, [teamMembers]);
+  const hasScoreByPerson = scoreByPerson.length > 0;
+
+  // Average of scored members' blended score (0-5) per department.
+  const scoreByDepartment = useMemo(() => {
+    const byDept = new Map<string, number[]>();
+    for (const m of teamMembers) {
+      if (m.score === null) continue;
+      const key = m.department ?? 'no department';
+      const list = byDept.get(key);
+      if (list) list.push(m.score);
+      else byDept.set(key, [m.score]);
+    }
+    return [...byDept.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([label, scores]) => ({
+        label,
+        count: Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10,
+      }));
+  }, [teamMembers]);
+  const hasScoreByDepartment = scoreByDepartment.length > 0;
+
   const memberTableData = useMemo(() => {
     let data = teamMembers.filter((m) => {
       if (coverageFilterMatches(memberCoverageFilter, m.latestSubmission !== null) === false) return false;
@@ -542,15 +572,53 @@ export default function DashboardPage() {
             )}
 
             {canSeeTeamOverview && teamOverview && (
+              <div className="p-charts-row" style={{ marginBottom: 16 }}>
+                <div className="p-card">
+                  <div className="p-card-title">Submissions by department</div>
+                  {hasSubmissionsByDepartment ? (
+                    <CountBarChart
+                      data={submissionsByDepartment}
+                      textColor="var(--text-3)"
+                      gridColor="var(--border)"
+                      barColor="var(--accent)"
+                      countLabel="team members scored"
+                    />
+                  ) : (
+                    <p className="muted" style={{ fontSize: 12 }}>
+                      no scored team members yet.
+                    </p>
+                  )}
+                </div>
+
+                <div className="p-card">
+                  <div className="p-card-title">Average score by department</div>
+                  {hasScoreByDepartment ? (
+                    <CountBarChart
+                      data={scoreByDepartment}
+                      textColor="var(--text-3)"
+                      gridColor="var(--border)"
+                      barColor="var(--accent)"
+                      countLabel="avg score / 5"
+                    />
+                  ) : (
+                    <p className="muted" style={{ fontSize: 12 }}>
+                      no scored team members yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {canSeeTeamOverview && teamOverview && (
               <div className="p-card" style={{ marginBottom: 16 }}>
-                <div className="p-card-title">Submissions by department</div>
-                {hasSubmissionsByDepartment ? (
+                <div className="p-card-title">Score by team member</div>
+                {hasScoreByPerson ? (
                   <CountBarChart
-                    data={submissionsByDepartment}
+                    data={scoreByPerson}
                     textColor="var(--text-3)"
                     gridColor="var(--border)"
                     barColor="var(--accent)"
-                    countLabel="team members scored"
+                    countLabel="score / 5"
                   />
                 ) : (
                   <p className="muted" style={{ fontSize: 12 }}>
@@ -629,7 +697,8 @@ export default function DashboardPage() {
                   {recentFeedback.entries.map((entry) => (
                     <div key={entry.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
                       <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 3 }}>
-                        {entry.kpiName} · {entry.areaName} — {entry.personName}
+                        {entry.kpiName} · {entry.areaName} — {entry.personName}{' '}
+                        <span style={{ fontFamily: 'var(--mono)', fontWeight: 600 }}>{entry.display}</span>
                         <span className="muted"> · {new Date(entry.createdAt).toLocaleDateString()}</span>
                       </div>
                       {entry.comment && <div style={{ fontSize: 13, fontStyle: 'italic' }}>“{entry.comment}”</div>}
@@ -892,6 +961,7 @@ export default function DashboardPage() {
                       </TableHead>
                       <TableHead>role</TableHead>
                       <TableHead>status</TableHead>
+                      <TableHead>score</TableHead>
                       <TableHead
                         className="p-th-sortable"
                         aria-sort={
@@ -927,7 +997,7 @@ export default function DashboardPage() {
                   <TableBody>
                     {memberTableData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="muted" style={{ textAlign: 'center' }}>
+                        <TableCell colSpan={8} className="muted" style={{ textAlign: 'center' }}>
                           {teamMembers.length === 0 ? 'no active team members.' : 'no team members match this filter.'}
                         </TableCell>
                       </TableRow>
@@ -957,6 +1027,9 @@ export default function DashboardPage() {
                               <Badge className="border-transparent" style={statusBadgeStyle(memberStatus)}>
                                 {STATUS_LABEL[memberStatus]}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
+                              {m.score !== null ? `${m.score.toFixed(1)} / 5` : '—'}
                             </TableCell>
                             <TableCell>
                               {m.latestSubmission ? (
@@ -1001,6 +1074,7 @@ export default function DashboardPage() {
         <KpiDetailDrawer kpi={drawerKpi} onClose={() => setSelectedId(null)} />
         <TeamMemberDetailDrawer
           breakdown={currentMemberBreakdown}
+          score={teamMembers.find((m) => m.id === selectedMemberId)?.score ?? null}
           loading={selectedMemberId !== null && currentMemberBreakdown === null && !memberBreakdownError}
           error={selectedMemberId !== null ? memberBreakdownError : null}
           onClose={() => setSelectedMemberId(null)}

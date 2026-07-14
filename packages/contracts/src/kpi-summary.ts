@@ -131,6 +131,9 @@ export interface FeedbackEntry {
   personName: string;
   evaluatorName: string;
   anonymous: boolean;
+  /** The score that came with this feedback, pre-formatted on its native
+   *  scale (e.g. "4/5") — same value as ScoredSubmissionSummary.display. */
+  display: string;
   context: string | null;
   comment: string | null;
   createdAt: string;
