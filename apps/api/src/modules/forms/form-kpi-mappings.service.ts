@@ -88,6 +88,67 @@ export class FormKpiMappingsService {
   /** A mapping's subCriteriaId must actually belong to the Evaluation Area
    *  it's mapped to — otherwise the "narrows the area" tag would silently
    *  point at an unrelated part of the KPI tree. */
+  /** Same validation as create(), against an existing row — lets an admin fix a
+   *  mapping's evaluatee fields (the common case that used to require delete +
+   *  recreate + backfill) or any other field without losing its id/createdAt/
+   *  audit trail. The uniqueness check only re-runs when evaluationAreaId is
+   *  actually changing, since the existing row would otherwise "conflict with
+   *  itself". */
+  async update(formId: string, mappingId: string, input: CreateFormKpiMappingInput, actorId: string) {
+    const form = await this.requireForm(formId);
+    const existing = await this.prisma.formKpiMapping.findFirst({ where: { id: mappingId, formId } });
+    if (!existing) throw AppError.notFound('Form KPI mapping', mappingId);
+
+    const { definition } = await this.forms.getLatestVersion(form.slug);
+    this.validateEvaluateeFieldKeys(definition, input.evaluateeFieldKeys);
+    const scoreField = definition.fields.find((f) => f.key === input.scoreFieldKey);
+    if (!scoreField || scoreField.type === 'section_header') {
+      throw AppError.validation([{ path: 'scoreFieldKey', message: 'must reference a question on this form' }]);
+    }
+    this.validateExtraFieldKeys(definition, input.contextFieldKey, input.commentFieldKey);
+
+    const area = await this.prisma.evaluationArea.findUnique({ where: { id: input.evaluationAreaId } });
+    if (!area) throw AppError.notFound('Evaluation area', input.evaluationAreaId);
+
+    if (input.subCriteriaId) {
+      await this.requireSubCriteriaInArea(input.subCriteriaId, input.evaluationAreaId);
+    }
+
+    if (input.evaluationAreaId !== existing.evaluationAreaId) {
+      const conflict = await this.prisma.formKpiMapping.findUnique({
+        where: { formId_evaluationAreaId: { formId, evaluationAreaId: input.evaluationAreaId } },
+      });
+      if (conflict) throw new AppError('CONFLICT', `This form is already mapped to "${area.name}"`);
+    }
+
+    const mapping = await this.prisma.formKpiMapping.update({
+      where: { id: mappingId },
+      data: {
+        evaluationAreaId: input.evaluationAreaId,
+        // ?? null (not undefined) for every optional field — Prisma's update
+        // treats an undefined field as "leave it alone", so clearing a
+        // previously-set value in the edit form has to be an explicit null.
+        subCriteriaId: input.subCriteriaId ?? null,
+        evaluateeFieldKeys: input.evaluateeFieldKeys ?? [],
+        scoreFieldKey: input.scoreFieldKey,
+        reviewType: input.reviewType,
+        anonymous: input.anonymous,
+        contextFieldKey: input.contextFieldKey ?? null,
+        commentFieldKey: input.commentFieldKey ?? null,
+      },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'form_kpi_mapping.updated',
+        entity: 'FormKpiMapping',
+        entityId: mapping.id,
+        detail: input,
+      },
+    });
+    return mapping;
+  }
+
   private async requireSubCriteriaInArea(subCriteriaId: string, evaluationAreaId: string): Promise<void> {
     const subCriteria = await this.prisma.subCriteria.findUnique({ where: { id: subCriteriaId } });
     if (!subCriteria || subCriteria.evaluationAreaId !== evaluationAreaId) {

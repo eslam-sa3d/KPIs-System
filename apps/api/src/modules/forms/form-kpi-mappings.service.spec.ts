@@ -51,6 +51,7 @@ function makePrismaStub() {
       ),
       findFirst: vi.fn(),
       create: vi.fn(async ({ data }: { data: object }) => ({ id: 'mapping-1', ...data })),
+      update: vi.fn(async ({ data }: { data: object }) => ({ id: 'mapping-1', ...data })),
       delete: vi.fn(),
     },
     evaluationArea: {
@@ -262,6 +263,93 @@ describe('FormKpiMappingsService.create', () => {
     const service = new FormKpiMappingsService(prisma as never, forms as never);
     await expect(service.create('ghost', validInput, 'admin-1')).rejects.toMatchObject({
       code: 'NOT_FOUND',
+    });
+  });
+});
+
+describe('FormKpiMappingsService.update', () => {
+  let prisma: ReturnType<typeof makePrismaStub>;
+  let forms: ReturnType<typeof makeFormsStub>;
+
+  beforeEach(() => {
+    prisma = makePrismaStub();
+    forms = makeFormsStub();
+    prisma.formKpiMapping.findFirst.mockResolvedValue({
+      id: 'mapping-1',
+      formId: 'form-1',
+      evaluationAreaId: 'area-1',
+    });
+  });
+
+  it('updates a mapping’s evaluatee fields — the delete+recreate workaround this replaces', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await service.update('form-1', 'mapping-1', { ...validInput, evaluateeFieldKeys: ['evaluatee_choice'] }, 'admin-1');
+
+    expect(prisma.formKpiMapping.update).toHaveBeenCalledWith({
+      where: { id: 'mapping-1' },
+      data: expect.objectContaining({ evaluateeFieldKeys: ['evaluatee_choice'] }),
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a previously-set evaluateeFieldKeys/context/comment/subCriteria when omitted from the update', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await service.update(
+      'form-1',
+      'mapping-1',
+      { evaluationAreaId: 'area-1', scoreFieldKey: 'score', reviewType: 'peer' as const, anonymous: false },
+      'admin-1',
+    );
+
+    expect(prisma.formKpiMapping.update).toHaveBeenCalledWith({
+      where: { id: 'mapping-1' },
+      data: expect.objectContaining({
+        evaluateeFieldKeys: [],
+        subCriteriaId: null,
+        contextFieldKey: null,
+        commentFieldKey: null,
+      }),
+    });
+  });
+
+  it('rejects updating a mapping that does not belong to this form', async () => {
+    prisma.formKpiMapping.findFirst.mockResolvedValue(null);
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await expect(service.update('form-1', 'ghost', validInput, 'admin-1')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('rejects when scoreFieldKey no longer references a question on the form', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await expect(
+      service.update('form-1', 'mapping-1', { ...validInput, scoreFieldKey: 'ghost-field' }, 'admin-1'),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
+  it('does not re-check the uniqueness constraint when evaluationAreaId is unchanged', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await service.update('form-1', 'mapping-1', validInput, 'admin-1');
+    expect(prisma.formKpiMapping.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects moving to an evaluationArea already mapped by a different mapping on this form', async () => {
+    prisma.formKpiMapping.findUnique.mockResolvedValue({ id: 'other-mapping' });
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await expect(
+      service.update('form-1', 'mapping-1', { ...validInput, evaluationAreaId: 'area-2' }, 'admin-1'),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('allows moving to a new evaluationArea when nothing else maps there', async () => {
+    prisma.formKpiMapping.findUnique.mockResolvedValue(null);
+    prisma.evaluationArea.findUnique.mockResolvedValue({ id: 'area-2', name: 'Delivery' });
+    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    await service.update('form-1', 'mapping-1', { ...validInput, evaluationAreaId: 'area-2' }, 'admin-1');
+
+    expect(prisma.formKpiMapping.update).toHaveBeenCalledWith({
+      where: { id: 'mapping-1' },
+      data: expect.objectContaining({ evaluationAreaId: 'area-2' }),
     });
   });
 });

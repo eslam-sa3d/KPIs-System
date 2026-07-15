@@ -6,6 +6,7 @@ import {
   updatePerformanceLevelSchema,
 } from '@pulse/contracts';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
+import { Public } from '../auth/public.decorator';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
 import { PerformanceLevelsService } from './performance-levels.service';
 
@@ -15,8 +16,14 @@ type AuthedRequest = { user: { id: string } };
 export class PerformanceLevelsController {
   constructor(private readonly levels: PerformanceLevelsService) {}
 
+  // Public: FormRenderer fetches this for every 'performance_level' field,
+  // including on the anonymous public /f fill flow — an authenticated-only
+  // route there just meant every anonymous respondent silently got "no
+  // performance levels configured yet" instead of real options (401 →
+  // FormRenderer's catch → []). Labels/score ranges aren't sensitive, same
+  // reasoning as BrandingController's public GET.
+  @Public()
   @Get()
-  @RequirePermissions('configuration:view')
   list() {
     return this.levels.list();
   }

@@ -103,6 +103,9 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [backfillingId, setBackfillingId] = useState<string | null>(null);
+  // Set while the "add a mapping" form below is editing an existing row
+  // instead of creating a new one — same fields, PATCH instead of POST.
+  const [editingMappingId, setEditingMappingId] = useState<string | null>(null);
 
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkEvaluateeFieldKeys, setBulkEvaluateeFieldKeys] = useState<Set<string>>(new Set());
@@ -180,31 +183,55 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
     return allAreasIncludingInactive.find((a) => a.id === id)?.name ?? id;
   }
 
-  async function onCreate() {
+  function resetMappingForm() {
+    setEditingMappingId(null);
+    setKpiId('');
+    setEvaluationAreaId('');
+    setScoreFieldKey('');
+    setEvaluateeFieldKeys(new Set());
+    setReviewType('peer');
+    setAnonymous(false);
+    setContextFieldKey('');
+    setCommentFieldKey('');
+  }
+
+  /** Pre-fills the single-mapping form (below) from an existing row and
+   *  switches it into edit mode — the same fields, submitted as a PATCH
+   *  instead of a POST, so fixing e.g. a missing evaluatee field no longer
+   *  requires delete + recreate + backfill. */
+  function onStartEdit(m: MappingRow) {
+    setEditingMappingId(m.id);
+    setKpiId(m.evaluationArea.kpiId);
+    setEvaluationAreaId(m.evaluationAreaId);
+    setScoreFieldKey(m.scoreFieldKey);
+    setEvaluateeFieldKeys(new Set(m.evaluateeFieldKeys));
+    setReviewType(m.reviewType);
+    setAnonymous(m.anonymous);
+    setContextFieldKey(m.contextFieldKey ?? '');
+    setCommentFieldKey(m.commentFieldKey ?? '');
+    setError(null);
+  }
+
+  async function onSaveMapping() {
     if (!evaluationAreaId || !scoreFieldKey) return;
     setBusy(true);
     setError(null);
     try {
-      await api(`/v1/forms/${formId}/kpi-mappings`, {
-        method: 'POST',
-        body: JSON.stringify({
-          evaluationAreaId,
-          scoreFieldKey,
-          reviewType,
-          anonymous,
-          ...(evaluateeFieldKeys.size > 0 ? { evaluateeFieldKeys: [...evaluateeFieldKeys] } : {}),
-          ...(contextFieldKey ? { contextFieldKey } : {}),
-          ...(commentFieldKey ? { commentFieldKey } : {}),
-        }),
+      const body = JSON.stringify({
+        evaluationAreaId,
+        scoreFieldKey,
+        reviewType,
+        anonymous,
+        ...(evaluateeFieldKeys.size > 0 ? { evaluateeFieldKeys: [...evaluateeFieldKeys] } : {}),
+        ...(contextFieldKey ? { contextFieldKey } : {}),
+        ...(commentFieldKey ? { commentFieldKey } : {}),
       });
-      setKpiId('');
-      setEvaluationAreaId('');
-      setScoreFieldKey('');
-      setEvaluateeFieldKeys(new Set());
-      setReviewType('peer');
-      setAnonymous(false);
-      setContextFieldKey('');
-      setCommentFieldKey('');
+      if (editingMappingId) {
+        await api(`/v1/forms/${formId}/kpi-mappings/${editingMappingId}`, { method: 'PATCH', body });
+      } else {
+        await api(`/v1/forms/${formId}/kpi-mappings`, { method: 'POST', body });
+      }
+      resetMappingForm();
       reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'the request failed');
@@ -340,6 +367,9 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     >
                       {backfillingId === m.id ? 'scoring…' : 'backfill existing responses'}
                     </Button>{' '}
+                    <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onStartEdit(m)}>
+                      edit
+                    </Button>{' '}
                     {confirmDeleteId === m.id ? (
                       <>
                         <span className="muted">remove this mapping?</span>{' '}
@@ -366,7 +396,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               </ul>
             )}
 
-            <label htmlFor="kpi-mapping-kpi">add a mapping</label>
+            <label htmlFor="kpi-mapping-kpi">{editingMappingId ? 'edit mapping' : 'add a mapping'}</label>
             <Select
               value={kpiId}
               onValueChange={(v) => {
@@ -477,10 +507,15 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               type="button"
               variant="ghost"
               disabled={busy || !evaluationAreaId || !scoreFieldKey}
-              onClick={onCreate}
+              onClick={onSaveMapping}
             >
-              add mapping
+              {editingMappingId ? 'save changes' : 'add mapping'}
             </Button>
+            {editingMappingId && (
+              <Button type="button" variant="ghost" disabled={busy} onClick={resetMappingForm}>
+                cancel
+              </Button>
+            )}
 
             {unmappedScoreFields.length >= 2 && (
               <div className="kpi-bulk-mapping">

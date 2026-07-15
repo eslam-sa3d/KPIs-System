@@ -217,6 +217,17 @@ export class FormsController {
     return this.kpiMappings.bulkCreate(formId, body, req.user.id);
   }
 
+  @Patch(':formId/kpi-mappings/:mappingId')
+  @RequirePermissions('forms:edit', 'kpis:edit')
+  updateKpiMapping(
+    @Param('formId') formId: string,
+    @Param('mappingId') mappingId: string,
+    @Body(new ZodValidationPipe(createFormKpiMappingSchema)) body: CreateFormKpiMappingInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpiMappings.update(formId, mappingId, body, req.user.id);
+  }
+
   @Delete(':formId/kpi-mappings/:mappingId')
   @RequirePermissions('forms:edit', 'kpis:edit')
   deleteKpiMapping(@Param('formId') formId: string, @Param('mappingId') mappingId: string, @Req() req: AuthedRequest) {
