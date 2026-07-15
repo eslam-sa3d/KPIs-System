@@ -219,9 +219,7 @@ export function FormSettingsPanel({
               checked={draft.requireRespondentInfo}
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, requireRespondentInfo: checked === true }))}
             />
-            <label htmlFor="fs-respondent-info">
-              ask for name &amp; email before a public link submission starts
-            </label>
+            <label htmlFor="fs-respondent-info">ask for name &amp; email before a public link submission starts</label>
           </span>
 
           {draft.requireRespondentInfo && (

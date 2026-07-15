@@ -8,13 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 /** Public share link + QR (client-generated, no external network call). */
-export function ShareLinkPanel({
-  formId,
-  publicToken,
-}: {
-  formId: string;
-  publicToken: string | null;
-}) {
+export function ShareLinkPanel({ formId, publicToken }: { formId: string; publicToken: string | null }) {
   const [token, setToken] = useState(publicToken);
   const [qr, setQr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

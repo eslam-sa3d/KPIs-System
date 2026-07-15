@@ -2,7 +2,13 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
-import type { DashboardFormScope, FormListItem, RecentFeedback, TeamMemberBreakdown, TeamOverview } from '@pulse/contracts';
+import type {
+  DashboardFormScope,
+  FormListItem,
+  RecentFeedback,
+  TeamMemberBreakdown,
+  TeamOverview,
+} from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
 import { TeamMemberDetailDrawer } from '../../components/team-member-detail-drawer';
 import { FormMultiSelectCombobox } from '../../components/form-multi-select-combobox';

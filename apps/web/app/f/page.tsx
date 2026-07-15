@@ -164,7 +164,13 @@ function PublicForm() {
                 <label htmlFor="gate-name" className="muted">
                   name *
                 </label>
-                <Input id="gate-name" required autoFocus value={gateName} onChange={(e) => setGateName(e.target.value)} />
+                <Input
+                  id="gate-name"
+                  required
+                  autoFocus
+                  value={gateName}
+                  onChange={(e) => setGateName(e.target.value)}
+                />
                 <label htmlFor="gate-email" className="muted">
                   email *
                 </label>
