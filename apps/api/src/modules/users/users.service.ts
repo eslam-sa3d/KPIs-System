@@ -218,6 +218,31 @@ export class UsersService {
     return { id: userId, isActive };
   }
 
+  /** Admin-direct password reset (Users page "reset password" action) — sets
+   *  the account's password immediately, same "temporary password, must change
+   *  at next login" semantics as create(), and revokes existing sessions like
+   *  every other password change in this codebase (changePassword/resetPassword
+   *  in AuthService) so a stolen session can't outlive the password rotation. */
+  async resetPassword(userId: string, newPassword: string, actorId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw AppError.notFound('User', userId);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash: await this.hasher.hash(newPassword), mustChangePassword: true },
+      }),
+      this.prisma.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+      this.prisma.auditLog.create({
+        data: { actorId, action: 'user.password_reset_by_admin', entity: 'User', entityId: userId },
+      }),
+    ]);
+    return { id: userId };
+  }
+
   listDepartments() {
     return this.prisma.department.findMany({ orderBy: { name: 'asc' } });
   }

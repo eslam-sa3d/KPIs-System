@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -71,6 +72,10 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [pendingRoleIds, setPendingRoleIds] = useState<Set<string>>(new Set());
   const [savingRoles, setSavingRoles] = useState(false);
+  const [resetPasswordRow, setResetPasswordRow] = useState<UserRow | null>(null);
+  const [resetPasswordDraft, setResetPasswordDraft] = useState({ newPassword: '', confirmPassword: '' });
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
+  const [resetPasswordBusy, setResetPasswordBusy] = useState(false);
   const [editingInfoId, setEditingInfoId] = useState<string | null>(null);
   const [infoDraft, setInfoDraft] = useState({
     displayName: '',
@@ -170,6 +175,43 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
       void reloadStats();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Updating status failed');
+    }
+  }
+
+  function onStartResetPassword(row: UserRow) {
+    setError(null);
+    setResetPasswordError(null);
+    setResetPasswordDraft({ newPassword: '', confirmPassword: '' });
+    setResetPasswordRow(row);
+  }
+
+  function onCancelResetPassword() {
+    setResetPasswordRow(null);
+  }
+
+  /** Admin sets the account's new password directly (same "temporary password,
+   *  must change at next login" semantics as creating a user) — no email round
+   *  trip, so this works for a deactivated account too. */
+  async function onSubmitResetPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!resetPasswordRow) return;
+    if (resetPasswordDraft.newPassword !== resetPasswordDraft.confirmPassword) {
+      setResetPasswordError("new passwords don't match");
+      return;
+    }
+    setResetPasswordError(null);
+    setResetPasswordBusy(true);
+    try {
+      await api(`/v1/users/${resetPasswordRow.id}/password`, {
+        method: 'PATCH',
+        body: JSON.stringify({ newPassword: resetPasswordDraft.newPassword }),
+      });
+      setNotice(`password reset for ${resetPasswordRow.email}`);
+      setResetPasswordRow(null);
+    } catch (cause) {
+      setResetPasswordError(cause instanceof Error ? cause.message : 'Resetting the password failed');
+    } finally {
+      setResetPasswordBusy(false);
     }
   }
 
@@ -573,6 +615,11 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                             edit
                           </Button>
                         ))}
+                      {canEditUsers && (
+                        <Button variant="ghost" size="sm" onClick={() => onStartResetPassword(row)}>
+                          reset password
+                        </Button>
+                      )}
                       {canToggleUserStatus && (
                         <Button variant="ghost" size="sm" onClick={() => onToggleStatus(row)}>
                           {row.isActive ? 'deactivate' : 'activate'}
@@ -631,6 +678,58 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
             </Button>
           </span>
         </div>
+      )}
+
+      {resetPasswordRow && (
+        <Dialog open onOpenChange={(open) => !open && !resetPasswordBusy && onCancelResetPassword()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>set a new password for {resetPasswordRow.displayName}</DialogTitle>
+            </DialogHeader>
+            <form className="builder" onSubmit={onSubmitResetPassword} aria-busy={resetPasswordBusy}>
+              <label htmlFor="reset-pw-new">new password</label>
+              <Input
+                id="reset-pw-new"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                required
+                value={resetPasswordDraft.newPassword}
+                onChange={(e) => setResetPasswordDraft((d) => ({ ...d, newPassword: e.target.value }))}
+              />
+
+              <label htmlFor="reset-pw-confirm">confirm new password</label>
+              <Input
+                id="reset-pw-confirm"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                required
+                value={resetPasswordDraft.confirmPassword}
+                onChange={(e) => setResetPasswordDraft((d) => ({ ...d, confirmPassword: e.target.value }))}
+              />
+
+              <p className="muted" style={{ fontSize: 11, margin: '2px 0 8px' }}>
+                {resetPasswordRow.displayName} will be asked to change this password the next time they sign in.
+              </p>
+
+              {resetPasswordError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{resetPasswordError}</AlertDescription>
+                </Alert>
+              )}
+
+              <DialogFooter>
+                <Button type="button" variant="ghost" disabled={resetPasswordBusy} onClick={onCancelResetPassword}>
+                  cancel
+                </Button>
+                <Button type="submit" disabled={resetPasswordBusy}>
+                  {resetPasswordBusy ? 'saving…' : 'set new password'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

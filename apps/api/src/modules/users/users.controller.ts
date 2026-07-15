@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   AddProjectGroupMembersInput,
+  AdminResetPasswordInput,
   CreateDepartmentInput,
   CreateProjectGroupInput,
   CreateUserInput,
@@ -10,6 +11,7 @@ import {
   UpdateProjectGroupInput,
   UpdateUserInput,
   addProjectGroupMembersSchema,
+  adminResetPasswordSchema,
   createDepartmentSchema,
   createProjectGroupSchema,
   createUserSchema,
@@ -66,6 +68,16 @@ export class UsersController {
     @Req() req: AuthedRequest,
   ) {
     return this.users.setStatus(userId, input.isActive, req.user.id);
+  }
+
+  @Patch(':userId/password')
+  @RequirePermissions('users:edit')
+  resetPassword(
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(adminResetPasswordSchema)) input: AdminResetPasswordInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.users.resetPassword(userId, input.newPassword, req.user.id);
   }
 }
 

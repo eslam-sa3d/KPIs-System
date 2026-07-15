@@ -18,6 +18,12 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
 export const setUserStatusSchema = z.object({ isActive: z.boolean() });
 export type SetUserStatusInput = z.infer<typeof setUserStatusSchema>;
 
+/** Admin-direct password reset (Users page "reset password" action) — sets the
+ *  account's password immediately, same as the create-user flow's temporary
+ *  password, rather than emailing a self-service reset link. */
+export const adminResetPasswordSchema = z.object({ newPassword: z.string().min(8).max(128) });
+export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>;
+
 /** Every field optional (a caller only sends what changed); `departmentId: null`
  *  clears the department, `undefined`/omitted leaves it untouched. Same for
  *  `jobTitleId`. */
