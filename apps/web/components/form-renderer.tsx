@@ -680,19 +680,20 @@ export const FieldInput = memo(function FieldInput({
                   className="max-h-48 overflow-y-auto rounded-md border"
                 >
                   {candidates.map((u) => (
-                    <button
+                    <Button
                       key={u.id}
                       type="button"
+                      variant="ghost"
                       role="option"
                       aria-selected={false}
                       onClick={() => {
                         onChange(u.id);
                         setPersonFilter('');
                       }}
-                      className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-accent"
+                      className="h-auto w-full justify-start rounded-none px-3 py-2 text-left text-sm font-normal"
                     >
                       {u.displayName} ({u.email})
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}

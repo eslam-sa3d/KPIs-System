@@ -147,16 +147,17 @@ export function AccessControlPanel({
             {filter && candidates.length > 0 && (
               <div role="listbox" aria-label="matching users" className="max-h-48 overflow-y-auto rounded-md border">
                 {candidates.map((u) => (
-                  <button
+                  <Button
                     key={u.id}
                     type="button"
+                    variant="ghost"
                     role="option"
                     aria-selected={pickUserId === u.id}
                     onClick={() => setPickUserId(u.id)}
-                    className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-accent aria-selected:bg-accent aria-selected:text-accent-foreground"
+                    className="h-auto w-full justify-start rounded-none px-3 py-2 text-left text-sm font-normal aria-selected:bg-accent aria-selected:text-accent-foreground"
                   >
                     {u.displayName} ({u.email})
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}

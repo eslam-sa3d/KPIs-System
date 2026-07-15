@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { api } from '../lib/api-client';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/loading-state';
 import { UserMultiSelectCombobox, type UserPickerOption } from './user-multi-select-combobox';
 
@@ -59,14 +60,16 @@ export function ProjectGroupMembers({ groupId, canEdit }: { groupId: string; can
             <Badge key={m.id} variant="secondary">
               {m.displayName}
               {canEdit && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   aria-label={`remove ${m.displayName}`}
                   onClick={() => onToggle(m)}
-                  style={{ display: 'inline-flex', marginLeft: 4 }}
+                  className="ml-1 size-4"
                 >
                   <X size={12} aria-hidden="true" />
-                </button>
+                </Button>
               )}
             </Badge>
           ))}
