@@ -29,7 +29,7 @@ import {
 import { END_OF_FORM, SCORE_FIELD_TYPES, type FormDefinition } from '@pulse/contracts';
 import { PortalShell, can } from '../../../components/portal-shell';
 import { KpiLinkCombobox } from '../../../components/kpi-link-combobox';
-import { UserPickerCombobox } from '../../../components/user-picker-combobox';
+import { UserPickerCombobox, type UserPickerOption } from '../../../components/user-picker-combobox';
 import { SubCriteriaPickerCombobox } from '../../../components/sub-criteria-picker-combobox';
 import { LoadingState } from '../../../components/loading-state';
 import { api, assetUrl, uploadAsset } from '../../../lib/api-client';
@@ -232,6 +232,33 @@ function NewFormPage() {
 
   function updateField(index: number, patch: Partial<DraftField>) {
     setFields((current) => current.map((f, i) => (i === index ? { ...f, ...patch } : f)));
+  }
+
+  /** Bulk version of "select a user" for multi_select: populates the options
+   *  list with every active user in one click instead of adding them one at
+   *  a time. Fetches first, applies via the functional setState form so it
+   *  reads whatever the field's options are at apply time (not a stale
+   *  closure) if it edited while the fetch was in flight. Skips anyone
+   *  already present (by display name, same identity key "select a user"
+   *  already uses) so re-running it after hand-picking a few doesn't
+   *  duplicate them. */
+  async function addAllUsersAsOptions(index: number) {
+    const users = await api<UserPickerOption[]>('/v1/users?pageSize=200');
+    setFields((current) =>
+      current.map((f, i) => {
+        if (i !== index) return f;
+        const list = parseList(f.options);
+        const seen = new Set(list);
+        const optionUserIds = { ...f.optionUserIds };
+        for (const u of users) {
+          if (seen.has(u.displayName)) continue;
+          list.push(u.displayName);
+          seen.add(u.displayName);
+          optionUserIds[u.displayName] = u.id;
+        }
+        return { ...f, options: list.join(', '), optionUserIds };
+      }),
+    );
   }
 
   function toggleKpiPanel(index: number, open: boolean) {
@@ -1123,7 +1150,7 @@ function NewFormPage() {
                                                 </Button>
                                               </>
                                             )}
-                                          {field.type === 'select' && (
+                                          {(field.type === 'select' || field.type === 'multi_select') && (
                                             <>
                                               {' '}
                                               or{' '}
@@ -1138,6 +1165,20 @@ function NewFormPage() {
                                                   });
                                                 }}
                                               />
+                                            </>
+                                          )}
+                                          {field.type === 'multi_select' && (
+                                            <>
+                                              {' '}
+                                              or{' '}
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                className="option-row-other-link"
+                                                onClick={() => void addAllUsersAsOptions(index)}
+                                              >
+                                                add all users
+                                              </Button>
                                             </>
                                           )}
                                         </div>
