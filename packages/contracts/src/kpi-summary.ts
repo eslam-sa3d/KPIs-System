@@ -36,6 +36,7 @@ export interface TeamMember {
   displayName: string;
   email: string;
   department: string | null;
+  jobTitle: string | null;
   roles: string[];
   hasKpi: boolean;
   /** Normalized 0-5 blend across every EvaluationAreaEntry covering this

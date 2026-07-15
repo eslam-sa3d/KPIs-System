@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
-import type { ActivityTrend, RecentFeedback, TeamMemberBreakdown, TeamOverview } from '@pulse/contracts';
+import type { RecentFeedback, TeamMemberBreakdown, TeamOverview } from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
 import { TeamMemberDetailDrawer } from '../../components/team-member-detail-drawer';
 import { Badge } from '@/components/ui/badge';
@@ -18,10 +18,6 @@ import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusBadgeStyle, s
 
 // Lazy-loaded: recharts only ships once the dashboard actually renders a chart.
 const CountBarChart = dynamic(() => import('../../components/count-bar-chart'), {
-  ssr: false,
-  loading: () => <LoadingState label="loading chart…" />,
-});
-const ActivityTrendChart = dynamic(() => import('../../components/activity-trend-chart'), {
   ssr: false,
   loading: () => <LoadingState label="loading chart…" />,
 });
@@ -74,23 +70,9 @@ interface RawKpi {
 type MemberSortKey = 'name' | 'department' | 'updated';
 type CoverageFilter = 'all' | 'scored' | 'pending';
 
-const CADENCE_LABEL: Record<string, string> = {
-  weekly: 'Weekly',
-  monthly: 'Monthly',
-  quarterly: 'Quarterly',
-  yearly: 'Yearly',
-};
-
-const REVIEW_TYPE_LABEL: Record<string, string> = {
-  self: 'Self',
-  peer: 'Peer',
-  manager: 'Manager',
-  '360': '360',
-};
-
 export default function DashboardPage() {
   const user = useSession();
-  const [level, setLevel] = useState('all');
+  const [jobTitleFilter, setJobTitleFilter] = useState('all');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberCoverageFilter, setMemberCoverageFilter] = useState<CoverageFilter>('all');
   const [memberStatusFilter, setMemberStatusFilter] = useState<StatusKey | 'all'>('all');
@@ -111,11 +93,6 @@ export default function DashboardPage() {
     user && canSeeTeamOverview ? '/v1/kpis/recent-feedback' : null,
   );
 
-  // weekly count of new submissions to a mapped form, org-wide
-  const { data: activityTrend } = useResource<ActivityTrend>(
-    user && canSeeTeamOverview ? '/v1/kpis/activity-trend' : null,
-  );
-
   // fetched on demand when a team member row is clicked — their own scored
   // submissions, across every KPI that covers them
   const { data: memberBreakdown, error: memberBreakdownError } = useResource<TeamMemberBreakdown>(
@@ -126,35 +103,33 @@ export default function DashboardPage() {
   // member's stale breakdown while their own fetch is still in flight.
   const currentMemberBreakdown = memberBreakdown?.personId === selectedMemberId ? memberBreakdown : null;
 
-  // cadence now lives on each Evaluation Area (a KPI can span several) — "level" filters
-  // to KPIs that have at least one area on that cadence, rather than a single KPI-wide value
-  const levels = useMemo(() => {
-    if (!kpis) return [];
-    return [...new Set(kpis.flatMap((k) => k.evaluationAreas.map((a) => a.cadence)))].sort();
-  }, [kpis]);
-
-  const levelData = useMemo(() => {
-    if (!kpis) return [];
-    return level === 'all' ? kpis : kpis.filter((k) => k.evaluationAreas.some((a) => a.cadence === level));
-  }, [kpis, level]);
-
-  const areasFlat = useMemo(
-    () => levelData.flatMap((k) => k.evaluationAreas.map((a) => ({ ...a, kpiId: k.id, kpiName: k.name }))),
-    [levelData],
-  );
-  const totalSubmissionCount = areasFlat.reduce((sum, a) => sum + a.recentSubmissions.length, 0);
-
   const teamMembers = teamOverview?.members ?? [];
-  // Status strip: counts *people*, not KPI records — anyone with an active
-  // KPI mapped to their role/department, bucketed by their own blended
-  // score. Someone with no KPI mapped at all isn't "pending" here; that gap
-  // is the separate "No KPI assigned" card below.
-  const kpiCoveredMembers = useMemo(() => teamMembers.filter((m) => m.hasKpi), [teamMembers]);
+
+  // Distinct job titles actually present among the team, for the filter
+  // pills — "all job titles" plus one pill per title in use, each showing
+  // how many members carry it (mirrors the cadence pills' own pattern above).
+  const jobTitleOptions = useMemo(() => {
+    const set = new Set(teamMembers.map((m) => m.jobTitle).filter((t): t is string => Boolean(t)));
+    return [...set].sort();
+  }, [teamMembers]);
+
+  // The one filtered population every dashboard widget below reads from —
+  // status cards, the score chart, and the team table all derive from this
+  // same list, so a card's count and the table's rows can never disagree.
+  const filteredTeamMembers = useMemo(() => {
+    if (jobTitleFilter === 'all') return teamMembers;
+    return teamMembers.filter((m) => m.jobTitle === jobTitleFilter);
+  }, [teamMembers, jobTitleFilter]);
+
+  // Status strip: counts *people*, bucketed by their own blended score —
+  // statusOf(null) buckets anyone never scored into "pending", exactly the
+  // same statusOf(m.score) call the team table below uses per row, so the
+  // cards and the table always agree.
   const stats = useMemo(() => {
     const counts: Record<StatusKey, number> = { outstanding: 0, meets: 0, improve: 0, below: 0, pending: 0 };
-    kpiCoveredMembers.forEach((m) => counts[statusOf(m.score)]++);
+    filteredTeamMembers.forEach((m) => counts[statusOf(m.score)]++);
     return counts;
-  }, [kpiCoveredMembers]);
+  }, [filteredTeamMembers]);
   // Each card's headline number is the *average* score of the people in that
   // band, not how many of them there are — the member count moves to
   // subtext instead. Pending has no score to average (statusOf(null) is the
@@ -167,7 +142,7 @@ export default function DashboardPage() {
       below: [],
       pending: [],
     };
-    kpiCoveredMembers.forEach((m) => {
+    filteredTeamMembers.forEach((m) => {
       if (m.score !== null) scoresByStatus[statusOf(m.score)].push(m.score);
     });
     const avg: Record<StatusKey, number | null> = {
@@ -182,73 +157,21 @@ export default function DashboardPage() {
       avg[s] = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
     });
     return avg;
-  }, [kpiCoveredMembers]);
-
-  // Tally each rater's reviewType across every area's most recent
-  // submissions, so the dashboard shows the self/peer/manager/360 mix
-  // behind the raw values above.
-  const reviewMix = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const area of areasFlat) {
-      for (const s of area.recentSubmissions) {
-        counts[s.reviewType] = (counts[s.reviewType] ?? 0) + 1;
-      }
-    }
-    return counts;
-  }, [areasFlat]);
-  const reviewMixTotal = Object.values(reviewMix).reduce((a, b) => a + b, 0);
-
-  const noKpiMembers = useMemo(() => teamMembers.filter((m) => !m.hasKpi), [teamMembers]);
-  const pendingMembers = useMemo(
-    () => teamMembers.filter((m) => m.hasKpi && m.latestSubmission === null),
-    [teamMembers],
-  );
-
-  // "Submissions by department": how many team members in each department
-  // have at least one scored submission — a coverage view, not a performance one.
-  const submissionsByDepartment = useMemo(() => {
-    const byDept = new Map<string, number>();
-    for (const m of teamMembers) {
-      if (m.latestSubmission === null) continue;
-      const key = m.department ?? 'no department';
-      byDept.set(key, (byDept.get(key) ?? 0) + 1);
-    }
-    return [...byDept.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([label, count]) => ({ label, count }));
-  }, [teamMembers]);
-  const hasSubmissionsByDepartment = submissionsByDepartment.length > 0;
+  }, [filteredTeamMembers]);
 
   // Each scored member's own overall blended score (0-5) — one bar per
   // person, distinct from "submissions by person" below which counts raw
   // activity, not this normalized score.
   const scoreByPerson = useMemo(() => {
-    return teamMembers
+    return filteredTeamMembers
       .filter((m): m is typeof m & { score: number } => m.score !== null)
       .map((m) => ({ label: m.displayName, count: Math.round(m.score * 10) / 10 }))
       .sort((a, b) => b.count - a.count);
-  }, [teamMembers]);
+  }, [filteredTeamMembers]);
   const hasScoreByPerson = scoreByPerson.length > 0;
 
-  // Average of scored members' blended score (0-5) per department.
-  const scoreByDepartment = useMemo(() => {
-    const byDept = new Map<string, number[]>();
-    for (const m of teamMembers) {
-      if (m.score === null) continue;
-      const key = m.department ?? 'no department';
-      const list = byDept.get(key);
-      if (list) list.push(m.score);
-      else byDept.set(key, [m.score]);
-    }
-    return [...byDept.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([label, scores]) => ({
-        label,
-        count: Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10,
-      }));
-  }, [teamMembers]);
-  const hasScoreByDepartment = scoreByDepartment.length > 0;
-
   const memberTableData = useMemo(() => {
-    let data = teamMembers.filter((m) => {
+    let data = filteredTeamMembers.filter((m) => {
       if (coverageFilterMatches(memberCoverageFilter, m.latestSubmission !== null) === false) return false;
       if (memberStatusFilter !== 'all' && statusOf(m.score) !== memberStatusFilter) return false;
       if (!memberFilter.trim()) return true;
@@ -268,13 +191,11 @@ export default function DashboardPage() {
       }
     });
     return data;
-  }, [teamMembers, memberCoverageFilter, memberStatusFilter, memberFilter, memberSort]);
+  }, [filteredTeamMembers, memberCoverageFilter, memberStatusFilter, memberFilter, memberSort]);
 
   function sortMembersBy(key: MemberSortKey) {
     setMemberSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
   }
-
-  const levelLabel = level === 'all' ? 'all cadences' : (CADENCE_LABEL[level] ?? level);
 
   const dashboardRef = useReveal<HTMLDivElement>('.p-kpi-card, .p-card, .p-table-card', kpis !== null);
 
@@ -285,20 +206,25 @@ export default function DashboardPage() {
           <div>
             <h1>KPI dashboard</h1>
             <p className="portal-subtitle" style={{ margin: '4px 0 0' }}>
-              {levelLabel} · click any card or row for details
+              click any card or row for details
             </p>
           </div>
         </div>
 
-        {kpis && (
+        {canSeeTeamOverview && teamOverview && jobTitleOptions.length > 0 && (
           <div className="p-filter-pills" style={{ marginBottom: 20 }}>
-            <Badge asChild variant={level === 'all' ? 'default' : 'outline'} className="cursor-pointer py-1">
-              <button onClick={() => setLevel('all')}>all levels ({kpis.length})</button>
+            <Badge asChild variant={jobTitleFilter === 'all' ? 'default' : 'outline'} className="cursor-pointer py-1">
+              <button onClick={() => setJobTitleFilter('all')}>all job titles ({teamMembers.length})</button>
             </Badge>
-            {levels.map((l) => (
-              <Badge key={l} asChild variant={level === l ? 'default' : 'outline'} className="cursor-pointer py-1">
-                <button onClick={() => setLevel(l)}>
-                  {CADENCE_LABEL[l] ?? l} ({kpis.filter((k) => k.evaluationAreas.some((a) => a.cadence === l)).length})
+            {jobTitleOptions.map((title) => (
+              <Badge
+                key={title}
+                asChild
+                variant={jobTitleFilter === title ? 'default' : 'outline'}
+                className="cursor-pointer py-1"
+              >
+                <button onClick={() => setJobTitleFilter(title)}>
+                  {title} ({teamMembers.filter((m) => m.jobTitle === title).length})
                 </button>
               </Badge>
             ))}
@@ -337,121 +263,11 @@ export default function DashboardPage() {
                       {s === 'pending'
                         ? 'no entries yet'
                         : `${stats[s]} member${stats[s] === 1 ? '' : 's'} · ${
-                            kpiCoveredMembers.length ? Math.round((stats[s] / kpiCoveredMembers.length) * 100) : 0
+                            filteredTeamMembers.length ? Math.round((stats[s] / filteredTeamMembers.length) * 100) : 0
                           }% of team`}
                     </div>
                   </button>
                 ))}
-              </div>
-            )}
-
-            <div className="p-card" style={{ marginBottom: 16 }}>
-              <div className="p-card-title">Activity</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
-                <span className="p-score-ring p-status-meets" style={{ width: 64, height: 44, fontSize: 15 }}>
-                  {totalSubmissionCount}
-                </span>
-                <span className="muted" style={{ fontSize: 11 }}>
-                  scored submission{totalSubmissionCount === 1 ? '' : 's'} across {areasFlat.length} evaluation area
-                  {areasFlat.length === 1 ? '' : 's'} in this view
-                </span>
-              </div>
-              {reviewMixTotal > 0 && (
-                <div className="p-legend-row">
-                  {Object.entries(reviewMix).map(([type, count]) => (
-                    <Badge key={type} variant="outline" className="py-1">
-                      {REVIEW_TYPE_LABEL[type] ?? type}: {count}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {canSeeTeamOverview && teamOverview && (
-              <div className="p-charts-row" style={{ marginBottom: 16 }}>
-                <button
-                  type="button"
-                  className="p-card"
-                  style={{ textAlign: 'left', cursor: 'pointer' }}
-                  onClick={() => setMemberCoverageFilter('pending')}
-                >
-                  <div className="p-card-title">Pending evaluation</div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
-                    <span className="p-score-ring p-status-pending" style={{ width: 64, height: 44, fontSize: 15 }}>
-                      {pendingMembers.length}
-                    </span>
-                    <span className="muted" style={{ fontSize: 11 }}>
-                      team members with a KPI mapped who haven&apos;t been scored yet, out of{' '}
-                      {teamOverview.totalActiveUsers}
-                    </span>
-                  </div>
-                  {pendingMembers.length > 0 && (
-                    <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
-                      {pendingMembers.slice(0, 8).map((m) => (
-                        <li key={m.id}>{m.displayName}</li>
-                      ))}
-                      {pendingMembers.length > 8 && <li>…and {pendingMembers.length - 8} more</li>}
-                    </ul>
-                  )}
-                </button>
-
-                <div className="p-card">
-                  <div className="p-card-title">No KPI assigned</div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
-                    <span className="p-score-ring p-status-below" style={{ width: 64, height: 44, fontSize: 15 }}>
-                      {noKpiMembers.length}
-                    </span>
-                    <span className="muted" style={{ fontSize: 11 }}>
-                      team members whose role or department has no KPI mapped to it yet
-                    </span>
-                  </div>
-                  {noKpiMembers.length > 0 && (
-                    <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
-                      {noKpiMembers.slice(0, 8).map((m) => (
-                        <li key={m.id}>{m.displayName}</li>
-                      ))}
-                      {noKpiMembers.length > 8 && <li>…and {noKpiMembers.length - 8} more</li>}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {canSeeTeamOverview && teamOverview && (
-              <div className="p-charts-row" style={{ marginBottom: 16 }}>
-                <div className="p-card">
-                  <div className="p-card-title">Submissions by department</div>
-                  {hasSubmissionsByDepartment ? (
-                    <CountBarChart
-                      data={submissionsByDepartment}
-                      textColor="var(--text-3)"
-                      gridColor="var(--border)"
-                      barColor="var(--accent)"
-                      countLabel="team members scored"
-                    />
-                  ) : (
-                    <p className="muted" style={{ fontSize: 12 }}>
-                      no scored team members yet.
-                    </p>
-                  )}
-                </div>
-
-                <div className="p-card">
-                  <div className="p-card-title">Average score by department</div>
-                  {hasScoreByDepartment ? (
-                    <CountBarChart
-                      data={scoreByDepartment}
-                      textColor="var(--text-3)"
-                      gridColor="var(--border)"
-                      barColor="var(--accent)"
-                      countLabel="avg score / 5"
-                    />
-                  ) : (
-                    <p className="muted" style={{ fontSize: 12 }}>
-                      no scored team members yet.
-                    </p>
-                  )}
-                </div>
               </div>
             )}
 
@@ -496,24 +312,6 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {canSeeTeamOverview && activityTrend && (
-              <div className="p-card" style={{ marginBottom: 16 }}>
-                <div className="p-card-title">Evaluation activity</div>
-                {activityTrend.points.some((p) => p.count > 0) ? (
-                  <ActivityTrendChart
-                    data={activityTrend.points}
-                    textColor="var(--text-3)"
-                    gridColor="var(--border)"
-                    barColor="var(--accent)"
-                  />
-                ) : (
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    no submissions to a mapped form in the last 12 weeks.
-                  </p>
-                )}
               </div>
             )}
 
@@ -645,7 +443,7 @@ export default function DashboardPage() {
                 </Table>
                 <div className="p-table-footer">
                   <span className="p-tf-count">
-                    showing {memberTableData.length} of {teamMembers.length} team members
+                    showing {memberTableData.length} of {filteredTeamMembers.length} team members
                   </span>
                   <Button
                     variant="ghost"
