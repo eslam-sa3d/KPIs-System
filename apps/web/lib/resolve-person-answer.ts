@@ -16,3 +16,12 @@ export function resolvePersonAnswer(
   if (UUID_PATTERN.test(value)) return personNames[value] ?? value;
   return value;
 }
+
+/** Resolves a 'performance_level' answer (a PerformanceLevel id, not free
+ *  text) to its label — same live-lookup split as person answers:
+ *  structural id in the stored answer, referential label resolved here
+ *  against the Configuration page's live Performance Levels list. Falls
+ *  back to the raw id if that level was since renamed away or deleted. */
+export function resolvePerformanceLevelAnswer(value: string, performanceLevelLabels: Record<string, string>): string {
+  return performanceLevelLabels[value] ?? value;
+}

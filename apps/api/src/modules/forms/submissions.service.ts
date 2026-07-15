@@ -869,6 +869,16 @@ export class SubmissionsService {
         )
       : new Map<string, string>();
 
+    // performance_level answers store a PerformanceLevel id, and select/multi_select/
+    // ranking options built via the "link to a user" picker store that user's id AS
+    // the option value — same resolution as summary(), reused here so an export
+    // doesn't leak either kind of raw id.
+    const needsPerformanceLevels = definition.fields.some((f) => f.type === 'performance_level');
+    const performanceLevels = needsPerformanceLevels
+      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
+      : [];
+    const optionLabelsByKey = new Map(definition.fields.map((f) => [f.key, optionLabelsFor(f, performanceLevels)]));
+
     const keys = definition.fields.map((f) => f.key);
     const header = ['submitted_at', 'submitted_by', ...keys];
     const rows = submissions.map((s) => {
@@ -878,8 +888,20 @@ export class SubmissionsService {
         s.submittedBy?.email ?? 'anonymous',
         ...keys.map((k) => {
           const v = answers[k];
+          const optionLabels = optionLabelsByKey.get(k);
+          if (optionLabels) {
+            if (Array.isArray(v)) return (v as string[]).map((item) => optionLabels[item] ?? item).join('; ');
+            if (typeof v === 'string') return optionLabels[v] ?? v;
+          }
           if (personFieldKeys.has(k)) return personNames.get(v as string) ?? (v ? '(deleted user)' : '');
           if (typeof v === 'string' && UUID_PATTERN.test(v)) return personNames.get(v) ?? v;
+          if (Array.isArray(v)) {
+            return (v as unknown[])
+              .map((item) =>
+                typeof item === 'string' && UUID_PATTERN.test(item) ? (personNames.get(item) ?? item) : item,
+              )
+              .join('; ');
+          }
           return serializeCsvCell(v);
         }),
       ];

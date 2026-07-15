@@ -12,6 +12,7 @@ import {
   type SubmissionAnswers,
 } from '@pulse/contracts';
 import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
+import { resolvePersonAnswer, resolvePerformanceLevelAnswer } from '../lib/resolve-person-answer';
 import type { Media } from '@pulse/contracts';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -72,16 +73,44 @@ export const isVisible = (field: FormField, answers: SubmissionAnswers) => {
   }
 };
 
+/** Resolves one piped-in answer to displayable text — a 'person'/'performance_level'
+ *  answer (or a select/multi_select/ranking option built via the "link to a user"
+ *  picker) is stored as an id, not the label a respondent should see. */
+function resolvePipedValue(
+  value: SubmissionAnswers[string] | undefined,
+  field: FormField | undefined,
+  personNames: Record<string, string>,
+  performanceLevelLabels: Record<string, string>,
+): string {
+  if (value === undefined || value === null || value === '') return '';
+  if (typeof value === 'object' && !Array.isArray(value)) return ''; // compound answers (likert/contact_info) aren't piped
+  const optionLabels =
+    field && (field.type === 'select' || field.type === 'multi_select' || field.type === 'ranking')
+      ? Object.fromEntries(field.options.map((o) => [o.value, o.label]))
+      : undefined;
+  const resolveScalar = (v: string): string => {
+    if (field?.type === 'performance_level') return resolvePerformanceLevelAnswer(v, performanceLevelLabels);
+    if (optionLabels) return optionLabels[v] ?? v;
+    return resolvePersonAnswer(v, personNames, field?.type === 'person');
+  };
+  if (Array.isArray(value)) {
+    return value.map((v) => (typeof v === 'string' ? resolveScalar(v) : String(v))).join(', ');
+  }
+  return resolveScalar(String(value));
+}
+
 /** Answer piping: replaces every {{field_key}} in a label/helpText with that
  *  field's current in-progress answer — blank until answered, never the raw tag. */
-export function applyPiping(text: string, answers: SubmissionAnswers): string {
-  return text.replace(PIPE_TAG_PATTERN, (_match, key: string) => {
-    const value = answers[key];
-    if (value === undefined || value === null || value === '') return '';
-    if (Array.isArray(value)) return value.join(', ');
-    if (typeof value === 'object') return ''; // compound answers (likert/contact_info) aren't piped
-    return String(value);
-  });
+export function applyPiping(
+  text: string,
+  answers: SubmissionAnswers,
+  fieldByKey: Map<string, FormField>,
+  personNames: Record<string, string>,
+  performanceLevelLabels: Record<string, string>,
+): string {
+  return text.replace(PIPE_TAG_PATTERN, (_match, key: string) =>
+    resolvePipedValue(answers[key], fieldByKey.get(key), personNames, performanceLevelLabels),
+  );
 }
 
 /** Exported for reuse by ResponseDetailModal's edit mode — same input for filling and correcting.
@@ -829,6 +858,41 @@ export function FormRenderer({
     [shuffledQuestionOrder],
   );
 
+  // Answer piping ({{field_key}}) needs to resolve 'person'/'performance_level' answers
+  // to a name/label, not show the raw id — fetched once per form load, gated on the form
+  // actually having one of these field types, same gating FieldInput uses per-instance.
+  const fieldByKey = useMemo(() => new Map(definition.fields.map((f) => [f.key, f])), [definition]);
+  const [pipingPersonNames, setPipingPersonNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!definition.fields.some((f) => f.type === 'person')) return;
+    let cancelled = false;
+    api<UserOption[]>('/v1/users?pageSize=200')
+      .then((users) => {
+        if (!cancelled) setPipingPersonNames(Object.fromEntries(users.map((u) => [u.id, u.displayName])));
+      })
+      .catch(() => {
+        if (!cancelled) setPipingPersonNames({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [definition]);
+  const [pipingPerformanceLevelLabels, setPipingPerformanceLevelLabels] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!definition.fields.some((f) => f.type === 'performance_level')) return;
+    let cancelled = false;
+    api<PerformanceLevelOption[]>('/v1/performance-levels')
+      .then((levels) => {
+        if (!cancelled) setPipingPerformanceLevelLabels(Object.fromEntries(levels.map((l) => [l.id, l.label])));
+      })
+      .catch(() => {
+        if (!cancelled) setPipingPerformanceLevelLabels({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [definition]);
+
   const currentIndex = currentSectionId ? Math.max(0, path.indexOf(currentSectionId)) : -1;
   const currentSection = hasSections
     ? (renderDefinition.sections!.find((s) => s.id === path[currentIndex]) ?? renderDefinition.sections![0])
@@ -1034,8 +1098,16 @@ export function FormRenderer({
             );
             let questionNumber = 0;
             return visibleFields.map((field) => {
-              const label = applyPiping(field.label, answers);
-              const helpText = field.helpText ? applyPiping(field.helpText, answers) : undefined;
+              const label = applyPiping(
+                field.label,
+                answers,
+                fieldByKey,
+                pipingPersonNames,
+                pipingPerformanceLevelLabels,
+              );
+              const helpText = field.helpText
+                ? applyPiping(field.helpText, answers, fieldByKey, pipingPersonNames, pipingPerformanceLevelLabels)
+                : undefined;
               if (field.type === 'section_header') {
                 return (
                   <div key={field.key} className="question-card section-header-card">

@@ -21,7 +21,7 @@ import { FormKpiMappingsPanel } from '../../../components/form-kpi-mappings-pane
 import { ResponseSummary, ResponseSummaryData } from '../../../components/response-summary';
 import { ResponseDetailModal } from '../../../components/response-detail-modal';
 import { apiPaged, api, downloadFile } from '../../../lib/api-client';
-import { resolvePersonAnswer } from '../../../lib/resolve-person-answer';
+import { resolvePersonAnswer, resolvePerformanceLevelAnswer } from '../../../lib/resolve-person-answer';
 import { useSession } from '../../../lib/use-session';
 
 interface FormDetail {
@@ -72,6 +72,7 @@ function FormView() {
   // Fetched unconditionally (not just when a 'person' field exists): some forms
   // store a per-area evaluatee id in an ordinary text field instead.
   const [personNames, setPersonNames] = useState<Record<string, string>>({});
+  const [performanceLevelLabels, setPerformanceLevelLabels] = useState<Record<string, string>>({});
 
   const reloadDetail = useCallback(() => {
     if (slug) void api<FormDetail>(`/v1/forms/${encodeURIComponent(slug)}`).then(setDetail);
@@ -101,6 +102,21 @@ function FormView() {
       if (!cancelled) setPersonNames(names);
     }
     void loadAllPersonNames();
+    return () => {
+      cancelled = true;
+    };
+  }, [detail]);
+
+  useEffect(() => {
+    if (!detail) return;
+    let cancelled = false;
+    api<Array<{ id: string; label: string }>>('/v1/performance-levels')
+      .then((levels) => {
+        if (!cancelled) setPerformanceLevelLabels(Object.fromEntries(levels.map((l) => [l.id, l.label])));
+      })
+      .catch(() => {
+        if (!cancelled) setPerformanceLevelLabels({});
+      });
     return () => {
       cancelled = true;
     };
@@ -389,9 +405,19 @@ function FormView() {
                                 ))}
                               </span>
                             ) : typeof value === 'string' && value ? (
-                              resolvePersonAnswer(value, personNames, f.type === 'person')
+                              f.type === 'performance_level' ? (
+                                resolvePerformanceLevelAnswer(value, performanceLevelLabels)
+                              ) : (
+                                resolvePersonAnswer(value, personNames, f.type === 'person')
+                              )
                             ) : Array.isArray(value) ? (
-                              value.join(', ')
+                              value
+                                .map((item) =>
+                                  typeof item === 'string'
+                                    ? resolvePersonAnswer(item, personNames, false)
+                                    : String(item),
+                                )
+                                .join(', ')
                             ) : typeof value === 'object' && value !== null ? (
                               JSON.stringify(value)
                             ) : (
@@ -488,6 +514,7 @@ function FormView() {
                   slug={slug}
                   canEdit={canModerate}
                   personNames={personNames}
+                  performanceLevelLabels={performanceLevelLabels}
                   onClose={() => setSelectedRowId(null)}
                   onPrev={selectedIndex > 0 ? () => setSelectedRowId(filteredRows[selectedIndex - 1]!.id) : null}
                   onNext={
