@@ -13,6 +13,7 @@ import { LoadingState } from '@/components/loading-state';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { apiPaged, api } from '../lib/api-client';
+import { useReveal } from '../lib/use-reveal';
 
 const PAGE_SIZE = 25;
 // Keystrokes settle before firing a request, so typing a name doesn't
@@ -244,8 +245,10 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   const canEditUsers = can(user, 'users:edit');
   const canToggleUserStatus = can(user, 'users:activate_deactivate');
 
+  const scopeRef = useReveal<HTMLDivElement>('.insight-card, tbody tr', users !== null && users.length > 0);
+
   return (
-    <>
+    <div ref={scopeRef}>
       {stats && (
         <div className="insights-row">
           <div className="insight-card tone-purple">
@@ -577,6 +580,6 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
           </span>
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -29,6 +29,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 import { useResource } from '../../../lib/use-resource';
+import { useReveal } from '../../../lib/use-reveal';
 
 interface PermissionGrant {
   resource: string;
@@ -338,201 +339,214 @@ export default function RolesAdminPage() {
     }
   }
 
+  const scopeRef = useReveal<HTMLDivElement>('tbody tr', roles !== null && roles.length > 0);
+
   return (
     <PortalShell user={user}>
-      <div className="page-title-row">
-        <h1>roles</h1>
-        {canEdit && catalog && !creatingRole && (
-          <Button
-            type="button"
-            variant="outline"
-            className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
-            onClick={() => setCreatingRole(true)}
-          >
-            <Plus size={16} aria-hidden="true" />
-            new role
-          </Button>
-        )}
-      </div>
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {canEdit && catalog && creatingRole && (
-        <Card>
-          <CardContent className="pt-6">
+      <div ref={scopeRef}>
+        <div className="page-title-row">
+          <h1>roles</h1>
+          {canEdit && catalog && !creatingRole && (
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
-              className="mb-2 -ml-2 text-muted-foreground hover:text-foreground"
-              onClick={() => setCreatingRole(false)}
+              variant="outline"
+              className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
+              onClick={() => setCreatingRole(true)}
             >
-              <ArrowLeft size={16} aria-hidden="true" />
-              back to roles
+              <Plus size={16} aria-hidden="true" />
+              new role
             </Button>
-            <form className="builder" onSubmit={onCreate}>
-              <h2 className="text-lg font-semibold mb-2">new role</h2>
-              <label htmlFor="r-name">role name</label>
-              <Input id="r-name" name="name" required minLength={2} autoFocus />
-              <label htmlFor="r-desc">description</label>
-              <Input id="r-desc" name="description" />
-              <span className="field-label">permissions</span>
-              <PermissionFields catalog={catalog} performanceLevels={performanceLevels ?? []} defaultPermissions={[]} />
-              <span className="builder-field-actions">
-                <Button type="submit">create role</Button>
-                <Button type="button" variant="ghost" onClick={() => setCreatingRole(false)}>
-                  cancel
-                </Button>
-              </span>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {roles === null ? (
-        <LoadingState />
-      ) : roles.length === 0 ? (
-        <div className="empty-state">
-          <h2>no roles yet</h2>
-          <p className="muted">create the first custom role above to start composing access tiers.</p>
+          )}
         </div>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>role</TableHead>
-              <TableHead>members</TableHead>
-              <TableHead>permissions</TableHead>
-              {canManageColumn && <TableHead />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {roles.map((role) => (
-              <Fragment key={role.id}>
-                <TableRow>
-                  <TableCell>
-                    {renamingRoleId === role.id ? (
-                      <form className="inline-form" onSubmit={(e) => onRename(role.id, e)}>
-                        <Input name="name" defaultValue={role.name} required minLength={2} autoFocus />
-                        <Button type="submit" variant="ghost" size="sm">
-                          save
-                        </Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingRoleId(null)}>
-                          cancel
-                        </Button>
-                      </form>
-                    ) : (
-                      <>
-                        {role.name}
-                        {role.isSystem && <span className="muted"> (system)</span>}
-                        {!role.isActive && <span className="muted"> (deactivated)</span>}
-                        {role.description && <div className="muted">{role.description}</div>}
-                      </>
-                    )}
-                  </TableCell>
-                  <TableCell>{role.memberCount}</TableCell>
-                  <TableCell>
-                    <span className="chip-row">
-                      {role.permissions.map((p) => (
-                        <code key={permKey(p.resource, p.action)} className="perm-chip">
-                          {RESOURCE_LABEL[p.resource] ?? p.resource}:{ACTION_LABEL[p.action] ?? p.action}
-                          {p.scope !== 'all' &&
-                            ` (${p.scope}${p.scope === 'level' ? `: ${p.scopeValues.length}` : ''})`}
-                        </code>
-                      ))}
-                    </span>
-                  </TableCell>
-                  {canManageColumn && (
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {canEdit && catalog && creatingRole && (
+          <Card>
+            <CardContent className="pt-6">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mb-2 -ml-2 text-muted-foreground hover:text-foreground"
+                onClick={() => setCreatingRole(false)}
+              >
+                <ArrowLeft size={16} aria-hidden="true" />
+                back to roles
+              </Button>
+              <form className="builder" onSubmit={onCreate}>
+                <h2 className="text-lg font-semibold mb-2">new role</h2>
+                <label htmlFor="r-name">role name</label>
+                <Input id="r-name" name="name" required minLength={2} autoFocus />
+                <label htmlFor="r-desc">description</label>
+                <Input id="r-desc" name="description" />
+                <span className="field-label">permissions</span>
+                <PermissionFields
+                  catalog={catalog}
+                  performanceLevels={performanceLevels ?? []}
+                  defaultPermissions={[]}
+                />
+                <span className="builder-field-actions">
+                  <Button type="submit">create role</Button>
+                  <Button type="button" variant="ghost" onClick={() => setCreatingRole(false)}>
+                    cancel
+                  </Button>
+                </span>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {roles === null ? (
+          <LoadingState />
+        ) : roles.length === 0 ? (
+          <div className="empty-state">
+            <h2>no roles yet</h2>
+            <p className="muted">create the first custom role above to start composing access tiers.</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>role</TableHead>
+                <TableHead>members</TableHead>
+                <TableHead>permissions</TableHead>
+                {canManageColumn && <TableHead />}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {roles.map((role) => (
+                <Fragment key={role.id}>
+                  <TableRow>
                     <TableCell>
-                      {!role.isSystem && renamingRoleId !== role.id && (
-                        <span className="builder-field-actions">
-                          {canEdit && (
-                            <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingRoleId(role.id)}>
-                              rename
-                            </Button>
-                          )}
-                          {canEdit && catalog && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setEditingPermissionsRoleId(editingPermissionsRoleId === role.id ? null : role.id)
-                              }
-                            >
-                              {editingPermissionsRoleId === role.id ? 'close' : 'edit permissions'}
-                            </Button>
-                          )}
-                          {canToggleStatus && (
-                            <Button type="button" variant="ghost" size="sm" onClick={() => onToggleActive(role)}>
-                              {role.isActive ? 'deactivate' : 'reactivate'}
-                            </Button>
-                          )}
-                          {canDelete &&
-                            (confirmDeleteRoleId === role.id ? (
-                              <>
-                                <span className="muted">delete permanently?</span>
-                                <Button type="button" variant="ghost" size="sm" onClick={() => onDelete(role.id)}>
-                                  confirm delete
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setConfirmDeleteRoleId(null)}
-                                >
-                                  cancel
-                                </Button>
-                              </>
-                            ) : (
+                      {renamingRoleId === role.id ? (
+                        <form className="inline-form" onSubmit={(e) => onRename(role.id, e)}>
+                          <Input name="name" defaultValue={role.name} required minLength={2} autoFocus />
+                          <Button type="submit" variant="ghost" size="sm">
+                            save
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingRoleId(null)}>
+                            cancel
+                          </Button>
+                        </form>
+                      ) : (
+                        <>
+                          {role.name}
+                          {role.isSystem && <span className="muted"> (system)</span>}
+                          {!role.isActive && <span className="muted"> (deactivated)</span>}
+                          {role.description && <div className="muted">{role.description}</div>}
+                        </>
+                      )}
+                    </TableCell>
+                    <TableCell>{role.memberCount}</TableCell>
+                    <TableCell>
+                      <span className="chip-row">
+                        {role.permissions.map((p) => (
+                          <code key={permKey(p.resource, p.action)} className="perm-chip">
+                            {RESOURCE_LABEL[p.resource] ?? p.resource}:{ACTION_LABEL[p.action] ?? p.action}
+                            {p.scope !== 'all' &&
+                              ` (${p.scope}${p.scope === 'level' ? `: ${p.scopeValues.length}` : ''})`}
+                          </code>
+                        ))}
+                      </span>
+                    </TableCell>
+                    {canManageColumn && (
+                      <TableCell>
+                        {!role.isSystem && renamingRoleId !== role.id && (
+                          <span className="builder-field-actions">
+                            {canEdit && (
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setConfirmDeleteRoleId(role.id)}
+                                onClick={() => setRenamingRoleId(role.id)}
                               >
-                                delete
+                                rename
                               </Button>
-                            ))}
-                        </span>
-                      )}
-                    </TableCell>
-                  )}
-                </TableRow>
-                {editingPermissionsRoleId === role.id && catalog && (
-                  <TableRow key={`${role.id}-edit-permissions`}>
-                    <TableCell colSpan={canManageColumn ? 4 : 3}>
-                      <form key={role.id} className="builder" onSubmit={(e) => onSavePermissions(role.id, e)}>
-                        <PermissionFields
-                          catalog={catalog}
-                          performanceLevels={performanceLevels ?? []}
-                          defaultPermissions={role.permissions}
-                        />
-                        <span className="builder-field-actions">
-                          <Button type="submit" size="sm">
-                            save permissions
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditingPermissionsRoleId(null)}
-                          >
-                            cancel
-                          </Button>
-                        </span>
-                      </form>
-                    </TableCell>
+                            )}
+                            {canEdit && catalog && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setEditingPermissionsRoleId(editingPermissionsRoleId === role.id ? null : role.id)
+                                }
+                              >
+                                {editingPermissionsRoleId === role.id ? 'close' : 'edit permissions'}
+                              </Button>
+                            )}
+                            {canToggleStatus && (
+                              <Button type="button" variant="ghost" size="sm" onClick={() => onToggleActive(role)}>
+                                {role.isActive ? 'deactivate' : 'reactivate'}
+                              </Button>
+                            )}
+                            {canDelete &&
+                              (confirmDeleteRoleId === role.id ? (
+                                <>
+                                  <span className="muted">delete permanently?</span>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => onDelete(role.id)}>
+                                    confirm delete
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setConfirmDeleteRoleId(null)}
+                                  >
+                                    cancel
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setConfirmDeleteRoleId(role.id)}
+                                >
+                                  delete
+                                </Button>
+                              ))}
+                          </span>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
-                )}
-              </Fragment>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+                  {editingPermissionsRoleId === role.id && catalog && (
+                    <TableRow key={`${role.id}-edit-permissions`}>
+                      <TableCell colSpan={canManageColumn ? 4 : 3}>
+                        <form key={role.id} className="builder" onSubmit={(e) => onSavePermissions(role.id, e)}>
+                          <PermissionFields
+                            catalog={catalog}
+                            performanceLevels={performanceLevels ?? []}
+                            defaultPermissions={role.permissions}
+                          />
+                          <span className="builder-field-actions">
+                            <Button type="submit" size="sm">
+                              save permissions
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingPermissionsRoleId(null)}
+                            >
+                              cancel
+                            </Button>
+                          </span>
+                        </form>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
     </PortalShell>
   );
 }

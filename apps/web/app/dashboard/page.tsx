@@ -2,16 +2,8 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import type {
-  ActivityTrend,
-  MeasurementGaps,
-  RecentFeedback,
-  TeamMemberBreakdown,
-  TeamOverview,
-} from '@pulse/contracts';
+import type { ActivityTrend, RecentFeedback, TeamMemberBreakdown, TeamOverview } from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
-import { KpiDetailDrawer, DrawerKpi } from '../../components/kpi-detail-drawer';
 import { TeamMemberDetailDrawer } from '../../components/team-member-detail-drawer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +13,7 @@ import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useSession } from '../../lib/use-session';
 import { useResource } from '../../lib/use-resource';
+import { useReveal } from '../../lib/use-reveal';
 import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusBadgeStyle, statusOf } from '../../lib/kpi-status';
 
 // Lazy-loaded: recharts only ships once the dashboard actually renders a chart.
@@ -78,7 +71,6 @@ interface RawKpi {
   evaluationAreas: RawEvaluationArea[];
 }
 
-type KpiSortKey = 'name' | 'latest' | 'updated';
 type MemberSortKey = 'name' | 'department' | 'updated';
 type CoverageFilter = 'all' | 'scored' | 'pending';
 
@@ -96,20 +88,9 @@ const REVIEW_TYPE_LABEL: Record<string, string> = {
   '360': '360',
 };
 
-/** Every submission across a KPI's areas, most recent first — loadScoredSubmissions
- *  already sorts each area's own list, so this just merges and re-sorts across areas. */
-function allSubmissions(kpi: RawKpi): RawSubmission[] {
-  return kpi.evaluationAreas
-    .flatMap((a) => a.recentSubmissions)
-    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-}
-
 export default function DashboardPage() {
   const user = useSession();
   const [level, setLevel] = useState('all');
-  const [statusFilter, setStatusFilter] = useState<StatusKey | 'all'>('all');
-  const [sort, setSort] = useState<{ key: KpiSortKey; dir: 1 | -1 }>({ key: 'updated', dir: -1 });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberCoverageFilter, setMemberCoverageFilter] = useState<CoverageFilter>('all');
   const [memberStatusFilter, setMemberStatusFilter] = useState<StatusKey | 'all'>('all');
@@ -122,11 +103,6 @@ export default function DashboardPage() {
   // org-wide roster with KPI coverage/latest submission/last-updated — admin-only, powers the team coverage cards and table below
   const { data: teamOverview } = useResource<TeamOverview>(
     user && canSeeTeamOverview ? '/v1/kpis/team-overview' : null,
-  );
-
-  // unmapped score-eligible questions + stale evaluation areas, org-wide
-  const { data: measurementGaps } = useResource<MeasurementGaps>(
-    user && canSeeTeamOverview ? '/v1/kpis/measurement-gaps' : null,
   );
 
   // recent context/comment feedback, org-wide — the qualitative signal
@@ -208,25 +184,6 @@ export default function DashboardPage() {
     return avg;
   }, [kpiCoveredMembers]);
 
-  const kpiTableData = useMemo(() => {
-    let data = statusFilter === 'all' ? levelData : levelData.filter((k) => statusOf(k.latestValue) === statusFilter);
-    data = [...data].sort((a, b) => {
-      const dir = sort.dir;
-      switch (sort.key) {
-        case 'name':
-          return a.name.localeCompare(b.name) * dir;
-        case 'updated':
-        case 'latest':
-        default: {
-          const av = allSubmissions(a)[0]?.submittedAt ?? '';
-          const bv = allSubmissions(b)[0]?.submittedAt ?? '';
-          return av.localeCompare(bv) * dir;
-        }
-      }
-    });
-    return data;
-  }, [levelData, statusFilter, sort]);
-
   // Tally each rater's reviewType across every area's most recent
   // submissions, so the dashboard shows the self/peer/manager/360 mix
   // behind the raw values above.
@@ -240,26 +197,6 @@ export default function DashboardPage() {
     return counts;
   }, [areasFlat]);
   const reviewMixTotal = Object.values(reviewMix).reduce((a, b) => a + b, 0);
-
-  const submissionsByCadence = useMemo(() => {
-    const groups = level === 'all' ? levels : [level];
-    return groups.map((g) => ({
-      label: CADENCE_LABEL[g] ?? g,
-      count: areasFlat.filter((a) => a.cadence === g).reduce((sum, a) => sum + a.recentSubmissions.length, 0),
-    }));
-  }, [areasFlat, level, levels]);
-  const hasSubmissionsByCadence = submissionsByCadence.some((g) => g.count > 0);
-
-  const submissionsByPerson = useMemo(() => {
-    const byPerson = new Map<string, number>();
-    for (const area of areasFlat) {
-      for (const s of area.recentSubmissions) {
-        byPerson.set(s.personName, (byPerson.get(s.personName) ?? 0) + 1);
-      }
-    }
-    return [...byPerson.entries()].map(([label, count]) => ({ label, count }));
-  }, [areasFlat]);
-  const hasSubmissionsByPerson = submissionsByPerson.length > 0;
 
   const noKpiMembers = useMemo(() => teamMembers.filter((m) => !m.hasKpi), [teamMembers]);
   const pendingMembers = useMemo(
@@ -337,56 +274,13 @@ export default function DashboardPage() {
     setMemberSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
   }
 
-  function sortBy(key: KpiSortKey) {
-    setSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
-  }
-
-  const selected = kpis?.find((k) => k.id === selectedId) ?? null;
-  // This KPI's own review-type mix and anonymous rate, scoped to its own
-  // recent submissions — distinct from the org-wide reviewMix above, which
-  // is one flat tally across every KPI in the current cadence view.
-  const selectedReviewStats = useMemo(() => {
-    if (!selected) return { reviewMix: {} as Record<string, number>, anonymousRate: null as number | null };
-    const counts: Record<string, number> = {};
-    let anonymousCount = 0;
-    let total = 0;
-    for (const s of allSubmissions(selected)) {
-      counts[s.reviewType] = (counts[s.reviewType] ?? 0) + 1;
-      if (s.anonymous) anonymousCount += 1;
-      total += 1;
-    }
-    return { reviewMix: counts, anonymousRate: total > 0 ? Math.round((anonymousCount / total) * 100) : null };
-  }, [selected]);
-
-  const drawerKpi: DrawerKpi | null = selected
-    ? {
-        id: selected.id,
-        name: selected.name,
-        reviewMix: selectedReviewStats.reviewMix,
-        anonymousRate: selectedReviewStats.anonymousRate,
-        areas: selected.evaluationAreas.map((a) => ({
-          id: a.id,
-          name: a.name,
-          cadence: CADENCE_LABEL[a.cadence] ?? a.cadence,
-          submissions: a.recentSubmissions.map((s) => ({
-            display: s.display,
-            personName: s.personName,
-            evaluatorName: s.enteredBy.displayName,
-            reviewType: s.reviewType,
-            anonymous: s.anonymous,
-            context: s.context,
-            comment: s.comment,
-            submittedAt: s.submittedAt,
-          })),
-        })),
-      }
-    : null;
-
   const levelLabel = level === 'all' ? 'all cadences' : (CADENCE_LABEL[level] ?? level);
+
+  const dashboardRef = useReveal<HTMLDivElement>('.p-kpi-card, .p-card, .p-table-card', kpis !== null);
 
   return (
     <PortalShell user={user}>
-      <div className="p-dashboard">
+      <div className="p-dashboard" ref={dashboardRef}>
         <div className="page-title-row">
           <div>
             <h1>KPI dashboard</h1>
@@ -580,68 +474,6 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {canSeeTeamOverview && measurementGaps && (
-              <div className="p-charts-row" style={{ marginBottom: 16 }}>
-                <div className="p-card">
-                  <div className="p-card-title">Unmapped questions</div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
-                    <span className="p-score-ring p-status-below" style={{ width: 64, height: 44, fontSize: 15 }}>
-                      {measurementGaps.unmappedQuestions.total}
-                    </span>
-                    <span className="muted" style={{ fontSize: 11 }}>
-                      score-eligible question{measurementGaps.unmappedQuestions.total === 1 ? '' : 's'} on a published
-                      form that no KPI mapping points at
-                    </span>
-                  </div>
-                  {measurementGaps.unmappedQuestions.items.length > 0 && (
-                    <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
-                      {measurementGaps.unmappedQuestions.items.slice(0, 8).map((q) => (
-                        <li key={`${q.formSlug}-${q.fieldKey}`}>
-                          <Link href={`/forms/view?slug=${q.formSlug}`}>{q.fieldLabel}</Link>{' '}
-                          <span className="muted">· {q.formTitle}</span>
-                        </li>
-                      ))}
-                      {measurementGaps.unmappedQuestions.total > 8 && (
-                        <li>…and {measurementGaps.unmappedQuestions.total - 8} more</li>
-                      )}
-                    </ul>
-                  )}
-                </div>
-
-                <div className="p-card">
-                  <div className="p-card-title">Stale evaluation areas</div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
-                    <span className="p-score-ring p-status-below" style={{ width: 64, height: 44, fontSize: 15 }}>
-                      {measurementGaps.staleAreas.total}
-                    </span>
-                    <span className="muted" style={{ fontSize: 11 }}>
-                      area{measurementGaps.staleAreas.total === 1 ? '' : 's'} not scored recently enough for their own
-                      cadence
-                    </span>
-                  </div>
-                  {measurementGaps.staleAreas.items.length > 0 && (
-                    <ul className="muted" style={{ fontSize: 12, margin: '8px 0 0', paddingLeft: 18 }}>
-                      {measurementGaps.staleAreas.items.slice(0, 8).map((a) => (
-                        <li key={a.areaId}>
-                          {a.kpiName} · {a.areaName}{' '}
-                          <span className="muted">
-                            (
-                            {a.lastScoredAt
-                              ? `last scored ${new Date(a.lastScoredAt).toLocaleDateString()}`
-                              : 'never scored'}
-                            )
-                          </span>
-                        </li>
-                      ))}
-                      {measurementGaps.staleAreas.total > 8 && (
-                        <li>…and {measurementGaps.staleAreas.total - 8} more</li>
-                      )}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            )}
-
             {canSeeTeamOverview && recentFeedback && recentFeedback.entries.length > 0 && (
               <div className="p-card" style={{ marginBottom: 16 }}>
                 <div className="p-card-title">Recent feedback</div>
@@ -685,169 +517,8 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <div className="p-charts-row">
-              <div className="p-card">
-                <div className="p-card-title">Submissions by cadence</div>
-                {hasSubmissionsByCadence ? (
-                  <CountBarChart
-                    data={submissionsByCadence}
-                    textColor="var(--text-3)"
-                    gridColor="var(--border)"
-                    barColor="var(--accent)"
-                  />
-                ) : (
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    no scored submissions in this view yet.
-                  </p>
-                )}
-              </div>
-
-              <div className="p-card">
-                <div className="p-card-title">Submissions by person</div>
-                {hasSubmissionsByPerson ? (
-                  <CountBarChart
-                    data={submissionsByPerson}
-                    textColor="var(--text-3)"
-                    gridColor="var(--border)"
-                    barColor="var(--accent)"
-                  />
-                ) : (
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    no scored submissions in this view yet.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="p-table-card">
-              <div className="p-table-header">
-                <div className="p-filter-pills">
-                  {(['all', ...STATUS_ORDER] as const).map((s) => (
-                    <Badge
-                      key={s}
-                      asChild
-                      variant={statusFilter === s ? 'default' : 'outline'}
-                      className="cursor-pointer py-1"
-                    >
-                      <button onClick={() => setStatusFilter(s)}>{s === 'all' ? 'All' : STATUS_LABEL[s]}</button>
-                    </Badge>
-                  ))}
-                </div>
-                <span className="muted" style={{ fontSize: 11 }}>
-                  sort: {sort.key} {sort.dir > 0 ? '↑' : '↓'}
-                </span>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead
-                      className="p-th-sortable"
-                      aria-sort={sort.key === 'name' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
-                    >
-                      <button type="button" onClick={() => sortBy('name')}>
-                        name
-                      </button>
-                    </TableHead>
-                    <TableHead>areas</TableHead>
-                    <TableHead
-                      className="p-th-sortable"
-                      aria-sort={sort.key === 'latest' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
-                    >
-                      <button type="button" onClick={() => sortBy('latest')}>
-                        latest
-                      </button>
-                    </TableHead>
-                    <TableHead>status</TableHead>
-                    <TableHead
-                      className="p-th-sortable"
-                      aria-sort={sort.key === 'updated' ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}
-                    >
-                      <button type="button" onClick={() => sortBy('updated')}>
-                        last updated
-                      </button>
-                    </TableHead>
-                    <TableHead>action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {kpiTableData.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="muted" style={{ textAlign: 'center' }}>
-                        {kpis.length === 0 ? 'no KPIs assigned yet.' : 'no KPIs match this filter.'}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    kpiTableData.map((k) => {
-                      const latest = allSubmissions(k)[0] ?? null;
-                      const status = statusOf(k.latestValue);
-                      return (
-                        <TableRow
-                          key={k.id}
-                          tabIndex={0}
-                          role="button"
-                          aria-label={`view ${k.name}`}
-                          onClick={() => setSelectedId(k.id)}
-                          onKeyDown={(e) => {
-                            if (e.target !== e.currentTarget) return;
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setSelectedId(k.id);
-                            }
-                          }}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <TableCell style={{ fontWeight: 500 }}>{k.name}</TableCell>
-                          <TableCell className="muted">{k.evaluationAreas.length}</TableCell>
-                          <TableCell>
-                            {latest ? (
-                              <span className="p-score-ring p-status-meets">{latest.display}</span>
-                            ) : (
-                              <span className="p-score-ring p-status-pending">—</span>
-                            )}
-                            {latest && (
-                              <span className="muted" style={{ marginLeft: 8, fontSize: 11 }}>
-                                {latest.evaluationAreaName}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className="border-transparent" style={statusBadgeStyle(status)}>
-                              {STATUS_LABEL[status]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
-                            {latest ? new Date(latest.submittedAt).toLocaleDateString() : '—'}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedId(k.id);
-                              }}
-                            >
-                              View →
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-              <div className="p-table-footer">
-                <span className="p-tf-count">
-                  showing {kpiTableData.length} of {levelData.length} KPIs
-                </span>
-                <Button variant="ghost" size="sm" onClick={() => setStatusFilter('all')}>
-                  clear filters
-                </Button>
-              </div>
-            </div>
-
             {canSeeTeamOverview && teamOverview && (
-              <div className="p-table-card" style={{ marginTop: 16 }}>
+              <div className="p-table-card">
                 <div className="p-table-header">
                   <div className="p-filter-pills">
                     {(['all', 'scored', 'pending'] as const).map((s) => (
@@ -993,7 +664,6 @@ export default function DashboardPage() {
           </>
         )}
 
-        <KpiDetailDrawer kpi={drawerKpi} onClose={() => setSelectedId(null)} />
         <TeamMemberDetailDrawer
           breakdown={currentMemberBreakdown}
           score={teamMembers.find((m) => m.id === selectedMemberId)?.score ?? null}

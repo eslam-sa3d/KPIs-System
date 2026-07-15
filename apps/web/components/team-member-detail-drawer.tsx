@@ -18,8 +18,7 @@ const REVIEW_TYPE_LABEL: Record<string, string> = {
  * Slide-in detail panel for a single team member, opened from the dashboard's
  * team overview table — a chronological feed of their own scored submissions,
  * across every KPI that covers them. Each row is a real, traceable
- * FormSubmission answer, never blended with any other (see KpiDetailDrawer
- * for the equivalent per-KPI view on the self-view side).
+ * FormSubmission answer, never blended with any other.
  */
 export function TeamMemberDetailDrawer({
   breakdown,

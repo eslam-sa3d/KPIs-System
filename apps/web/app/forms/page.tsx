@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 import { useResource } from '../../lib/use-resource';
+import { useReveal } from '../../lib/use-reveal';
 
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -82,263 +83,270 @@ export default function FormsPage() {
     setEditingFolderId(null);
   }
 
+  const scopeRef = useReveal<HTMLDivElement>('.insight-card, tbody tr', forms !== null && forms.length > 0);
+
   return (
     <PortalShell user={user}>
-      <div className="page-title-row">
-        <h1>forms</h1>
-        <Button asChild>
-          <Link href="/forms/new">new form</Link>
-        </Button>
-      </div>
-      <p className="portal-subtitle">collect data with custom forms, then aggregate and export it</p>
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      <div ref={scopeRef}>
+        <div className="page-title-row">
+          <h1>forms</h1>
+          <Button asChild>
+            <Link href="/forms/new">new form</Link>
+          </Button>
+        </div>
+        <p className="portal-subtitle">collect data with custom forms, then aggregate and export it</p>
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-      {forms === null ? (
-        <div className="rounded-md border bg-card mt-4 mb-6 p-6" style={{ display: 'flex', justifyContent: 'center' }}>
-          <Spinner className="size-6" />
-        </div>
-      ) : forms.length === 0 ? (
-        <div className="empty-state">
-          <span className="empty-state-icon">
-            <ClipboardList size={22} aria-hidden="true" />
-          </span>
-          <h2>no forms yet</h2>
-          <p className="muted">create your first data-entry form to start collecting.</p>
-        </div>
-      ) : (
-        <>
-          {stats && (
-            <div className="insights-row">
-              <div className="insight-card tone-purple">
-                <span className="hierarchy-icon hierarchy-icon-sm">
-                  <ClipboardList size={15} aria-hidden="true" />
-                </span>
-                <span className="insight-card-body">
-                  <strong>{stats.total}</strong>
-                  <span>{stats.total === 1 ? 'form' : 'forms'}</span>
-                </span>
-              </div>
-              <div className="insight-card tone-green">
-                <span className="hierarchy-icon hierarchy-icon-sm">
-                  <ClipboardList size={15} aria-hidden="true" />
-                </span>
-                <span className="insight-card-body">
-                  <strong>{stats.open}</strong>
-                  <span>accepting responses</span>
-                </span>
-              </div>
-              <div className="insight-card tone-blue">
-                <span className="hierarchy-icon hierarchy-icon-sm">
-                  <Share2 size={15} aria-hidden="true" />
-                </span>
-                <span className="insight-card-body">
-                  <strong>{stats.shared}</strong>
-                  <span>shared publicly</span>
-                </span>
-              </div>
-              {stats.archived > 0 && (
-                <div className="insight-card tone-gray">
+        {forms === null ? (
+          <div
+            className="rounded-md border bg-card mt-4 mb-6 p-6"
+            style={{ display: 'flex', justifyContent: 'center' }}
+          >
+            <Spinner className="size-6" />
+          </div>
+        ) : forms.length === 0 ? (
+          <div className="empty-state">
+            <span className="empty-state-icon">
+              <ClipboardList size={22} aria-hidden="true" />
+            </span>
+            <h2>no forms yet</h2>
+            <p className="muted">create your first data-entry form to start collecting.</p>
+          </div>
+        ) : (
+          <>
+            {stats && (
+              <div className="insights-row">
+                <div className="insight-card tone-purple">
                   <span className="hierarchy-icon hierarchy-icon-sm">
-                    <FolderOpen size={15} aria-hidden="true" />
+                    <ClipboardList size={15} aria-hidden="true" />
                   </span>
                   <span className="insight-card-body">
-                    <strong>{stats.archived}</strong>
-                    <span>archived</span>
+                    <strong>{stats.total}</strong>
+                    <span>{stats.total === 1 ? 'form' : 'forms'}</span>
                   </span>
                 </div>
-              )}
+                <div className="insight-card tone-green">
+                  <span className="hierarchy-icon hierarchy-icon-sm">
+                    <ClipboardList size={15} aria-hidden="true" />
+                  </span>
+                  <span className="insight-card-body">
+                    <strong>{stats.open}</strong>
+                    <span>accepting responses</span>
+                  </span>
+                </div>
+                <div className="insight-card tone-blue">
+                  <span className="hierarchy-icon hierarchy-icon-sm">
+                    <Share2 size={15} aria-hidden="true" />
+                  </span>
+                  <span className="insight-card-body">
+                    <strong>{stats.shared}</strong>
+                    <span>shared publicly</span>
+                  </span>
+                </div>
+                {stats.archived > 0 && (
+                  <div className="insight-card tone-gray">
+                    <span className="hierarchy-icon hierarchy-icon-sm">
+                      <FolderOpen size={15} aria-hidden="true" />
+                    </span>
+                    <span className="insight-card-body">
+                      <strong>{stats.archived}</strong>
+                      <span>archived</span>
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="kpi-search">
+              <Search size={16} aria-hidden="true" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="search forms by title…"
+                aria-label="search forms"
+              />
             </div>
-          )}
 
-          <div className="kpi-search">
-            <Search size={16} aria-hidden="true" />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="search forms by title…"
-              aria-label="search forms"
-            />
-          </div>
+            {folders.length > 0 && (
+              <div className="page-title-row" style={{ marginBottom: 8 }}>
+                <label htmlFor="forms-folder-filter" className="muted" style={{ fontSize: 13 }}>
+                  folder
+                </label>
+                <Select
+                  value={folderFilter || '__all__'}
+                  onValueChange={(v) => setFolderFilter(v === '__all__' ? '' : v)}
+                >
+                  <SelectTrigger id="forms-folder-filter" size="sm" className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">all folders</SelectItem>
+                    {folders.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-          {folders.length > 0 && (
-            <div className="page-title-row" style={{ marginBottom: 8 }}>
-              <label htmlFor="forms-folder-filter" className="muted" style={{ fontSize: 13 }}>
-                folder
-              </label>
-              <Select
-                value={folderFilter || '__all__'}
-                onValueChange={(v) => setFolderFilter(v === '__all__' ? '' : v)}
-              >
-                <SelectTrigger id="forms-folder-filter" size="sm" className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">all folders</SelectItem>
-                  {folders.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {f}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {visibleForms.length === 0 ? (
-            <p className="empty-state-inline">
-              <Search size={14} aria-hidden="true" />
-              no forms match your filters
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>title</TableHead>
-                  <TableHead>status</TableHead>
-                  <TableHead>fields</TableHead>
-                  <TableHead>version</TableHead>
-                  <TableHead>public link</TableHead>
-                  <TableHead>folder</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleForms.map((form) => (
-                  <TableRow key={form.id} className="hover-actions-row">
-                    <TableCell>
-                      <Link href={`/forms/view?slug=${encodeURIComponent(form.slug)}`}>{form.title}</Link>
-                    </TableCell>
-                    <TableCell>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        {form.status === 'archived' ? (
-                          <StatusBadge active={false} label="archived" size="sm" />
-                        ) : (
-                          <StatusBadge
-                            active={form.settings.acceptingResponses}
-                            label={form.settings.acceptingResponses ? 'open' : 'closed'}
-                            size="sm"
-                          />
-                        )}
-                        {(form.hasSubmissionGap || form.mappedWhileClosed) && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                aria-label="form health warning"
-                                style={{
-                                  display: 'inline-flex',
-                                  background: 'none',
-                                  border: 'none',
-                                  padding: 0,
-                                  cursor: 'default',
-                                  color: 'var(--amber)',
-                                }}
-                              >
-                                <AlertTriangle size={14} aria-hidden="true" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {form.hasSubmissionGap && <p>open, but no submissions in 30+ days</p>}
-                              {form.mappedWhileClosed && <p>linked to a KPI, but not currently reachable</p>}
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </span>
-                    </TableCell>
-                    <TableCell>{pluralize(form.fieldCount, 'field')}</TableCell>
-                    <TableCell>v{form.version}</TableCell>
-                    <TableCell>{form.hasPublicLink ? 'shared' : '—'}</TableCell>
-                    <TableCell>
-                      {editingFolderId === form.id ? (
-                        <span className="builder-required">
-                          <input
-                            aria-label="folder"
-                            value={folderDraft}
-                            onChange={(e) => setFolderDraft(e.target.value)}
-                            placeholder="no folder"
-                            style={{ width: 120 }}
-                          />
-                          <Button type="button" variant="ghost" size="sm" onClick={() => saveFolder(form.id)}>
-                            save
-                          </Button>
+            {visibleForms.length === 0 ? (
+              <p className="empty-state-inline">
+                <Search size={14} aria-hidden="true" />
+                no forms match your filters
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>title</TableHead>
+                    <TableHead>status</TableHead>
+                    <TableHead>fields</TableHead>
+                    <TableHead>version</TableHead>
+                    <TableHead>public link</TableHead>
+                    <TableHead>folder</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleForms.map((form) => (
+                    <TableRow key={form.id} className="hover-actions-row">
+                      <TableCell>
+                        <Link href={`/forms/view?slug=${encodeURIComponent(form.slug)}`}>{form.title}</Link>
+                      </TableCell>
+                      <TableCell>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          {form.status === 'archived' ? (
+                            <StatusBadge active={false} label="archived" size="sm" />
+                          ) : (
+                            <StatusBadge
+                              active={form.settings.acceptingResponses}
+                              label={form.settings.acceptingResponses ? 'open' : 'closed'}
+                              size="sm"
+                            />
+                          )}
+                          {(form.hasSubmissionGap || form.mappedWhileClosed) && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label="form health warning"
+                                  style={{
+                                    display: 'inline-flex',
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: 0,
+                                    cursor: 'default',
+                                    color: 'var(--amber)',
+                                  }}
+                                >
+                                  <AlertTriangle size={14} aria-hidden="true" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {form.hasSubmissionGap && <p>open, but no submissions in 30+ days</p>}
+                                {form.mappedWhileClosed && <p>linked to a KPI, but not currently reachable</p>}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                         </span>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-primary hover:text-primary"
-                          onClick={() => {
-                            setEditingFolderId(form.id);
-                            setFolderDraft(form.folder ?? '');
-                          }}
-                        >
-                          {form.folder ?? 'move to folder'}
-                        </Button>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="row-actions hover-actions">
-                        {can(user, 'forms:edit') && (
-                          <Button asChild variant="ghost" size="icon-sm" aria-label={`edit ${form.title}`}>
-                            <Link href={`/forms/new?edit=${encodeURIComponent(form.slug)}`}>
-                              <Pencil size={14} aria-hidden="true" />
-                            </Link>
-                          </Button>
-                        )}
-                        {can(user, 'forms:activate_deactivate') && (
+                      </TableCell>
+                      <TableCell>{pluralize(form.fieldCount, 'field')}</TableCell>
+                      <TableCell>v{form.version}</TableCell>
+                      <TableCell>{form.hasPublicLink ? 'shared' : '—'}</TableCell>
+                      <TableCell>
+                        {editingFolderId === form.id ? (
+                          <span className="builder-required">
+                            <input
+                              aria-label="folder"
+                              value={folderDraft}
+                              onChange={(e) => setFolderDraft(e.target.value)}
+                              placeholder="no folder"
+                              style={{ width: 120 }}
+                            />
+                            <Button type="button" variant="ghost" size="sm" onClick={() => saveFolder(form.id)}>
+                              save
+                            </Button>
+                          </span>
+                        ) : (
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             className="text-primary hover:text-primary"
-                            onClick={() => onArchiveToggle(form)}
+                            onClick={() => {
+                              setEditingFolderId(form.id);
+                              setFolderDraft(form.folder ?? '');
+                            }}
                           >
-                            {form.status === 'archived' ? 'unarchive' : 'archive'}
+                            {form.folder ?? 'move to folder'}
                           </Button>
                         )}
-                        {can(user, 'forms:delete') &&
-                          (confirmDeleteId === form.id ? (
-                            <>
-                              <span className="muted">delete?</span>
-                              <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(form.id)}>
-                                confirm
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="text-primary hover:text-primary"
-                                onClick={() => setConfirmDeleteId(null)}
-                              >
-                                cancel
-                              </Button>
-                            </>
-                          ) : (
+                      </TableCell>
+                      <TableCell>
+                        <span className="row-actions hover-actions">
+                          {can(user, 'forms:edit') && (
+                            <Button asChild variant="ghost" size="icon-sm" aria-label={`edit ${form.title}`}>
+                              <Link href={`/forms/new?edit=${encodeURIComponent(form.slug)}`}>
+                                <Pencil size={14} aria-hidden="true" />
+                              </Link>
+                            </Button>
+                          )}
+                          {can(user, 'forms:activate_deactivate') && (
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => setConfirmDeleteId(form.id)}
+                              className="text-primary hover:text-primary"
+                              onClick={() => onArchiveToggle(form)}
                             >
-                              delete
+                              {form.status === 'archived' ? 'unarchive' : 'archive'}
                             </Button>
-                          ))}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </>
-      )}
+                          )}
+                          {can(user, 'forms:delete') &&
+                            (confirmDeleteId === form.id ? (
+                              <>
+                                <span className="muted">delete?</span>
+                                <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(form.id)}>
+                                  confirm
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-primary hover:text-primary"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                >
+                                  cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setConfirmDeleteId(form.id)}
+                              >
+                                delete
+                              </Button>
+                            ))}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </>
+        )}
+      </div>
     </PortalShell>
   );
 }
