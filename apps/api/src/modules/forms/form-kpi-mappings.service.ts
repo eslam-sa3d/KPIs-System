@@ -53,11 +53,18 @@ export class FormKpiMappingsService {
       await this.requireSubCriteriaInArea(input.subCriteriaId, input.evaluationAreaId);
     }
 
-    const existing = await this.prisma.formKpiMapping.findUnique({
-      where: { formId_evaluationAreaId: { formId, evaluationAreaId: input.evaluationAreaId } },
+    // findFirst, not findUnique: subCriteriaId is nullable, and Prisma's compound
+    // WhereUniqueInput type doesn't accept `null` for a nullable key component.
+    const existing = await this.prisma.formKpiMapping.findFirst({
+      where: { formId, evaluationAreaId: input.evaluationAreaId, subCriteriaId: input.subCriteriaId ?? null },
     });
     if (existing) {
-      throw new AppError('CONFLICT', `This form is already mapped to "${area.name}"`);
+      throw new AppError(
+        'CONFLICT',
+        input.subCriteriaId
+          ? `This form is already mapped to "${area.name}" under that sub-criteria`
+          : `This form is already mapped to "${area.name}" with no sub-criteria`,
+      );
     }
 
     const mapping = await this.prisma.formKpiMapping.create({
@@ -91,9 +98,9 @@ export class FormKpiMappingsService {
   /** Same validation as create(), against an existing row — lets an admin fix a
    *  mapping's evaluatee fields (the common case that used to require delete +
    *  recreate + backfill) or any other field without losing its id/createdAt/
-   *  audit trail. The uniqueness check only re-runs when evaluationAreaId is
-   *  actually changing, since the existing row would otherwise "conflict with
-   *  itself". */
+   *  audit trail. The uniqueness check only re-runs when evaluationAreaId or
+   *  subCriteriaId is actually changing, since the existing row would
+   *  otherwise "conflict with itself". */
   async update(formId: string, mappingId: string, input: CreateFormKpiMappingInput, actorId: string) {
     const form = await this.requireForm(formId);
     const existing = await this.prisma.formKpiMapping.findFirst({ where: { id: mappingId, formId } });
@@ -114,11 +121,20 @@ export class FormKpiMappingsService {
       await this.requireSubCriteriaInArea(input.subCriteriaId, input.evaluationAreaId);
     }
 
-    if (input.evaluationAreaId !== existing.evaluationAreaId) {
-      const conflict = await this.prisma.formKpiMapping.findUnique({
-        where: { formId_evaluationAreaId: { formId, evaluationAreaId: input.evaluationAreaId } },
+    const nextSubCriteriaId = input.subCriteriaId ?? null;
+    if (input.evaluationAreaId !== existing.evaluationAreaId || nextSubCriteriaId !== existing.subCriteriaId) {
+      // findFirst, not findUnique — same nullable-key reason as create() above.
+      const conflict = await this.prisma.formKpiMapping.findFirst({
+        where: { formId, evaluationAreaId: input.evaluationAreaId, subCriteriaId: nextSubCriteriaId },
       });
-      if (conflict) throw new AppError('CONFLICT', `This form is already mapped to "${area.name}"`);
+      if (conflict) {
+        throw new AppError(
+          'CONFLICT',
+          nextSubCriteriaId
+            ? `This form is already mapped to "${area.name}" under that sub-criteria`
+            : `This form is already mapped to "${area.name}" with no sub-criteria`,
+        );
+      }
     }
 
     const mapping = await this.prisma.formKpiMapping.update({
@@ -229,7 +245,12 @@ export class FormKpiMappingsService {
     // batch — a row can't be re-checked against the DB mid-loop anymore, so
     // this set is updated by hand right after each create() below, mirroring
     // the read-your-own-writes behavior the old per-row findUnique gave for free.
-    const mappedAreaIds = new Set(existingMappings.map((m) => m.evaluationAreaId));
+    // A bulk-created row never sets subCriteriaId (no such input here), so it
+    // only conflicts with an existing mapping that's ALSO untagged — one
+    // already narrowed to a specific sub-criteria doesn't block it.
+    const mappedAreaIds = new Set(
+      existingMappings.filter((m) => m.subCriteriaId === null).map((m) => m.evaluationAreaId),
+    );
 
     for (const row of input.mappings) {
       const scoreField = definition.fields.find((f) => f.key === row.scoreFieldKey);

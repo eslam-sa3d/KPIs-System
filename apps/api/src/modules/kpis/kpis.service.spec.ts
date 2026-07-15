@@ -382,7 +382,7 @@ describe('KpisService', () => {
     it('records an entry for an active area and known person, and audit-logs it', async () => {
       prisma.evaluationArea.findFirst.mockResolvedValue(activeArea);
       prisma.user.findUnique.mockResolvedValue(evaluatee);
-      prisma.evaluationAreaEntry.findUnique.mockResolvedValue(null);
+      prisma.evaluationAreaEntry.findFirst.mockResolvedValue(null);
       prisma.evaluationAreaEntry.create.mockResolvedValue({ id: 'entry-1' });
 
       await service.recordEntry('kpi-1', 'area-1', input, 'evaluator-1');
@@ -409,7 +409,7 @@ describe('KpisService', () => {
     it('rejects duplicate (area, person, period) entries with CONFLICT', async () => {
       prisma.evaluationArea.findFirst.mockResolvedValue(activeArea);
       prisma.user.findUnique.mockResolvedValue(evaluatee);
-      prisma.evaluationAreaEntry.findUnique.mockResolvedValue({ id: 'existing' });
+      prisma.evaluationAreaEntry.findFirst.mockResolvedValue({ id: 'existing' });
 
       await expect(service.recordEntry('kpi-1', 'area-1', input, 'evaluator-1')).rejects.toMatchObject({
         code: 'CONFLICT',

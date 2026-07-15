@@ -1135,16 +1135,20 @@ export class KpisService {
 
     // Keyed by evaluator too: this only guards against the SAME evaluator
     // double-recording — a different evaluator scoring the same person/area/
-    // period is a second, coexisting rater, not a duplicate.
-    const duplicate = await this.prisma.evaluationAreaEntry.findUnique({
+    // period is a second, coexisting rater, not a duplicate. mappingId is
+    // always null here (this is the direct, non-forms recording path) —
+    // explicit in the filter so it matches only other manual entries, not one
+    // produced by a form mapping (see EvaluationAreaEntry.mappingId).
+    // findFirst, not findUnique: mappingId is nullable, and Prisma's compound
+    // WhereUniqueInput type doesn't accept `null` for a nullable key component.
+    const duplicate = await this.prisma.evaluationAreaEntry.findFirst({
       where: {
-        evaluationAreaId_personId_periodStart_periodEnd_enteredById: {
-          evaluationAreaId: areaId,
-          personId: input.personId,
-          periodStart,
-          periodEnd,
-          enteredById,
-        },
+        evaluationAreaId: areaId,
+        personId: input.personId,
+        periodStart,
+        periodEnd,
+        enteredById,
+        mappingId: null,
       },
     });
     if (duplicate) {

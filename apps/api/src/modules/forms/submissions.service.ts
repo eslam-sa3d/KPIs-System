@@ -412,15 +412,17 @@ export class SubmissionsService {
     const comment = resolveContextText(mapping.commentFieldKey, commentField);
 
     // personId is part of the upsert's own unique key below, so if this same
-    // submission previously resolved to a DIFFERENT evaluatee (a mapping that
-    // used to be self-assessment and is now evaluatee-based, a changed
-    // evaluatee-field answer on a resubmission, or a mapping's evaluatee
-    // field being reconfigured before a backfill) the upsert would silently
-    // leave that old entry behind under the wrong person instead of moving
-    // it — nothing else in this codebase ever cleans that up. Reconcile by
-    // submissionId first: this submission owns at most one entry per area.
+    // submission+mapping previously resolved to a DIFFERENT evaluatee (a
+    // mapping that used to be self-assessment and is now evaluatee-based, a
+    // changed evaluatee-field answer on a resubmission, or a mapping's
+    // evaluatee field being reconfigured before a backfill) the upsert would
+    // silently leave that old entry behind under the wrong person instead of
+    // moving it — nothing else in this codebase ever cleans that up.
+    // Reconcile by submissionId+mappingId first: this submission owns at most
+    // one entry PER MAPPING (two mappings sharing an Evaluation Area under
+    // different subCriteria each own their own entry — see mappingId below).
     const stale = await this.prisma.evaluationAreaEntry.findFirst({
-      where: { submissionId, evaluationAreaId: mapping.evaluationAreaId, personId: { not: evaluateeId } },
+      where: { submissionId, mappingId: mapping.id, personId: { not: evaluateeId } },
       select: { id: true },
     });
     if (stale) await this.prisma.evaluationAreaEntry.delete({ where: { id: stale.id } });
@@ -428,16 +430,20 @@ export class SubmissionsService {
     // enteredById is part of the key: one row PER EVALUATOR per period, so a
     // second rater scoring the same person/area/period adds a distinct entry
     // instead of overwriting the first — see EvaluationAreaEntry's schema
-    // comment. Only a resubmission by the SAME evaluator (e.g. editing their
-    // own response) updates in place.
+    // comment. mappingId is part of it too: two mappings sharing an
+    // Evaluation Area (distinguished only by subCriteriaId) each get their
+    // own entry instead of the second one's upsert overwriting the first's
+    // score. Only a resubmission by the SAME evaluator on the SAME mapping
+    // (e.g. editing their own response) updates in place.
     await this.prisma.evaluationAreaEntry.upsert({
       where: {
-        evaluationAreaId_personId_periodStart_periodEnd_enteredById: {
+        evaluationAreaId_personId_periodStart_periodEnd_enteredById_mappingId: {
           evaluationAreaId: mapping.evaluationAreaId,
           personId: evaluateeId,
           periodStart,
           periodEnd,
           enteredById,
+          mappingId: mapping.id,
         },
       },
       create: {
@@ -452,6 +458,7 @@ export class SubmissionsService {
         context,
         comment,
         submissionId,
+        mappingId: mapping.id,
       },
       update: {
         value,

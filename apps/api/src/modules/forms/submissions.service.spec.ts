@@ -437,7 +437,9 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
 
     expect(prisma.evaluationAreaEntry.upsert).toHaveBeenCalledTimes(1);
     const call = prisma.evaluationAreaEntry.upsert.mock.calls[0]![0];
-    expect(call.where.evaluationAreaId_personId_periodStart_periodEnd_enteredById.enteredById).toBe('evaluator-1');
+    expect(call.where.evaluationAreaId_personId_periodStart_periodEnd_enteredById_mappingId.enteredById).toBe(
+      'evaluator-1',
+    );
     expect(call.create.evaluationAreaId).toBe('area-1');
     expect(call.create.personId).toBe('11111111-1111-4111-8111-111111111111');
     expect(call.create.enteredById).toBe('evaluator-1');
@@ -458,8 +460,12 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
 
     expect(prisma.evaluationAreaEntry.upsert).toHaveBeenCalledTimes(2);
     const [first, second] = prisma.evaluationAreaEntry.upsert.mock.calls.map((c) => c[0]);
-    expect(first.where.evaluationAreaId_personId_periodStart_periodEnd_enteredById.enteredById).toBe('evaluator-1');
-    expect(second.where.evaluationAreaId_personId_periodStart_periodEnd_enteredById.enteredById).toBe('evaluator-2');
+    expect(first.where.evaluationAreaId_personId_periodStart_periodEnd_enteredById_mappingId.enteredById).toBe(
+      'evaluator-1',
+    );
+    expect(second.where.evaluationAreaId_personId_periodStart_periodEnd_enteredById_mappingId.enteredById).toBe(
+      'evaluator-2',
+    );
   });
 
   it('snapshots reviewType/anonymous/context/comment from the mapping onto the entry', async () => {
@@ -569,7 +575,7 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
     expect(prisma.evaluationAreaEntry.findFirst).toHaveBeenCalledWith({
       where: {
         submissionId: 'sub-new',
-        evaluationAreaId: 'area-1',
+        mappingId: 'mapping-1',
         personId: { not: '11111111-1111-4111-8111-111111111111' },
       },
       select: { id: true },

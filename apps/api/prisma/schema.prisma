@@ -13,25 +13,25 @@ datasource db {
 // ─────────────────────────── Identity & Dynamic RBAC ───────────────────────────
 
 model User {
-  id              String        @id @default(uuid())
-  email           String        @unique
-  passwordHash    String
-  displayName     String
-  departmentId    String?
-  department      Department?   @relation(fields: [departmentId], references: [id])
-  jobTitleId      String?
-  jobTitle        JobTitle?     @relation(fields: [jobTitleId], references: [id])
-  isActive        Boolean       @default(true)
+  id                 String      @id @default(uuid())
+  email              String      @unique
+  passwordHash       String
+  displayName        String
+  departmentId       String?
+  department         Department? @relation(fields: [departmentId], references: [id])
+  jobTitleId         String?
+  jobTitle           JobTitle?   @relation(fields: [jobTitleId], references: [id])
+  isActive           Boolean     @default(true)
   /// Whether this person should be scored/tracked by the KPI system at all —
   /// set at creation, editable after. When false, they're excluded from the
   /// dashboard's team overview regardless of role/department KPI mappings.
-  isKpiApplicable Boolean       @default(true)
+  isKpiApplicable    Boolean     @default(true)
   /// Set true whenever an admin issues this account's password (creation
   /// today — see UsersService.create) so the next login forces a change
   /// before anything else is usable. Cleared by AuthService.changePassword.
-  mustChangePassword Boolean    @default(false)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  mustChangePassword Boolean     @default(false)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   roles                   UserRole[]
   sessions                Session[]
@@ -273,12 +273,22 @@ model EvaluationAreaEntry {
   comment          String?
   submissionId     String?
   submission       FormSubmission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  /// Which FormKpiMapping produced this entry — null for entries recorded
+  /// before this concept existed, or via the direct (non-forms) recording
+  /// API. Part of the uniqueness key below so two mappings sharing the same
+  /// Evaluation Area (distinguished only by subCriteriaId — see
+  /// FormKpiMapping) each keep their own entry instead of the second
+  /// mapping's upsert silently overwriting the first's score. SetNull on
+  /// delete so removing a mapping doesn't destroy its scoring history.
+  mappingId        String?
+  mapping          FormKpiMapping? @relation(fields: [mappingId], references: [id], onDelete: SetNull)
   createdAt        DateTime        @default(now())
 
-  @@unique([evaluationAreaId, personId, periodStart, periodEnd, enteredById], map: "EvaluationAreaEntry_area_person_period_evaluator_key")
+  @@unique([evaluationAreaId, personId, periodStart, periodEnd, enteredById, mappingId], map: "EvaluationAreaEntry_area_person_period_evaluator_mapping_key")
   @@index([evaluationAreaId, periodStart])
   @@index([personId])
   @@index([submissionId])
+  @@index([mappingId])
 }
 
 // ─────────────────────────── Schema-driven Form Builder ────────────────────────
@@ -335,27 +345,27 @@ model FormCollaborator {
 /// 0-5) are upserted as an EvaluationAreaEntry against `evaluationAreaId`.
 /// See SubmissionsService.
 model FormKpiMapping {
-  id                 String         @id @default(uuid())
+  id                 String                @id @default(uuid())
   formId             String
-  form               Form           @relation(fields: [formId], references: [id], onDelete: Cascade)
+  form               Form                  @relation(fields: [formId], references: [id], onDelete: Cascade)
   evaluationAreaId   String
-  evaluationArea     EvaluationArea @relation(fields: [evaluationAreaId], references: [id], onDelete: Cascade)
+  evaluationArea     EvaluationArea        @relation(fields: [evaluationAreaId], references: [id], onDelete: Cascade)
   /// Candidate fields that could name the evaluatee, tried in order,
   /// first-answered-wins — e.g. a form with several per-project "Tester"
   /// fields where only one is filled in per submission. An empty array means
   /// self-assessment: the submitter scores themselves. If candidates are
   /// configured but none were answered, no evaluatee resolves (the score
   /// does NOT fall back to self) — see SubmissionsService.applyOneMapping.
-  evaluateeFieldKeys String[]       @default([])
+  evaluateeFieldKeys String[]              @default([])
   scoreFieldKey      String
   /// Who this mapping's scores come from, relative to the evaluatee —
   /// 'self' | 'peer' | 'manager' | '360'. Drives the dashboard's per-type
   /// breakdown and is copied onto every entry it produces.
-  reviewType         String         @default("peer")
+  reviewType         String                @default("peer")
   /// When true, the evaluator's identity is withheld from anyone without
   /// kpis:manage when reading entries this mapping produced — standard
   /// practice for honest peer/360 feedback.
-  anonymous          Boolean        @default(false)
+  anonymous          Boolean               @default(false)
   /// Optional extra form field (any type) whose answer is snapshotted onto
   /// each entry as free-text context, e.g. the evaluatee's level.
   contextFieldKey    String?
@@ -368,10 +378,14 @@ model FormKpiMapping {
   /// alone); SetNull on delete so removing a Sub-Criteria just clears the
   /// tag instead of destroying the mapping.
   subCriteriaId      String?
-  subCriteria        SubCriteria?   @relation(fields: [subCriteriaId], references: [id], onDelete: SetNull)
-  createdAt          DateTime       @default(now())
+  subCriteria        SubCriteria?          @relation(fields: [subCriteriaId], references: [id], onDelete: SetNull)
+  entries            EvaluationAreaEntry[]
+  createdAt          DateTime              @default(now())
 
-  @@unique([formId, evaluationAreaId])
+  /// Two mappings CAN now share an Evaluation Area as long as their
+  /// subCriteriaId differs (or one is null) — see EvaluationAreaEntry.mappingId
+  /// for how their scores stay distinct instead of one overwriting the other.
+  @@unique([formId, evaluationAreaId, subCriteriaId])
   @@index([evaluationAreaId])
   @@index([subCriteriaId])
 }
@@ -406,8 +420,8 @@ model FormSubmission {
   /// the gate, and always null for authenticated submissions (submittedById
   /// already identifies those). Email is checked against EmailDomain at
   /// submit time; not re-validated here since domains can change later.
-  respondentName         String?
-  respondentEmail        String?
+  respondentName        String?
+  respondentEmail       String?
   /// fieldKey → answer. GIN-indexed for filtering (index added in raw migration).
   answers               Json
   /// QuizScore JSON ({earnedPoints, totalPoints, percent, passed}), computed once at

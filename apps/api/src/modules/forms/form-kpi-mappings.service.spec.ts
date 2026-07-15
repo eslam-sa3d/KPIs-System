@@ -250,8 +250,8 @@ describe('FormKpiMappingsService.create', () => {
     expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
   });
 
-  it('rejects a duplicate mapping for the same (form, evaluationArea) pair', async () => {
-    prisma.formKpiMapping.findUnique.mockResolvedValue({ id: 'existing' });
+  it('rejects a duplicate mapping for the same (form, evaluationArea, subCriteria) triple', async () => {
+    prisma.formKpiMapping.findFirst.mockResolvedValue({ id: 'existing' });
     const service = new FormKpiMappingsService(prisma as never, forms as never);
     await expect(service.create('form-1', validInput, 'admin-1')).rejects.toMatchObject({
       code: 'CONFLICT',
@@ -271,14 +271,21 @@ describe('FormKpiMappingsService.update', () => {
   let prisma: ReturnType<typeof makePrismaStub>;
   let forms: ReturnType<typeof makeFormsStub>;
 
+  // findFirst serves two different lookups in update(): fetching the mapping
+  // being edited (by id) and, when evaluationAreaId/subCriteriaId change, the
+  // conflict check (by formId+evaluationAreaId+subCriteriaId) — distinguish by
+  // the where clause's shape so a test overriding one doesn't have to also
+  // restate the other.
+  function mockFindFirst(conflict: { id: string } | null = null) {
+    prisma.formKpiMapping.findFirst.mockImplementation(async ({ where }: { where: Record<string, unknown> }) =>
+      'id' in where ? { id: 'mapping-1', formId: 'form-1', evaluationAreaId: 'area-1', subCriteriaId: null } : conflict,
+    );
+  }
+
   beforeEach(() => {
     prisma = makePrismaStub();
     forms = makeFormsStub();
-    prisma.formKpiMapping.findFirst.mockResolvedValue({
-      id: 'mapping-1',
-      formId: 'form-1',
-      evaluationAreaId: 'area-1',
-    });
+    mockFindFirst();
   });
 
   it('updates a mapping’s evaluatee fields — the delete+recreate workaround this replaces', async () => {
@@ -327,14 +334,15 @@ describe('FormKpiMappingsService.update', () => {
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
-  it('does not re-check the uniqueness constraint when evaluationAreaId is unchanged', async () => {
+  it('does not re-check the uniqueness constraint when evaluationAreaId/subCriteriaId are unchanged', async () => {
     const service = new FormKpiMappingsService(prisma as never, forms as never);
     await service.update('form-1', 'mapping-1', validInput, 'admin-1');
-    expect(prisma.formKpiMapping.findUnique).not.toHaveBeenCalled();
+    // only the by-id lookup (existing mapping) — never the conflict-check shape
+    expect(prisma.formKpiMapping.findFirst).toHaveBeenCalledTimes(1);
   });
 
   it('rejects moving to an evaluationArea already mapped by a different mapping on this form', async () => {
-    prisma.formKpiMapping.findUnique.mockResolvedValue({ id: 'other-mapping' });
+    mockFindFirst({ id: 'other-mapping' });
     const service = new FormKpiMappingsService(prisma as never, forms as never);
     await expect(
       service.update('form-1', 'mapping-1', { ...validInput, evaluationAreaId: 'area-2' }, 'admin-1'),
@@ -342,7 +350,6 @@ describe('FormKpiMappingsService.update', () => {
   });
 
   it('allows moving to a new evaluationArea when nothing else maps there', async () => {
-    prisma.formKpiMapping.findUnique.mockResolvedValue(null);
     prisma.evaluationArea.findUnique.mockResolvedValue({ id: 'area-2', name: 'Delivery' });
     const service = new FormKpiMappingsService(prisma as never, forms as never);
     await service.update('form-1', 'mapping-1', { ...validInput, evaluationAreaId: 'area-2' }, 'admin-1');
@@ -394,7 +401,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
     prisma.formKpiMapping.findMany.mockImplementation(async () =>
       Object.entries(existingMappings)
         .filter((entry): entry is [string, { id: string }] => entry[1] !== null)
-        .map(([evaluationAreaId, mapping]) => ({ ...mapping, evaluationAreaId })),
+        .map(([evaluationAreaId, mapping]) => ({ subCriteriaId: null, ...mapping, evaluationAreaId })),
     );
     return prisma;
   }
