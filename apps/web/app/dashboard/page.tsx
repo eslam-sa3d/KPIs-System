@@ -79,7 +79,7 @@ interface RawKpi {
 }
 
 type KpiSortKey = 'name' | 'latest' | 'updated';
-type MemberSortKey = 'name' | 'department' | 'latest' | 'trend' | 'updated';
+type MemberSortKey = 'name' | 'department' | 'updated';
 type CoverageFilter = 'all' | 'scored' | 'pending';
 
 const CADENCE_LABEL: Record<string, string> = {
@@ -102,48 +102,6 @@ function allSubmissions(kpi: RawKpi): RawSubmission[] {
   return kpi.evaluationAreas
     .flatMap((a) => a.recentSubmissions)
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-}
-
-function TrendIndicator({
-  latest,
-  previous,
-}: {
-  latest: { raw: unknown; display: string } | null;
-  previous: { raw: unknown; display: string } | null;
-}) {
-  if (!latest || !previous) {
-    return (
-      <span className="muted" style={{ fontSize: 11 }}>
-        —
-      </span>
-    );
-  }
-  // Only rating/nps/slider/number/boolean answers are plain numbers — a
-  // select/multi_select/likert/performance_level raw value has no single
-  // magnitude to diff, so those just show both values without an arrow.
-  if (typeof latest.raw !== 'number' || typeof previous.raw !== 'number') {
-    return (
-      <span className="muted" style={{ fontSize: 11 }}>
-        {previous.display} → {latest.display}
-      </span>
-    );
-  }
-  const diff = Math.round((latest.raw - previous.raw) * 100) / 100;
-  if (diff === 0) {
-    return (
-      <span className="muted" style={{ fontSize: 11 }}>
-        no change
-      </span>
-    );
-  }
-  const up = diff > 0;
-  return (
-    <span
-      style={{ fontSize: 11, color: up ? 'var(--green)' : 'var(--red)', fontFamily: 'var(--mono)', fontWeight: 600 }}
-    >
-      {up ? '▲' : '▼'} {Math.abs(diff).toLocaleString()}
-    </span>
-  );
 }
 
 export default function DashboardPage() {
@@ -365,13 +323,7 @@ export default function DashboardPage() {
       switch (memberSort.key) {
         case 'department':
           return (a.department ?? '').localeCompare(b.department ?? '') * dir;
-        case 'trend': {
-          const av = a.previousSubmission ? 1 : 0;
-          const bv = b.previousSubmission ? 1 : 0;
-          return (av - bv) * dir;
-        }
         case 'updated':
-        case 'latest':
           return (a.lastUpdated ?? '').localeCompare(b.lastUpdated ?? '') * dir;
         case 'name':
         default:
@@ -965,26 +917,6 @@ export default function DashboardPage() {
                       <TableHead
                         className="p-th-sortable"
                         aria-sort={
-                          memberSort.key === 'latest' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
-                        }
-                      >
-                        <button type="button" onClick={() => sortMembersBy('latest')}>
-                          latest
-                        </button>
-                      </TableHead>
-                      <TableHead
-                        className="p-th-sortable"
-                        aria-sort={
-                          memberSort.key === 'trend' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
-                        }
-                      >
-                        <button type="button" onClick={() => sortMembersBy('trend')}>
-                          trend
-                        </button>
-                      </TableHead>
-                      <TableHead
-                        className="p-th-sortable"
-                        aria-sort={
                           memberSort.key === 'updated' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
                         }
                       >
@@ -997,7 +929,7 @@ export default function DashboardPage() {
                   <TableBody>
                     {memberTableData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="muted" style={{ textAlign: 'center' }}>
+                        <TableCell colSpan={6} className="muted" style={{ textAlign: 'center' }}>
                           {teamMembers.length === 0 ? 'no active team members.' : 'no team members match this filter.'}
                         </TableCell>
                       </TableRow>
@@ -1030,16 +962,6 @@ export default function DashboardPage() {
                             </TableCell>
                             <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
                               {m.score !== null ? `${m.score.toFixed(1)} / 5` : '—'}
-                            </TableCell>
-                            <TableCell>
-                              {m.latestSubmission ? (
-                                <span className="p-score-ring p-status-meets">{m.latestSubmission.display}</span>
-                              ) : (
-                                <span className="p-score-ring p-status-pending">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <TrendIndicator latest={m.latestSubmission} previous={m.previousSubmission} />
                             </TableCell>
                             <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
                               {m.lastUpdated ? new Date(m.lastUpdated).toLocaleDateString() : '—'}
