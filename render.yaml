@@ -29,6 +29,13 @@ services:
     name: pulse-api
     runtime: node
     plan: free
+    # Off deliberately — see the CI/CD workflow's deploy job (ci.yml) for why:
+    # with this on, Render deploys straight off the push webhook, racing the
+    # gated CI/CD job and double-deploying on every push (once immediately,
+    # once again ~3-5 min later once tests/lint/security finish). The CI job
+    # is the only path that should ship — it won't fire until everything
+    # passes, which the raw push webhook has no way to wait for.
+    autoDeploy: false
     # Render preinstalls pnpm (packageManager field) — corepack is unnecessary
     # and fails on the read-only image filesystem.
     #
@@ -145,6 +152,8 @@ services:
   - type: web
     name: pulse-web
     runtime: static
+    # Off deliberately — see pulse-api's autoDeploy comment above.
+    autoDeploy: false
     buildCommand: >-
       pnpm install --frozen-lockfile &&
       pnpm --filter @pulse/contracts build &&
