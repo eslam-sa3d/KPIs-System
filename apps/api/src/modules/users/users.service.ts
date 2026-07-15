@@ -92,6 +92,7 @@ export class UsersService {
           isKpiApplicable: true,
           createdAt: true,
           department: { select: { id: true, name: true } },
+          jobTitle: { select: { id: true, label: true } },
           roles: { select: { role: { select: { id: true, name: true } } } },
         },
       }),
@@ -128,6 +129,7 @@ export class UsersService {
           displayName: input.displayName,
           passwordHash,
           departmentId: input.departmentId,
+          jobTitleId: input.jobTitleId,
           isKpiApplicable: input.isKpiApplicable,
           // the password an admin sets here is the "temporary password" the
           // create-user form labels it — force a change on first login
@@ -165,6 +167,7 @@ export class UsersService {
         ...(input.email !== undefined ? { email: input.email } : {}),
         ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
         ...(input.departmentId !== undefined ? { departmentId: input.departmentId } : {}),
+        ...(input.jobTitleId !== undefined ? { jobTitleId: input.jobTitleId } : {}),
         ...(input.isKpiApplicable !== undefined ? { isKpiApplicable: input.isKpiApplicable } : {}),
       },
       select: {
@@ -174,6 +177,7 @@ export class UsersService {
         isActive: true,
         isKpiApplicable: true,
         department: { select: { id: true, name: true } },
+        jobTitle: { select: { id: true, label: true } },
       },
     });
     await this.prisma.auditLog.create({

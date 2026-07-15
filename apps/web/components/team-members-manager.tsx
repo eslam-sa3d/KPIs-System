@@ -27,6 +27,7 @@ interface UserRow {
   isActive: boolean;
   isKpiApplicable: boolean;
   department: { id: string; name: string } | null;
+  jobTitle: { id: string; label: string } | null;
   roles: Array<{ id: string; name: string }>;
 }
 
@@ -38,6 +39,11 @@ interface RoleRow {
 interface DepartmentRow {
   id: string;
   name: string;
+}
+
+interface JobTitleRow {
+  id: string;
+  label: string;
 }
 
 interface UserStats {
@@ -59,6 +65,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
+  const [jobTitles, setJobTitles] = useState<JobTitleRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -69,6 +76,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
     displayName: '',
     email: '',
     departmentId: '',
+    jobTitleId: '',
     isKpiApplicable: true,
   });
   const [savingInfo, setSavingInfo] = useState(false);
@@ -115,6 +123,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
     if (!user) return;
     if (can(user, 'roles:view')) void api<RoleRow[]>('/v1/roles').then(setRoles);
     if (can(user, 'departments:view')) void api<DepartmentRow[]>('/v1/departments').then(setDepartments);
+    if (can(user, 'configuration:view')) void api<JobTitleRow[]>('/v1/job-titles').then(setJobTitles);
   }, [user]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
@@ -130,6 +139,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
           displayName: form.get('displayName'),
           password: form.get('password'),
           departmentId: form.get('departmentId') || undefined,
+          jobTitleId: form.get('jobTitleId') || undefined,
           roleIds: form.getAll('roleIds'),
           isKpiApplicable: form.get('isKpiApplicable') === 'on',
         }),
@@ -210,6 +220,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
       displayName: row.displayName,
       email: row.email,
       departmentId: row.department?.id ?? '',
+      jobTitleId: row.jobTitle?.id ?? '',
       isKpiApplicable: row.isKpiApplicable,
     });
   }
@@ -228,6 +239,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
           displayName: infoDraft.displayName,
           email: infoDraft.email,
           departmentId: infoDraft.departmentId || null,
+          jobTitleId: infoDraft.jobTitleId || null,
           isKpiApplicable: infoDraft.isKpiApplicable,
         }),
       });
@@ -340,6 +352,23 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                   </Select>
                 </>
               )}
+              {jobTitles.length > 0 && (
+                <>
+                  <label htmlFor="u-job-title">job title</label>
+                  <Select name="jobTitleId">
+                    <SelectTrigger id="u-job-title">
+                      <SelectValue placeholder="— none —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {jobTitles.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
               {roles.length > 0 && (
                 <>
                   <span className="field-label">roles</span>
@@ -418,6 +447,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
               <TableHead>name</TableHead>
               <TableHead>email</TableHead>
               <TableHead>department</TableHead>
+              <TableHead>job title</TableHead>
               <TableHead>roles</TableHead>
               <TableHead>status</TableHead>
               <TableHead>KPI applicable</TableHead>
@@ -470,6 +500,28 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
                     </Select>
                   ) : (
                     (row.department?.name ?? '—')
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingInfoId === row.id ? (
+                    <Select
+                      value={infoDraft.jobTitleId || '__none__'}
+                      onValueChange={(v) => setInfoDraft((d) => ({ ...d, jobTitleId: v === '__none__' ? '' : v }))}
+                    >
+                      <SelectTrigger aria-label="job title" size="sm" className="w-[160px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— none —</SelectItem>
+                        {jobTitles.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    (row.jobTitle?.label ?? '—')
                   )}
                 </TableCell>
                 <TableCell>

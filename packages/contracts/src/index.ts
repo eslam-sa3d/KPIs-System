@@ -6,6 +6,7 @@ export * from './form-schema';
 export * from './form-sections';
 export * from './form-summary';
 export * from './kpi';
+export * from './job-titles';
 export * from './kpi-summary';
 export * from './performance-levels';
 export * from './rbac';

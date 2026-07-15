@@ -19,6 +19,8 @@ model User {
   displayName     String
   departmentId    String?
   department      Department?   @relation(fields: [departmentId], references: [id])
+  jobTitleId      String?
+  jobTitle        JobTitle?     @relation(fields: [jobTitleId], references: [id])
   isActive        Boolean       @default(true)
   /// Whether this person should be scored/tracked by the KPI system at all —
   /// set at creation, editable after. When false, they're excluded from the
@@ -45,6 +47,7 @@ model User {
   projectGroupMemberships ProjectGroupMember[]
 
   @@index([departmentId])
+  @@index([jobTitleId])
 }
 
 model Department {
@@ -502,4 +505,14 @@ model PerformanceLevel {
   maxScore  Decimal // 0-5
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// A named job title — the Configuration page's Job Titles tab. Plain
+/// label, no relation to User yet (not currently assignable to anyone).
+model JobTitle {
+  id        String   @id @default(uuid())
+  label     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
 }

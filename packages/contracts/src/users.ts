@@ -5,6 +5,7 @@ export const createUserSchema = z.object({
   displayName: z.string().min(2).max(120),
   password: z.string().min(8).max(128),
   departmentId: z.string().uuid().optional(),
+  jobTitleId: z.string().uuid().optional(),
   roleIds: z.array(z.string().uuid()).max(20).default([]),
   /** Whether this person should be scored/tracked by the KPI system at all —
    *  false excludes them from the dashboard's team overview regardless of
@@ -18,11 +19,13 @@ export const setUserStatusSchema = z.object({ isActive: z.boolean() });
 export type SetUserStatusInput = z.infer<typeof setUserStatusSchema>;
 
 /** Every field optional (a caller only sends what changed); `departmentId: null`
- *  clears the department, `undefined`/omitted leaves it untouched. */
+ *  clears the department, `undefined`/omitted leaves it untouched. Same for
+ *  `jobTitleId`. */
 export const updateUserSchema = z.object({
   email: z.string().email().max(254).optional(),
   displayName: z.string().min(2).max(120).optional(),
   departmentId: z.string().uuid().nullable().optional(),
+  jobTitleId: z.string().uuid().nullable().optional(),
   isKpiApplicable: z.boolean().optional(),
 });
 
