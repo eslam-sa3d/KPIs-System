@@ -297,7 +297,7 @@ export const FieldInput = memo(function FieldInput({
             value={isOther ? '__other' : raw || undefined}
             onValueChange={(v) => onChange(v === '__other' ? 'other:' : v)}
           >
-            <SelectTrigger id={id}>
+            <SelectTrigger id={id} className="w-full">
               <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
