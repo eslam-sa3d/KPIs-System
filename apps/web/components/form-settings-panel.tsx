@@ -9,8 +9,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 
-const toLocalInputValue = (iso?: string) => (iso ? iso.slice(0, 16) : '');
-const toIso = (local: string) => (local ? new Date(local).toISOString() : undefined);
+// date-only pickers — 'opens at' resolves to the start of the chosen day, 'closes
+// at' to the end of it, so the form stays open through the entirety of both days
+// rather than closing at the literal midnight moment the date began. Built as a
+// literal UTC string (no `new Date(local).toISOString()` round trip) so the
+// calendar date the admin picked is exactly the calendar date re-shown on
+// reload, regardless of the admin's own timezone offset.
+const toDateInputValue = (iso?: string) => (iso ? iso.slice(0, 10) : '');
+const toIsoStartOfDay = (local: string) => (local ? `${local}T00:00:00.000Z` : undefined);
+const toIsoEndOfDay = (local: string) => (local ? `${local}T23:59:59.999Z` : undefined);
 
 /** MS-Forms-style settings: accept responses, schedule, one-per-user, shuffle, thank-you text. */
 export function FormSettingsPanel({
@@ -64,17 +71,17 @@ export function FormSettingsPanel({
           <label htmlFor="fs-opens">opens at (optional)</label>
           <Input
             id="fs-opens"
-            type="datetime-local"
-            value={toLocalInputValue(draft.opensAt)}
-            onChange={(e) => setDraft((d) => ({ ...d, opensAt: toIso(e.target.value) }))}
+            type="date"
+            value={toDateInputValue(draft.opensAt)}
+            onChange={(e) => setDraft((d) => ({ ...d, opensAt: toIsoStartOfDay(e.target.value) }))}
           />
 
           <label htmlFor="fs-closes">closes at (optional)</label>
           <Input
             id="fs-closes"
-            type="datetime-local"
-            value={toLocalInputValue(draft.closesAt)}
-            onChange={(e) => setDraft((d) => ({ ...d, closesAt: toIso(e.target.value) }))}
+            type="date"
+            value={toDateInputValue(draft.closesAt)}
+            onChange={(e) => setDraft((d) => ({ ...d, closesAt: toIsoEndOfDay(e.target.value) }))}
           />
 
           <span className="builder-required">
