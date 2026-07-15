@@ -291,8 +291,6 @@ model Form {
   settings    Json?
   /// Non-null enables the anonymous public fill link (/f?token=…)
   publicToken String?  @unique
-  /// Non-null enables the token-gated live export link (Excel "Get Data from Web")
-  exportToken String?  @unique
   /// When true, only the creator, a FormCollaborator, or a forms:manage holder
   /// may view/fill/manage this form via the portal — independent of the
   /// anonymous public link above, which stays open-to-anyone once enabled.
@@ -403,6 +401,13 @@ model FormSubmission {
   /// Random id from a cookie set on first visit — the only "identity" an anonymous
   /// public-link respondent has, used to enforce oneResponsePerUser without an account.
   respondentFingerprint String?
+  /// Self-reported name/email, collected on the pre-form gate screen when the
+  /// form's `requireRespondentInfo` setting is on — null for forms without
+  /// the gate, and always null for authenticated submissions (submittedById
+  /// already identifies those). Email is checked against EmailDomain at
+  /// submit time; not re-validated here since domains can change later.
+  respondentName         String?
+  respondentEmail        String?
   /// fieldKey → answer. GIN-indexed for filtering (index added in raw migration).
   answers               Json
   /// QuizScore JSON ({earnedPoints, totalPoints, percent, passed}), computed once at
@@ -515,4 +520,16 @@ model JobTitle {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   users     User[]
+}
+
+/// Global, admin-managed subset of Forms whose submissions feed the
+/// dashboard (raw submissions, the legacy blended status score, and the
+/// activity trend — NOT the measurement-gaps audit, which deliberately
+/// always reflects every form regardless of this scope). Single row, id
+/// fixed to 1. `formIds` empty = unrestricted (every form counts), the
+/// default until an admin configures it via PUT /v1/kpis/dashboard-form-scope.
+model DashboardFormScope {
+  id        Int      @id @default(1)
+  formIds   String[] @default([])
+  updatedAt DateTime @updatedAt
 }

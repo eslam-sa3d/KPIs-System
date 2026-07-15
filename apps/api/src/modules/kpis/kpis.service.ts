@@ -5,6 +5,8 @@ import {
   CreateEvaluationAreaInput,
   CreateKpiInput,
   CreateSubCriteriaInput,
+  DashboardFormScope,
+  DashboardFormScopeInput,
   EvaluationAreaCadence,
   FormDefinition,
   KpiAssignmentInput,
@@ -269,6 +271,51 @@ export class KpisService {
     return { assignments: { some: { OR: scope } } };
   }
 
+  /** The admin-configured dashboard-form-scope, resolved to `null` (no
+   *  restriction) or the explicit list of allowed form ids — every
+   *  dashboard-facing query below takes this as an optional param rather
+   *  than re-fetching it itself, so one request only reads the setting once. */
+  private async allowedFormIds(): Promise<string[] | null> {
+    const scope = await this.prisma.dashboardFormScope.findUnique({ where: { id: 1 } });
+    return scope && scope.formIds.length > 0 ? scope.formIds : null;
+  }
+
+  async getDashboardFormScope(): Promise<DashboardFormScope> {
+    const scope = await this.prisma.dashboardFormScope.findUnique({ where: { id: 1 } });
+    return { formIds: scope?.formIds ?? [] };
+  }
+
+  /** Empty formIds means "unrestricted" — every form's submissions count
+   *  again — rather than "restricted to nothing". */
+  async setDashboardFormScope(input: DashboardFormScopeInput, actorId: string): Promise<DashboardFormScope> {
+    await this.prisma.dashboardFormScope.upsert({
+      where: { id: 1 },
+      create: { id: 1, formIds: input.formIds },
+      update: { formIds: input.formIds },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'dashboard_form_scope.updated',
+        entity: 'DashboardFormScope',
+        entityId: '1',
+        detail: input,
+      },
+    });
+    return { formIds: input.formIds };
+  }
+
+  /** EvaluationAreaEntry has no formId of its own — only a nullable
+   *  submissionId. An entry recorded via the direct (non-forms) API has no
+   *  submission to trace back to a form at all, so it always counts,
+   *  regardless of the dashboard-form-scope; only entries traceable to an
+   *  excluded form are filtered out. Returns undefined (no-op) when
+   *  unrestricted. */
+  private legacyEntryFormFilter(allowedFormIds: string[] | null): Prisma.EvaluationAreaEntryWhereInput | undefined {
+    if (allowedFormIds === null) return undefined;
+    return { OR: [{ submissionId: null }, { submission: { formVersion: { formId: { in: allowedFormIds } } } }] };
+  }
+
   /**
    * Loads every (mapping, submission) pair that resolves to a real, active,
    * KPI-applicable evaluatee with a describable raw score — the read-side
@@ -277,12 +324,20 @@ export class KpisService {
    * EvaluationAreaEntry sources from this instead, so what's shown is always
    * traceable to one real FormSubmission — never blended or normalized
    * across mappings (see describeAnswer). Optionally scoped to a set of
-   * Evaluation Areas; every active mapping org-wide when omitted. Sorted
+   * Evaluation Areas; every active mapping org-wide when omitted. Also
+   * optionally scoped to the admin-configured dashboard-form-scope (see
+   * allowedFormIds) — omit/null for unrestricted. Sorted
    * most-recent-submission-first.
    */
-  private async loadScoredSubmissions(evaluationAreaIds?: string[]): Promise<ScoredSubmission[]> {
+  private async loadScoredSubmissions(
+    evaluationAreaIds?: string[],
+    allowedFormIds?: string[] | null,
+  ): Promise<ScoredSubmission[]> {
     const mappings = await this.prisma.formKpiMapping.findMany({
-      where: evaluationAreaIds ? { evaluationAreaId: { in: evaluationAreaIds } } : undefined,
+      where: {
+        ...(evaluationAreaIds ? { evaluationAreaId: { in: evaluationAreaIds } } : {}),
+        ...(allowedFormIds ? { formId: { in: allowedFormIds } } : {}),
+      },
       include: {
         evaluationArea: {
           select: { id: true, name: true, isActive: true, kpiId: true, kpi: { select: { name: true } } },
@@ -500,7 +555,7 @@ export class KpisService {
    * `recentSubmissions` — display data is raw everywhere else.
    */
   async listMine(userId: string) {
-    const [kpis, canSeeEvaluators] = await Promise.all([
+    const [kpis, canSeeEvaluators, allowedFormIds] = await Promise.all([
       this.prisma.kpi.findMany({
         where: { isActive: true, ...(await this.myAssignmentFilter(userId)) },
         orderBy: { name: 'asc' },
@@ -512,13 +567,18 @@ export class KpisService {
         },
       }),
       this.canSeeAnonymousEvaluators(userId),
+      this.allowedFormIds(),
     ]);
 
     const areaIds = kpis.flatMap((kpi) => kpi.evaluationAreas.map((a) => a.id));
     const [scored, legacyEntries] = await Promise.all([
-      this.loadScoredSubmissions(areaIds),
+      this.loadScoredSubmissions(areaIds, allowedFormIds),
       this.prisma.evaluationAreaEntry.findMany({
-        where: { evaluationAreaId: { in: areaIds }, person: { isKpiApplicable: true } },
+        where: {
+          evaluationAreaId: { in: areaIds },
+          person: { isKpiApplicable: true },
+          ...this.legacyEntryFormFilter(allowedFormIds),
+        },
         select: { evaluationAreaId: true, value: true, periodStart: true },
       }),
     ]);
@@ -583,6 +643,7 @@ export class KpisService {
             select: { minScore: true, maxScore: true },
           });
 
+    const allowedFormIds = await this.allowedFormIds();
     const [users, kpis, legacyEntries, scored] = await Promise.all([
       this.prisma.user.findMany({
         where: { isActive: true, isKpiApplicable: true },
@@ -605,10 +666,14 @@ export class KpisService {
         },
       }),
       this.prisma.evaluationAreaEntry.findMany({
-        where: { person: { isActive: true }, periodStart: { gte: teamOverviewLookbackCutoff() } },
+        where: {
+          person: { isActive: true },
+          periodStart: { gte: teamOverviewLookbackCutoff() },
+          ...this.legacyEntryFormFilter(allowedFormIds),
+        },
         select: { personId: true, evaluationAreaId: true, value: true, periodStart: true },
       }),
-      this.loadScoredSubmissions(),
+      this.loadScoredSubmissions(undefined, allowedFormIds),
     ]);
 
     const scoredByPerson = new Map<string, ScoredSubmission[]>();
@@ -717,16 +782,17 @@ export class KpisService {
     });
     if (!person) throw AppError.notFound('User', personId);
 
-    const [kpis, canSeeEvaluators] = await Promise.all([
+    const [kpis, canSeeEvaluators, allowedFormIds] = await Promise.all([
       this.prisma.kpi.findMany({
         where: { isActive: true, ...(await this.myAssignmentFilter(personId)) },
         select: { evaluationAreas: { where: { isActive: true }, select: { id: true } } },
       }),
       this.canSeeAnonymousEvaluators(callerId),
+      this.allowedFormIds(),
     ]);
     const areaIds = kpis.flatMap((kpi) => kpi.evaluationAreas.map((a) => a.id));
 
-    const scored = await this.loadScoredSubmissions(areaIds);
+    const scored = await this.loadScoredSubmissions(areaIds, allowedFormIds);
     const personScored = scored.filter((s) => s.personId === personId).slice(0, RECENT_ENTRIES_TAKE);
 
     return {
@@ -758,7 +824,11 @@ export class KpisService {
    * Evaluation Areas that haven't been scored recently enough for their own
    * cadence. Distinct from the per-person "pending evaluation" signal, which
    * only catches a gap for one person at a time, not a KPI stale across
-   * everyone or a form whose answers never reach a KPI at all.
+   * everyone or a form whose answers never reach a KPI at all. Deliberately
+   * ignores the dashboard-form-scope (see allowedFormIds) — this is a
+   * completeness audit over the whole org's setup, not a display of the
+   * dashboard's current data, so a form hidden from the dashboard still
+   * needs to show up here if it has an unmapped question or feeds a stale area.
    */
   async getMeasurementGaps(): Promise<MeasurementGaps> {
     const [forms, kpis, scored] = await Promise.all([
@@ -844,7 +914,7 @@ export class KpisService {
    * returned as a label for the UI.
    */
   async getRecentFeedback(kpiId?: string): Promise<RecentFeedback> {
-    const scored = await this.loadScoredSubmissions();
+    const scored = await this.loadScoredSubmissions(undefined, await this.allowedFormIds());
     const withFeedback = scored
       .filter((s) => (s.context !== null || s.comment !== null) && (!kpiId || s.kpiId === kpiId))
       .slice(0, RECENT_FEEDBACK_TAKE);
@@ -883,8 +953,9 @@ export class KpisService {
     const earliestWeekStart = new Date(currentWeekStart);
     earliestWeekStart.setUTCDate(earliestWeekStart.getUTCDate() - (ACTIVITY_TREND_WEEKS - 1) * 7);
 
+    const allowedFormIds = await this.allowedFormIds();
     const mappedFormIds = await this.prisma.formKpiMapping.findMany({
-      where: { evaluationArea: { isActive: true } },
+      where: { evaluationArea: { isActive: true }, ...(allowedFormIds ? { formId: { in: allowedFormIds } } : {}) },
       select: { formId: true },
       distinct: ['formId'],
     });

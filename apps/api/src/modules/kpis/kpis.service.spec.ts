@@ -39,6 +39,10 @@ function makePrismaStub() {
     formKpiMapping: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
     formSubmission: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
     performanceLevel: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
+    // Default: no row yet, i.e. unrestricted — every test that doesn't care
+    // about the dashboard-form-scope filter gets every form's data, same as
+    // before this concept existed. Tests exercising the filter override this.
+    dashboardFormScope: { findUnique: vi.fn(async (): Promise<{ formIds: string[] } | null> => null), upsert: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn((ops: Array<Promise<unknown>>) => Promise.all(ops)),
   };

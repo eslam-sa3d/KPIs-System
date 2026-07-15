@@ -1,4 +1,5 @@
 export * from './auth';
+export * from './dashboard-settings';
 export * from './envelope';
 export * from './form-kpi-mapping';
 export * from './form-media';

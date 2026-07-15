@@ -1,13 +1,18 @@
 'use client';
 
 import Image from 'next/image';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { BrandIdentity, FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { FormRenderer, SubmissionScore } from '../../components/form-renderer';
 import { LoadingState } from '../../components/loading-state';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { API_URL } from '../../lib/api-client';
 import { asset } from '../../lib/asset';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 const TURNSTILE_SCRIPT_ID = 'cf-turnstile-script';
@@ -30,6 +35,29 @@ function PublicForm() {
   const [branding, setBranding] = useState<BrandIdentity | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<HTMLDivElement>(null);
+
+  // the pre-form "name & email" gate — never shown when editing an existing
+  // response (the respondent is already known from when they first submitted).
+  const [gateRespondent, setGateRespondent] = useState<{ name: string; email: string } | null>(null);
+  const [gateName, setGateName] = useState('');
+  const [gateEmail, setGateEmail] = useState('');
+  const [gateError, setGateError] = useState<string | null>(null);
+  const gatePending = !!data?.settings.requireRespondentInfo && !editToken && !gateRespondent;
+
+  function onGateSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = gateName.trim();
+    const email = gateEmail.trim();
+    if (!name) return setGateError('please enter your name');
+    if (!EMAIL_PATTERN.test(email)) return setGateError('please enter a valid email address');
+    const domains = data?.settings.allowedEmailDomains ?? [];
+    const emailDomain = email.split('@')[1]?.toLowerCase();
+    if (domains.length > 0 && (!emailDomain || !domains.includes(emailDomain))) {
+      return setGateError(`email must be from an approved domain (${domains.map((d) => `@${d}`).join(', ')})`);
+    }
+    setGateError(null);
+    setGateRespondent({ name, email });
+  }
 
   useEffect(() => {
     if (!token) return setMissing(true);
@@ -95,6 +123,12 @@ function PublicForm() {
       headers: {
         'Content-Type': 'application/json',
         ...(turnstileToken ? { 'x-turnstile-token': turnstileToken } : {}),
+        ...(gateRespondent
+          ? {
+              'x-respondent-name': encodeURIComponent(gateRespondent.name),
+              'x-respondent-email': encodeURIComponent(gateRespondent.email),
+            }
+          : {}),
       },
       body: JSON.stringify(answers),
     });
@@ -119,6 +153,44 @@ function PublicForm() {
           </div>
         ) : !data ? (
           <LoadingState />
+        ) : gatePending ? (
+          <div className="msform">
+            <header className="msform-banner">
+              <h1>{data.definition.title}</h1>
+              <p className="muted">enter your name and email to continue</p>
+            </header>
+            <div className="question-card">
+              <form className="contact-info-grid" onSubmit={onGateSubmit}>
+                <label htmlFor="gate-name" className="muted">
+                  name *
+                </label>
+                <Input id="gate-name" required autoFocus value={gateName} onChange={(e) => setGateName(e.target.value)} />
+                <label htmlFor="gate-email" className="muted">
+                  email *
+                </label>
+                <Input
+                  id="gate-email"
+                  type="email"
+                  required
+                  value={gateEmail}
+                  onChange={(e) => setGateEmail(e.target.value)}
+                />
+                {data.settings.allowedEmailDomains.length > 0 && (
+                  <p className="muted" style={{ fontSize: 12, gridColumn: '1 / -1' }}>
+                    only {data.settings.allowedEmailDomains.map((d) => `@${d}`).join(', ')} email addresses are accepted
+                  </p>
+                )}
+                {gateError && (
+                  <Alert variant="destructive" style={{ gridColumn: '1 / -1' }}>
+                    <AlertDescription>{gateError}</AlertDescription>
+                  </Alert>
+                )}
+                <Button type="submit" style={{ gridColumn: '1 / -1', justifySelf: 'start' }}>
+                  continue
+                </Button>
+              </form>
+            </div>
+          </div>
         ) : (
           <FormRenderer
             definition={data.definition}

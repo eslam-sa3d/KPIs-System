@@ -1190,7 +1190,7 @@ describe('SubmissionsService.exportCsv', () => {
     const csv = await service.exportCsv('export-repro', 'admin-1');
 
     const [header, row] = csv.split('\n');
-    expect(header).toBe('submitted_at,submitted_by,evaluatee,root_cause,notes');
-    expect(row).toBe('2026-01-01T00:00:00.000Z,respondent@pulse.local,Ana Ivanova,Sam Reyes,plain text');
+    expect(header).toBe('submitted_at,submitted_by,respondent_name,respondent_email,evaluatee,root_cause,notes');
+    expect(row).toBe('2026-01-01T00:00:00.000Z,respondent@pulse.local,,,Ana Ivanova,Sam Reyes,plain text');
   });
 });

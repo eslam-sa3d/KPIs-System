@@ -56,6 +56,19 @@ const ASSET_INTERCEPTOR = FileInterceptor('file', { storage: memoryStorage(), li
  *  "identity" a public-link filler has, used to enforce oneResponsePerUser without an account.
  *  Same cross-site cookie reasoning as the auth refresh cookie (see auth.controller.ts). */
 const RESPONDENT_COOKIE = 'pulse_pf';
+
+/** decodeURIComponent throws on malformed percent-encoding — a public,
+ *  unauthenticated endpoint can't let a hostile header value 500 the
+ *  request, so a bad encoding just becomes "no value" (fails the
+ *  respondent-info validation below with a normal 4xx instead). */
+function safeDecodeHeader(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
+}
 const respondentCookieSameSite = env.REFRESH_COOKIE_SAMESITE;
 const respondentCookieOptions = {
   httpOnly: true,
@@ -103,12 +116,6 @@ export class FormsController {
   @RequirePermissions('forms:edit')
   setShareLink(@Param('formId') formId: string, @Body() body: { enabled: boolean }, @Req() req: AuthedRequest) {
     return this.forms.setShareLink(formId, Boolean(body?.enabled), req.user.id);
-  }
-
-  @Post(':formId/export-link')
-  @RequirePermissions('forms:edit')
-  setExportLink(@Param('formId') formId: string, @Body() body: { enabled: boolean }, @Req() req: AuthedRequest) {
-    return this.forms.setExportLink(formId, Boolean(body?.enabled), req.user.id);
   }
 
   /** Restricts portal access to the creator, collaborators, and forms:edit holders.
@@ -160,8 +167,8 @@ export class FormsController {
     return this.forms.duplicate(formId, req.user.id);
   }
 
-  /** Hides the form from the default list and closes its public/export links
-   *  to further use, without touching submission history. */
+  /** Hides the form from the default list and closes its public link to
+   *  further use, without touching submission history. */
   @Post(':formId/archive')
   @RequirePermissions('forms:activate_deactivate')
   archiveForm(@Param('formId') formId: string, @Req() req: AuthedRequest) {
@@ -355,21 +362,10 @@ export class PublicFormsController {
   @Get(':token')
   async getForm(@Param('token') token: string) {
     const { definition, settings } = await this.forms.getByPublicToken(token);
-    // expose only what a respondent needs — no ids, no internals
+    // expose only what a respondent needs — no ids, no internals. settings
+    // already carries allowedEmailDomains — not sensitive (just which
+    // domains can respond), so the gate screen can validate client-side.
     return { definition, settings };
-  }
-
-  /** Token-gated live export — paste into Excel's "Get Data from Web" and refresh anytime.
-   *  The unguessable token IS the access control, same trust model as the public fill link. */
-  @Public()
-  @Get('export/:exportToken')
-  async exportXlsx(@Param('exportToken') exportToken: string, @Res() res: Response) {
-    const { form } = await this.forms.getByExportToken(exportToken);
-    const buffer = await this.submissions.exportXlsx(form.slug, null);
-    res
-      .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      .setHeader('Content-Disposition', `attachment; filename="${form.slug}-live.xlsx"`)
-      .send(buffer);
   }
 
   @Public()
@@ -380,12 +376,23 @@ export class PublicFormsController {
     @Param('token') token: string,
     @Body(new ZodValidationPipe(submissionAnswersSchema)) answers: SubmissionAnswers,
     @Headers('x-turnstile-token') turnstileToken: string | undefined,
+    // the pre-form gate's name/email — URI-encoded client-side (RESPONDENT_HEADER_ENCODING
+    // in app/f/page.tsx) since raw non-ASCII header values aren't spec-safe.
+    @Headers('x-respondent-name') respondentNameHeader: string | undefined,
+    @Headers('x-respondent-email') respondentEmailHeader: string | undefined,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const fingerprint = req.cookies?.[RESPONDENT_COOKIE] ?? randomBytes(16).toString('base64url');
     res.cookie(RESPONDENT_COOKIE, fingerprint, respondentCookieOptions);
-    return this.submissions.submitPublic(token, answers, fingerprint, turnstileToken);
+    return this.submissions.submitPublic(
+      token,
+      answers,
+      fingerprint,
+      turnstileToken,
+      safeDecodeHeader(respondentNameHeader),
+      safeDecodeHeader(respondentEmailHeader),
+    );
   }
 
   @Public()

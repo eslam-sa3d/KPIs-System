@@ -342,6 +342,33 @@ export const formSettingsSchema = z.object({
   /** require a passing Cloudflare Turnstile check on public submissions — default
    *  off, since most forms here are internal. See TurnstileService. */
   requireCaptcha: z.boolean().default(false),
+  /** show a gate screen collecting the respondent's name + email before a public
+   *  (not-logged-in) fill can start — default off, same "opt in per form" shape
+   *  as requireCaptcha. Never shown on the authenticated in-app fill flow, only
+   *  the public /f link, and skipped when editing an existing response via its
+   *  edit token. See allowedEmailDomains below for restricting which domains
+   *  the collected email may come from. */
+  requireRespondentInfo: z.boolean().default(false),
+  /** Restricts the respondent gate's email (above) to these domains — bare, no
+   *  leading "@" (e.g. "pulsebysolutions.com"). Empty = unrestricted, any
+   *  domain accepted. Per-form, unlike requireRespondentInfo's other sibling
+   *  settings this has no independent "on/off": an empty list simply means no
+   *  restriction, so it doesn't need its own boolean. */
+  allowedEmailDomains: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(3)
+        .max(255)
+        .regex(
+          /^@?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i,
+          'enter a valid domain, e.g. pulsebysolutions.com',
+        )
+        .transform((d) => d.replace(/^@/, '').toLowerCase()),
+    )
+    .max(20)
+    .default([]),
   /** fire-and-forget POST of every new submission to this URL — failures are
    *  logged, never block or fail the submission itself. */
   webhookUrl: z.string().url().max(2000).optional(),

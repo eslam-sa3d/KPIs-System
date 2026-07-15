@@ -10,7 +10,7 @@ import {
   buildPaginationMeta,
   resolvePageBounds,
 } from '@pulse/contracts';
-import { ZodError } from 'zod';
+import { ZodError, z } from 'zod';
 import ExcelJS from 'exceljs';
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
@@ -64,17 +64,68 @@ export class SubmissionsService {
   }
 
   /** Anonymous submission via a public share link. `respondentFingerprint` is a random id the
-   *  controller stores in a cookie — the only "identity" an anonymous filler has. */
+   *  controller stores in a cookie — the only "identity" an anonymous filler has.
+   *  `respondentName`/`respondentEmail` come from the pre-form gate screen (see
+   *  assertRespondentInfoAllowed) — undefined when the form's requireRespondentInfo
+   *  setting is off, since the gate never showed. */
   async submitPublic(
     token: string,
     rawAnswers: SubmissionAnswers,
     respondentFingerprint: string | null,
     turnstileToken?: string,
+    respondentName?: string,
+    respondentEmail?: string,
   ) {
     const { form, version, definition, settings } = await this.forms.getByPublicToken(token);
     await this.turnstile.verify(settings.requireCaptcha, turnstileToken);
+    this.assertRespondentInfoAllowed(
+      settings.requireRespondentInfo,
+      settings.allowedEmailDomains,
+      respondentName,
+      respondentEmail,
+    );
     await this.enforceSettings(form.id, settings, null, respondentFingerprint, rawAnswers);
-    return this.persist(form.slug, form.id, version.id, definition, settings, rawAnswers, null, respondentFingerprint);
+    return this.persist(
+      form.slug,
+      form.id,
+      version.id,
+      definition,
+      settings,
+      rawAnswers,
+      null,
+      respondentFingerprint,
+      respondentName,
+      respondentEmail,
+    );
+  }
+
+  /** Enforces the pre-form gate: when the form requires it, a non-empty name and a
+   *  domain-allowed email must both be present — checked server-side regardless of
+   *  what the gate screen already validated client-side, since that's only a UX
+   *  convenience, not a trust boundary. `allowedDomains` is this form's own
+   *  settings.allowedEmailDomains — empty means unrestricted. No-op when the
+   *  requireRespondentInfo setting is off. */
+  private assertRespondentInfoAllowed(
+    required: boolean,
+    allowedDomains: string[],
+    respondentName: string | undefined,
+    respondentEmail: string | undefined,
+  ) {
+    if (!required) return;
+    const name = respondentName?.trim();
+    if (!name) throw AppError.validation([{ path: 'respondentName', message: 'name is required' }]);
+
+    const email = respondentEmail?.trim();
+    if (!email || !z.string().email().safeParse(email).success) {
+      throw AppError.validation([{ path: 'respondentEmail', message: 'enter a valid email address' }]);
+    }
+    const emailDomain = email.split('@')[1]?.toLowerCase();
+    if (allowedDomains.length > 0 && !allowedDomains.includes(emailDomain ?? '')) {
+      const domains = allowedDomains.map((d) => `@${d}`).join(', ');
+      throw AppError.validation([
+        { path: 'respondentEmail', message: `email must be from an approved domain (${domains})` },
+      ]);
+    }
   }
 
   /** Fetches a respondent's own previously-submitted answers to prefill the edit form. */
@@ -206,6 +257,8 @@ export class SubmissionsService {
     rawAnswers: SubmissionAnswers,
     submittedById: string | null,
     respondentFingerprint: string | null,
+    respondentName?: string,
+    respondentEmail?: string,
   ) {
     const { answers, uploadIds, score } = await this.validateAndScore(formId, definition, settings, rawAnswers);
 
@@ -214,6 +267,8 @@ export class SubmissionsService {
         formVersionId,
         submittedById,
         respondentFingerprint,
+        respondentName: respondentName?.trim() || null,
+        respondentEmail: respondentEmail?.trim() || null,
         answers,
         score: score ? (score as unknown as Prisma.InputJsonValue) : undefined,
         editToken: settings.allowRespondentEdit ? randomBytes(24).toString('base64url') : undefined,
@@ -902,12 +957,14 @@ export class SubmissionsService {
     const optionLabelsByKey = new Map(definition.fields.map((f) => [f.key, optionLabelsFor(f, performanceLevels)]));
 
     const keys = definition.fields.map((f) => f.key);
-    const header = ['submitted_at', 'submitted_by', ...keys];
+    const header = ['submitted_at', 'submitted_by', 'respondent_name', 'respondent_email', ...keys];
     const rows = submissions.map((s) => {
       const answers = s.answers as SubmissionAnswers;
       return [
         s.createdAt.toISOString(),
         s.submittedBy?.email ?? 'anonymous',
+        s.respondentName ?? '',
+        s.respondentEmail ?? '',
         ...keys.map((k) => {
           const v = answers[k];
           const optionLabels = optionLabelsByKey.get(k);

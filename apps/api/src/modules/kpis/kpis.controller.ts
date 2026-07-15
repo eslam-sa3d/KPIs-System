@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import {
   CreateEvaluationAreaInput,
   CreateKpiInput,
   CreateSubCriteriaInput,
+  DashboardFormScopeInput,
   KpiAssignmentInput,
   PageQuery,
   RecordEvaluationAreaEntryInput,
@@ -15,6 +16,7 @@ import {
   createEvaluationAreaSchema,
   createKpiSchema,
   createSubCriteriaSchema,
+  dashboardFormScopeSchema,
   kpiAssignmentSchema,
   recordEvaluationAreaEntrySchema,
   setEvaluationAreaStatusSchema,
@@ -88,6 +90,25 @@ export class KpisController {
   @RequirePermissions('dashboards:view')
   getActivityTrend() {
     return this.kpis.getActivityTrend();
+  }
+
+  /** Which forms' submissions currently feed the dashboard — readable by
+   *  anyone who can see the dashboard, so the picker can show the active
+   *  state even to a viewer who can't change it. */
+  @Get('dashboard-form-scope')
+  @RequirePermissions('dashboards:view')
+  getDashboardFormScope() {
+    return this.kpis.getDashboardFormScope();
+  }
+
+  /** Global, org-wide — not per-caller — see DashboardFormScope. */
+  @Put('dashboard-form-scope')
+  @RequirePermissions('dashboards:edit')
+  setDashboardFormScope(
+    @Body(new ZodValidationPipe(dashboardFormScopeSchema)) input: DashboardFormScopeInput,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.kpis.setDashboardFormScope(input, req.user.id);
   }
 
   @Patch(':id')

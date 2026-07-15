@@ -145,25 +145,6 @@ export class FormsService {
     };
   }
 
-  /** Unguessable-token-gated live export — the practical equivalent of MS Forms' "Open in
-   *  Excel": paste this URL into Excel's "Get Data from Web" and refresh anytime. */
-  async getByExportToken(token: string) {
-    const form = await this.prisma.form.findUnique({
-      where: { exportToken: token },
-      include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
-    });
-    const version = form?.versions[0];
-    if (!form || !version || form.status === 'archived') {
-      throw AppError.notFound('Form', 'export link');
-    }
-    return {
-      form,
-      version,
-      definition: version.definition as unknown as FormDefinition,
-      settings: this.settingsOf(form.settings),
-    };
-  }
-
   async getByPublicToken(token: string) {
     const form = await this.prisma.form.findUnique({
       where: { publicToken: token },
@@ -224,26 +205,6 @@ export class FormsService {
     return { publicToken };
   }
 
-  /** Enable/rotate or disable the token-gated live export link (see getByExportToken). */
-  async setExportLink(formId: string, enabled: boolean, actorId: string) {
-    const form = await this.prisma.form.findUnique({ where: { id: formId } });
-    if (!form) throw AppError.notFound('Form', formId);
-
-    const exportToken = enabled ? randomBytes(24).toString('base64url') : null;
-    await this.prisma.$transaction([
-      this.prisma.form.update({ where: { id: formId }, data: { exportToken } }),
-      this.prisma.auditLog.create({
-        data: {
-          actorId,
-          action: enabled ? 'form.export_link_enabled' : 'form.export_link_disabled',
-          entity: 'Form',
-          entityId: formId,
-        },
-      }),
-    ]);
-    return { exportToken };
-  }
-
   /** Restricting a form limits portal view/fill to the creator, collaborators, and forms:manage holders.
    *  The anonymous public link (above) is untouched — it's opt-in and always anonymous regardless. */
   async setRestricted(formId: string, restricted: boolean, actorId: string) {
@@ -275,9 +236,9 @@ export class FormsService {
   }
 
   /** Archive a form — hides it from the default list (listForms already
-   *  filters status !== 'archived') and closes the public/export links to
-   *  further use (getByPublicToken/getByExportToken already reject archived
-   *  forms), without touching its submission history. */
+   *  filters status !== 'archived') and closes the public link to further
+   *  use (getByPublicToken already rejects archived forms), without
+   *  touching its submission history. */
   async archiveForm(formId: string, actorId: string) {
     await this.getOwnedForm(formId, actorId);
     await this.prisma.$transaction([

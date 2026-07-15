@@ -40,9 +40,11 @@ export function FormSettingsPanel({
     setError(null);
     setNotice(null);
     try {
+      // blank rows are just an editing convenience (from "+ add domain") — never sent
+      const payload = { ...draft, allowedEmailDomains: draft.allowedEmailDomains.map((d) => d.trim()).filter(Boolean) };
       const saved = await api<FormSettings>(`/v1/forms/${formId}/settings`, {
         method: 'PATCH',
-        body: JSON.stringify(draft),
+        body: JSON.stringify(payload),
       });
       onSaved(saved);
       setNotice('settings saved');
@@ -210,6 +212,63 @@ export function FormSettingsPanel({
               NEXT_PUBLIC_TURNSTILE_SITE_KEY configured to take effect)
             </label>
           </span>
+
+          <span className="builder-required">
+            <Checkbox
+              id="fs-respondent-info"
+              checked={draft.requireRespondentInfo}
+              onCheckedChange={(checked) => setDraft((d) => ({ ...d, requireRespondentInfo: checked === true }))}
+            />
+            <label htmlFor="fs-respondent-info">
+              ask for name &amp; email before a public link submission starts
+            </label>
+          </span>
+
+          {draft.requireRespondentInfo && (
+            <>
+              <label>allowed email domains (optional)</label>
+              <p className="muted" style={{ fontSize: 11, margin: '2px 0 8px' }}>
+                restrict the gate&apos;s email to these domains, e.g. pulsebysolutions.com — leave empty to accept any
+                domain.
+              </p>
+              {draft.allowedEmailDomains.map((domain, i) => (
+                <div key={i} className="builder-required">
+                  <Input
+                    aria-label="domain"
+                    value={domain}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        allowedEmailDomains: d.allowedEmailDomains.map((dm, di) => (di === i ? e.target.value : dm)),
+                      }))
+                    }
+                    placeholder="pulsebysolutions.com"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        allowedEmailDomains: d.allowedEmailDomains.filter((_, di) => di !== i),
+                      }))
+                    }
+                  >
+                    remove
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setDraft((d) => ({ ...d, allowedEmailDomains: [...d.allowedEmailDomains, ''] }))}
+              >
+                + add domain
+              </Button>
+            </>
+          )}
 
           <label htmlFor="fs-webhook">webhook URL (optional)</label>
           <Input

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { API_URL, api } from '../lib/api-client';
+import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,24 +11,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 export function ShareLinkPanel({
   formId,
   publicToken,
-  exportToken,
 }: {
   formId: string;
   publicToken: string | null;
-  exportToken: string | null;
 }) {
   const [token, setToken] = useState(publicToken);
   const [qr, setQr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
-  const [xToken, setXToken] = useState(exportToken);
-  const [xBusy, setXBusy] = useState(false);
-  const [xCopied, setXCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDisable, setConfirmDisable] = useState(false);
-  const [confirmDisableExport, setConfirmDisableExport] = useState(false);
-  const exportUrl = xToken ? `${API_URL}/api/v1/public/forms/export/${xToken}` : null;
 
   const url =
     token && typeof window !== 'undefined'
@@ -75,30 +68,6 @@ export function ShareLinkPanel({
     await navigator.clipboard.writeText(embedSnippet);
     setEmbedCopied(true);
     setTimeout(() => setEmbedCopied(false), 2000);
-  }
-
-  async function toggleExportLink(enabled: boolean) {
-    setXBusy(true);
-    setError(null);
-    try {
-      const result = await api<{ exportToken: string | null }>(`/v1/forms/${formId}/export-link`, {
-        method: 'POST',
-        body: JSON.stringify({ enabled }),
-      });
-      setXToken(result.exportToken);
-      setConfirmDisableExport(false);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'the request failed');
-    } finally {
-      setXBusy(false);
-    }
-  }
-
-  async function copyExportUrl() {
-    if (!exportUrl) return;
-    await navigator.clipboard.writeText(exportUrl);
-    setXCopied(true);
-    setTimeout(() => setXCopied(false), 2000);
   }
 
   return (
@@ -156,47 +125,6 @@ export function ShareLinkPanel({
                 </>
               ) : (
                 <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(true)} disabled={busy}>
-                  disable
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-
-        <h2 style={{ marginTop: 24 }}>live export link</h2>
-        <p className="muted">
-          paste this into Excel's "Get Data → From Web" and refresh anytime for the latest responses — the practical
-          equivalent of Microsoft Forms' "Open in Excel". The link itself is the access control, so treat it like a
-          password.
-        </p>
-        {!xToken ? (
-          <Button onClick={() => toggleExportLink(true)} disabled={xBusy}>
-            {xBusy ? 'creating…' : 'create live export link'}
-          </Button>
-        ) : (
-          <div className="share-panel-active">
-            <div className="share-link-row">
-              <code className="share-link-url">{exportUrl}</code>
-              <Button variant="ghost" size="sm" onClick={copyExportUrl}>
-                {xCopied ? 'copied!' : 'copy'}
-              </Button>
-            </div>
-            <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
-              <Button variant="ghost" size="sm" onClick={() => toggleExportLink(true)} disabled={xBusy}>
-                rotate link
-              </Button>
-              {confirmDisableExport ? (
-                <>
-                  <span className="muted">disable the live export link?</span>
-                  <Button variant="ghost" size="sm" onClick={() => toggleExportLink(false)} disabled={xBusy}>
-                    confirm disable
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(false)}>
-                    cancel
-                  </Button>
-                </>
-              ) : (
-                <Button variant="ghost" size="sm" onClick={() => setConfirmDisableExport(true)} disabled={xBusy}>
                   disable
                 </Button>
               )}

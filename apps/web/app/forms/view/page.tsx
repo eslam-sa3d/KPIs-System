@@ -31,7 +31,6 @@ interface FormDetail {
     slug: string;
     status: string;
     publicToken: string | null;
-    exportToken: string | null;
     restricted: boolean;
   };
   version: { id: string; version: number };
@@ -44,6 +43,10 @@ interface SubmissionRow {
   createdAt: string;
   answers: SubmissionAnswers;
   submittedBy: { displayName: string; email: string } | null;
+  /** Self-reported on the public-form "name & email" gate — only set for an
+   *  anonymous submission to a form with requireRespondentInfo on. */
+  respondentName: string | null;
+  respondentEmail: string | null;
   score?: SubmissionScore | null;
 }
 
@@ -218,8 +221,8 @@ function FormView() {
     if (dateTo && row.createdAt > `${dateTo}T23:59:59.999Z`) return false;
     if (!filter) return true;
     const haystack = [
-      row.submittedBy?.displayName ?? 'anonymous',
-      row.submittedBy?.email ?? '',
+      row.submittedBy?.displayName ?? row.respondentName ?? 'anonymous',
+      row.submittedBy?.email ?? row.respondentEmail ?? '',
       ...Object.values(row.answers).map((v) => (typeof v === 'object' ? JSON.stringify(v) : String(v ?? ''))),
     ]
       .join(' ')
@@ -384,7 +387,7 @@ function FormView() {
                   {filteredRows.map((row) => (
                     <TableRow key={row.id}>
                       <TableCell>{new Date(row.createdAt).toLocaleString()}</TableCell>
-                      <TableCell>{row.submittedBy?.displayName ?? 'anonymous'}</TableCell>
+                      <TableCell>{row.submittedBy?.displayName ?? row.respondentName ?? 'anonymous'}</TableCell>
                       {definition.fields.map((f) => {
                         const value = row.answers[f.key];
                         return (
@@ -580,7 +583,7 @@ function FormView() {
                 settings={settings}
                 onSaved={(next) => setDetail((d) => (d ? { ...d, settings: next } : d))}
               />
-              <ShareLinkPanel formId={form.id} publicToken={form.publicToken} exportToken={form.exportToken} />
+              <ShareLinkPanel formId={form.id} publicToken={form.publicToken} />
               <AccessControlPanel
                 formId={form.id}
                 restricted={form.restricted}

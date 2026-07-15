@@ -2,15 +2,18 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
-import type { RecentFeedback, TeamMemberBreakdown, TeamOverview } from '@pulse/contracts';
+import type { DashboardFormScope, FormListItem, RecentFeedback, TeamMemberBreakdown, TeamOverview } from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
 import { TeamMemberDetailDrawer } from '../../components/team-member-detail-drawer';
+import { FormMultiSelectCombobox } from '../../components/form-multi-select-combobox';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { LoadingState } from '@/components/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 import { useResource } from '../../lib/use-resource';
 import { useReveal } from '../../lib/use-reveal';
@@ -80,18 +83,56 @@ export default function DashboardPage() {
   const [memberFilter, setMemberFilter] = useState('');
   const canSeeTeamOverview = can(user, 'dashboards:view');
 
-  const { data: kpis } = useResource<RawKpi[]>(user ? '/v1/kpis/my' : null);
+  const { data: kpis, reload: reloadKpis } = useResource<RawKpi[]>(user ? '/v1/kpis/my' : null);
 
   // org-wide roster with KPI coverage/latest submission/last-updated — admin-only, powers the team coverage cards and table below
-  const { data: teamOverview } = useResource<TeamOverview>(
+  const { data: teamOverview, reload: reloadTeamOverview } = useResource<TeamOverview>(
     user && canSeeTeamOverview ? '/v1/kpis/team-overview' : null,
   );
 
   // recent context/comment feedback, org-wide — the qualitative signal
   // usually buried one entry at a time inside a person's own drawer
-  const { data: recentFeedback } = useResource<RecentFeedback>(
+  const { data: recentFeedback, reload: reloadRecentFeedback } = useResource<RecentFeedback>(
     user && canSeeTeamOverview ? '/v1/kpis/recent-feedback' : null,
   );
+
+  // which forms' submissions currently feed the dashboard — global,
+  // admin-managed, shared across every user (see DashboardFormScope)
+  const canEditFormScope = can(user, 'dashboards:edit');
+  const { data: formScope, setData: setFormScope } = useResource<DashboardFormScope>(
+    user && canSeeTeamOverview ? '/v1/kpis/dashboard-form-scope' : null,
+  );
+  const { data: scopeForms } = useResource<FormListItem[]>(user && canSeeTeamOverview ? '/v1/forms' : null);
+  const [formScopeSaving, setFormScopeSaving] = useState(false);
+  const [formScopeError, setFormScopeError] = useState<string | null>(null);
+  const selectedFormIds = useMemo(() => new Set(formScope?.formIds ?? []), [formScope]);
+
+  async function persistFormScope(formIds: string[]) {
+    setFormScopeSaving(true);
+    setFormScopeError(null);
+    try {
+      const updated = await api<DashboardFormScope>('/v1/kpis/dashboard-form-scope', {
+        method: 'PUT',
+        body: JSON.stringify({ formIds }),
+      });
+      setFormScope(updated);
+      // The scope affects almost every widget below — refresh them all.
+      void reloadKpis();
+      void reloadTeamOverview();
+      void reloadRecentFeedback();
+    } catch (cause) {
+      setFormScopeError(cause instanceof Error ? cause.message : 'the request failed');
+    } finally {
+      setFormScopeSaving(false);
+    }
+  }
+
+  function onToggleScopeForm(form: FormListItem) {
+    const next = new Set(selectedFormIds);
+    if (next.has(form.id)) next.delete(form.id);
+    else next.add(form.id);
+    void persistFormScope([...next]);
+  }
 
   // fetched on demand when a team member row is clicked — their own scored
   // submissions, across every KPI that covers them
@@ -210,6 +251,49 @@ export default function DashboardPage() {
             </p>
           </div>
         </div>
+
+        {canSeeTeamOverview && (
+          <div
+            className="p-card"
+            style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}
+          >
+            <span className="muted">
+              showing data from:{' '}
+              {formScope === null
+                ? 'loading…'
+                : selectedFormIds.size === 0
+                  ? 'all forms'
+                  : [...selectedFormIds].map((id) => scopeForms?.find((f) => f.id === id)?.title ?? id).join(', ')}
+            </span>
+            {canEditFormScope && (
+              <>
+                <FormMultiSelectCombobox
+                  selectedIds={selectedFormIds}
+                  onToggle={onToggleScopeForm}
+                  disabled={formScopeSaving}
+                  triggerLabel="choose a form"
+                />
+                {selectedFormIds.size > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={formScopeSaving}
+                    onClick={() => void persistFormScope([])}
+                  >
+                    show all forms
+                  </Button>
+                )}
+                {formScopeSaving && <Spinner className="size-4" />}
+              </>
+            )}
+          </div>
+        )}
+        {formScopeError && (
+          <Alert variant="destructive" style={{ marginBottom: 16 }}>
+            <AlertDescription>{formScopeError}</AlertDescription>
+          </Alert>
+        )}
 
         {canSeeTeamOverview && teamOverview && jobTitleOptions.length > 0 && (
           <div className="p-filter-pills" style={{ marginBottom: 20 }}>
