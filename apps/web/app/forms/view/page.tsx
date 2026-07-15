@@ -303,6 +303,7 @@ function FormView() {
                 placeholder="filter…"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
+                style={{ flex: '0 1 180px' }}
               />
               <span className="builder-required date-range-filter">
                 <label htmlFor="submissions-date-from" className="muted" style={{ fontSize: 12 }}>

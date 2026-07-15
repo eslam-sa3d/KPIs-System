@@ -1691,6 +1691,15 @@
     flex-wrap: wrap;
   }
 
+  /* overrides .page-title-row input's flex:1 1 200px (sized for the free-text
+   filter box) — a native date input needs nowhere near 200px, and that basis
+   on TWO of them bloats this row enough to force the rest of the toolbar
+   (export/delete buttons) onto a second line even on an ordinary desktop
+   width. */
+  .page-title-row .date-range-filter input {
+    flex: 0 0 130px;
+  }
+
   .check-group {
     display: flex;
     flex-direction: column;
