@@ -253,8 +253,8 @@ export class FormsController {
 
   @Get(':slug/submissions/summary')
   @FormPermission('view')
-  summary(@Param('slug') slug: string) {
-    return this.submissions.summary(slug);
+  summary(@Param('slug') slug: string, @Query('userId') userId?: string) {
+    return this.submissions.summary(slug, userId || undefined);
   }
 
   @Patch(':slug/submissions/:submissionId')

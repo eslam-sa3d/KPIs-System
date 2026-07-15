@@ -553,11 +553,15 @@ export class SubmissionsService {
     ['evaluation type', 'period (e.g., q2, h1, annual 2026)', 'your role'].map(normalizeLabel),
   );
 
-  /** MS-Forms-style per-question aggregates for the summary dashboard. */
-  async summary(formSlug: string): Promise<FormResponseSummary> {
+  /** MS-Forms-style per-question aggregates for the summary dashboard.
+   *  `userId` optionally narrows every aggregate to only the submissions that
+   *  name that person as the answer to ANY question — not just a dedicated
+   *  'person' field, since one submission on a form like a QC checklist can
+   *  name several different people across several different questions. */
+  async summary(formSlug: string, userId?: string): Promise<FormResponseSummary> {
     const { version, definition } = await this.forms.getLatestVersion(formSlug);
     await this.assertSyncReportSizeOk(version.id);
-    const submissions = await this.prisma.formSubmission.findMany({
+    const allSubmissions = await this.prisma.formSubmission.findMany({
       where: { formVersionId: version.id },
       select: { answers: true, createdAt: true, score: true },
       orderBy: { createdAt: 'asc' },
@@ -565,18 +569,25 @@ export class SubmissionsService {
 
     // 'person' answers are a User's id, not a displayable string — resolve every
     // one referenced by this form's submissions in one batch instead of N+1. Also
-    // scan every OTHER field's raw values for a UUID shape: some forms store a
-    // per-area evaluatee id in an ordinary text field rather than a dedicated
-    // 'person' field, and those need the same name resolution to avoid leaking
-    // a raw user id into a summary card.
+    // scan every OTHER field's raw values (including inside multi_select/ranking
+    // arrays, where a "link to a user" option stores that user's id as its value)
+    // for a UUID shape: some forms store a per-area evaluatee id in an ordinary
+    // text field rather than a dedicated 'person' field, and those need the same
+    // name resolution to avoid leaking a raw user id into a summary card. This
+    // scan is always over the FULL, unfiltered submission set — `respondents`
+    // below is meant to stay the complete filter-dropdown option list even once
+    // `userId` narrows everything else in this response.
     const personFieldKeys = new Set(definition.fields.filter((f) => f.type === 'person').map((f) => f.key));
     const candidateIds = new Set<string>();
-    for (const s of submissions) {
+    for (const s of allSubmissions) {
       const answers = s.answers as SubmissionAnswers;
       for (const field of definition.fields) {
         const v = answers[field.key];
-        if (typeof v !== 'string' || !v) continue;
-        if (personFieldKeys.has(field.key) || UUID_PATTERN.test(v)) candidateIds.add(v);
+        if (typeof v === 'string' && v && (personFieldKeys.has(field.key) || UUID_PATTERN.test(v))) {
+          candidateIds.add(v);
+        } else if (Array.isArray(v)) {
+          for (const item of v) if (typeof item === 'string' && UUID_PATTERN.test(item)) candidateIds.add(item);
+        }
       }
     }
     const personNames = candidateIds.size
@@ -589,6 +600,16 @@ export class SubmissionsService {
           ).map((u) => [u.id, u.displayName]),
         )
       : new Map<string, string>();
+    const respondents = [...personNames]
+      .map(([id, displayName]) => ({ id, displayName }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+    const submissions = userId
+      ? allSubmissions.filter((s) => {
+          const answers = s.answers as SubmissionAnswers;
+          return Object.values(answers).some((v) => v === userId || (Array.isArray(v) && v.includes(userId)));
+        })
+      : allSubmissions;
 
     // performance_level answers store a PerformanceLevel id — fetched lazily,
     // same rule as normalizeScore/describeAnswer, only when this form
@@ -749,6 +770,7 @@ export class SubmissionsService {
       lastResponseAt: submissions[submissions.length - 1]?.createdAt.toISOString() ?? null,
       fields,
       ...(quiz ? { quiz } : {}),
+      respondents,
     };
   }
 

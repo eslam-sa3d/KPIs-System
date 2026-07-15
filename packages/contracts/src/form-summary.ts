@@ -85,6 +85,12 @@ export interface FormResponseSummary {
   lastResponseAt: string | null;
   fields: FormFieldSummary[];
   quiz?: QuizResponseSummary;
+  /** Every person named as the answer to any question across this form's
+   *  submissions (a 'person' field, or a select/multi_select/ranking option
+   *  built via the "link to a user" picker) — always the full, unfiltered
+   *  set, so it stays stable as the filter dropdown's option list even while
+   *  a `userId` filter narrows everything else in this response. */
+  respondents: Array<{ id: string; displayName: string }>;
 }
 
 /**

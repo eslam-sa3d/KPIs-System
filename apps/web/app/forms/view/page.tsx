@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/loading-state';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FormRenderer, SubmissionScore } from '../../../components/form-renderer';
@@ -59,6 +60,11 @@ function FormView() {
   const [page, setPage] = useState(1);
   const SUBMISSIONS_PAGE_SIZE = 50;
   const [summary, setSummary] = useState<ResponseSummaryData | null>(null);
+  // narrows the summary to only submissions naming this person as the answer to
+  // any question — '' means "everyone". Kept separate from `fieldFilter` (which
+  // filters the submissions TABLE to one exact field/value) since this filters
+  // the aggregated summary CARDS instead, across every field at once.
+  const [summaryUserId, setSummaryUserId] = useState('');
   const [filter, setFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -142,8 +148,9 @@ function FormView() {
   }, [fieldFilter]);
 
   const loadSummary = useCallback(() => {
-    void api<ResponseSummaryData>(`/v1/forms/${encodeURIComponent(slug)}/submissions/summary`).then(setSummary);
-  }, [slug]);
+    const qs = summaryUserId ? `?userId=${encodeURIComponent(summaryUserId)}` : '';
+    void api<ResponseSummaryData>(`/v1/forms/${encodeURIComponent(slug)}/submissions/summary${qs}`).then(setSummary);
+  }, [slug, summaryUserId]);
 
   useEffect(() => {
     if (!user || !slug) return;
@@ -533,6 +540,29 @@ function FormView() {
 
         <TabsContent value="summary">
           <section aria-label="response summary">
+            {summary && summary.respondents.length > 0 && (
+              <div className="page-title-row" style={{ marginBottom: 8 }}>
+                <label htmlFor="summary-user-filter" className="muted" style={{ fontSize: 13 }}>
+                  filter by person
+                </label>
+                <Select
+                  value={summaryUserId || '__all__'}
+                  onValueChange={(v) => setSummaryUserId(v === '__all__' ? '' : v)}
+                >
+                  <SelectTrigger id="summary-user-filter" size="sm" className="w-[220px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">everyone</SelectItem>
+                    {summary.respondents.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.displayName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {summary === null ? (
               <LoadingState />
             ) : (
