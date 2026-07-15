@@ -31,8 +31,12 @@ export function FormMultiSelectCombobox({
       onOpenChange={(next) => {
         setOpen(next);
         if (next && forms === null) {
+          // /v1/forms is the admin management list and deliberately includes
+          // archived forms (so "unarchive" stays reachable there) — this picker
+          // is choosing which forms feed the live dashboard, where an archived
+          // form is never a meaningful choice, so it's excluded here instead.
           api<FormListItem[]>('/v1/forms')
-            .then(setForms)
+            .then((all) => setForms(all.filter((f) => f.status !== 'archived')))
             .catch(() => setForms([]));
         }
       }}

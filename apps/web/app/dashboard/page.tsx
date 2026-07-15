@@ -330,12 +330,6 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            {kpis.length === 0 && (
-              <p className="muted" style={{ marginBottom: 12 }}>
-                no KPIs assigned yet — an admin can map KPIs to your role or department under KPI settings. the widgets
-                below will fill in as soon as one is.
-              </p>
-            )}
             {canSeeTeamOverview && teamOverview && (
               <div className="p-kpi-strip">
                 {STATUS_ORDER.map((s) => (
