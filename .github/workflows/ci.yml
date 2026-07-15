@@ -187,18 +187,47 @@ jobs:
 
   # ── Stage 5: security audit — a failure here fails this workflow, which
   # gates deploy-pages.yml (workflow_run, only fires on success) ────────────
+  #
+  # `pnpm audit` is retired: npm's registry retired the legacy
+  # /-/npm/v1/security/audits endpoint it depends on (410 Gone) — pnpm only
+  # adapted to the replacement bulk-advisory endpoint in v11, which requires
+  # Node 22+ (this workflow is still on Node 20 everywhere). OSV-Scanner
+  # queries OSV.dev directly against pnpm-lock.yaml instead, sidestepping
+  # that endpoint entirely, with no Node/pnpm version changes needed.
+  #
+  # The scan step's own exit code fires on ANY finding regardless of
+  # severity (confirmed empirically — its JSON+output-file mode isn't
+  # severity-aware), so it's `continue-on-error`'d and the real gate is the
+  # next step, checking each finding's GHSA-native `database_specific.severity`
+  # (matching npm audit's traditional --audit-level semantics — HIGH/CRITICAL
+  # only; this deliberately isn't a raw-CVSS cutoff, since CVSS and GHSA's own
+  # qualitative rating can disagree, e.g. GHSA-w5hq-g745-h8pq scores CVSS 7.5
+  # but GitHub rates it MODERATE).
   security:
     name: Dependency Audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - name: Scan pnpm-lock.yaml with OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        continue-on-error: true
         with:
-          node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level high
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+            --format=json
+            --output-file=osv-results.json
+      - name: Fail only on high/critical severity findings
+        run: |
+          high=$(jq '[.results[]?.packages[]?.vulnerabilities[]?.database_specific.severity
+                      | select(. == "HIGH" or . == "CRITICAL")] | length' osv-results.json)
+          if [ "$high" -gt 0 ]; then
+            echo "::error::$high high/critical severity finding(s) — see the scan step above for details."
+            jq -r '.results[]?.packages[]?
+                   | select(any(.vulnerabilities[]?.database_specific.severity; . == "HIGH" or . == "CRITICAL"))
+                   | "\(.package.name)@\(.package.version)"' osv-results.json
+            exit 1
+          fi
+          echo "no high/critical severity vulnerabilities found."
 
   # ── Stage 6: deploy — the only thing allowed to ship to prod ──────────────
   # Both services live on Render (see render.yaml). Render's own "auto-deploy

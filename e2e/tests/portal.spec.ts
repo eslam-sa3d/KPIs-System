@@ -185,10 +185,11 @@ test.describe('KPI module (create → evaluation area → score via a mapped for
     await page.getByRole('button', { name: 'submit' }).click();
     await expect(page.getByText(/thank you/i)).toBeVisible();
 
-    // the dashboard's "KPI by Person" chart and table both derive from the
-    // EvaluationAreaEntry that submission just upserted — the table row is
-    // the more stable thing to assert on
+    // the dashboard no longer lists individual KPIs (that per-KPI table was
+    // removed) — the team members table's blended score is now the stable,
+    // still-visible thing this submission's EvaluationAreaEntry feeds into.
     await page.goto('/dashboard');
-    await expect(page.getByRole('cell', { name: kpiName })).toBeVisible();
+    const adminRow = page.getByRole('button', { name: "view Platform Admin's rate" });
+    await expect(adminRow.getByText(/\d(\.\d)? \/ 5/)).toBeVisible();
   });
 });
