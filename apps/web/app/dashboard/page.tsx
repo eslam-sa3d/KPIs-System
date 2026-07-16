@@ -22,51 +22,6 @@ import { DashboardScoreChart } from './dashboard-score-chart';
 import { DashboardRecentFeedback } from './dashboard-recent-feedback';
 import { DashboardTeamTable } from './dashboard-team-table';
 
-/** A single (FormKpiMapping, FormSubmission) pair, exactly as KpisService's
- *  loadScoredSubmissions produces it — raw, on its own scale, never blended
- *  with any other mapping's answer. `submittedAt` arrives as an ISO string
- *  (Date serializes that way over JSON). */
-interface RawSubmission {
-  mappingId: string;
-  evaluationAreaId: string;
-  evaluationAreaName: string;
-  kpiId: string;
-  kpiName: string;
-  personId: string;
-  personName: string;
-  enteredById: string;
-  enteredBy: { id: string; displayName: string };
-  anonymous: boolean;
-  reviewType: string;
-  raw: unknown;
-  display: string;
-  context: string | null;
-  comment: string | null;
-  submittedAt: string;
-  submissionId: string;
-}
-
-interface RawEvaluationArea {
-  id: string;
-  name: string;
-  cadence: string;
-  isActive: boolean;
-  recentSubmissions: RawSubmission[];
-}
-
-interface RawKpi {
-  id: string;
-  name: string;
-  isActive: boolean;
-  weight: number | null;
-  /** Old normalized 0-5 blend, still computed server-side from
-   *  EvaluationAreaEntry — purely so the status strip can bucket this KPI
-   *  into Outstanding/Meets/Needs improvement/Below/Pending. Every other
-   *  display on this page uses raw, per-submission values instead. */
-  latestValue: number | null;
-  evaluationAreas: RawEvaluationArea[];
-}
-
 type MemberSortKey = 'name' | 'department' | 'updated';
 type CoverageFilter = 'all' | 'scored' | 'pending';
 
@@ -79,8 +34,6 @@ export default function DashboardPage() {
   const [memberSort, setMemberSort] = useState<{ key: MemberSortKey; dir: 1 | -1 }>({ key: 'updated', dir: -1 });
   const [memberFilter, setMemberFilter] = useState('');
   const canSeeTeamOverview = can(user, 'dashboards:view');
-
-  const { data: kpis, reload: reloadKpis } = useResource<RawKpi[]>(user ? '/v1/kpis/my' : null);
 
   // org-wide roster with KPI coverage/latest submission/last-updated — admin-only, powers the team coverage cards and table below
   const { data: teamOverview, reload: reloadTeamOverview } = useResource<TeamOverview>(
@@ -114,7 +67,6 @@ export default function DashboardPage() {
       });
       setFormScope(updated);
       // The scope affects almost every widget below — refresh them all.
-      void reloadKpis();
       void reloadTeamOverview();
       void reloadRecentFeedback();
     } catch (cause) {
@@ -267,7 +219,7 @@ export default function DashboardPage() {
           teamMembers={teamMembers}
         />
 
-        {kpis === null ? (
+        {canSeeTeamOverview && teamOverview === null ? (
           <div
             className="rounded-md border bg-card mt-4 mb-6 p-6"
             style={{ display: 'flex', justifyContent: 'center' }}
