@@ -17,7 +17,13 @@ import { PrismaService } from '../../infra/prisma.service';
 import { RedisService } from '../../infra/redis.service';
 import { answerToText, describeAnswer, resolveEvaluateeId } from '../forms/score-resolution';
 import { RbacService } from '../rbac/rbac.service';
-import { allowedFormIds, canSeeAnonymousEvaluators, legacyEntryFormFilter, myAssignmentFilter, serializeKpi } from './kpi-scope';
+import {
+  allowedFormIds,
+  canSeeAnonymousEvaluators,
+  legacyEntryFormFilter,
+  myAssignmentFilter,
+  serializeKpi,
+} from './kpi-scope';
 
 /** Bumped (INCR'd) whenever a write can change what the dashboard aggregation
  *  methods below return — submission create/update, KPI-mapping backfill, KPI

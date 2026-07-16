@@ -31,12 +31,7 @@ export function ContactInfoField({
       <label htmlFor={`${id}-phone`} className="muted">
         Phone{field.requirePhone && ' *'}
       </label>
-      <Input
-        id={`${id}-phone`}
-        type="tel"
-        value={current.phone ?? ''}
-        onChange={(e) => set('phone', e.target.value)}
-      />
+      <Input id={`${id}-phone`} type="tel" value={current.phone ?? ''} onChange={(e) => set('phone', e.target.value)} />
     </div>
   );
 }

@@ -13,7 +13,9 @@ describe('PerformanceLevelsService', () => {
 
   describe('list', () => {
     it('lists levels ordered by descending minScore, serialized to numbers', async () => {
-      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'pl-1', label: 'Outstanding', minScore: 4, maxScore: 5 }]);
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: 'pl-1', label: 'Outstanding', minScore: 4, maxScore: 5 },
+      ]);
 
       const result = await service.list();
 
@@ -46,7 +48,12 @@ describe('PerformanceLevelsService', () => {
     });
 
     it('rejects when the resulting maxScore would be less than minScore', async () => {
-      prisma.performanceLevel.findUnique.mockResolvedValue({ id: 'pl-1', label: 'Outstanding', minScore: 4, maxScore: 5 });
+      prisma.performanceLevel.findUnique.mockResolvedValue({
+        id: 'pl-1',
+        label: 'Outstanding',
+        minScore: 4,
+        maxScore: 5,
+      });
 
       await expect(service.update('pl-1', { maxScore: 3 }, 'admin-1')).rejects.toMatchObject({
         code: 'VALIDATION_ERROR',
@@ -55,8 +62,18 @@ describe('PerformanceLevelsService', () => {
     });
 
     it('falls back to the existing minScore/maxScore when only one bound is provided', async () => {
-      prisma.performanceLevel.findUnique.mockResolvedValue({ id: 'pl-1', label: 'Outstanding', minScore: 4, maxScore: 5 });
-      prisma.performanceLevel.update.mockResolvedValue({ id: 'pl-1', label: 'Outstanding', minScore: 4.5, maxScore: 5 });
+      prisma.performanceLevel.findUnique.mockResolvedValue({
+        id: 'pl-1',
+        label: 'Outstanding',
+        minScore: 4,
+        maxScore: 5,
+      });
+      prisma.performanceLevel.update.mockResolvedValue({
+        id: 'pl-1',
+        label: 'Outstanding',
+        minScore: 4.5,
+        maxScore: 5,
+      });
 
       await service.update('pl-1', { minScore: 4.5 }, 'admin-1');
 
@@ -79,7 +96,12 @@ describe('PerformanceLevelsService', () => {
     });
 
     it('deletes a level and records an audit log entry', async () => {
-      prisma.performanceLevel.findUnique.mockResolvedValue({ id: 'pl-1', label: 'Outstanding', minScore: 4, maxScore: 5 });
+      prisma.performanceLevel.findUnique.mockResolvedValue({
+        id: 'pl-1',
+        label: 'Outstanding',
+        minScore: 4,
+        maxScore: 5,
+      });
 
       const result = await service.remove('pl-1', 'admin-1');
 

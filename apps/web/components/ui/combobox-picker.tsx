@@ -77,9 +77,7 @@ export function ComboboxPicker<T>({
                     }}
                     style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}
                   >
-                    {multi && (
-                      <Check className={cn('size-4', selectedIds!.has(id) ? 'opacity-100' : 'opacity-0')} />
-                    )}
+                    {multi && <Check className={cn('size-4', selectedIds!.has(id) ? 'opacity-100' : 'opacity-0')} />}
                     {renderItem(item)}
                   </CommandItem>
                 );

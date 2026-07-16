@@ -152,12 +152,7 @@ export function KpiAssignments({
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={!assignRoleTarget}
-              onClick={() => onAssignKpiRole(kpiId)}
-            >
+            <Button type="button" variant="ghost" disabled={!assignRoleTarget} onClick={() => onAssignKpiRole(kpiId)}>
               Assign
             </Button>
             <Button

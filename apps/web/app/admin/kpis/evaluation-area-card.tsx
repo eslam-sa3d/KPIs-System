@@ -2,7 +2,7 @@ import { FormEvent } from 'react';
 import { Layers, ListPlus, Pencil, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { StatusPill, pluralize } from './kpi-widgets';
+import { StatusPill, WeightRing, pluralize } from './kpi-widgets';
 import type { EvaluationAreaRow } from './types';
 
 /** One Evaluation Area row (rename/toggle/delete) plus its nested
@@ -11,6 +11,7 @@ import type { EvaluationAreaRow } from './types';
 export function EvaluationAreaCard({
   kpiId,
   area,
+  weightShare,
   canWrite,
   canManage,
   canToggleStatus,
@@ -33,6 +34,10 @@ export function EvaluationAreaCard({
 }: {
   kpiId: string;
   area: EvaluationAreaRow;
+  /** KPI weight split evenly across all of its evaluation areas — purely a
+   *  display derived from the KPI's own weight, not a value stored per area.
+   *  Null when the KPI has no weight set. */
+  weightShare: number | null;
   canWrite: boolean;
   canManage: boolean;
   canToggleStatus: boolean;
@@ -62,7 +67,14 @@ export function EvaluationAreaCard({
     <div className="builder-field kpi-area">
       {renamingAreaId === area.id ? (
         <form className="inline-form" onSubmit={(e) => onRenameArea(kpiId, area.id, e)}>
-          <Input name="name" defaultValue={area.name} required minLength={2} aria-label="Evaluation area name" autoFocus />
+          <Input
+            name="name"
+            defaultValue={area.name}
+            required
+            minLength={2}
+            aria-label="Evaluation area name"
+            autoFocus
+          />
           <Button type="submit" variant="ghost">
             Save
           </Button>
@@ -73,9 +85,13 @@ export function EvaluationAreaCard({
       ) : (
         <div className="kpi-area-head hover-actions-row">
           <div className="hierarchy-title-row">
-            <span className="hierarchy-icon hierarchy-icon-sm">
-              <Layers size={15} aria-hidden="true" />
-            </span>
+            {weightShare !== null ? (
+              <WeightRing value={weightShare} size="sm" />
+            ) : (
+              <span className="hierarchy-icon hierarchy-icon-sm">
+                <Layers size={15} aria-hidden="true" />
+              </span>
+            )}
             <strong>{area.name}</strong>
             {area.subCriteria.length > 0 && (
               <span className="muted">{pluralize(area.subCriteria.length, 'sub-criteria', 'sub-criteria')}</span>
@@ -140,12 +156,15 @@ export function EvaluationAreaCard({
         )}
         {area.subCriteria.map((sub) =>
           renamingSubCriteriaId === sub.id ? (
-            <form
-              key={sub.id}
-              className="inline-form"
-              onSubmit={(e) => onRenameSubCriteria(kpiId, area.id, sub.id, e)}
-            >
-              <Input name="name" defaultValue={sub.name} required minLength={2} aria-label="Sub-criteria name" autoFocus />
+            <form key={sub.id} className="inline-form" onSubmit={(e) => onRenameSubCriteria(kpiId, area.id, sub.id, e)}>
+              <Input
+                name="name"
+                defaultValue={sub.name}
+                required
+                minLength={2}
+                aria-label="Sub-criteria name"
+                autoFocus
+              />
               <Button type="submit" variant="ghost">
                 Save
               </Button>

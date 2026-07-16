@@ -52,9 +52,9 @@ describe('AssetsService.upload', () => {
 
   it('rejects a file over the 5MB limit', async () => {
     const service = new AssetsService(makePrismaStub() as never);
-    await expect(
-      service.upload(makeFile({ size: 6 * 1024 * 1024 }), 'user-1'),
-    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(service.upload(makeFile({ size: 6 * 1024 * 1024 }), 'user-1')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
   });
 
   it.each(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])('accepts a %s upload', async (mimetype) => {
