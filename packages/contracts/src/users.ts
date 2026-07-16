@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { emailSchema, passwordSchema } from './primitives';
 
 export const createUserSchema = z.object({
-  email: z.string().email().max(254),
+  email: emailSchema,
   displayName: z.string().min(2).max(120),
-  password: z.string().min(8).max(128),
+  password: passwordSchema,
   departmentId: z.string().uuid().optional(),
   jobTitleId: z.string().uuid().optional(),
   roleIds: z.array(z.string().uuid()).max(20).default([]),
@@ -21,14 +22,14 @@ export type SetUserStatusInput = z.infer<typeof setUserStatusSchema>;
 /** Admin-direct password reset (Users page "reset password" action) — sets the
  *  account's password immediately, same as the create-user flow's temporary
  *  password, rather than emailing a self-service reset link. */
-export const adminResetPasswordSchema = z.object({ newPassword: z.string().min(8).max(128) });
+export const adminResetPasswordSchema = z.object({ newPassword: passwordSchema });
 export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>;
 
 /** Every field optional (a caller only sends what changed); `departmentId: null`
  *  clears the department, `undefined`/omitted leaves it untouched. Same for
  *  `jobTitleId`. */
 export const updateUserSchema = z.object({
-  email: z.string().email().max(254).optional(),
+  email: emailSchema.optional(),
   displayName: z.string().min(2).max(120).optional(),
   departmentId: z.string().uuid().nullable().optional(),
   jobTitleId: z.string().uuid().nullable().optional(),

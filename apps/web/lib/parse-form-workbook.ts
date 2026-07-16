@@ -5,7 +5,7 @@ import type { FieldType } from '@pulse/contracts';
  * Shape the "new form" builder maps 1:1 onto its DraftField/DraftSection state
  * (see apps/web/app/forms/new/page.tsx) after an import.
  */
-export interface ParsedFormField {
+interface ParsedFormField {
   label: string;
   helpText: string;
   type: FieldType;

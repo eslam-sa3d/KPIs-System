@@ -47,7 +47,7 @@ export function JobTitlesManager({ user }: { user: AuthenticatedUser | null }) {
         body: JSON.stringify({ label: form.get('label') }),
       });
       (event.target as HTMLFormElement).reset();
-      setNotice('job title created');
+      setNotice('Job title created');
       await reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Creating the job title failed');
@@ -83,7 +83,7 @@ export function JobTitlesManager({ user }: { user: AuthenticatedUser | null }) {
 
   return (
     <>
-      <p className="muted">name the job titles available across the org</p>
+      <p className="muted">Name the job titles available across the org</p>
 
       {canEdit && (
         <Card>
@@ -93,10 +93,10 @@ export function JobTitlesManager({ user }: { user: AuthenticatedUser | null }) {
                 name="label"
                 required
                 minLength={2}
-                placeholder="title, e.g. Software Engineer"
-                aria-label="label"
+                placeholder="Title, e.g. Software Engineer"
+                aria-label="Label"
               />
-              <Button type="submit">add job title</Button>
+              <Button type="submit">Add job title</Button>
             </form>
             {notice && (
               <Alert className="mt-4">
@@ -119,14 +119,14 @@ export function JobTitlesManager({ user }: { user: AuthenticatedUser | null }) {
           <span className="empty-state-icon">
             <Briefcase size={22} aria-hidden="true" />
           </span>
-          <h2>no job titles yet</h2>
-          <p className="muted">add the first title above to start building the list.</p>
+          <h2>No job titles yet</h2>
+          <p className="muted">Add the first title above to start building the list.</p>
         </div>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>label</TableHead>
+              <TableHead>Label</TableHead>
               {(canEdit || canDelete) && <TableHead />}
             </TableRow>
           </TableHeader>
@@ -141,14 +141,14 @@ export function JobTitlesManager({ user }: { user: AuthenticatedUser | null }) {
                         required
                         minLength={2}
                         defaultValue={jobTitle.label}
-                        aria-label="label"
+                        aria-label="Label"
                         autoFocus
                       />
                       <Button type="submit" variant="ghost" size="sm">
-                        save
+                        Save
                       </Button>
                       <Button type="button" variant="ghost" size="sm" onClick={() => setEditingId(null)}>
-                        cancel
+                        Cancel
                       </Button>
                     </form>
                   </TableCell>
@@ -164,7 +164,7 @@ export function JobTitlesManager({ user }: { user: AuthenticatedUser | null }) {
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            aria-label={`edit ${jobTitle.label}`}
+                            aria-label={`Edit ${jobTitle.label}`}
                             onClick={() => setEditingId(jobTitle.id)}
                           >
                             <Pencil size={14} aria-hidden="true" />
@@ -173,17 +173,17 @@ export function JobTitlesManager({ user }: { user: AuthenticatedUser | null }) {
                         {canDelete &&
                           (confirmDeleteId === jobTitle.id ? (
                             <>
-                              <span className="muted">delete?</span>
+                              <span className="muted">Delete?</span>
                               <Button
                                 type="button"
                                 variant="destructive"
                                 size="sm"
                                 onClick={() => onDelete(jobTitle.id)}
                               >
-                                confirm
+                                Confirm
                               </Button>
                               <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
-                                cancel
+                                Cancel
                               </Button>
                             </>
                           ) : (
@@ -194,7 +194,7 @@ export function JobTitlesManager({ user }: { user: AuthenticatedUser | null }) {
                               className="text-destructive hover:text-destructive"
                               onClick={() => setConfirmDeleteId(jobTitle.id)}
                             >
-                              delete
+                              Delete
                             </Button>
                           ))}
                       </span>

@@ -5,12 +5,6 @@
  * Never hard-code hex values in app code — consume these variables.
  */
 
-/* Material Design 3 color-role tokens (--md-sys-color-*), generated from the
-   pulse brand seed — see m3-scheme.css's header comment and
-   scripts/generate-m3-tokens.mjs. The semantic aliases below resolve through
-   these roles rather than the raw --pulse-* hexes directly. */
-@import './m3-scheme.css';
-
 :root {
   /* ── primary palette ─────────────────────────────────────────── */
   --pulse-air: #ffffff;        /* air    — pantone n/a  */
@@ -32,30 +26,52 @@
   --pulse-chart-sea: #1dced8;      /* pantone 311C  */
   --pulse-chart-coral: #ff375e;    /* coral doubles as a chart series */
 
+  /* ── surface & content roles (light mode) ──────────────────────
+     Hand-picked pulse-brand values, flat and independent — no color-
+     generation algorithm, no borrowed design-system vocabulary. Dark-mode
+     values for the same roles are set further down. */
+  --pulse-role-primary: #4f008c;
+  --pulse-role-on-primary: #ffffff;
+  --pulse-role-primary-container: #f0dbff;
+  --pulse-role-on-primary-container: #2c0051;
+  --pulse-role-primary-fixed-dim: #dcb8ff;
+  --pulse-role-tertiary: #b90065;
+  --pulse-role-on-tertiary: #ffffff;
+  --pulse-role-secondary-container: #e3c6fe;
+  --pulse-role-on-secondary-container: #67507f;
+  --pulse-role-error: #ba1a1a;
+  --pulse-role-on-error: #ffffff;
+  --pulse-role-surface: #fff7fe;
+  --pulse-role-surface-container-low: #faf1fc;
+  --pulse-role-surface-container: #f4ebf6;
+  --pulse-role-surface-container-high: #efe5f0;
+  --pulse-role-on-surface: #1e1a22;
+  --pulse-role-on-surface-variant: #4c4452;
+  --pulse-role-outline: #7d7483;
+  --pulse-role-outline-variant: #cec2d4;
+
   /* ── semantic aliases (what app code should actually use) ─────────
-     Resolve through the M3 color roles (m3-scheme.css) rather than the raw
-     --pulse-* hexes, so the whole app picks up light/dark M3 schemes for
-     free. --pulse-* itself is untouched below — still the literal brand
-     reference for the logo, chart series, and print contexts. */
-  --color-bg: var(--md-sys-color-surface);
-  --color-surface: var(--md-sys-color-surface-container-low);
-  --color-text: var(--md-sys-color-on-surface);
-  --color-text-muted: var(--md-sys-color-on-surface-variant);
-  --color-border: var(--md-sys-color-outline-variant);
-  --color-primary: var(--md-sys-color-primary);
-  --color-primary-soft: var(--md-sys-color-primary-container);
-  --color-accent: var(--md-sys-color-tertiary); /* pulse coral, promoted to M3's tertiary
-                                                    role — highlights, use sparingly:
-                                                    "if you highlight everything,
-                                                     you highlight nothing" */
-  --color-on-primary: var(--md-sys-color-on-primary);
-  --color-success: var(--pulse-chart-oasis);   /* M3 has no standard "success" role */
-  --color-warning: var(--pulse-chart-sunset);  /* M3 has no standard "warning" role */
-  --color-danger: var(--md-sys-color-error);
+     Resolve through the roles above rather than the raw --pulse-* hexes,
+     so the whole app picks up light/dark schemes for free. --pulse-*
+     itself is untouched below — still the literal brand reference for the
+     logo, chart series, and print contexts. */
+  --color-bg: var(--pulse-role-surface);
+  --color-surface: var(--pulse-role-surface-container-low);
+  --color-text: var(--pulse-role-on-surface);
+  --color-text-muted: var(--pulse-role-on-surface-variant);
+  --color-border: var(--pulse-role-outline-variant);
+  --color-primary: var(--pulse-role-primary);
+  --color-primary-soft: var(--pulse-role-primary-container);
+  --color-accent: var(--pulse-role-tertiary); /* pulse coral's on-brand highlight role —
+                                                  use sparingly: "if you highlight
+                                                  everything, you highlight nothing" */
+  --color-on-primary: var(--pulse-role-on-primary);
+  --color-success: var(--pulse-chart-oasis);   /* no standard "success" role above */
+  --color-warning: var(--pulse-chart-sunset);  /* no standard "warning" role above */
+  --color-danger: var(--pulse-role-error);
 
   /* ── typography ──────────────────────────────────────────────── */
-  /* Primary: stc forward. System/secondary fallback: Arial (per guidelines). */
-  --font-family-base: 'stc forward', Arial, 'Helvetica Neue', sans-serif;
+  --font-family-base: Arial, 'Helvetica Neue', sans-serif;
 
   /* Weights: light/regular/medium = standard headlines & body copy.
      bold/extrabold = reserved for highlights, numbers, percentages,
@@ -77,133 +93,127 @@
   --line-height-tight: 1.2;
   --line-height-base: 1.5;
 
-  /* ── M3 type scale (https://m3.material.io/styles/typography/type-scale-tokens) ──
-     Structure only — built on the brand typeface (--font-family-base) rather
-     than Roboto. M3's own weight vocabulary (regular 400 / medium 500) maps
-     directly onto this codebase's existing --font-weight-regular/-medium. */
-  --md-sys-typescale-display-large-size: 3.5625rem;   /* 57px */
-  --md-sys-typescale-display-large-line-height: 4rem;  /* 64px */
-  --md-sys-typescale-display-large-weight: var(--font-weight-regular);
-  --md-sys-typescale-display-medium-size: 2.8125rem;  /* 45px */
-  --md-sys-typescale-display-medium-line-height: 3.25rem; /* 52px */
-  --md-sys-typescale-display-medium-weight: var(--font-weight-regular);
-  --md-sys-typescale-display-small-size: 2.25rem;     /* 36px */
-  --md-sys-typescale-display-small-line-height: 2.75rem; /* 44px */
-  --md-sys-typescale-display-small-weight: var(--font-weight-regular);
+  /* ── pulse type scale — flat step names, built on the brand typeface.
+     Only the steps actually consumed by app CSS are kept here; unused
+     steps (display-*, headline-medium/small, title-small, body-medium)
+     were removed rather than kept as speculative future scaffolding. ── */
+  --pulse-type-headline-large-size: 2rem;       /* 32px */
+  --pulse-type-headline-large-line-height: 2.5rem; /* 40px */
+  --pulse-type-headline-large-weight: var(--font-weight-regular);
 
-  --md-sys-typescale-headline-large-size: 2rem;       /* 32px */
-  --md-sys-typescale-headline-large-line-height: 2.5rem; /* 40px */
-  --md-sys-typescale-headline-large-weight: var(--font-weight-regular);
-  --md-sys-typescale-headline-medium-size: 1.75rem;   /* 28px */
-  --md-sys-typescale-headline-medium-line-height: 2.25rem; /* 36px */
-  --md-sys-typescale-headline-medium-weight: var(--font-weight-regular);
-  --md-sys-typescale-headline-small-size: 1.5rem;     /* 24px */
-  --md-sys-typescale-headline-small-line-height: 2rem; /* 32px */
-  --md-sys-typescale-headline-small-weight: var(--font-weight-regular);
+  --pulse-type-title-large-size: 1.375rem;      /* 22px */
+  --pulse-type-title-large-line-height: 1.75rem; /* 28px */
+  --pulse-type-title-large-weight: var(--font-weight-regular);
+  --pulse-type-title-medium-size: 1rem;         /* 16px */
+  --pulse-type-title-medium-line-height: 1.5rem; /* 24px */
+  --pulse-type-title-medium-weight: var(--font-weight-medium);
+  --pulse-type-title-medium-tracking: 0.009375rem; /* 0.15px */
 
-  --md-sys-typescale-title-large-size: 1.375rem;      /* 22px */
-  --md-sys-typescale-title-large-line-height: 1.75rem; /* 28px */
-  --md-sys-typescale-title-large-weight: var(--font-weight-regular);
-  --md-sys-typescale-title-medium-size: 1rem;         /* 16px */
-  --md-sys-typescale-title-medium-line-height: 1.5rem; /* 24px */
-  --md-sys-typescale-title-medium-weight: var(--font-weight-medium);
-  --md-sys-typescale-title-medium-tracking: 0.009375rem; /* 0.15px */
-  --md-sys-typescale-title-small-size: 0.875rem;      /* 14px */
-  --md-sys-typescale-title-small-line-height: 1.25rem; /* 20px */
-  --md-sys-typescale-title-small-weight: var(--font-weight-medium);
-  --md-sys-typescale-title-small-tracking: 0.00625rem; /* 0.1px */
+  --pulse-type-body-large-size: 1rem;           /* 16px */
+  --pulse-type-body-large-line-height: 1.5rem;  /* 24px */
+  --pulse-type-body-large-weight: var(--font-weight-regular);
+  --pulse-type-body-large-tracking: 0.03125rem; /* 0.5px */
+  --pulse-type-body-small-size: 0.75rem;        /* 12px */
+  --pulse-type-body-small-line-height: 1rem;    /* 16px */
+  --pulse-type-body-small-weight: var(--font-weight-regular);
+  --pulse-type-body-small-tracking: 0.025rem;   /* 0.4px */
 
-  --md-sys-typescale-body-large-size: 1rem;           /* 16px */
-  --md-sys-typescale-body-large-line-height: 1.5rem;  /* 24px */
-  --md-sys-typescale-body-large-weight: var(--font-weight-regular);
-  --md-sys-typescale-body-large-tracking: 0.03125rem; /* 0.5px */
-  --md-sys-typescale-body-medium-size: 0.875rem;      /* 14px */
-  --md-sys-typescale-body-medium-line-height: 1.25rem; /* 20px */
-  --md-sys-typescale-body-medium-weight: var(--font-weight-regular);
-  --md-sys-typescale-body-medium-tracking: 0.015625rem; /* 0.25px */
-  --md-sys-typescale-body-small-size: 0.75rem;        /* 12px */
-  --md-sys-typescale-body-small-line-height: 1rem;    /* 16px */
-  --md-sys-typescale-body-small-weight: var(--font-weight-regular);
-  --md-sys-typescale-body-small-tracking: 0.025rem;   /* 0.4px */
-
-  --md-sys-typescale-label-large-size: 0.875rem;      /* 14px */
-  --md-sys-typescale-label-large-line-height: 1.25rem; /* 20px */
-  --md-sys-typescale-label-large-weight: var(--font-weight-medium);
-  --md-sys-typescale-label-large-tracking: 0.00625rem; /* 0.1px */
-  --md-sys-typescale-label-medium-size: 0.75rem;      /* 12px */
-  --md-sys-typescale-label-medium-line-height: 1rem;  /* 16px */
-  --md-sys-typescale-label-medium-weight: var(--font-weight-medium);
-  --md-sys-typescale-label-medium-tracking: 0.03125rem; /* 0.5px */
-  --md-sys-typescale-label-small-size: 0.6875rem;     /* 11px */
-  --md-sys-typescale-label-small-line-height: 1rem;   /* 16px */
-  --md-sys-typescale-label-small-weight: var(--font-weight-medium);
-  --md-sys-typescale-label-small-tracking: 0.03125rem; /* 0.5px */
+  --pulse-type-label-large-size: 0.875rem;      /* 14px */
+  --pulse-type-label-large-line-height: 1.25rem; /* 20px */
+  --pulse-type-label-large-weight: var(--font-weight-medium);
+  --pulse-type-label-large-tracking: 0.00625rem; /* 0.1px */
+  --pulse-type-label-medium-size: 0.75rem;      /* 12px */
+  --pulse-type-label-medium-line-height: 1rem;  /* 16px */
+  --pulse-type-label-medium-weight: var(--font-weight-medium);
+  --pulse-type-label-medium-tracking: 0.03125rem; /* 0.5px */
+  --pulse-type-label-small-size: 0.6875rem;     /* 11px */
+  --pulse-type-label-small-line-height: 1rem;   /* 16px */
+  --pulse-type-label-small-weight: var(--font-weight-medium);
+  --pulse-type-label-small-tracking: 0.03125rem; /* 0.5px */
 
   /* ── spacing (4px scale) ─────────────────────────────────────── */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
+  --space-5: 1.25rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
   --space-12: 3rem;
   --space-16: 4rem;
 
-  /* ── shape (M3 shape scale, https://m3.material.io/styles/shape) ── */
-  --md-sys-shape-corner-none: 0px;
-  --md-sys-shape-corner-extra-small: 4px;
-  --md-sys-shape-corner-small: 8px;
-  --md-sys-shape-corner-medium: 12px;
-  --md-sys-shape-corner-large: 16px;
-  --md-sys-shape-corner-extra-large: 28px;
-  --md-sys-shape-corner-full: 999px;
-
-  /* legacy aliases — repointed to the nearest M3 step (was 6/10/16px) */
-  --radius-sm: var(--md-sys-shape-corner-small);
-  --radius-md: var(--md-sys-shape-corner-medium);
-  --radius-lg: var(--md-sys-shape-corner-large);
-
-  /* ── elevation (M3 tonal-surface + shadow, https://m3.material.io/styles/elevation) ──
-     Each level pairs a shadow with a surface-tint overlay (primary mixed into
-     surface) — color-mix() is already used elsewhere in this codebase. */
-  --md-sys-elevation-level0: none;
-  --md-sys-elevation-level1:
-    0 1px 2px rgb(0 0 0 / 0.30),
-    0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --md-sys-elevation-level2:
-    0 1px 2px rgb(0 0 0 / 0.30),
-    0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --md-sys-elevation-level3:
-    0 1px 3px rgb(0 0 0 / 0.30),
-    0 4px 8px 3px rgb(0 0 0 / 0.15);
-  --md-sys-elevation-level4:
-    0 1px 3px rgb(0 0 0 / 0.30),
-    0 6px 10px 4px rgb(0 0 0 / 0.15);
-  --md-sys-elevation-level5:
-    0 1px 3px rgb(0 0 0 / 0.30),
-    0 8px 12px 6px rgb(0 0 0 / 0.15);
-  --md-sys-elevation-tint-level1: color-mix(in srgb, var(--md-sys-color-primary) 5%, transparent);
-  --md-sys-elevation-tint-level2: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent);
-  --md-sys-elevation-tint-level3: color-mix(in srgb, var(--md-sys-color-primary) 11%, transparent);
-  --md-sys-elevation-tint-level4: color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent);
-  --md-sys-elevation-tint-level5: color-mix(in srgb, var(--md-sys-color-primary) 14%, transparent);
+  /* ── shape ───────────────────────────────────────────────────── */
+  --pulse-radius-none: 0px;
+  --pulse-radius-extra-small: 4px;
+  --pulse-radius-small: 8px;
+  --pulse-radius-medium: 12px;
+  --pulse-radius-large: 16px;
+  --pulse-radius-extra-large: 28px;
+  --pulse-radius-full: 999px;
 
   /* legacy aliases */
-  --shadow-card: var(--md-sys-elevation-level1);
-  --shadow-modal: var(--md-sys-elevation-level3);
+  --radius-sm: var(--pulse-radius-small);
+  --radius-md: var(--pulse-radius-medium);
+  --radius-lg: var(--pulse-radius-large);
 
   /* ── motion ──────────────────────────────────────────────────── */
   --transition-fast: 120ms ease;
   --transition-base: 200ms ease;
 
-  /* ── M3 state layers (https://m3.material.io/foundations/interaction/states) ──
+  /* ── state layers ──────────────────────────────────────────────
      Applied inline via color-mix() at the point of use (e.g. `color-mix(in srgb,
-     var(--color-on-primary) var(--md-sys-state-hover-opacity), var(--color-primary))`)
+     var(--color-on-primary) var(--pulse-state-hover-opacity), var(--color-primary))`)
      rather than a stacked pseudo-element overlay — same visual result, no JS-driven
      ripple, and it composites correctly regardless of the base color's own format. */
-  --md-sys-state-hover-opacity: 8%;
-  --md-sys-state-focus-opacity: 10%;
-  --md-sys-state-pressed-opacity: 10%;
+  --pulse-state-hover-opacity: 8%;
+  --pulse-state-focus-opacity: 10%;
+  --pulse-state-pressed-opacity: 10%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --pulse-role-primary: #dcb8ff;
+    --pulse-role-on-primary: #490081;
+    --pulse-role-primary-container: #62229f;
+    --pulse-role-on-primary-container: #f0dbff;
+    --pulse-role-primary-fixed-dim: #dcb8ff;
+    --pulse-role-tertiary: #ffb0c9;
+    --pulse-role-on-tertiary: #650034;
+    --pulse-role-secondary-container: #543d6b;
+    --pulse-role-on-secondary-container: #c6aae0;
+    --pulse-role-error: #ffb4ab;
+    --pulse-role-on-error: #690005;
+    --pulse-role-surface: #161219;
+    --pulse-role-surface-container-low: #1e1a22;
+    --pulse-role-surface-container: #221e26;
+    --pulse-role-surface-container-high: #2d2830;
+    --pulse-role-on-surface: #e9e0eb;
+    --pulse-role-on-surface-variant: #cec2d4;
+    --pulse-role-outline: #978d9d;
+    --pulse-role-outline-variant: #4c4452;
+  }
+}
+
+:root[data-theme='dark'] {
+  --pulse-role-primary: #dcb8ff;
+  --pulse-role-on-primary: #490081;
+  --pulse-role-primary-container: #62229f;
+  --pulse-role-on-primary-container: #f0dbff;
+  --pulse-role-primary-fixed-dim: #dcb8ff;
+  --pulse-role-tertiary: #ffb0c9;
+  --pulse-role-on-tertiary: #650034;
+  --pulse-role-secondary-container: #543d6b;
+  --pulse-role-on-secondary-container: #c6aae0;
+  --pulse-role-error: #ffb4ab;
+  --pulse-role-on-error: #690005;
+  --pulse-role-surface: #161219;
+  --pulse-role-surface-container-low: #1e1a22;
+  --pulse-role-surface-container: #221e26;
+  --pulse-role-surface-container-high: #2d2830;
+  --pulse-role-on-surface: #e9e0eb;
+  --pulse-role-on-surface-variant: #cec2d4;
+  --pulse-role-outline: #978d9d;
+  --pulse-role-outline-variant: #4c4452;
 }
 
 /* Dark surface context (e.g. hero sections on purple, footer on onyx) */
@@ -215,19 +225,4 @@
   --color-border: var(--pulse-purple-light);
   /* purple CTAs vanish on purple — the brand CTA on dark surfaces is coral */
   --color-primary: var(--pulse-coral);
-}
-
-/* Brand font files from pulsebysolutions.com (regular + bold are published).
-   Weights 100–500 resolve to regular, 600–900 to bold. */
-@font-face {
-  font-family: 'stc forward';
-  src: url('/fonts/stc-forward-regular.ttf') format('truetype');
-  font-weight: 100 500;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'stc forward';
-  src: url('/fonts/stc-forward-bold.ttf') format('truetype');
-  font-weight: 600 900;
-  font-display: swap;
 }

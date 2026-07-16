@@ -42,7 +42,7 @@ export function KpiLinkCombobox({
   const label =
     selectedKpi && selectedArea
       ? `${selectedKpi.name} — ${selectedArea.name}${selectedSubCriteria ? ` — ${selectedSubCriteria.name}` : ''}`
-      : 'not linked';
+      : 'Not linked';
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -56,16 +56,16 @@ export function KpiLinkCombobox({
           className="w-full justify-between font-normal"
         >
           <span className={cn('truncate', !selectedArea && 'text-muted-foreground')}>
-            {kpis === null ? 'loading…' : label}
+            {kpis === null ? 'Loading…' : label}
           </span>
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[340px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="search KPIs…" />
+          <CommandInput placeholder="Search KPIs…" />
           <CommandList>
-            <CommandEmpty>no KPI matches.</CommandEmpty>
+            <CommandEmpty>No KPI matches.</CommandEmpty>
             {selectedArea && (
               <CommandGroup>
                 <CommandItem
@@ -74,7 +74,7 @@ export function KpiLinkCombobox({
                     setOpen(false);
                   }}
                 >
-                  not linked
+                  Not linked
                 </CommandItem>
               </CommandGroup>
             )}

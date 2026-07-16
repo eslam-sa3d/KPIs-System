@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { FormEvent, Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { BrandIdentity, FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
+import type { ApiEnvelope, BrandIdentity, FormDefinition, FormSettings, SubmissionAnswers } from '@pulse/contracts';
 import { FormRenderer, SubmissionScore } from '../../components/form-renderer';
 import { LoadingState } from '../../components/loading-state';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -48,12 +48,12 @@ function PublicForm() {
     event.preventDefault();
     const name = gateName.trim();
     const email = gateEmail.trim();
-    if (!name) return setGateError('please enter your name');
-    if (!EMAIL_PATTERN.test(email)) return setGateError('please enter a valid email address');
+    if (!name) return setGateError('Please enter your name');
+    if (!EMAIL_PATTERN.test(email)) return setGateError('Please enter a valid email address');
     const domains = data?.settings.allowedEmailDomains ?? [];
     const emailDomain = email.split('@')[1]?.toLowerCase();
     if (domains.length > 0 && (!emailDomain || !domains.includes(emailDomain))) {
-      return setGateError(`email must be from an approved domain (${domains.map((d) => `@${d}`).join(', ')})`);
+      return setGateError(`Email must be from an approved domain (${domains.map((d) => `@${d}`).join(', ')})`);
     }
     setGateError(null);
     setGateRespondent({ name, email });
@@ -62,26 +62,26 @@ function PublicForm() {
   useEffect(() => {
     if (!token) return setMissing(true);
     fetch(`${API_URL}/api/v1/public/forms/${encodeURIComponent(token)}`)
-      .then((r) => r.json())
-      .then((env) => (env?.success ? setData(env.data) : setMissing(true)))
+      .then((r) => r.json() as Promise<ApiEnvelope<{ definition: FormDefinition; settings: FormSettings }>>)
+      .then((env) => (env.success ? setData(env.data) : setMissing(true)))
       .catch(() => setMissing(true));
   }, [token]);
 
   useEffect(() => {
     if (!token || !editToken) return;
     fetch(`${API_URL}/api/v1/public/forms/${encodeURIComponent(token)}/submissions/${encodeURIComponent(editToken)}`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<ApiEnvelope<{ answers: SubmissionAnswers }>>)
       .then((env) => {
-        if (env?.success) setInitialAnswers(env.data.answers);
+        if (env.success) setInitialAnswers(env.data.answers);
       })
       .catch(() => undefined);
   }, [token, editToken]);
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/branding`)
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<ApiEnvelope<BrandIdentity>>)
       .then((env) => {
-        if (env?.success) setBranding(env.data);
+        if (env.success) setBranding(env.data);
       })
       .catch(() => undefined);
   }, []);
@@ -132,9 +132,9 @@ function PublicForm() {
       },
       body: JSON.stringify(answers),
     });
-    const env = await res.json();
-    if (!env?.success) throw new Error(env?.error?.message ?? 'Submission failed');
-    return env.data as { score?: SubmissionScore | null; editToken?: string | null };
+    const env = (await res.json()) as ApiEnvelope<{ score?: SubmissionScore | null; editToken?: string | null }>;
+    if (!env.success) throw new Error(env.error.message);
+    return env.data;
   }
 
   return (
@@ -143,13 +143,13 @@ function PublicForm() {
         {branding?.logoUrl ? (
           <img src={branding.logoUrl} alt={branding.companyName} height={42} style={{ height: 42, width: 'auto' }} />
         ) : (
-          <Image src={asset('/brand/pulse-neg.svg')} alt="pulse by solutions" width={96} height={42} />
+          <Image src={asset('/brand/pulse-neg.svg')} alt="Pulse by solutions" width={96} height={42} />
         )}
       </header>
       <div className="portal-main">
         {missing ? (
           <div className="empty-state">
-            <h2>this form link is invalid or expired</h2>
+            <h2>This form link is invalid or expired</h2>
           </div>
         ) : !data ? (
           <LoadingState />
@@ -157,12 +157,12 @@ function PublicForm() {
           <div className="msform">
             <header className="msform-banner">
               <h1>{data.definition.title}</h1>
-              <p className="muted">enter your name and email to continue</p>
+              <p className="muted">Enter your name and email to continue</p>
             </header>
             <div className="question-card">
               <form className="contact-info-grid" onSubmit={onGateSubmit}>
                 <label htmlFor="gate-name" className="muted">
-                  name *
+                  Name *
                 </label>
                 <Input
                   id="gate-name"
@@ -172,7 +172,7 @@ function PublicForm() {
                   onChange={(e) => setGateName(e.target.value)}
                 />
                 <label htmlFor="gate-email" className="muted">
-                  email *
+                  Email *
                 </label>
                 <Input
                   id="gate-email"
@@ -183,7 +183,7 @@ function PublicForm() {
                 />
                 {data.settings.allowedEmailDomains.length > 0 && (
                   <p className="muted" style={{ fontSize: 12, gridColumn: '1 / -1' }}>
-                    only {data.settings.allowedEmailDomains.map((d) => `@${d}`).join(', ')} email addresses are accepted
+                    Only {data.settings.allowedEmailDomains.map((d) => `@${d}`).join(', ')} email addresses are accepted
                   </p>
                 )}
                 {gateError && (
@@ -192,7 +192,7 @@ function PublicForm() {
                   </Alert>
                 )}
                 <Button type="submit" style={{ gridColumn: '1 / -1', justifySelf: 'start' }}>
-                  continue
+                  Continue
                 </Button>
               </form>
             </div>

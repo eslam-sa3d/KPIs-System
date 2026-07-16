@@ -17,7 +17,7 @@ export default function CountBarChart({
   textColor,
   gridColor,
   barColor,
-  countLabel = 'count',
+  countLabel = 'Count',
 }: {
   data: CountRow[];
   textColor: string;

@@ -1,43 +1,118 @@
 'use client';
 
 import * as React from 'react';
-import { Tooltip as TooltipPrimitive } from 'radix-ui';
 
 import { cn } from '@/lib/utils';
+import { Portal } from '@/components/ui/primitives/portal';
+import { useAnchoredPosition } from '@/components/ui/primitives/use-anchored-position';
+import { renderAsChild } from '@/components/ui/primitives/use-as-child';
 
-function TooltipProvider({ delayDuration = 0, ...props }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
-  return <TooltipPrimitive.Provider data-slot="tooltip-provider" delayDuration={delayDuration} {...props} />;
+/** No-op passthrough kept for API parity with the previous Radix-based
+ *  Tooltip, so `apps/web/app/layout.tsx`'s global `<TooltipProvider>` wrapper
+ *  needs no edit beyond the import path — there's only ever one real
+ *  `<Tooltip>` instance in this app, so a shared delay-timer context buys
+ *  nothing over each Tooltip owning its own state. */
+function TooltipProvider({ children }: { children?: React.ReactNode }) {
+  return <>{children}</>;
 }
 
-function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />;
+const TooltipContext = React.createContext<{
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  triggerRef: React.RefObject<HTMLElement | null>;
+  contentId: string;
+} | null>(null);
+
+function useTooltipContext() {
+  const context = React.useContext(TooltipContext);
+  if (!context) throw new Error('Tooltip.* must be rendered inside <Tooltip>');
+  return context;
 }
 
-function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
+function Tooltip({ children }: { children?: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLElement | null>(null);
+  const contentId = React.useId();
+  const context = React.useMemo(() => ({ open, setOpen, triggerRef, contentId }), [open, contentId]);
+
+  return <TooltipContext.Provider value={context}>{children}</TooltipContext.Provider>;
+}
+
+function TooltipTrigger({
+  asChild = false,
+  children,
+  ...props
+}: React.ComponentProps<'button'> & { asChild?: boolean }) {
+  const { open, setOpen, triggerRef, contentId } = useTooltipContext();
+
+  const handlers = {
+    ...props,
+    ref: triggerRef,
+    'data-slot': 'tooltip-trigger',
+    'aria-describedby': open ? contentId : undefined,
+    onMouseEnter: () => {
+      if (window.matchMedia?.('(pointer: coarse)').matches) return;
+      setOpen(true);
+    },
+    onMouseLeave: () => setOpen(false),
+    onFocus: () => setOpen(true),
+    onBlur: () => setOpen(false),
+  };
+
+  if (asChild) {
+    return renderAsChild(children as React.ReactElement, handlers);
+  }
+
+  return (
+    <button type="button" {...handlers} ref={triggerRef as React.Ref<HTMLButtonElement>}>
+      {children}
+    </button>
+  );
 }
 
 function TooltipContent({
   className,
-  sideOffset = 0,
+  sideOffset = 8,
+  side = 'top',
+  align = 'center',
   children,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+}: React.ComponentProps<'div'> & {
+  sideOffset?: number;
+  side?: 'top' | 'bottom' | 'left' | 'right';
+  align?: 'start' | 'center' | 'end';
+}) {
+  const { open, triggerRef, contentId } = useTooltipContext();
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+  const { style, side: resolvedSide } = useAnchoredPosition({
+    open,
+    triggerRef,
+    contentRef,
+    side,
+    align,
+    sideOffset,
+  });
+
+  if (!open) return null;
+
   return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Content
+    <Portal>
+      <div
+        ref={contentRef}
+        id={contentId}
         data-slot="tooltip-content"
-        sideOffset={sideOffset}
+        data-side={resolvedSide}
+        role="tooltip"
+        style={style}
         className={cn(
-          'z-50 w-fit origin-(--radix-tooltip-content-transform-origin) animate-in rounded-md bg-foreground px-3 py-1.5 text-xs text-balance text-background fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
+          'z-50 w-fit rounded-md bg-foreground px-3 py-1.5 text-xs text-balance text-background',
           className,
         )}
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
-      </TooltipPrimitive.Content>
-    </TooltipPrimitive.Portal>
+      </div>
+    </Portal>
   );
 }
 

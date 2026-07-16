@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { createPrismaMock } from '../../testing/mocks';
 import { DemoDataService } from './demo-data.service';
 
 /** Previously zero test coverage on this module, including its destructive
@@ -7,28 +8,15 @@ import { DemoDataService } from './demo-data.service';
  *  demo data an admin can inspect in the portal, not re-mocked here — these
  *  tests focus on what unit tests are actually good at: the re-seed guard
  *  and the exact scope of what remove() deletes. */
-function makePrismaStub() {
-  return {
-    $transaction: vi.fn(),
-    user: { count: vi.fn(), create: vi.fn(), deleteMany: vi.fn(), updateMany: vi.fn() },
-    kpi: { count: vi.fn(), deleteMany: vi.fn() },
-    form: { count: vi.fn(), deleteMany: vi.fn() },
-    role: { count: vi.fn(), deleteMany: vi.fn() },
-    department: { count: vi.fn(), deleteMany: vi.fn() },
-    formSubmission: { count: vi.fn(), deleteMany: vi.fn() },
-    evaluationAreaEntry: { deleteMany: vi.fn() },
-    auditLog: { create: vi.fn() },
-  };
-}
 
 const EMPTY_STATUS_COUNTS = [0, 0, 0, 0, 0, 0];
 
 describe('DemoDataService', () => {
-  let prisma: ReturnType<typeof makePrismaStub>;
+  let prisma: ReturnType<typeof createPrismaMock>;
   let service: DemoDataService;
 
   beforeEach(() => {
-    prisma = makePrismaStub();
+    prisma = createPrismaMock();
     service = new DemoDataService(prisma as never, {} as never);
   });
 

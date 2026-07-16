@@ -17,7 +17,7 @@ import { env } from '../../infra/env';
 import { AuthService, GrantWithRefresh } from './auth.service';
 import { Public } from './public.decorator';
 
-export const REFRESH_COOKIE = 'pulse_rt';
+const REFRESH_COOKIE = 'pulse_rt';
 
 /**
  * The refresh token only ever travels on the auth endpoints, over an httpOnly

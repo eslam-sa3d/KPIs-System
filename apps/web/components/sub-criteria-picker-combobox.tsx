@@ -47,14 +47,14 @@ export function SubCriteriaPickerCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button type="button" variant="ghost" className="option-row-other-link" disabled={disabled || kpis === null}>
-          choose from sub-criteria
+          Choose from sub-criteria
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[420px] p-0" align="start">
         <Command>
-          <CommandInput placeholder="search sub-criteria…" />
+          <CommandInput placeholder="Search sub-criteria…" />
           <CommandList>
-            <CommandEmpty>no match.</CommandEmpty>
+            <CommandEmpty>No match.</CommandEmpty>
             <CommandGroup>
               {options.map((o) => (
                 <CommandItem

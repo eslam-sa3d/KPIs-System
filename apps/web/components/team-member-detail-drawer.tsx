@@ -8,9 +8,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { STATUS_LABEL, statusBadgeStyle, statusOf } from '../lib/kpi-status';
 
 const REVIEW_TYPE_LABEL: Record<string, string> = {
-  self: 'self',
-  peer: 'peer',
-  manager: 'manager',
+  self: 'Self',
+  peer: 'Peer',
+  manager: 'Manager',
   '360': '360',
 };
 
@@ -41,11 +41,11 @@ export function TeamMemberDetailDrawer({
       <SheetContent className="w-full sm:max-w-[480px]">
         {error ? (
           <Alert variant="destructive" style={{ marginTop: 24 }}>
-            <AlertDescription>couldn&apos;t load this team member&apos;s submissions — {error}</AlertDescription>
+            <AlertDescription>Couldn&apos;t load this team member&apos;s submissions — {error}</AlertDescription>
           </Alert>
         ) : loading && !breakdown ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
-            <LoadingState label="loading submissions…" />
+            <LoadingState label="Loading submissions…" />
           </div>
         ) : (
           breakdown && (
@@ -67,7 +67,7 @@ export function TeamMemberDetailDrawer({
               <div className="p-drawer-body">
                 {breakdown.submissions.length === 0 ? (
                   <p className="muted" style={{ fontSize: 12 }}>
-                    no KPI has scored this person yet
+                    No KPI has scored this person yet
                   </p>
                 ) : (
                   breakdown.submissions.map((s, i) => (
@@ -84,7 +84,7 @@ export function TeamMemberDetailDrawer({
                         {new Date(s.submittedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                       </div>
                       {s.context && (
-                        <div style={{ fontSize: 11, marginTop: 2, color: 'var(--text-2)' }}>context: {s.context}</div>
+                        <div style={{ fontSize: 11, marginTop: 2, color: 'var(--text-2)' }}>Context: {s.context}</div>
                       )}
                       {s.comment && (
                         <div style={{ fontSize: 11, marginTop: 2, color: 'var(--text-2)', fontStyle: 'italic' }}>

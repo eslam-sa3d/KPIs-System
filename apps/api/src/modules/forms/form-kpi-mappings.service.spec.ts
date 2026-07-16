@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { formDefinitionSchema } from '@pulse/contracts';
+import { createRedisMock } from '../../testing/mocks';
 import { FormKpiMappingsService } from './form-kpi-mappings.service';
+
+const redisStub = createRedisMock();
 
 const definition = formDefinitionSchema.parse({
   title: 'peer review',
@@ -97,7 +100,7 @@ describe('FormKpiMappingsService.create', () => {
   });
 
   it('creates a mapping when both fields and the Evaluation Area exist', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await service.create('form-1', validInput, 'admin-1');
 
     expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
@@ -117,7 +120,7 @@ describe('FormKpiMappingsService.create', () => {
   });
 
   it('accepts a reviewType/anonymous/context/comment field selection', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await service.create(
       'form-1',
       { ...validInput, reviewType: 'manager', anonymous: true, contextFieldKey: 'notes', commentFieldKey: 'notes' },
@@ -135,7 +138,7 @@ describe('FormKpiMappingsService.create', () => {
   });
 
   it('rejects a contextFieldKey/commentFieldKey that does not exist on the form', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(
       service.create('form-1', { ...validInput, contextFieldKey: 'ghost-field' }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
@@ -143,7 +146,7 @@ describe('FormKpiMappingsService.create', () => {
   });
 
   it('rejects when evaluateeFieldKeys does not reference a person field', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(
       service.create('form-1', { ...validInput, evaluateeFieldKeys: ['notes'] }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
@@ -151,7 +154,7 @@ describe('FormKpiMappingsService.create', () => {
   });
 
   it('creates a self-assessment mapping when evaluateeFieldKeys is omitted', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     const { evaluateeFieldKeys: _omit, ...withoutEvaluatee } = validInput;
     await service.create('form-1', withoutEvaluatee, 'admin-1');
 
@@ -161,7 +164,7 @@ describe('FormKpiMappingsService.create', () => {
   });
 
   it('accepts a "select" field as the evaluatee source when it has a user-linked option', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await service.create('form-1', { ...validInput, evaluateeFieldKeys: ['evaluatee_choice'] }, 'admin-1');
 
     expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
@@ -170,7 +173,7 @@ describe('FormKpiMappingsService.create', () => {
   });
 
   it('rejects a "select" field with no user-linked options as the evaluatee source', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(
       service.create('form-1', { ...validInput, evaluateeFieldKeys: ['plain_choice'] }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
@@ -178,7 +181,7 @@ describe('FormKpiMappingsService.create', () => {
   });
 
   it('accepts multiple candidate evaluatee fields, tried in order at resolution time', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await service.create('form-1', { ...validInput, evaluateeFieldKeys: ['evaluatee', 'evaluatee_choice'] }, 'admin-1');
 
     expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
@@ -187,7 +190,7 @@ describe('FormKpiMappingsService.create', () => {
   });
 
   it('rejects the whole set when any one candidate evaluatee field is invalid', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(
       service.create('form-1', { ...validInput, evaluateeFieldKeys: ['evaluatee', 'plain_choice'] }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
@@ -195,21 +198,21 @@ describe('FormKpiMappingsService.create', () => {
   });
 
   it('allows linking a field type with no live-scoring formula (e.g. short_text) — it just never scores', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(service.create('form-1', { ...validInput, scoreFieldKey: 'notes' }, 'admin-1')).resolves.toMatchObject(
       { id: 'mapping-1' },
     );
   });
 
   it('rejects when scoreFieldKey references a section_header, which has no answer at all', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(
       service.create('form-1', { ...validInput, scoreFieldKey: 'heading' }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
   it('rejects when scoreFieldKey does not reference any field on the form', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(service.create('form-1', { ...validInput, scoreFieldKey: 'ghost' }, 'admin-1')).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
     });
@@ -217,14 +220,14 @@ describe('FormKpiMappingsService.create', () => {
 
   it('rejects an unknown Evaluation Area', async () => {
     prisma.evaluationArea.findUnique.mockResolvedValue(null);
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(service.create('form-1', validInput, 'admin-1')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
   });
 
   it('creates a mapping with a subCriteriaId that belongs to the mapped area', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await service.create('form-1', { ...validInput, subCriteriaId: 'sub-1' }, 'admin-1');
 
     expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
@@ -234,7 +237,7 @@ describe('FormKpiMappingsService.create', () => {
 
   it('rejects a subCriteriaId that belongs to a different evaluation area', async () => {
     prisma.subCriteria.findUnique.mockResolvedValue({ id: 'sub-1', evaluationAreaId: 'area-2' });
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(service.create('form-1', { ...validInput, subCriteriaId: 'sub-1' }, 'admin-1')).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
     });
@@ -243,7 +246,7 @@ describe('FormKpiMappingsService.create', () => {
 
   it('rejects an unknown subCriteriaId', async () => {
     prisma.subCriteria.findUnique.mockResolvedValue(null);
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(
       service.create('form-1', { ...validInput, subCriteriaId: 'ghost-sub' }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
@@ -252,7 +255,7 @@ describe('FormKpiMappingsService.create', () => {
 
   it('rejects a duplicate mapping for the same (form, evaluationArea, subCriteria) triple', async () => {
     prisma.formKpiMapping.findFirst.mockResolvedValue({ id: 'existing' });
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(service.create('form-1', validInput, 'admin-1')).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -260,7 +263,7 @@ describe('FormKpiMappingsService.create', () => {
 
   it('rejects an unknown form', async () => {
     prisma.form.findUnique.mockResolvedValue(null);
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(service.create('ghost', validInput, 'admin-1')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
@@ -289,7 +292,7 @@ describe('FormKpiMappingsService.update', () => {
   });
 
   it('updates a mapping’s evaluatee fields — the delete+recreate workaround this replaces', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await service.update('form-1', 'mapping-1', { ...validInput, evaluateeFieldKeys: ['evaluatee_choice'] }, 'admin-1');
 
     expect(prisma.formKpiMapping.update).toHaveBeenCalledWith({
@@ -300,7 +303,7 @@ describe('FormKpiMappingsService.update', () => {
   });
 
   it('clears a previously-set evaluateeFieldKeys/context/comment/subCriteria when omitted from the update', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await service.update(
       'form-1',
       'mapping-1',
@@ -321,21 +324,21 @@ describe('FormKpiMappingsService.update', () => {
 
   it('rejects updating a mapping that does not belong to this form', async () => {
     prisma.formKpiMapping.findFirst.mockResolvedValue(null);
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(service.update('form-1', 'ghost', validInput, 'admin-1')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
   });
 
   it('rejects when scoreFieldKey no longer references a question on the form', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(
       service.update('form-1', 'mapping-1', { ...validInput, scoreFieldKey: 'ghost-field' }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
   it('does not re-check the uniqueness constraint when evaluationAreaId/subCriteriaId are unchanged', async () => {
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await service.update('form-1', 'mapping-1', validInput, 'admin-1');
     // only the by-id lookup (existing mapping) — never the conflict-check shape
     expect(prisma.formKpiMapping.findFirst).toHaveBeenCalledTimes(1);
@@ -343,7 +346,7 @@ describe('FormKpiMappingsService.update', () => {
 
   it('rejects moving to an evaluationArea already mapped by a different mapping on this form', async () => {
     mockFindFirst({ id: 'other-mapping' });
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await expect(
       service.update('form-1', 'mapping-1', { ...validInput, evaluationAreaId: 'area-2' }, 'admin-1'),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
@@ -351,7 +354,7 @@ describe('FormKpiMappingsService.update', () => {
 
   it('allows moving to a new evaluationArea when nothing else maps there', async () => {
     prisma.evaluationArea.findUnique.mockResolvedValue({ id: 'area-2', name: 'Delivery' });
-    const service = new FormKpiMappingsService(prisma as never, forms as never);
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await service.update('form-1', 'mapping-1', { ...validInput, evaluationAreaId: 'area-2' }, 'admin-1');
 
     expect(prisma.formKpiMapping.update).toHaveBeenCalledWith({
@@ -365,7 +368,7 @@ describe('FormKpiMappingsService.delete', () => {
   it('deletes an existing mapping and audit-logs it', async () => {
     const prisma = makePrismaStub();
     prisma.formKpiMapping.findFirst.mockResolvedValue({ id: 'mapping-1', formId: 'form-1' });
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     await service.delete('form-1', 'mapping-1', 'admin-1');
 
@@ -376,7 +379,7 @@ describe('FormKpiMappingsService.delete', () => {
   it('rejects deleting a mapping that does not belong to this form', async () => {
     const prisma = makePrismaStub();
     prisma.formKpiMapping.findFirst.mockResolvedValue(null);
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     await expect(service.delete('form-1', 'ghost', 'admin-1')).rejects.toMatchObject({
       code: 'NOT_FOUND',
@@ -418,7 +421,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('creates every row when all are valid and unmapped', async () => {
     const prisma = makeBulkPrismaStub();
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     const result = await service.bulkCreate('form-1', bulkInput, 'admin-1');
 
@@ -430,7 +433,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('skips a row whose Evaluation Area is already mapped on this form, keeping the rest', async () => {
     const prisma = makeBulkPrismaStub({ 'area-2': { id: 'mapping-existing' } });
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     const result = await service.bulkCreate('form-1', bulkInput, 'admin-1');
 
@@ -443,7 +446,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('skips a row referencing an unknown Evaluation Area', async () => {
     const prisma = makeBulkPrismaStub();
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     const result = await service.bulkCreate(
       'form-1',
@@ -462,7 +465,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('creates a row whose scoreFieldKey has no live-scoring formula (e.g. short_text) — it just never scores', async () => {
     const prisma = makeBulkPrismaStub();
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     const result = await service.bulkCreate(
       'form-1',
@@ -481,7 +484,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('skips a row whose scoreFieldKey references a section_header, which has no answer at all', async () => {
     const prisma = makeBulkPrismaStub();
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     const result = await service.bulkCreate(
       'form-1',
@@ -502,7 +505,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('rejects the whole batch when evaluateeFieldKeys is not a person field', async () => {
     const prisma = makeBulkPrismaStub();
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     await expect(
       service.bulkCreate('form-1', { ...bulkInput, evaluateeFieldKeys: ['notes'] }, 'admin-1'),
@@ -512,7 +515,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('rejects the whole batch when any one candidate evaluatee field is invalid', async () => {
     const prisma = makeBulkPrismaStub();
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     await expect(
       service.bulkCreate('form-1', { ...bulkInput, evaluateeFieldKeys: ['evaluatee', 'notes'] }, 'admin-1'),
@@ -522,7 +525,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('accepts a "select" field with a user-linked option as the batch evaluatee source', async () => {
     const prisma = makeBulkPrismaStub();
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     const result = await service.bulkCreate(
       'form-1',
@@ -538,7 +541,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('accepts multiple candidate evaluatee fields for the whole batch', async () => {
     const prisma = makeBulkPrismaStub();
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     const result = await service.bulkCreate(
       'form-1',
@@ -556,7 +559,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('creates every row as self-assessment when evaluateeFieldKeys is omitted', async () => {
     const prisma = makeBulkPrismaStub();
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
     const { evaluateeFieldKeys: _omit, ...withoutEvaluatee } = bulkInput;
 
     const result = await service.bulkCreate('form-1', withoutEvaluatee, 'admin-1');
@@ -569,7 +572,7 @@ describe('FormKpiMappingsService.bulkCreate', () => {
 
   it('does not audit-log when nothing was created', async () => {
     const prisma = makeBulkPrismaStub();
-    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never);
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
 
     await service.bulkCreate(
       'form-1',

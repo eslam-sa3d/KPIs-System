@@ -24,7 +24,7 @@ function ResetPasswordForm() {
     const newPassword = String(form.get('newPassword'));
     const confirm = String(form.get('confirmPassword'));
     if (newPassword !== confirm) {
-      setError("passwords don't match");
+      setError("Passwords don't match");
       return;
     }
     setPending(true);
@@ -32,7 +32,7 @@ function ResetPasswordForm() {
       await resetPassword(token, newPassword);
       setDone(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'something went wrong — please retry');
+      setError(cause instanceof Error ? cause.message : 'Something went wrong — please retry');
       setPending(false);
     }
   }
@@ -40,15 +40,15 @@ function ResetPasswordForm() {
   if (!token) {
     return (
       <div className="login-card">
-        <Image src={asset('/brand/pulse-pos.svg')} alt="pulse by solutions" width={120} height={52} priority />
-        <h1>invalid link</h1>
+        <Image src={asset('/brand/pulse-pos.svg')} alt="Pulse by solutions" width={120} height={52} priority />
+        <h1>Invalid link</h1>
         <Alert variant="destructive">
           <AlertDescription>
-            this reset link is missing its token — copy the full link from your email, or request a new one.
+            This reset link is missing its token — copy the full link from your email, or request a new one.
           </AlertDescription>
         </Alert>
         <Button asChild variant="ghost" className="w-full">
-          <Link href="/forgot-password">request a new link</Link>
+          <Link href="/forgot-password">Request a new link</Link>
         </Button>
       </div>
     );
@@ -57,13 +57,13 @@ function ResetPasswordForm() {
   if (done) {
     return (
       <div className="login-card">
-        <Image src={asset('/brand/pulse-pos.svg')} alt="pulse by solutions" width={120} height={52} priority />
-        <h1>password reset</h1>
+        <Image src={asset('/brand/pulse-pos.svg')} alt="Pulse by solutions" width={120} height={52} priority />
+        <h1>Password reset</h1>
         <Alert>
-          <AlertDescription>your password has been changed — sign in with your new password.</AlertDescription>
+          <AlertDescription>Your password has been changed — sign in with your new password.</AlertDescription>
         </Alert>
         <Button className="w-full" onClick={() => router.push('/login')}>
-          go to sign in
+          Go to sign in
         </Button>
       </div>
     );
@@ -71,13 +71,13 @@ function ResetPasswordForm() {
 
   return (
     <form className="login-card" onSubmit={onSubmit} aria-busy={pending}>
-      <Image src={asset('/brand/pulse-pos.svg')} alt="pulse by solutions" width={120} height={52} priority />
-      <h1>choose a new password</h1>
+      <Image src={asset('/brand/pulse-pos.svg')} alt="Pulse by solutions" width={120} height={52} priority />
+      <h1>Choose a new password</h1>
 
-      <label htmlFor="newPassword">new password</label>
+      <label htmlFor="newPassword">New password</label>
       <Input id="newPassword" name="newPassword" type="password" autoComplete="new-password" minLength={8} required />
 
-      <label htmlFor="confirmPassword">confirm new password</label>
+      <label htmlFor="confirmPassword">Confirm new password</label>
       <Input
         id="confirmPassword"
         name="confirmPassword"
@@ -94,7 +94,7 @@ function ResetPasswordForm() {
       )}
 
       <Button type="submit" disabled={pending} className="w-full">
-        {pending ? 'resetting…' : 'reset password'}
+        {pending ? 'Resetting…' : 'Reset password'}
       </Button>
     </form>
   );

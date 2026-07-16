@@ -32,16 +32,16 @@ export default function LoginPage() {
   return (
     <main className="login-screen" data-surface="purple">
       <form className="login-card" onSubmit={onSubmit} aria-busy={pending}>
-        <Image src={asset('/brand/pulse-pos.svg')} alt="pulse by solutions" width={120} height={52} priority />
-        <h1>welcome back</h1>
+        <Image src={asset('/brand/pulse-pos.svg')} alt="Pulse by solutions" width={120} height={52} priority />
+        <h1>Welcome back</h1>
 
-        <label htmlFor="email">email</label>
+        <label htmlFor="email">Email</label>
         <Input id="email" name="email" type="email" autoComplete="email" required />
 
-        <label htmlFor="password">password</label>
+        <label htmlFor="password">Password</label>
         <Input id="password" name="password" type="password" autoComplete="current-password" minLength={8} required />
         <Link href="/forgot-password" className="login-forgot-link">
-          forgot password?
+          Forgot password?
         </Link>
 
         {error && (
@@ -51,7 +51,7 @@ export default function LoginPage() {
         )}
 
         <Button type="submit" disabled={pending} className="w-full">
-          {pending ? 'signing in…' : 'sign in'}
+          {pending ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
     </main>

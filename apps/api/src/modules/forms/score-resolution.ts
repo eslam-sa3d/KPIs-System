@@ -5,9 +5,9 @@ import type { FormField, SubmissionAnswers } from '@pulse/contracts';
  *  with a string answer wins — candidates configured but none answered
  *  resolves to null (NOT a fallback to self; that was the bug this
  *  multi-candidate support replaces). Shared between the write path
- *  (SubmissionsService.applyOneMapping) and the dashboard's read path
- *  (KpisService) so the two can never resolve "who is this submission
- *  about" differently. */
+ *  (FormKpiScoringService.applyOneMapping) and the dashboard's read path
+ *  (KpiDashboardService) so the two can never resolve "who is this
+ *  submission about" differently. */
 export function resolveEvaluateeId(
   evaluateeFieldKeys: string[],
   answers: SubmissionAnswers,

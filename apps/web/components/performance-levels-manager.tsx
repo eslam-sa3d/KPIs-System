@@ -57,7 +57,7 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
         }),
       });
       (event.target as HTMLFormElement).reset();
-      setNotice('performance level created');
+      setNotice('Performance level created');
       await reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Creating the performance level failed');
@@ -97,7 +97,7 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
 
   return (
     <>
-      <p className="muted">name the bands a 0–5 evaluation score falls into</p>
+      <p className="muted">Name the bands a 0–5 evaluation score falls into</p>
 
       {canEdit && (
         <Card>
@@ -110,8 +110,8 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
                 max={5}
                 step="0.1"
                 required
-                placeholder="from"
-                aria-label="range start"
+                placeholder="From"
+                aria-label="Range start"
                 style={{ maxWidth: '6rem' }}
               />
               <Input
@@ -121,12 +121,12 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
                 max={5}
                 step="0.1"
                 required
-                placeholder="to"
-                aria-label="range end"
+                placeholder="To"
+                aria-label="Range end"
                 style={{ maxWidth: '6rem' }}
               />
-              <Input name="label" required minLength={2} placeholder="label, e.g. Outstanding" aria-label="label" />
-              <Button type="submit">add level</Button>
+              <Input name="label" required minLength={2} placeholder="Label, e.g. Outstanding" aria-label="Label" />
+              <Button type="submit">Add level</Button>
             </form>
             {notice && (
               <Alert className="mt-4">
@@ -149,15 +149,15 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
           <span className="empty-state-icon">
             <Gauge size={22} aria-hidden="true" />
           </span>
-          <h2>no performance levels yet</h2>
-          <p className="muted">add the first band above to start labeling evaluation scores.</p>
+          <h2>No performance levels yet</h2>
+          <p className="muted">Add the first band above to start labeling evaluation scores.</p>
         </div>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>range</TableHead>
-              <TableHead>label</TableHead>
+              <TableHead>Range</TableHead>
+              <TableHead>Label</TableHead>
               {(canEdit || canDelete) && <TableHead />}
             </TableRow>
           </TableHeader>
@@ -175,7 +175,7 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
                         step="0.1"
                         required
                         defaultValue={level.minScore}
-                        aria-label="range start"
+                        aria-label="Range start"
                         style={{ maxWidth: '6rem' }}
                         autoFocus
                       />
@@ -187,15 +187,15 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
                         step="0.1"
                         required
                         defaultValue={level.maxScore}
-                        aria-label="range end"
+                        aria-label="Range end"
                         style={{ maxWidth: '6rem' }}
                       />
-                      <Input name="label" required minLength={2} defaultValue={level.label} aria-label="label" />
+                      <Input name="label" required minLength={2} defaultValue={level.label} aria-label="Label" />
                       <Button type="submit" variant="ghost" size="sm">
-                        save
+                        Save
                       </Button>
                       <Button type="button" variant="ghost" size="sm" onClick={() => setEditingId(null)}>
-                        cancel
+                        Cancel
                       </Button>
                     </form>
                   </TableCell>
@@ -212,7 +212,7 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            aria-label={`edit ${level.label}`}
+                            aria-label={`Edit ${level.label}`}
                             onClick={() => setEditingId(level.id)}
                           >
                             <Pencil size={14} aria-hidden="true" />
@@ -221,12 +221,12 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
                         {canDelete &&
                           (confirmDeleteId === level.id ? (
                             <>
-                              <span className="muted">delete?</span>
+                              <span className="muted">Delete?</span>
                               <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(level.id)}>
-                                confirm
+                                Confirm
                               </Button>
                               <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
-                                cancel
+                                Cancel
                               </Button>
                             </>
                           ) : (
@@ -237,7 +237,7 @@ export function PerformanceLevelsManager({ user }: { user: AuthenticatedUser | n
                               className="text-destructive hover:text-destructive"
                               onClick={() => setConfirmDeleteId(level.id)}
                             >
-                              delete
+                              Delete
                             </Button>
                           ))}
                       </span>

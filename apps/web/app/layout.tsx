@@ -4,8 +4,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
 
 export const metadata: Metadata = {
-  title: 'pulse — KPI management platform',
-  description: 'the intelligence behind what can’t fail',
+  title: 'Pulse — KPI management platform',
+  description: 'The intelligence behind what can’t fail',
 };
 
 // Runs before first paint so a stored light/dark choice applies immediately —

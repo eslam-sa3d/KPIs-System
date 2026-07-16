@@ -1,27 +1,22 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { Building2, UserCheck, UserX, Users as UsersIcon } from 'lucide-react';
 import type { AuthenticatedUser, PaginationMeta } from '@pulse/contracts';
 import { can } from './portal-shell';
+import { TeamMemberCreateForm } from './team-member-create-form';
+import { TeamMemberResetPasswordDialog } from './team-member-reset-password-dialog';
+import { TeamMemberStats } from './team-member-stats';
+import { TeamMembersTable } from './team-members-table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { LoadingState } from '@/components/loading-state';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { apiPaged, api } from '../lib/api-client';
-import { useReveal } from '../lib/use-reveal';
 
 const PAGE_SIZE = 25;
 // Keystrokes settle before firing a request, so typing a name doesn't
 // spray a request per character at the users:read endpoint.
 const SEARCH_DEBOUNCE_MS = 300;
 
-interface UserRow {
+export interface UserRow {
   id: string;
   email: string;
   displayName: string;
@@ -32,22 +27,22 @@ interface UserRow {
   roles: Array<{ id: string; name: string }>;
 }
 
-interface RoleRow {
+export interface RoleRow {
   id: string;
   name: string;
 }
 
-interface DepartmentRow {
+export interface DepartmentRow {
   id: string;
   name: string;
 }
 
-interface JobTitleRow {
+export interface JobTitleRow {
   id: string;
   label: string;
 }
 
-interface UserStats {
+export interface UserStats {
   total: number;
   active: number;
   inactive: number;
@@ -150,7 +145,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
         }),
       });
       (event.target as HTMLFormElement).reset();
-      setNotice('user created');
+      setNotice('User created');
       setCreatingUser(false);
       // New users sort first (createdAt desc) — jump to page 1 so the one
       // just created is actually visible instead of landing on whatever
@@ -196,7 +191,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
     event.preventDefault();
     if (!resetPasswordRow) return;
     if (resetPasswordDraft.newPassword !== resetPasswordDraft.confirmPassword) {
-      setResetPasswordError("new passwords don't match");
+      setResetPasswordError("New passwords don't match");
       return;
     }
     setResetPasswordError(null);
@@ -206,7 +201,7 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
         method: 'PATCH',
         body: JSON.stringify({ newPassword: resetPasswordDraft.newPassword }),
       });
-      setNotice(`password reset for ${resetPasswordRow.email}`);
+      setNotice(`Password reset for ${resetPasswordRow.email}`);
       setResetPasswordRow(null);
     } catch (cause) {
       setResetPasswordError(cause instanceof Error ? cause.message : 'Resetting the password failed');
@@ -299,56 +294,13 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
   const canEditUsers = can(user, 'users:edit');
   const canToggleUserStatus = can(user, 'users:activate_deactivate');
 
-  const scopeRef = useReveal<HTMLDivElement>('.insight-card, tbody tr', users !== null && users.length > 0);
-
   return (
-    <div ref={scopeRef}>
-      {stats && (
-        <div className="insights-row">
-          <div className="insight-card tone-purple">
-            <span className="hierarchy-icon hierarchy-icon-sm">
-              <UsersIcon size={15} aria-hidden="true" />
-            </span>
-            <span className="insight-card-body">
-              <strong>{stats.total}</strong>
-              <span>{stats.total === 1 ? 'user' : 'users'}</span>
-            </span>
-          </div>
-          <div className="insight-card tone-blue">
-            <span className="hierarchy-icon hierarchy-icon-sm">
-              <Building2 size={15} aria-hidden="true" />
-            </span>
-            <span className="insight-card-body">
-              <strong>{stats.departments}</strong>
-              <span>
-                {stats.departments === 1 ? 'department' : 'departments'} · {stats.assignedToDepartment} assigned
-              </span>
-            </span>
-          </div>
-          <div className="insight-card tone-green">
-            <span className="hierarchy-icon hierarchy-icon-sm">
-              <UserCheck size={15} aria-hidden="true" />
-            </span>
-            <span className="insight-card-body">
-              <strong>{stats.active}</strong>
-              <span>activated</span>
-            </span>
-          </div>
-          <div className="insight-card tone-amber">
-            <span className="hierarchy-icon hierarchy-icon-sm">
-              <UserX size={15} aria-hidden="true" />
-            </span>
-            <span className="insight-card-body">
-              <strong>{stats.inactive}</strong>
-              <span>deactivated</span>
-            </span>
-          </div>
-        </div>
-      )}
+    <div>
+      <TeamMemberStats stats={stats} />
 
       {canEditUsers && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-2)' }}>
-          {!creatingUser && <Button onClick={() => setCreatingUser(true)}>new user</Button>}
+          {!creatingUser && <Button onClick={() => setCreatingUser(true)}>New user</Button>}
         </div>
       )}
 
@@ -364,373 +316,57 @@ export function TeamMembersManager({ user }: { user: AuthenticatedUser | null })
       )}
 
       {canEditUsers && creatingUser && (
-        <Card>
-          <CardContent className="pt-6">
-            <form className="builder" onSubmit={onCreate}>
-              <h2 className="text-lg font-semibold mb-2">new user</h2>
-              <label htmlFor="u-email">email</label>
-              <Input id="u-email" name="email" type="email" required />
-              <label htmlFor="u-name">display name</label>
-              <Input id="u-name" name="displayName" required minLength={2} />
-              <label htmlFor="u-pass">temporary password</label>
-              <Input id="u-pass" name="password" type="password" required minLength={8} />
-              {departments.length > 0 && (
-                <>
-                  <label htmlFor="u-dept">department</label>
-                  {/* Radix Select renders a hidden native <select> in sync with its
-                      value when given a `name`, so this still participates in the
-                      surrounding form's FormData on submit like a native <select>. */}
-                  <Select name="departmentId">
-                    <SelectTrigger id="u-dept">
-                      <SelectValue placeholder="— none —" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </>
-              )}
-              {jobTitles.length > 0 && (
-                <>
-                  <label htmlFor="u-job-title">job title</label>
-                  <Select name="jobTitleId">
-                    <SelectTrigger id="u-job-title">
-                      <SelectValue placeholder="— none —" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {jobTitles.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </>
-              )}
-              {roles.length > 0 && (
-                <>
-                  <span className="field-label">roles</span>
-                  <span className="check-group">
-                    {roles.map((r) => (
-                      <label key={r.id} className="check-item">
-                        <Checkbox name="roleIds" value={r.id} /> {r.name}
-                      </label>
-                    ))}
-                  </span>
-                </>
-              )}
-              <span className="check-group">
-                <label className="check-item">
-                  <Checkbox name="isKpiApplicable" defaultChecked /> KPI applicable
-                </label>
-              </span>
-              <span className="row-actions">
-                <Button type="submit">create user</Button>
-                <Button type="button" variant="ghost" onClick={() => setCreatingUser(false)}>
-                  cancel
-                </Button>
-              </span>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="page-title-row">
-        <Input
-          aria-label="search users"
-          placeholder="search by name or email…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+        <TeamMemberCreateForm
+          departments={departments}
+          jobTitles={jobTitles}
+          roles={roles}
+          onCreate={onCreate}
+          onCancel={() => setCreatingUser(false)}
         />
-        {departments.length > 0 && (
-          <Select
-            value={departmentFilter || '__all__'}
-            onValueChange={(v) => setDepartmentFilter(v === '__all__' ? '' : v)}
-          >
-            <SelectTrigger aria-label="filter by department" className="w-[180px]">
-              <SelectValue placeholder="all departments" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">all departments</SelectItem>
-              {departments.map((d) => (
-                <SelectItem key={d.id} value={d.id}>
-                  {d.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-
-      {users === null ? (
-        <LoadingState />
-      ) : users.length === 0 ? (
-        <div className="empty-state">
-          {debouncedSearch || departmentFilter ? (
-            <>
-              <h2>no users match</h2>
-              <p className="muted">try a different search term or department.</p>
-            </>
-          ) : (
-            <>
-              <h2>no users yet</h2>
-              <p className="muted">create the first account above to start granting access.</p>
-            </>
-          )}
-        </div>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>name</TableHead>
-              <TableHead>email</TableHead>
-              <TableHead>department</TableHead>
-              <TableHead>job title</TableHead>
-              <TableHead>roles</TableHead>
-              <TableHead>status</TableHead>
-              <TableHead>KPI applicable</TableHead>
-              {(canToggleUserStatus || canEditUsers || canEditRoles) && <TableHead />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>
-                  {editingInfoId === row.id ? (
-                    <Input
-                      aria-label="display name"
-                      value={infoDraft.displayName}
-                      onChange={(e) => setInfoDraft((d) => ({ ...d, displayName: e.target.value }))}
-                    />
-                  ) : (
-                    row.displayName
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingInfoId === row.id ? (
-                    <Input
-                      aria-label="email"
-                      type="email"
-                      value={infoDraft.email}
-                      onChange={(e) => setInfoDraft((d) => ({ ...d, email: e.target.value }))}
-                    />
-                  ) : (
-                    row.email
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingInfoId === row.id ? (
-                    <Select
-                      value={infoDraft.departmentId || '__none__'}
-                      onValueChange={(v) => setInfoDraft((d) => ({ ...d, departmentId: v === '__none__' ? '' : v }))}
-                    >
-                      <SelectTrigger aria-label="department" size="sm" className="w-[160px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— none —</SelectItem>
-                        {departments.map((d) => (
-                          <SelectItem key={d.id} value={d.id}>
-                            {d.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    (row.department?.name ?? '—')
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingInfoId === row.id ? (
-                    <Select
-                      value={infoDraft.jobTitleId || '__none__'}
-                      onValueChange={(v) => setInfoDraft((d) => ({ ...d, jobTitleId: v === '__none__' ? '' : v }))}
-                    >
-                      <SelectTrigger aria-label="job title" size="sm" className="w-[160px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— none —</SelectItem>
-                        {jobTitles.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    (row.jobTitle?.label ?? '—')
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingUserId === row.id ? (
-                    <span className="check-group">
-                      {roles.map((r) => (
-                        <label key={r.id} className="check-item">
-                          <Checkbox
-                            checked={pendingRoleIds.has(r.id)}
-                            onCheckedChange={() => onTogglePendingRole(r.id)}
-                          />{' '}
-                          {r.name}
-                        </label>
-                      ))}
-                    </span>
-                  ) : (
-                    row.roles.map((r) => r.name).join(', ') || '—'
-                  )}
-                </TableCell>
-                <TableCell>{row.isActive ? 'active' : 'deactivated'}</TableCell>
-                <TableCell>
-                  {editingInfoId === row.id ? (
-                    <Checkbox
-                      aria-label="KPI applicable"
-                      checked={infoDraft.isKpiApplicable}
-                      onCheckedChange={(v) => setInfoDraft((d) => ({ ...d, isKpiApplicable: v === true }))}
-                    />
-                  ) : row.isKpiApplicable ? (
-                    'yes'
-                  ) : (
-                    'no'
-                  )}
-                </TableCell>
-                {(canToggleUserStatus || canEditUsers || canEditRoles) && (
-                  <TableCell>
-                    <span className="builder-field-actions">
-                      {canEditUsers &&
-                        (editingInfoId === row.id ? (
-                          <>
-                            <Button size="sm" disabled={savingInfo} onClick={() => onSaveInfo(row)}>
-                              save info
-                            </Button>
-                            <Button variant="ghost" size="sm" disabled={savingInfo} onClick={onCancelEditInfo}>
-                              cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <Button variant="ghost" size="sm" onClick={() => onStartEditInfo(row)}>
-                            edit
-                          </Button>
-                        ))}
-                      {canEditUsers && (
-                        <Button variant="ghost" size="sm" onClick={() => onStartResetPassword(row)}>
-                          reset password
-                        </Button>
-                      )}
-                      {canToggleUserStatus && (
-                        <Button variant="ghost" size="sm" onClick={() => onToggleStatus(row)}>
-                          {row.isActive ? 'deactivate' : 'activate'}
-                        </Button>
-                      )}
-                      {canEditRoles &&
-                        (editingUserId === row.id ? (
-                          <>
-                            <Button size="sm" disabled={savingRoles} onClick={() => onSaveRoles(row)}>
-                              save roles
-                            </Button>
-                            <Button variant="ghost" size="sm" disabled={savingRoles} onClick={onCancelEditRoles}>
-                              cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <Button variant="ghost" size="sm" onClick={() => onStartEditRoles(row)}>
-                            change role
-                          </Button>
-                        ))}
-                    </span>
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
       )}
 
-      {pagination && pagination.totalItems > 0 && (
-        <div className="page-title-row" aria-label="users pagination">
-          <span className="muted">
-            showing {(pagination.page - 1) * pagination.pageSize + 1}
-            {'–'}
-            {Math.min(pagination.page * pagination.pageSize, pagination.totalItems)} of {pagination.totalItems}
-          </span>
-          <span className="row-actions">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              previous
-            </Button>
-            <span className="muted">
-              page {pagination.page} of {pagination.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.page >= pagination.totalPages}
-              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-            >
-              next
-            </Button>
-          </span>
-        </div>
-      )}
+      <TeamMembersTable
+        users={users}
+        pagination={pagination}
+        search={search}
+        setSearch={setSearch}
+        debouncedSearch={debouncedSearch}
+        departmentFilter={departmentFilter}
+        setDepartmentFilter={setDepartmentFilter}
+        departments={departments}
+        jobTitles={jobTitles}
+        roles={roles}
+        editingInfoId={editingInfoId}
+        infoDraft={infoDraft}
+        setInfoDraft={setInfoDraft}
+        savingInfo={savingInfo}
+        onSaveInfo={onSaveInfo}
+        onCancelEditInfo={onCancelEditInfo}
+        onStartEditInfo={onStartEditInfo}
+        editingUserId={editingUserId}
+        pendingRoleIds={pendingRoleIds}
+        onTogglePendingRole={onTogglePendingRole}
+        savingRoles={savingRoles}
+        onSaveRoles={onSaveRoles}
+        onCancelEditRoles={onCancelEditRoles}
+        onStartEditRoles={onStartEditRoles}
+        onStartResetPassword={onStartResetPassword}
+        onToggleStatus={onToggleStatus}
+        canEditUsers={canEditUsers}
+        canEditRoles={canEditRoles}
+        canToggleUserStatus={canToggleUserStatus}
+        setPage={setPage}
+      />
 
-      {resetPasswordRow && (
-        <Dialog open onOpenChange={(open) => !open && !resetPasswordBusy && onCancelResetPassword()}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>set a new password for {resetPasswordRow.displayName}</DialogTitle>
-            </DialogHeader>
-            <form className="builder" onSubmit={onSubmitResetPassword} aria-busy={resetPasswordBusy}>
-              <label htmlFor="reset-pw-new">new password</label>
-              <Input
-                id="reset-pw-new"
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                required
-                value={resetPasswordDraft.newPassword}
-                onChange={(e) => setResetPasswordDraft((d) => ({ ...d, newPassword: e.target.value }))}
-              />
-
-              <label htmlFor="reset-pw-confirm">confirm new password</label>
-              <Input
-                id="reset-pw-confirm"
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                required
-                value={resetPasswordDraft.confirmPassword}
-                onChange={(e) => setResetPasswordDraft((d) => ({ ...d, confirmPassword: e.target.value }))}
-              />
-
-              <p className="muted" style={{ fontSize: 11, margin: '2px 0 8px' }}>
-                {resetPasswordRow.displayName} will be asked to change this password the next time they sign in.
-              </p>
-
-              {resetPasswordError && (
-                <Alert variant="destructive">
-                  <AlertDescription>{resetPasswordError}</AlertDescription>
-                </Alert>
-              )}
-
-              <DialogFooter>
-                <Button type="button" variant="ghost" disabled={resetPasswordBusy} onClick={onCancelResetPassword}>
-                  cancel
-                </Button>
-                <Button type="submit" disabled={resetPasswordBusy}>
-                  {resetPasswordBusy ? 'saving…' : 'set new password'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
+      <TeamMemberResetPasswordDialog
+        row={resetPasswordRow}
+        draft={resetPasswordDraft}
+        setDraft={setResetPasswordDraft}
+        error={resetPasswordError}
+        busy={resetPasswordBusy}
+        onCancel={onCancelResetPassword}
+        onSubmit={onSubmitResetPassword}
+      />
     </div>
   );
 }

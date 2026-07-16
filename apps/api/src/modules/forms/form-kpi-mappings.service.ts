@@ -9,19 +9,36 @@ import {
 } from '@pulse/contracts';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
+import { RedisService } from '../../infra/redis.service';
+import { DASHBOARD_CACHE_GENERATION_KEY } from '../kpis/kpi-dashboard.service';
 import { FormsService } from './forms.service';
 
 /**
  * Admin CRUD for the Forms→KPI bridge: which of a form's own fields supplies
  * the evaluatee and which supplies the score, for a given Evaluation Area.
- * SubmissionsService reads these rows at submit time — see its persist().
+ * FormKpiScoringService reads these rows at submit time — see its applyKpiMappings().
  */
 @Injectable()
 export class FormKpiMappingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly forms: FormsService,
+    private readonly redis: RedisService,
   ) {}
+
+  /** loadScoredSubmissions (kpi-dashboard.service.ts) re-derives scoring from
+   *  the CURRENT mapping set against every existing submission on each call —
+   *  no backfill needed for a mapping change to take effect — so create/
+   *  update/delete here must invalidate the dashboard cache same as a
+   *  submission write. Best-effort: see kpi-dashboard.service.ts's
+   *  cachedDashboardRead. */
+  private async invalidateDashboardCache(): Promise<void> {
+    try {
+      await this.redis.incr(DASHBOARD_CACHE_GENERATION_KEY);
+    } catch {
+      // fail-open — the dashboard's own short TTL bounds staleness regardless.
+    }
+  }
 
   async list(formId: string) {
     return this.prisma.formKpiMapping.findMany({
@@ -38,7 +55,7 @@ export class FormKpiMappingsService {
     const { definition } = await this.forms.getLatestVersion((await this.requireForm(formId)).slug);
 
     this.validateEvaluateeFieldKeys(definition, input.evaluateeFieldKeys);
-    // Any answerable field can be linked — see normalizeScore in SubmissionsService for which
+    // Any answerable field can be linked — see normalizeScore in FormKpiScoringService for which
     // types (SCORE_FIELD_TYPES) actually produce a live score; the rest just never do, silently.
     const scoreField = definition.fields.find((f) => f.key === input.scoreFieldKey);
     if (!scoreField || scoreField.type === 'section_header') {
@@ -89,6 +106,7 @@ export class FormKpiMappingsService {
         detail: input,
       },
     });
+    await this.invalidateDashboardCache();
     return mapping;
   }
 
@@ -162,6 +180,7 @@ export class FormKpiMappingsService {
         detail: input,
       },
     });
+    await this.invalidateDashboardCache();
     return mapping;
   }
 
@@ -302,6 +321,7 @@ export class FormKpiMappingsService {
           detail: { evaluateeFieldKeys: input.evaluateeFieldKeys, count: result.created.length },
         },
       });
+      await this.invalidateDashboardCache();
     }
 
     return result;
@@ -316,6 +336,7 @@ export class FormKpiMappingsService {
     await this.prisma.auditLog.create({
       data: { actorId, action: 'form_kpi_mapping.deleted', entity: 'FormKpiMapping', entityId: mappingId },
     });
+    await this.invalidateDashboardCache();
     return null;
   }
 

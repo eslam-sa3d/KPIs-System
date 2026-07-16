@@ -11,14 +11,14 @@ export default function SettingsPage() {
 
   return (
     <PortalShell user={user}>
-      <h1>settings</h1>
-      <p className="portal-subtitle">platform administration</p>
+      <h1>Settings</h1>
+      <p className="portal-subtitle">Platform administration</p>
 
       <Tabs defaultValue="departments">
         <TabsList>
-          <TabsTrigger value="departments">departments</TabsTrigger>
-          <TabsTrigger value="project-groups">project groups</TabsTrigger>
-          <TabsTrigger value="team">team members</TabsTrigger>
+          <TabsTrigger value="departments">Departments</TabsTrigger>
+          <TabsTrigger value="project-groups">Project groups</TabsTrigger>
+          <TabsTrigger value="team">Team members</TabsTrigger>
         </TabsList>
         <TabsContent value="departments">
           <DepartmentsManager user={user} />

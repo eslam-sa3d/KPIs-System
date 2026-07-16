@@ -1,3 +1,5 @@
+import { palette } from '@pulse/theme';
+
 /**
  * Evaluation Area raw score (0–5 scale) → status band. Every score in this
  * system is a direct 0–5 rating (matching the QA evaluation forms this
@@ -38,12 +40,12 @@ export const STATUS_ORDER: StatusKey[] = ['outstanding', 'meets', 'improve', 'be
 /** Pulse brand colors per status band — the single source of truth for both
  *  CSS (via .p-status-* classes, see globals.css) and SVG chart fills
  *  (recharts needs real hex, not custom-property indirection). */
-export const STATUS_COLOR: Record<StatusKey, string> = {
-  outstanding: '#a54ee1', // moon-light
-  meets: '#00c48c', // oasis
-  improve: '#ff6a39', // sunset
-  below: '#ff375e', // coral
-  pending: '#8e9aa0', // silver
+const STATUS_COLOR: Record<StatusKey, string> = {
+  outstanding: palette.secondary.moonLight,
+  meets: palette.tertiary.oasis,
+  improve: palette.tertiary.sunset,
+  below: palette.primary.coral,
+  pending: palette.secondary.silver,
 };
 
 /** Inline style for a status Badge — bypasses Tailwind's utilities layer
