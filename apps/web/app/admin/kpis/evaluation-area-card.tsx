@@ -63,6 +63,14 @@ export function EvaluationAreaCard({
   ) => void;
   onDeleteSubCriteria: (kpiId: string, areaId: string, subCriteriaId: string) => void;
 }) {
+  // The area's own weight share is split evenly again across its
+  // sub-criteria — same derived-display approach as the KPI→area split,
+  // nothing persisted per sub-criteria.
+  const subCriteriaWeightShare =
+    weightShare !== null && area.subCriteria.length > 0
+      ? Math.round((weightShare / area.subCriteria.length) * 10) / 10
+      : null;
+
   return (
     <div className="builder-field kpi-area">
       {renamingAreaId === area.id ? (
@@ -174,8 +182,12 @@ export function EvaluationAreaCard({
             </form>
           ) : (
             <div key={sub.id} className="kpi-subcriteria-row hover-actions-row">
-              <span>
-                <span className="hierarchy-dot" aria-hidden="true" />
+              <span className="kpi-subcriteria-label">
+                {subCriteriaWeightShare !== null ? (
+                  <WeightRing value={subCriteriaWeightShare} size="xs" />
+                ) : (
+                  <span className="hierarchy-dot" aria-hidden="true" />
+                )}
                 {sub.name}
               </span>
               {canWrite && (

@@ -2383,12 +2383,42 @@
   }
 
   .weight-ring-sm {
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
   }
 
   .weight-ring-sm .weight-ring-value {
-    font-size: 8px;
+    font-size: 12px;
+  }
+
+  .weight-ring-xs {
+    width: 32px;
+    height: 32px;
+  }
+
+  .weight-ring-xs::after {
+    inset: 3px;
+  }
+
+  .weight-ring-xs .weight-ring-value {
+    font-size: 11px;
+    letter-spacing: -0.3px;
+  }
+
+  /* Icon/ring + label pairing for list rows (sub-criteria) — mirrors
+   hierarchy-title-row's gap so a WeightRing badge gets the same breathing
+   room a hierarchy-dot got for free from its own margin. */
+  .kpi-subcriteria-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  /* The gap above already provides the spacing hierarchy-dot's own
+   margin-right was for — avoid doubling it up when weight is unset and
+   the dot fallback renders inside this same flex label. */
+  .kpi-subcriteria-label .hierarchy-dot {
+    margin-right: 0;
   }
 
   /* Search */

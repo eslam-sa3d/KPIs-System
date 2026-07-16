@@ -9,10 +9,10 @@ export function pluralize(count: number, singular: string, plural = `${singular}
 
 /** M3-style conic-gradient dial showing a 0-100 weight at a glance instead
  *  of burying it in a run of muted text. */
-export function WeightRing({ value, size = 'md' }: { value: number; size?: 'md' | 'sm' }) {
+export function WeightRing({ value, size = 'md' }: { value: number; size?: 'md' | 'sm' | 'xs' }) {
   return (
     <span
-      className={`weight-ring${size === 'sm' ? ' weight-ring-sm' : ''}`}
+      className={`weight-ring${size === 'sm' ? ' weight-ring-sm' : size === 'xs' ? ' weight-ring-xs' : ''}`}
       style={{ '--ring-pct': `${Math.min(100, Math.max(0, value))}%` } as React.CSSProperties}
       role="img"
       aria-label={`Weight ${value}%`}
