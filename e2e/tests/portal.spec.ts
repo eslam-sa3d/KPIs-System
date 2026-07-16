@@ -173,9 +173,9 @@ test.describe('KPI module (create → evaluation area → score via a mapped for
     const formDetailEnvelope = await (
       await page.request.get(`${apiUrl}/api/v1/forms/${targetForm.slug}`, { headers: authHeaders })
     ).json();
-    const scoreFieldDef = (
-      formDetailEnvelope.data.definition.fields as Array<{ key: string; label: string }>
-    ).find((f) => f.label === 'Score')!;
+    const scoreFieldDef = (formDetailEnvelope.data.definition.fields as Array<{ key: string; label: string }>).find(
+      (f) => f.label === 'Score',
+    )!;
 
     const kpisEnvelope = await (
       await page.request.get(`${apiUrl}/api/v1/kpis?pageSize=100`, { headers: authHeaders })

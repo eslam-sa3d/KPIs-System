@@ -277,6 +277,13 @@ export default function KpisAdminPage() {
   }, [kpis]);
 
   const selectedKpi = useMemo(() => kpis?.find((k) => k.id === selectedKpiId) ?? null, [kpis, selectedKpiId]);
+  // The KPI's weight isn't stored per area — it's split evenly across
+  // however many evaluation areas the KPI currently has, purely for display,
+  // so it stays correct automatically as areas are added or removed.
+  const areaWeightShare = useMemo(() => {
+    if (!selectedKpi || selectedKpi.weight === null || selectedKpi.evaluationAreas.length === 0) return null;
+    return Math.round((selectedKpi.weight / selectedKpi.evaluationAreas.length) * 100) / 100;
+  }, [selectedKpi]);
   const firstInactiveKpiId = useMemo(() => kpis?.find((k) => !k.isActive)?.id ?? null, [kpis]);
   const canWrite = can(user, 'kpis:edit');
   const canManage = can(user, 'kpis:delete');
@@ -591,6 +598,7 @@ export default function KpisAdminPage() {
                         key={area.id}
                         kpiId={selectedKpi.id}
                         area={area}
+                        weightShare={areaWeightShare}
                         canWrite={canWrite}
                         canManage={canManage}
                         canToggleStatus={canToggleStatus}

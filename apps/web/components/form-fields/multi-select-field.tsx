@@ -43,9 +43,7 @@ export function MultiSelectField({
               type="text"
               aria-label={`${field.label} other`}
               value={otherEntry.slice(6)}
-              onChange={(e) =>
-                onChange(selected.map((v) => (v.startsWith('other:') ? `other:${e.target.value}` : v)))
-              }
+              onChange={(e) => onChange(selected.map((v) => (v.startsWith('other:') ? `other:${e.target.value}` : v)))}
             />
           )}
         </label>

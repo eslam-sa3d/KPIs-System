@@ -28,8 +28,7 @@ export function RankingField({
       {order.map((v, i) => (
         <li key={v} className="ranking-item">
           <span>
-            {i + 1}.{' '}
-            {imageOf(v) && <img src={assetUrl(imageOf(v)!)} alt="" className="option-image" loading="lazy" />}
+            {i + 1}. {imageOf(v) && <img src={assetUrl(imageOf(v)!)} alt="" className="option-image" loading="lazy" />}
             {labelOf(v)}
           </span>
           <span className="ranking-controls">
