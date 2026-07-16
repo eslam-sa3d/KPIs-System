@@ -35,9 +35,9 @@ type MappingRow = FormKpiMappingWithArea;
 type BulkMappingResult = BulkCreateFormKpiMappingResult;
 
 const REVIEW_TYPE_LABEL: Record<ReviewType, string> = {
-  self: 'self-assessment',
-  peer: 'peer review',
-  manager: 'manager review',
+  self: 'Self-assessment',
+  peer: 'Peer review',
+  manager: 'Manager review',
   '360': '360 review',
 };
 
@@ -264,7 +264,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         { method: 'POST' },
       );
       setNotice(
-        `scored ${result.scored} existing submission${result.scored === 1 ? '' : 's'} into "${areaLabel}"` +
+        `Scored ${result.scored} existing submission${result.scored === 1 ? '' : 's'} into "${areaLabel}"` +
           (result.skipped > 0 ? ` · skipped ${result.skipped}` : ''),
       );
     } catch (cause) {
@@ -324,7 +324,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
       </CardHeader>
       <CardContent>
         <p className="muted">
-          connect this survey to a KPI Evaluation Area: pick which field supplies the score, and — for a peer, manager,
+          Connect this survey to a KPI Evaluation Area: pick which field supplies the score, and — for a peer, manager,
           or 360 review — which field says who it&apos;s about. Left as self-assessment, every future submission scores
           the submitter themselves. Every future submission upserts an entry automatically.
         </p>
@@ -340,14 +340,14 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         )}
 
         {scoreFields.length === 0 ? (
-          <p className="muted">add a rating, NPS, or slider field to this form to supply the score.</p>
+          <p className="muted">Add a rating, NPS, or slider field to this form to supply the score.</p>
         ) : (
           <>
-            <label>current mappings</label>
+            <span className="field-label">Current mappings</span>
             {mappings === null ? (
               <LoadingState />
             ) : mappings.length === 0 ? (
-              <p className="muted">no KPI mapping yet — add one below.</p>
+              <p className="muted">No KPI mapping yet — add one below.</p>
             ) : (
               <ul className="summary-samples">
                 {mappings.map((m) => (
@@ -355,7 +355,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     <strong>{m.evaluationArea.name}</strong> ({m.evaluationArea.cadence}) —{' '}
                     {REVIEW_TYPE_LABEL[m.reviewType]}
                     {m.anonymous && ' · anonymous'} · evaluatee:{' '}
-                    {m.evaluateeFieldKeys.length > 0 ? m.evaluateeFieldKeys.map(fieldLabel).join(', ') : 'self'}, score:{' '}
+                    {m.evaluateeFieldKeys.length > 0 ? m.evaluateeFieldKeys.map(fieldLabel).join(', ') : 'Self'}, score:{' '}
                     {fieldLabel(m.scoreFieldKey)}{' '}
                     <Button
                       type="button"
@@ -363,21 +363,21 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                       size="sm"
                       disabled={backfillingId === m.id}
                       onClick={() => onBackfill(m.id, m.evaluationArea.name)}
-                      title="score every existing submission against this mapping too"
+                      title="Score every existing submission against this mapping too"
                     >
-                      {backfillingId === m.id ? 'scoring…' : 'backfill existing responses'}
+                      {backfillingId === m.id ? 'Scoring…' : 'Backfill existing responses'}
                     </Button>{' '}
                     <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onStartEdit(m)}>
-                      edit
+                      Edit
                     </Button>{' '}
                     {confirmDeleteId === m.id ? (
                       <>
-                        <span className="muted">remove this mapping?</span>{' '}
+                        <span className="muted">Remove this mapping?</span>{' '}
                         <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onDelete(m.id)}>
-                          confirm remove
+                          Confirm remove
                         </Button>{' '}
                         <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>
-                          cancel
+                          Cancel
                         </Button>
                       </>
                     ) : (
@@ -388,7 +388,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                         disabled={busy}
                         onClick={() => setConfirmDeleteId(m.id)}
                       >
-                        remove
+                        Remove
                       </Button>
                     )}
                   </li>
@@ -396,7 +396,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               </ul>
             )}
 
-            <label htmlFor="kpi-mapping-kpi">{editingMappingId ? 'edit mapping' : 'add a mapping'}</label>
+            <label htmlFor="kpi-mapping-kpi">{editingMappingId ? 'Edit mapping' : 'Add a mapping'}</label>
             <Select
               value={kpiId}
               onValueChange={(v) => {
@@ -405,7 +405,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               }}
             >
               <SelectTrigger id="kpi-mapping-kpi">
-                <SelectValue placeholder="choose a KPI…" />
+                <SelectValue placeholder="Choose a KPI…" />
               </SelectTrigger>
               <SelectContent>
                 {kpis?.map((k) => (
@@ -416,8 +416,8 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               </SelectContent>
             </Select>
             <Select value={evaluationAreaId} onValueChange={setEvaluationAreaId} disabled={!kpiId}>
-              <SelectTrigger aria-label="evaluation area">
-                <SelectValue placeholder="choose an evaluation area…" />
+              <SelectTrigger aria-label="Evaluation area">
+                <SelectValue placeholder="Choose an evaluation area…" />
               </SelectTrigger>
               <SelectContent>
                 {kpiAreas.map((a) => (
@@ -428,8 +428,8 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               </SelectContent>
             </Select>
             <Select value={scoreFieldKey} onValueChange={setScoreFieldKey}>
-              <SelectTrigger aria-label="score field">
-                <SelectValue placeholder="which field supplies the score…" />
+              <SelectTrigger aria-label="Score field">
+                <SelectValue placeholder="Which field supplies the score…" />
               </SelectTrigger>
               <SelectContent>
                 {scoreFields.map((f) => (
@@ -439,13 +439,13 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                 ))}
               </SelectContent>
             </Select>
-            <label>
-              who this is about — check every candidate field; whichever one is actually answered on a submission wins
+            <span className="field-label">
+              Who this is about — check every candidate field; whichever one is actually answered on a submission wins
               (leave all unchecked for self-assessment)
-            </label>
+            </span>
             {evaluateeFields.length === 0 ? (
               <p className="muted">
-                no eligible field on this form — add a &quot;person&quot; field, or a &quot;select&quot; field with a
+                No eligible field on this form — add a &quot;person&quot; field, or a &quot;select&quot; field with a
                 user-linked option, to enable peer/manager/360 scoring.
               </p>
             ) : (
@@ -462,7 +462,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               </span>
             )}
             <Select value={reviewType} onValueChange={(v) => setReviewType(v as ReviewType)}>
-              <SelectTrigger aria-label="review type">
+              <SelectTrigger aria-label="Review type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -475,30 +475,30 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
             </Select>
             <label className="check-item">
               <Checkbox checked={anonymous} onCheckedChange={(checked) => setAnonymous(checked === true)} />
-              keep the evaluator anonymous
+              Keep the evaluator anonymous
             </label>
             <Select value={contextFieldKey || NONE} onValueChange={(v) => setContextFieldKey(v === NONE ? '' : v)}>
-              <SelectTrigger aria-label="context field (optional)">
+              <SelectTrigger aria-label="Context field (optional)">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE}>no context field</SelectItem>
+                <SelectItem value={NONE}>No context field</SelectItem>
                 {definition.fields.map((f) => (
                   <SelectItem key={f.key} value={f.key}>
-                    context: {f.label}
+                    Context: {f.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={commentFieldKey || NONE} onValueChange={(v) => setCommentFieldKey(v === NONE ? '' : v)}>
-              <SelectTrigger aria-label="comment field (optional)">
+              <SelectTrigger aria-label="Comment field (optional)">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE}>no comment field</SelectItem>
+                <SelectItem value={NONE}>No comment field</SelectItem>
                 {definition.fields.map((f) => (
                   <SelectItem key={f.key} value={f.key}>
-                    comment: {f.label}
+                    Comment: {f.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -509,11 +509,11 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               disabled={busy || !evaluationAreaId || !scoreFieldKey}
               onClick={onSaveMapping}
             >
-              {editingMappingId ? 'save changes' : 'add mapping'}
+              {editingMappingId ? 'Save changes' : 'Add mapping'}
             </Button>
             {editingMappingId && (
               <Button type="button" variant="ghost" disabled={busy} onClick={resetMappingForm}>
-                cancel
+                Cancel
               </Button>
             )}
 
@@ -522,7 +522,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                 {bulkResult && (
                   <Alert>
                     <AlertDescription>
-                      mapped {bulkResult.created.length} question{bulkResult.created.length === 1 ? '' : 's'}
+                      Mapped {bulkResult.created.length} question{bulkResult.created.length === 1 ? '' : 's'}
                       {bulkResult.skipped.length > 0 &&
                         ` · skipped ${bulkResult.skipped.length}: ${bulkResult.skipped
                           .map((s) => `${areaName(s.evaluationAreaId)} (${s.reason})`)
@@ -532,12 +532,12 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                 )}
                 {bulkOpen ? (
                   <>
-                    <label>
-                      bulk-map the {unmappedScoreFields.length} remaining unmapped question
+                    <span className="field-label">
+                      Bulk-map the {unmappedScoreFields.length} remaining unmapped question
                       {unmappedScoreFields.length === 1 ? '' : 's'}
-                    </label>
+                    </span>
                     <Select value={bulkReviewType} onValueChange={(v) => setBulkReviewType(v as ReviewType)}>
-                      <SelectTrigger aria-label="review type for this batch">
+                      <SelectTrigger aria-label="Review type for this batch">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -548,12 +548,12 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                         ))}
                       </SelectContent>
                     </Select>
-                    <label>
-                      who this batch is about — check every candidate field; whichever one is actually answered on a
+                    <span className="field-label">
+                      Who this batch is about — check every candidate field; whichever one is actually answered on a
                       submission wins (leave all unchecked for self-assessment)
-                    </label>
+                    </span>
                     {evaluateeFields.length === 0 ? (
-                      <p className="muted">no eligible field on this form.</p>
+                      <p className="muted">No eligible field on this form.</p>
                     ) : (
                       <span className="check-group">
                         {evaluateeFields.map((f) => (
@@ -572,20 +572,20 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                         checked={bulkAnonymous}
                         onCheckedChange={(checked) => setBulkAnonymous(checked === true)}
                       />
-                      keep evaluators anonymous
+                      Keep evaluators anonymous
                     </label>
                     <Select
                       value={bulkContextFieldKey || NONE}
                       onValueChange={(v) => setBulkContextFieldKey(v === NONE ? '' : v)}
                     >
-                      <SelectTrigger aria-label="context field for this batch (optional)">
+                      <SelectTrigger aria-label="Context field for this batch (optional)">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NONE}>no context field</SelectItem>
+                        <SelectItem value={NONE}>No context field</SelectItem>
                         {definition.fields.map((f) => (
                           <SelectItem key={f.key} value={f.key}>
-                            context: {f.label}
+                            Context: {f.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -594,14 +594,14 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                       value={bulkCommentFieldKey || NONE}
                       onValueChange={(v) => setBulkCommentFieldKey(v === NONE ? '' : v)}
                     >
-                      <SelectTrigger aria-label="comment field for this batch (optional)">
+                      <SelectTrigger aria-label="Comment field for this batch (optional)">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NONE}>no comment field</SelectItem>
+                        <SelectItem value={NONE}>No comment field</SelectItem>
                         {definition.fields.map((f) => (
                           <SelectItem key={f.key} value={f.key}>
-                            comment: {f.label}
+                            Comment: {f.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -610,8 +610,8 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     <Table className="kpi-bulk-mapping-table">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>question</TableHead>
-                          <TableHead>evaluation area</TableHead>
+                          <TableHead>Question</TableHead>
+                          <TableHead>Evaluation area</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -625,7 +625,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                                   setBulkSelections((current) => ({ ...current, [f.key]: v === NONE ? '' : v }))
                                 }
                               >
-                                <SelectTrigger aria-label={`evaluation area for ${f.label}`}>
+                                <SelectTrigger aria-label={`Evaluation area for ${f.label}`}>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -652,10 +652,10 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
 
                     <div className="row-actions">
                       <Button type="button" size="sm" disabled={busy || bulkMappedCount === 0} onClick={onBulkCreate}>
-                        map {bulkMappedCount} question{bulkMappedCount === 1 ? '' : 's'}
+                        Map {bulkMappedCount} question{bulkMappedCount === 1 ? '' : 's'}
                       </Button>
                       <Button type="button" variant="ghost" size="sm" onClick={() => setBulkOpen(false)}>
-                        close
+                        Close
                       </Button>
                     </div>
                   </>
@@ -666,7 +666,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     className="border-dashed text-muted-foreground hover:border-primary hover:text-primary"
                     onClick={openBulk}
                   >
-                    bulk-map {unmappedScoreFields.length} remaining questions
+                    Bulk-map {unmappedScoreFields.length} remaining questions
                   </Button>
                 )}
               </div>

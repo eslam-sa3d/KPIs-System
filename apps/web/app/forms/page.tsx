@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ClipboardList, FolderOpen, Pencil, Search, Share2 } from 'lucide-react';
 import type { FormListItem } from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
@@ -15,11 +15,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 import { useResource } from '../../lib/use-resource';
-import { useReveal } from '../../lib/use-reveal';
 
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
+
+const FORMS_PAGE_SIZE = 25;
 
 export default function FormsPage() {
   const user = useSession();
@@ -30,6 +31,7 @@ export default function FormsPage() {
   const [folderDraft, setFolderDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   async function onArchiveToggle(form: FormListItem) {
     setError(null);
@@ -66,6 +68,19 @@ export default function FormsPage() {
     );
   }, [forms, folderFilter, search]);
 
+  // Narrowing the search/folder filter can leave `page` pointing past the
+  // now-shorter result set — snap back to the first page instead of showing
+  // an empty page with working Previous/Next controls that look broken.
+  useEffect(() => {
+    setPage(1);
+  }, [search, folderFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleForms.length / FORMS_PAGE_SIZE));
+  const pagedForms = useMemo(
+    () => visibleForms.slice((page - 1) * FORMS_PAGE_SIZE, page * FORMS_PAGE_SIZE),
+    [visibleForms, page],
+  );
+
   const stats = useMemo(() => {
     if (!forms) return null;
     return {
@@ -83,18 +98,16 @@ export default function FormsPage() {
     setEditingFolderId(null);
   }
 
-  const scopeRef = useReveal<HTMLDivElement>('.insight-card, tbody tr', forms !== null && forms.length > 0);
-
   return (
     <PortalShell user={user}>
-      <div ref={scopeRef}>
+      <div>
         <div className="page-title-row">
-          <h1>forms</h1>
+          <h1>Forms</h1>
           <Button asChild>
-            <Link href="/forms/new">new form</Link>
+            <Link href="/forms/new">New form</Link>
           </Button>
         </div>
-        <p className="portal-subtitle">collect data with custom forms, then aggregate and export it</p>
+        <p className="portal-subtitle">Collect data with custom forms, then aggregate and export it</p>
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -113,8 +126,8 @@ export default function FormsPage() {
             <span className="empty-state-icon">
               <ClipboardList size={22} aria-hidden="true" />
             </span>
-            <h2>no forms yet</h2>
-            <p className="muted">create your first data-entry form to start collecting.</p>
+            <h2>No forms yet</h2>
+            <p className="muted">Create your first data-entry form to start collecting.</p>
           </div>
         ) : (
           <>
@@ -126,7 +139,7 @@ export default function FormsPage() {
                   </span>
                   <span className="insight-card-body">
                     <strong>{stats.total}</strong>
-                    <span>{stats.total === 1 ? 'form' : 'forms'}</span>
+                    <span>{stats.total === 1 ? 'Form' : 'Forms'}</span>
                   </span>
                 </div>
                 <div className="insight-card tone-green">
@@ -135,7 +148,7 @@ export default function FormsPage() {
                   </span>
                   <span className="insight-card-body">
                     <strong>{stats.open}</strong>
-                    <span>accepting responses</span>
+                    <span>Accepting responses</span>
                   </span>
                 </div>
                 <div className="insight-card tone-blue">
@@ -144,7 +157,7 @@ export default function FormsPage() {
                   </span>
                   <span className="insight-card-body">
                     <strong>{stats.shared}</strong>
-                    <span>shared publicly</span>
+                    <span>Shared publicly</span>
                   </span>
                 </div>
                 {stats.archived > 0 && (
@@ -154,7 +167,7 @@ export default function FormsPage() {
                     </span>
                     <span className="insight-card-body">
                       <strong>{stats.archived}</strong>
-                      <span>archived</span>
+                      <span>Archived</span>
                     </span>
                   </div>
                 )}
@@ -167,15 +180,15 @@ export default function FormsPage() {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="search forms by title…"
-                aria-label="search forms"
+                placeholder="Search forms by title…"
+                aria-label="Search forms"
               />
             </div>
 
             {folders.length > 0 && (
               <div className="page-title-row" style={{ marginBottom: 8 }}>
                 <label htmlFor="forms-folder-filter" className="muted" style={{ fontSize: 13 }}>
-                  folder
+                  Folder
                 </label>
                 <Select
                   value={folderFilter || '__all__'}
@@ -185,7 +198,7 @@ export default function FormsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">all folders</SelectItem>
+                    <SelectItem value="__all__">All folders</SelectItem>
                     {folders.map((f) => (
                       <SelectItem key={f} value={f}>
                         {f}
@@ -199,23 +212,23 @@ export default function FormsPage() {
             {visibleForms.length === 0 ? (
               <p className="empty-state-inline">
                 <Search size={14} aria-hidden="true" />
-                no forms match your filters
+                No forms match your filters
               </p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>title</TableHead>
-                    <TableHead>status</TableHead>
-                    <TableHead>fields</TableHead>
-                    <TableHead>version</TableHead>
-                    <TableHead>public link</TableHead>
-                    <TableHead>folder</TableHead>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Fields</TableHead>
+                    <TableHead>Version</TableHead>
+                    <TableHead>Public link</TableHead>
+                    <TableHead>Folder</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visibleForms.map((form) => (
+                  {pagedForms.map((form) => (
                     <TableRow key={form.id} className="hover-actions-row">
                       <TableCell>
                         <Link href={`/forms/view?slug=${encodeURIComponent(form.slug)}`}>{form.title}</Link>
@@ -223,11 +236,11 @@ export default function FormsPage() {
                       <TableCell>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                           {form.status === 'archived' ? (
-                            <StatusBadge active={false} label="archived" size="sm" />
+                            <StatusBadge active={false} label="Archived" size="sm" />
                           ) : (
                             <StatusBadge
                               active={form.settings.acceptingResponses}
-                              label={form.settings.acceptingResponses ? 'open' : 'closed'}
+                              label={form.settings.acceptingResponses ? 'Open' : 'Closed'}
                               size="sm"
                             />
                           )}
@@ -236,7 +249,7 @@ export default function FormsPage() {
                               <TooltipTrigger asChild>
                                 <button
                                   type="button"
-                                  aria-label="form health warning"
+                                  aria-label="Form health warning"
                                   style={{
                                     display: 'inline-flex',
                                     background: 'none',
@@ -250,8 +263,8 @@ export default function FormsPage() {
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent>
-                                {form.hasSubmissionGap && <p>open, but no submissions in 30+ days</p>}
-                                {form.mappedWhileClosed && <p>linked to a KPI, but not currently reachable</p>}
+                                {form.hasSubmissionGap && <p>Open, but no submissions in 30+ days</p>}
+                                {form.mappedWhileClosed && <p>Linked to a KPI, but not currently reachable</p>}
                               </TooltipContent>
                             </Tooltip>
                           )}
@@ -259,7 +272,7 @@ export default function FormsPage() {
                       </TableCell>
                       <TableCell>{pluralize(form.fieldCount, 'field')}</TableCell>
                       <TableCell>v{form.version}</TableCell>
-                      <TableCell>{form.hasPublicLink ? 'shared' : '—'}</TableCell>
+                      <TableCell>{form.hasPublicLink ? 'Shared' : '—'}</TableCell>
                       <TableCell>
                         {editingFolderId === form.id ? (
                           <span className="builder-required">
@@ -267,11 +280,11 @@ export default function FormsPage() {
                               aria-label="folder"
                               value={folderDraft}
                               onChange={(e) => setFolderDraft(e.target.value)}
-                              placeholder="no folder"
+                              placeholder="No folder"
                               style={{ width: 120 }}
                             />
                             <Button type="button" variant="ghost" size="sm" onClick={() => saveFolder(form.id)}>
-                              save
+                              Save
                             </Button>
                           </span>
                         ) : (
@@ -285,14 +298,14 @@ export default function FormsPage() {
                               setFolderDraft(form.folder ?? '');
                             }}
                           >
-                            {form.folder ?? 'move to folder'}
+                            {form.folder ?? 'Move to folder'}
                           </Button>
                         )}
                       </TableCell>
                       <TableCell>
                         <span className="row-actions hover-actions">
                           {can(user, 'forms:edit') && (
-                            <Button asChild variant="ghost" size="icon-sm" aria-label={`edit ${form.title}`}>
+                            <Button asChild variant="ghost" size="icon-sm" aria-label={`Edit ${form.title}`}>
                               <Link href={`/forms/new?edit=${encodeURIComponent(form.slug)}`}>
                                 <Pencil size={14} aria-hidden="true" />
                               </Link>
@@ -306,15 +319,15 @@ export default function FormsPage() {
                               className="text-primary hover:text-primary"
                               onClick={() => onArchiveToggle(form)}
                             >
-                              {form.status === 'archived' ? 'unarchive' : 'archive'}
+                              {form.status === 'archived' ? 'Unarchive' : 'Archive'}
                             </Button>
                           )}
                           {can(user, 'forms:delete') &&
                             (confirmDeleteId === form.id ? (
                               <>
-                                <span className="muted">delete?</span>
+                                <span className="muted">Delete?</span>
                                 <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(form.id)}>
-                                  confirm
+                                  Confirm
                                 </Button>
                                 <Button
                                   type="button"
@@ -323,7 +336,7 @@ export default function FormsPage() {
                                   className="text-primary hover:text-primary"
                                   onClick={() => setConfirmDeleteId(null)}
                                 >
-                                  cancel
+                                  Cancel
                                 </Button>
                               </>
                             ) : (
@@ -334,7 +347,7 @@ export default function FormsPage() {
                                 className="text-destructive hover:text-destructive"
                                 onClick={() => setConfirmDeleteId(form.id)}
                               >
-                                delete
+                                Delete
                               </Button>
                             ))}
                         </span>
@@ -343,6 +356,37 @@ export default function FormsPage() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+
+            {visibleForms.length > 0 && (
+              <div className="page-title-row" aria-label="Forms pagination">
+                <span className="muted">
+                  Showing {(page - 1) * FORMS_PAGE_SIZE + 1}
+                  {'–'}
+                  {Math.min(page * FORMS_PAGE_SIZE, visibleForms.length)} of {visibleForms.length}
+                </span>
+                <span className="row-actions">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="muted">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </Button>
+                </span>
+              </div>
             )}
           </>
         )}

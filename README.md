@@ -10,21 +10,22 @@ Built on the **pulse by solutions** brand system (see `packages/theme`).
 **Monorepo tooling**: pnpm workspaces (`pnpm@9.15.0`), Node ≥20
 
 **Backend** — `apps/api` (`@pulse/api`)
-- [NestJS 10](https://nestjs.com/) on Express
+- [NestJS 10](https://nestjs.com/) on Express, `helmet` for security headers
 - [Prisma 6](https://www.prisma.io/) + PostgreSQL 16 (JSONB-driven KPI/form schema)
 - Redis (`ioredis`)
 - JWT auth (`@nestjs/jwt`), `argon2` password hashing
 - `zod` validation
-- `exceljs` / `pdfkit` for exports
+- `exceljs` for spreadsheet exports
 - Vitest (unit) + Supertest (integration)
 
 **Frontend** — `apps/web` (`@pulse/web`)
 - [Next.js 15](https://nextjs.org/) (React 19), static export (`next build` → `out/`, served via `serve`)
 - Tailwind CSS 4
-- Radix UI (`radix-ui`), `cmdk`, `lucide-react`
-- `@dnd-kit` (drag-and-drop form builder)
-- Zustand (state), Recharts (charts)
-- `mammoth` / `read-excel-file` (doc/Excel import), `qrcode`
+- Hand-rolled, accessible UI primitives (`components/ui/`) — no Radix/shadcn dependency
+- `@dnd-kit` (drag-and-drop form builder), `lucide-react` (icons), `sonner` (toasts)
+- Component-level React state + custom hooks (no global state library)
+- Recharts (charts, dynamically imported per chart type)
+- `mammoth` / `read-excel-file` (doc/Excel import, dynamically imported), `qrcode` (share-link QR codes)
 
 **Shared packages**
 - `@pulse/contracts` — shared Zod schemas/types between API and web

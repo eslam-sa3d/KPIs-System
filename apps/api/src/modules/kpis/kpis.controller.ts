@@ -28,13 +28,17 @@ import {
 } from '@pulse/contracts';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { RequirePermissions } from '../rbac/require-permissions.decorator';
+import { KpiDashboardService } from './kpi-dashboard.service';
 import { KpisService } from './kpis.service';
 
 type AuthedRequest = { user: { id: string } };
 
 @Controller('v1/kpis')
 export class KpisController {
-  constructor(private readonly kpis: KpisService) {}
+  constructor(
+    private readonly kpis: KpisService,
+    private readonly dashboard: KpiDashboardService,
+  ) {}
 
   @Post()
   @RequirePermissions('kpis:edit')
@@ -52,7 +56,7 @@ export class KpisController {
   @Get('my')
   @RequirePermissions('kpis:view')
   listMine(@Req() req: AuthedRequest) {
-    return this.kpis.listMine(req.user.id);
+    return this.dashboard.listMine(req.user.id);
   }
 
   /** Every active user with their coverage/score/last-updated — powers the admin
@@ -61,35 +65,35 @@ export class KpisController {
   @Get('team-overview')
   @RequirePermissions('dashboards:view')
   getTeamOverview(@Req() req: AuthedRequest) {
-    return this.kpis.getTeamOverview(req.user.id);
+    return this.dashboard.getTeamOverview(req.user.id);
   }
 
   /** One team member's own rate across every covering KPI — powers the team overview table's row detail drawer. */
   @Get('team-overview/:personId')
   @RequirePermissions('dashboards:view')
   getPersonBreakdown(@Param('personId') personId: string, @Req() req: AuthedRequest) {
-    return this.kpis.getPersonBreakdown(personId, req.user.id);
+    return this.dashboard.getPersonBreakdown(personId, req.user.id);
   }
 
   /** Unmapped score-eligible questions + stale Evaluation Areas, org-wide — powers the dashboard's measurement-gap panel. */
   @Get('measurement-gaps')
   @RequirePermissions('dashboards:view')
   getMeasurementGaps() {
-    return this.kpis.getMeasurementGaps();
+    return this.dashboard.getMeasurementGaps();
   }
 
   /** Recent context/comment feedback, org-wide or scoped to one KPI — powers the dashboard's qualitative feedback digest. */
   @Get('recent-feedback')
   @RequirePermissions('dashboards:view')
   getRecentFeedback(@Query('kpiId') kpiId?: string) {
-    return this.kpis.getRecentFeedback(kpiId);
+    return this.dashboard.getRecentFeedback(kpiId);
   }
 
   /** Weekly count of new Evaluation Area entries, org-wide — powers the dashboard's evaluation activity trend chart. */
   @Get('activity-trend')
   @RequirePermissions('dashboards:view')
   getActivityTrend() {
-    return this.kpis.getActivityTrend();
+    return this.dashboard.getActivityTrend();
   }
 
   /** Which forms' submissions currently feed the dashboard — readable by

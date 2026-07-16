@@ -10,7 +10,7 @@ import { PrismaService } from '../../infra/prisma.service';
 import { RbacService } from '../rbac/rbac.service';
 import { PasswordHasher } from './password-hasher';
 
-export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
+const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 const REFRESH_TOKEN_TTL_DAYS = 30;
 const RESET_TOKEN_TTL_MINUTES = 60;
 

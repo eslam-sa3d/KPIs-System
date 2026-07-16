@@ -58,7 +58,7 @@ export function AccessControlPanel({
       });
       onRestrictedChange(next);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'the request failed');
+      setError(cause instanceof Error ? cause.message : 'The request failed');
     } finally {
       setBusy(false);
     }
@@ -78,7 +78,7 @@ export function AccessControlPanel({
       setPickCanManage(false);
       setPickCanViewResponses(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'the request failed');
+      setError(cause instanceof Error ? cause.message : 'The request failed');
     } finally {
       setBusy(false);
     }
@@ -92,7 +92,7 @@ export function AccessControlPanel({
       setCollaborators((current) => current?.filter((c) => c.userId !== userId) ?? null);
       setConfirmRemoveUserId(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'the request failed');
+      setError(cause instanceof Error ? cause.message : 'The request failed');
     } finally {
       setBusy(false);
     }
@@ -107,13 +107,13 @@ export function AccessControlPanel({
   );
 
   return (
-    <Card>
+    <Card className="border-l-4 border-l-primary">
       <CardHeader>
-        <CardTitle>access</CardTitle>
+        <CardTitle>Access</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="muted">
-          by default, anyone signed in with the "view forms" permission can open this form. restricting it limits that
+          By default, anyone signed in with the "view forms" permission can open this form. restricting it limits that
           to specific people — the public share link above is unaffected either way.
         </p>
         {error && (
@@ -129,12 +129,12 @@ export function AccessControlPanel({
             disabled={busy}
             onChange={(e) => toggleRestricted(e.target.checked)}
           />
-          restrict to specific people
+          Restrict to specific people
         </label>
 
         {restricted && (
           <>
-            <label htmlFor="ac-filter">invite someone</label>
+            <label htmlFor="ac-filter">Invite someone</label>
             <input
               id="ac-filter"
               value={filter}
@@ -142,10 +142,10 @@ export function AccessControlPanel({
                 setFilter(e.target.value);
                 setPickUserId('');
               }}
-              placeholder="search by name or email"
+              placeholder="Search by name or email"
             />
             {filter && candidates.length > 0 && (
-              <div role="listbox" aria-label="matching users" className="max-h-48 overflow-y-auto rounded-md border">
+              <div role="listbox" aria-label="Matching users" className="max-h-48 overflow-y-auto rounded-md border">
                 {candidates.map((u) => (
                   <Button
                     key={u.id}
@@ -168,7 +168,7 @@ export function AccessControlPanel({
                 checked={pickCanManage}
                 onChange={(e) => setPickCanManage(e.target.checked)}
               />
-              <label htmlFor="ac-can-manage">co-owner (can also edit and manage this form)</label>
+              <label htmlFor="ac-can-manage">Co-owner (can also edit and manage this form)</label>
             </span>
             <span className="builder-required">
               <input
@@ -179,18 +179,18 @@ export function AccessControlPanel({
                 onChange={(e) => setPickCanViewResponses(e.target.checked)}
               />
               <label htmlFor="ac-can-view-responses">
-                can view responses (without editing the form — implied by co-owner)
+                Can view responses (without editing the form — implied by co-owner)
               </label>
             </span>
             <Button type="button" variant="ghost" size="sm" disabled={!pickUserId || busy} onClick={invite}>
-              invite
+              Invite
             </Button>
 
-            <label>people with access</label>
+            <span className="field-label">People with access</span>
             {collaborators === null ? (
               <LoadingState />
             ) : collaborators.length === 0 ? (
-              <p className="muted">no one invited yet — only you and admins can open this form.</p>
+              <p className="muted">No one invited yet — only you and admins can open this form.</p>
             ) : (
               <ul className="summary-samples">
                 {collaborators.map((c) => (
@@ -199,7 +199,7 @@ export function AccessControlPanel({
                     {c.canManage ? '· co-owner' : c.canViewResponses ? '· can view responses' : ''}{' '}
                     {confirmRemoveUserId === c.userId ? (
                       <>
-                        <span className="muted">remove access?</span>{' '}
+                        <span className="muted">Remove access?</span>{' '}
                         <Button
                           type="button"
                           variant="ghost"
@@ -207,10 +207,10 @@ export function AccessControlPanel({
                           disabled={busy}
                           onClick={() => remove(c.userId)}
                         >
-                          confirm remove
+                          Confirm remove
                         </Button>{' '}
                         <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmRemoveUserId(null)}>
-                          cancel
+                          Cancel
                         </Button>
                       </>
                     ) : (
@@ -221,7 +221,7 @@ export function AccessControlPanel({
                         disabled={busy}
                         onClick={() => setConfirmRemoveUserId(c.userId)}
                       >
-                        remove
+                        Remove
                       </Button>
                     )}
                   </li>

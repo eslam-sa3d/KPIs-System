@@ -31,32 +31,32 @@ export default function ForgotPasswordPage() {
     <main className="login-screen" data-surface="purple">
       {sent ? (
         <div className="login-card">
-          <Image src={asset('/brand/pulse-pos.svg')} alt="pulse by solutions" width={120} height={52} priority />
-          <h1>check your email</h1>
+          <Image src={asset('/brand/pulse-pos.svg')} alt="Pulse by solutions" width={120} height={52} priority />
+          <h1>Check your email</h1>
           <Alert>
             <AlertDescription>
-              if an account matches that address, we&apos;ve sent a link to reset your password. it expires in 60
+              If an account matches that address, we&apos;ve sent a link to reset your password. it expires in 60
               minutes.
             </AlertDescription>
           </Alert>
           <Button asChild variant="ghost" className="w-full">
-            <Link href="/login">back to sign in</Link>
+            <Link href="/login">Back to sign in</Link>
           </Button>
         </div>
       ) : (
         <form className="login-card" onSubmit={onSubmit} aria-busy={pending}>
-          <Image src={asset('/brand/pulse-pos.svg')} alt="pulse by solutions" width={120} height={52} priority />
-          <h1>forgot your password?</h1>
-          <p className="muted">enter your email and we&apos;ll send you a link to reset it.</p>
+          <Image src={asset('/brand/pulse-pos.svg')} alt="Pulse by solutions" width={120} height={52} priority />
+          <h1>Forgot your password?</h1>
+          <p className="muted">Enter your email and we&apos;ll send you a link to reset it.</p>
 
-          <label htmlFor="email">email</label>
+          <label htmlFor="email">Email</label>
           <Input id="email" name="email" type="email" autoComplete="email" required />
 
           <Button type="submit" disabled={pending} className="w-full">
-            {pending ? 'sending…' : 'send reset link'}
+            {pending ? 'Sending…' : 'Send reset link'}
           </Button>
           <Button asChild variant="ghost" className="w-full">
-            <Link href="/login">back to sign in</Link>
+            <Link href="/login">Back to sign in</Link>
           </Button>
         </form>
       )}

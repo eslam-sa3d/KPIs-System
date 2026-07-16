@@ -53,7 +53,7 @@ export function ProjectGroupMembers({ groupId, canEdit }: { groupId: string; can
         </Alert>
       )}
       {members.length === 0 ? (
-        <p className="muted">no members yet.</p>
+        <p className="muted">No members yet.</p>
       ) : (
         <span className="chip-row">
           {members.map((m) => (
@@ -64,7 +64,7 @@ export function ProjectGroupMembers({ groupId, canEdit }: { groupId: string; can
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={`remove ${m.displayName}`}
+                  aria-label={`Remove ${m.displayName}`}
                   onClick={() => onToggle(m)}
                   className="ml-1 size-4"
                 >
@@ -79,7 +79,7 @@ export function ProjectGroupMembers({ groupId, canEdit }: { groupId: string; can
         <UserMultiSelectCombobox
           selectedIds={new Set(members.map((m) => m.id))}
           onToggle={onToggle}
-          triggerLabel="add / remove members"
+          triggerLabel="Add / remove members"
         />
       )}
     </div>

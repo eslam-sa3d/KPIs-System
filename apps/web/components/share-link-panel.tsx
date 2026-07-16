@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
 import { api } from '../lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -24,9 +23,18 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
 
   useEffect(() => {
     if (!url) return setQr(null);
-    QRCode.toDataURL(url, { margin: 1, width: 180, color: { dark: '#4f008c' } })
-      .then(setQr)
-      .catch(() => setQr(null));
+    let cancelled = false;
+    import('qrcode')
+      .then(({ default: QRCode }) => QRCode.toDataURL(url, { margin: 1, width: 180, color: { dark: '#4f008c' } }))
+      .then((dataUrl) => {
+        if (!cancelled) setQr(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setQr(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [url]);
 
   async function toggle(enabled: boolean) {
@@ -40,7 +48,7 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
       setToken(result.publicToken);
       setConfirmDisable(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'the request failed');
+      setError(cause instanceof Error ? cause.message : 'The request failed');
     } finally {
       setBusy(false);
     }
@@ -54,7 +62,7 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
   }
 
   const embedSnippet = url
-    ? `<iframe src="${url}" width="640" height="480" frameborder="0" title="pulse form">Loading…</iframe>`
+    ? `<iframe src="${url}" width="640" height="480" frameborder="0" title="Pulse form">Loading…</iframe>`
     : null;
 
   async function copyEmbed() {
@@ -65,13 +73,13 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
   }
 
   return (
-    <Card className="share-panel">
+    <Card className="share-panel border-l-4 border-l-primary">
       <CardHeader>
-        <CardTitle>public share link</CardTitle>
+        <CardTitle>Public share link</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="muted">
-          anyone with this link can submit a response without signing in — like a Microsoft Forms share link. Disabling
+          Anyone with this link can submit a response without signing in — like a Microsoft Forms share link. Disabling
           it (or rotating) invalidates the previous link immediately.
         </p>
         {error && (
@@ -82,14 +90,14 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
 
         {!token ? (
           <Button onClick={() => toggle(true)} disabled={busy}>
-            {busy ? 'creating…' : 'create public link'}
+            {busy ? 'Creating…' : 'Create public link'}
           </Button>
         ) : (
           <div className="share-panel-active">
             <div className="share-link-row">
               <code className="share-link-url">{url}</code>
               <Button variant="ghost" size="sm" onClick={copy}>
-                {copied ? 'copied!' : 'copy'}
+                {copied ? 'Copied!' : 'Copy'}
               </Button>
             </div>
             {qr && <img src={qr} alt="QR code for the public form link" width={140} height={140} />}
@@ -98,28 +106,28 @@ export function ShareLinkPanel({ formId, publicToken }: { formId: string; public
               <div className="share-link-row" style={{ marginTop: 12 }}>
                 <code className="share-link-url">{embedSnippet}</code>
                 <Button variant="ghost" size="sm" onClick={copyEmbed}>
-                  {embedCopied ? 'copied!' : 'copy embed code'}
+                  {embedCopied ? 'Copied!' : 'Copy embed code'}
                 </Button>
               </div>
             )}
 
             <div className="page-title-row" style={{ justifyContent: 'flex-start' }}>
               <Button variant="ghost" size="sm" onClick={() => toggle(true)} disabled={busy}>
-                rotate link
+                Rotate link
               </Button>
               {confirmDisable ? (
                 <>
-                  <span className="muted">disable the public link?</span>
+                  <span className="muted">Disable the public link?</span>
                   <Button variant="ghost" size="sm" onClick={() => toggle(false)} disabled={busy}>
-                    confirm disable
+                    Confirm disable
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(false)}>
-                    cancel
+                    Cancel
                   </Button>
                 </>
               ) : (
                 <Button variant="ghost" size="sm" onClick={() => setConfirmDisable(true)} disabled={busy}>
-                  disable
+                  Disable
                 </Button>
               )}
             </div>

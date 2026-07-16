@@ -42,7 +42,7 @@ export function ThemeToggle() {
     }
   }
 
-  const label = theme === 'system' ? 'auto' : theme;
+  const label = theme === 'system' ? 'Auto' : theme;
 
   return (
     <Button
@@ -51,7 +51,7 @@ export function ThemeToggle() {
       size="sm"
       className="rounded-full"
       onClick={cycle}
-      aria-label={`theme: ${label} — click to change`}
+      aria-label={`Theme: ${label} — click to change`}
     >
       {label}
     </Button>

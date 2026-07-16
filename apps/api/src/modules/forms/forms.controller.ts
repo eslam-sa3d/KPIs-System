@@ -35,8 +35,10 @@ import { RequirePermissions } from '../rbac/require-permissions.decorator';
 import { AssetsService } from './assets.service';
 import { FileUploadsService } from './file-uploads.service';
 import { FormKpiMappingsService } from './form-kpi-mappings.service';
+import { FormKpiScoringService } from './form-kpi-scoring.service';
 import { FormPermission } from './form-permission.decorator';
 import { FormsService } from './forms.service';
+import { SubmissionReportingService } from './submission-reporting.service';
 import { SubmissionsService } from './submissions.service';
 
 type AuthedRequest = { user: { id: string } };
@@ -83,9 +85,11 @@ export class FormsController {
   constructor(
     private readonly forms: FormsService,
     private readonly submissions: SubmissionsService,
+    private readonly reporting: SubmissionReportingService,
     private readonly uploads: FileUploadsService,
     private readonly assets: AssetsService,
     private readonly kpiMappings: FormKpiMappingsService,
+    private readonly kpiScoring: FormKpiScoringService,
   ) {}
 
   @Get()
@@ -235,11 +239,11 @@ export class FormsController {
   }
 
   /** Retroactively scores every existing submission against a mapping created
-   *  after they were collected — see SubmissionsService.backfillMapping. */
+   *  after they were collected — see FormKpiScoringService.backfillMapping. */
   @Post(':formId/kpi-mappings/:mappingId/backfill')
   @RequirePermissions('forms:edit', 'kpis:edit')
   backfillKpiMapping(@Param('formId') formId: string, @Param('mappingId') mappingId: string) {
-    return this.submissions.backfillMapping(formId, mappingId);
+    return this.kpiScoring.backfillMapping(formId, mappingId);
   }
 
   @Get(':slug')
@@ -272,7 +276,7 @@ export class FormsController {
   @Get(':slug/submissions/summary')
   @FormPermission('view')
   summary(@Param('slug') slug: string, @Query('userId') userId?: string) {
-    return this.submissions.summary(slug, userId || undefined);
+    return this.reporting.summary(slug, userId || undefined);
   }
 
   @Patch(':slug/submissions/:submissionId')
@@ -345,14 +349,14 @@ export class FormsController {
   @Get(':slug/submissions/export')
   @FormPermission('view')
   async export(@Param('slug') slug: string, @Req() req: AuthedRequest, @Res() res: Response) {
-    const csv = await this.submissions.exportCsv(slug, req.user.id);
+    const csv = await this.reporting.exportCsv(slug, req.user.id);
     res.type('text/csv').setHeader('Content-Disposition', `attachment; filename="${slug}-submissions.csv"`).send(csv);
   }
 
   @Get(':slug/submissions/export.xlsx')
   @FormPermission('view')
   async exportXlsx(@Param('slug') slug: string, @Req() req: AuthedRequest, @Res() res: Response) {
-    const buffer = await this.submissions.exportXlsx(slug, req.user.id);
+    const buffer = await this.reporting.exportXlsx(slug, req.user.id);
     res
       .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
       .setHeader('Content-Disposition', `attachment; filename="${slug}-submissions.xlsx"`)
