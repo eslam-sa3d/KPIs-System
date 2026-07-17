@@ -9,9 +9,8 @@ const CountBarChart = dynamic(() => import('../../components/count-bar-chart'), 
   loading: () => <LoadingState label="Loading chart…" />,
 });
 
-/** Each scored member's own overall blended score (0-5) — one bar per
- *  person, distinct from "submissions by person" which counts raw
- *  activity, not this normalized score. */
+/** Each scored member's own totalScore — one bar per person, distinct from
+ *  "submissions by person" which counts raw activity, not this sum. */
 export function DashboardScoreChart({
   show,
   scoreByPerson,
@@ -31,7 +30,7 @@ export function DashboardScoreChart({
           textColor="var(--text-3)"
           gridColor="var(--border)"
           barColor="var(--accent)"
-          countLabel="Score / 5"
+          countLabel="Total score"
         />
       ) : (
         <p className="muted" style={{ fontSize: 12 }}>

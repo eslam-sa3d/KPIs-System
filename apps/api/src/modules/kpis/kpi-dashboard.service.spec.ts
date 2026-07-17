@@ -625,21 +625,37 @@ describe('KpiDashboardService', () => {
       expect(members[0]!.performanceLevel).toEqual({ id: 'level-over', label: 'Over-Achieved' });
     });
 
-    it('restricts the roster to members whose score falls within an allowed Performance-Level range', async () => {
-      const thirdUser = { ...coveredUser, id: 'user-3', displayName: 'Third User' };
-      prisma.user.findMany.mockResolvedValue([coveredUser, thirdUser]);
+    it("restricts the roster to members whose own performanceLevel is one of the caller's allowed Performance Levels", async () => {
+      const thirdUser = { ...coveredUser, id: 'user-3', displayName: 'Third User', isActive: true, isKpiApplicable: true };
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }, thirdUser]);
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'level', scopeValues: ['level-1'] }]);
       prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'Outstanding', minScore: 4, maxScore: 5 }]);
-      prisma.evaluationAreaEntry.findMany.mockResolvedValue([
-        { personId: 'user-1', evaluationAreaId: 'area-1', value: 5, periodStart: new Date('2026-02-01') },
-        { personId: 'user-3', evaluationAreaId: 'area-1', value: 1, periodStart: new Date('2026-02-01') },
+      mockOneMapping(prisma);
+      // user-1's totalScore (5) matches level-1 (4-5); user-3's (1) doesn't
+      // — self-assessment submissions (mockOneMapping's default
+      // evaluateeFieldKeys: []), so submittedById is the evaluatee.
+      prisma.formSubmission.findMany.mockResolvedValue([
+        submissionFixture({ id: 'sub-1', submittedById: 'user-1', answers: { score: 5 } }),
+        submissionFixture({ id: 'sub-3', submittedById: 'user-3', answers: { score: 1 } }),
       ]);
 
       const { members } = await service.getTeamOverview(actorId);
 
       expect(members.map((m) => m.id)).toEqual(['user-1']);
-      expect(members[0]!.score).toBe(5);
+      expect(members[0]!.totalScore).toBe(5);
+      expect(members[0]!.performanceLevel).toEqual({ id: 'level-1', label: 'Outstanding' });
+    });
+
+    it('excludes an unranked or never-scored member even when the caller is otherwise unrestricted vs. restricted-to-nothing', async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'level', scopeValues: [] }]);
+      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'Outstanding', minScore: 4, maxScore: 5 }]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members).toEqual([]);
     });
 
     it('counts raw-activity submissions on unmapped forms, naming a person via a "select a user" option', async () => {

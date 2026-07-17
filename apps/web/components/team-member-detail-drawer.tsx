@@ -5,6 +5,7 @@ import { LoadingState } from './loading-state';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { PerformanceLevelOption, bandBadgeStyle, bandOf } from '../lib/performance-band';
 
 const REVIEW_TYPE_LABEL: Record<string, string> = {
   self: 'Self',
@@ -21,11 +22,13 @@ const REVIEW_TYPE_LABEL: Record<string, string> = {
  */
 export function TeamMemberDetailDrawer({
   breakdown,
+  levels,
   loading,
   error,
   onClose,
 }: {
   breakdown: TeamMemberBreakdown | null;
+  levels: PerformanceLevelOption[];
   loading: boolean;
   error?: string | null;
   onClose: () => void;
@@ -50,7 +53,7 @@ export function TeamMemberDetailDrawer({
                 <SheetTitle className="p-drawer-name">{breakdown.displayName}</SheetTitle>
                 <div className="p-drawer-meta" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   {breakdown.totalScore !== null && (
-                    <Badge variant="secondary" className="border-transparent">
+                    <Badge className="border-transparent" style={bandBadgeStyle(bandOf(breakdown), levels)}>
                       {breakdown.totalScore.toFixed(1)} ·{' '}
                       {breakdown.performanceLevel ? breakdown.performanceLevel.label : 'Unranked'}
                     </Badge>

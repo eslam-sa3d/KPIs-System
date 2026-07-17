@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { STATUS_LABEL, STATUS_ORDER, StatusKey, statusBadgeStyle, statusOf } from '../../lib/kpi-status';
+import { Band, BandKey, PerformanceLevelOption, bandBadgeStyle, bandOf } from '../../lib/performance-band';
 
 type MemberSortKey = 'name' | 'department' | 'updated';
 type CoverageFilter = 'all' | 'scored' | 'pending';
@@ -14,6 +14,8 @@ type CoverageFilter = 'all' | 'scored' | 'pending';
  *  sortable columns, and a row per member that opens their detail drawer. */
 export function DashboardTeamTable({
   show,
+  bands,
+  levels,
   memberCoverageFilter,
   setMemberCoverageFilter,
   memberStatusFilter,
@@ -29,10 +31,12 @@ export function DashboardTeamTable({
   onClearFilters,
 }: {
   show: boolean;
+  bands: Band[];
+  levels: PerformanceLevelOption[];
   memberCoverageFilter: CoverageFilter;
   setMemberCoverageFilter: (filter: CoverageFilter) => void;
-  memberStatusFilter: StatusKey | 'all';
-  setMemberStatusFilter: (filter: StatusKey | 'all') => void;
+  memberStatusFilter: BandKey | 'all';
+  setMemberStatusFilter: (filter: BandKey | 'all') => void;
   memberSort: { key: MemberSortKey; dir: 1 | -1 };
   sortMembersBy: (key: MemberSortKey) => void;
   memberFilter: string;
@@ -60,14 +64,17 @@ export function DashboardTeamTable({
           ))}
         </div>
         <div className="p-filter-pills">
-          {(['all', ...STATUS_ORDER] as const).map((s) => (
+          <Badge asChild variant={memberStatusFilter === 'all' ? 'default' : 'outline'} className="cursor-pointer py-1">
+            <button onClick={() => setMemberStatusFilter('all')}>All</button>
+          </Badge>
+          {bands.map((b) => (
             <Badge
-              key={s}
+              key={b.key}
               asChild
-              variant={memberStatusFilter === s ? 'default' : 'outline'}
+              variant={memberStatusFilter === b.key ? 'default' : 'outline'}
               className="cursor-pointer py-1"
             >
-              <button onClick={() => setMemberStatusFilter(s)}>{s === 'all' ? 'All' : STATUS_LABEL[s]}</button>
+              <button onClick={() => setMemberStatusFilter(b.key)}>{b.label}</button>
             </Badge>
           ))}
         </div>
@@ -125,11 +132,7 @@ export function DashboardTeamTable({
             </TableRow>
           ) : (
             memberTableData.map((m) => {
-              // Colors the badge only — statusLabel's actual text always
-              // comes from the API's performanceLevel (matched server-side
-              // against totalScore — see TeamMember.performanceLevel),
-              // never this hardcoded band.
-              const memberStatus = statusOf(m.score);
+              const band = bandOf(m);
               const statusLabel = m.performanceLevel ? m.performanceLevel.label : m.totalScore !== null ? 'Unranked' : 'Pending';
               const scoreDisplay = m.totalScore !== null ? m.totalScore.toFixed(1) : '—';
               return (
@@ -152,7 +155,7 @@ export function DashboardTeamTable({
                   <TableCell className="muted">{m.department ?? '—'}</TableCell>
                   <TableCell className="muted">{m.roles.join(', ') || '—'}</TableCell>
                   <TableCell>
-                    <Badge className="border-transparent" style={statusBadgeStyle(memberStatus)}>
+                    <Badge className="border-transparent" style={bandBadgeStyle(band, levels)}>
                       {statusLabel}
                     </Badge>
                     {m.rawActivityCount > 0 && (

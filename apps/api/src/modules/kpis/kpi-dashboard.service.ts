@@ -697,12 +697,9 @@ export class KpiDashboardService {
   }
 
   private async getTeamOverviewImpl(userId: string): Promise<TeamOverview> {
-    // null = unrestricted; [] = restricted with nothing selected (sees no one);
-    // non-empty = restricted to whichever Performance Level bands are allowed.
-    // The gate runs on the old normalized 0-5 blend — also returned to the
-    // client as `score` now, to power the dashboard's status cards — because
-    // a Performance Level range is defined on that same 0-5 scale and has
-    // nothing else to compare a raw, per-mapping answer against.
+    // null = unrestricted; [] = restricted with nothing selected (sees no
+    // one); non-empty = restricted to whichever Performance Levels are
+    // allowed — checked below against each member's own performanceLevel.
     const [allowedLevelIds, performanceLevelRows] = await Promise.all([
       this.rbac.allowedDashboardLevelIds(userId),
       this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } }),
@@ -713,7 +710,6 @@ export class KpiDashboardService {
       minScore: Number(l.minScore),
       maxScore: Number(l.maxScore),
     }));
-    const allowedRanges = allowedLevelIds === null ? null : allPerformanceLevels.filter((l) => allowedLevelIds.includes(l.id));
 
     const allowedFormIdList = await allowedFormIds(this.prisma);
     const [users, kpis, legacyEntries, scored, rawActivity] = await Promise.all([
@@ -856,15 +852,17 @@ export class KpiDashboardService {
       };
     });
 
-    // dashboards:view scope='level': narrow the roster to people whose
-    // blended score falls inside one of the caller's allowed Performance
-    // Level ranges. allowedRanges === null means unrestricted (skip
-    // filtering entirely); [] means restricted-but-nothing-selected, so
-    // everyone with no matching range (i.e. everyone) is dropped.
+    // dashboards:view scope='level': narrow the roster to people whose own
+    // performanceLevel (see above — matched against their real totalScore,
+    // same as everywhere else on the dashboard) is one of the caller's
+    // allowed Performance Levels. allowedLevelIds === null means
+    // unrestricted (skip filtering entirely); [] means restricted-but-
+    // nothing-selected, so everyone with no matching level (i.e. everyone,
+    // including the unranked/never-scored) is dropped.
     const visibleMembers =
-      allowedRanges === null
+      allowedLevelIds === null
         ? members
-        : members.filter((m) => m.score !== null && allowedRanges.some((r) => m.score! >= r.minScore && m.score! <= r.maxScore));
+        : members.filter((m) => m.performanceLevel !== null && allowedLevelIds.includes(m.performanceLevel.id));
 
     return { totalActiveUsers: visibleMembers.length, members: visibleMembers };
   }

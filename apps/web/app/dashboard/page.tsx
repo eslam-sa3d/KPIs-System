@@ -14,7 +14,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 import { useResource } from '../../lib/use-resource';
-import { StatusKey, statusOf } from '../../lib/kpi-status';
+import { BandKey, PerformanceLevelOption, bandOf, orderedBands } from '../../lib/performance-band';
 import { DashboardFormScopePicker } from './dashboard-form-scope-picker';
 import { DashboardJobTitlePills } from './dashboard-job-title-pills';
 import { DashboardStatusCards } from './dashboard-status-cards';
@@ -75,12 +75,19 @@ export default function DashboardPage() {
   const [jobTitleFilter, setJobTitleFilter] = useState('all');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [memberCoverageFilter, setMemberCoverageFilter] = useState<CoverageFilter>('all');
-  const [memberStatusFilter, setMemberStatusFilter] = useState<StatusKey | 'all'>('all');
+  const [memberStatusFilter, setMemberStatusFilter] = useState<BandKey | 'all'>('all');
   const [memberSort, setMemberSort] = useState<{ key: MemberSortKey; dir: 1 | -1 }>({ key: 'updated', dir: -1 });
   const [memberFilter, setMemberFilter] = useState('');
   const canSeeTeamOverview = can(user, 'dashboards:view');
 
   const { data: kpis, reload: reloadKpis } = useResource<RawKpi[]>(user ? '/v1/kpis/my' : null);
+  // Admin-configured Performance Levels — the status strip, filter pills,
+  // and each row's status badge are all driven by these, never a fixed set
+  // of bands, so the dashboard always reflects whatever's actually
+  // configured on the Configuration page.
+  const { data: performanceLevels } = useResource<PerformanceLevelOption[]>(user ? '/v1/performance-levels' : null);
+  const levels = performanceLevels ?? [];
+  const bands = useMemo(() => orderedBands(levels), [levels]);
 
   // org-wide roster with KPI coverage/latest submission/last-updated — admin-only, powers the team coverage cards and table below
   const { data: teamOverview, reload: reloadTeamOverview } = useResource<TeamOverview>(
@@ -159,51 +166,46 @@ export default function DashboardPage() {
     return teamMembers.filter((m) => m.jobTitle === jobTitleFilter);
   }, [teamMembers, jobTitleFilter]);
 
-  // Status strip: counts *people*, bucketed by their own blended score —
-  // statusOf(null) buckets anyone never scored into "pending", exactly the
-  // same statusOf(m.score) call the team table below uses per row, so the
-  // cards and the table always agree.
+  // Status strip: counts *people*, bucketed by their own totalScore's
+  // matched Performance Level — bandOf(m) is the exact same rule the team
+  // table below uses per row, so the cards and the table always agree.
   const stats = useMemo(() => {
-    const counts: Record<StatusKey, number> = { outstanding: 0, meets: 0, improve: 0, below: 0, pending: 0 };
-    filteredTeamMembers.forEach((m) => counts[statusOf(m.score)]++);
-    return counts;
-  }, [filteredTeamMembers]);
-  // Each card's headline number is the *average* score of the people in that
-  // band, not how many of them there are — the member count moves to
-  // subtext instead. Pending has no score to average (statusOf(null) is the
-  // only way into that band), so it keeps showing its member count.
-  const bandScoreAvg = useMemo(() => {
-    const scoresByStatus: Record<StatusKey, number[]> = {
-      outstanding: [],
-      meets: [],
-      improve: [],
-      below: [],
-      pending: [],
-    };
+    const counts: Record<BandKey, number> = {};
+    bands.forEach((b) => (counts[b.key] = 0));
     filteredTeamMembers.forEach((m) => {
-      if (m.score !== null) scoresByStatus[statusOf(m.score)].push(m.score);
+      const key = bandOf(m);
+      counts[key] = (counts[key] ?? 0) + 1;
     });
-    const avg: Record<StatusKey, number | null> = {
-      outstanding: null,
-      meets: null,
-      improve: null,
-      below: null,
-      pending: null,
-    };
-    (Object.keys(scoresByStatus) as StatusKey[]).forEach((s) => {
-      const scores = scoresByStatus[s];
-      avg[s] = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    return counts;
+  }, [filteredTeamMembers, bands]);
+  // Each card's headline number is the *average* totalScore of the people
+  // in that band, not how many of them there are — the member count moves
+  // to subtext instead. Pending has no score to average, so it keeps
+  // showing its member count; Unranked does have real totalScores to
+  // average even though none matched a configured range.
+  const bandScoreAvg = useMemo(() => {
+    const scoresByBand: Record<BandKey, number[]> = {};
+    bands.forEach((b) => (scoresByBand[b.key] = []));
+    filteredTeamMembers.forEach((m) => {
+      if (m.totalScore !== null) {
+        const key = bandOf(m);
+        (scoresByBand[key] ??= []).push(m.totalScore);
+      }
+    });
+    const avg: Record<BandKey, number | null> = {};
+    bands.forEach((b) => {
+      const scores = scoresByBand[b.key] ?? [];
+      avg[b.key] = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
     });
     return avg;
-  }, [filteredTeamMembers]);
+  }, [filteredTeamMembers, bands]);
 
-  // Each scored member's own overall blended score (0-5) — one bar per
-  // person, distinct from "submissions by person" below which counts raw
-  // activity, not this normalized score.
+  // Each scored member's own totalScore — one bar per person, distinct from
+  // "submissions by person" below which counts raw activity, not this sum.
   const scoreByPerson = useMemo(() => {
     return filteredTeamMembers
-      .filter((m): m is typeof m & { score: number } => m.score !== null)
-      .map((m) => ({ label: m.displayName, count: Math.round(m.score * 10) / 10 }))
+      .filter((m): m is typeof m & { totalScore: number } => m.totalScore !== null)
+      .map((m) => ({ label: m.displayName, count: Math.round(m.totalScore * 10) / 10 }))
       .sort((a, b) => b.count - a.count);
   }, [filteredTeamMembers]);
   const hasScoreByPerson = scoreByPerson.length > 0;
@@ -211,7 +213,7 @@ export default function DashboardPage() {
   const memberTableData = useMemo(() => {
     let data = filteredTeamMembers.filter((m) => {
       if (coverageFilterMatches(memberCoverageFilter, m.latestSubmission !== null) === false) return false;
-      if (memberStatusFilter !== 'all' && statusOf(m.score) !== memberStatusFilter) return false;
+      if (memberStatusFilter !== 'all' && bandOf(m) !== memberStatusFilter) return false;
       if (!memberFilter.trim()) return true;
       const haystack = `${m.displayName} ${m.email} ${m.department ?? ''} ${m.roles.join(' ')}`.toLowerCase();
       return haystack.includes(memberFilter.trim().toLowerCase());
@@ -278,6 +280,8 @@ export default function DashboardPage() {
           <>
             <DashboardStatusCards
               show={Boolean(canSeeTeamOverview && teamOverview)}
+              bands={bands}
+              levels={levels}
               memberStatusFilter={memberStatusFilter}
               setMemberStatusFilter={setMemberStatusFilter}
               bandScoreAvg={bandScoreAvg}
@@ -295,6 +299,8 @@ export default function DashboardPage() {
 
             <DashboardTeamTable
               show={Boolean(canSeeTeamOverview && teamOverview)}
+              bands={bands}
+              levels={levels}
               memberCoverageFilter={memberCoverageFilter}
               setMemberCoverageFilter={setMemberCoverageFilter}
               memberStatusFilter={memberStatusFilter}
@@ -318,6 +324,7 @@ export default function DashboardPage() {
 
         <TeamMemberDetailDrawer
           breakdown={currentMemberBreakdown}
+          levels={levels}
           loading={selectedMemberId !== null && currentMemberBreakdown === null && !memberBreakdownError}
           error={selectedMemberId !== null ? memberBreakdownError : null}
           onClose={() => setSelectedMemberId(null)}
