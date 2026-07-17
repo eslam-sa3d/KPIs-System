@@ -315,6 +315,66 @@ describe('SubmissionReportingService.summary', () => {
   });
 });
 
+describe('editing a form with existing submissions does not lose submission history', () => {
+  it("summary() queries by the form's id across every version, not just the latest version's id", async () => {
+    const prisma = makePrismaStub();
+    const definition = formDefinitionSchema.parse({
+      title: 'survey',
+      fields: [{ key: 'notes', label: 'Notes', type: 'long_text' }],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v2' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    prisma.formSubmission.findMany.mockResolvedValue([
+      { answers: { notes: 'from an older version' }, createdAt: new Date() },
+    ]);
+
+    const service = new SubmissionReportingService(prisma as never, forms as never);
+    await service.summary('survey');
+
+    expect(prisma.formSubmission.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { formVersion: { formId: activeForm.id } } }),
+    );
+  });
+
+  it("exportCsv() queries by the form's id across every version, not just the latest version's id", async () => {
+    const prisma = makePrismaStub();
+    const definition = formDefinitionSchema.parse({
+      title: 'survey',
+      fields: [{ key: 'notes', label: 'Notes', type: 'long_text' }],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v2' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    prisma.formSubmission.findMany.mockResolvedValue([
+      {
+        answers: { notes: 'from an older version' },
+        createdAt: new Date(),
+        submittedBy: null,
+        respondentName: null,
+        respondentEmail: null,
+      },
+    ]);
+
+    const service = new SubmissionReportingService(prisma as never, forms as never);
+    await service.exportCsv('survey', 'actor-1');
+
+    expect(prisma.formSubmission.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { formVersion: { formId: activeForm.id } } }),
+    );
+  });
+});
+
 describe('SubmissionReportingService.exportCsv', () => {
   it("resolves a 'person' field and a UUID-shaped text field to display names, leaving other cells alone", async () => {
     const prisma = makePrismaStub();

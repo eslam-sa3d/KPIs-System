@@ -490,9 +490,9 @@ describe('SubmissionsService.updateSubmission', () => {
     expect(prisma.formSubmission.update).not.toHaveBeenCalled();
   });
 
-  it('rejects editing a submission that belongs to an older version', async () => {
+  it('finds and edits a submission that belongs to an older version — a correction re-validates against the current definition regardless', async () => {
     const prisma = makePrismaStub();
-    prisma.formSubmission.findFirst.mockResolvedValue(null); // not found on the CURRENT version
+    prisma.formSubmission.findFirst.mockResolvedValue({ id: 'sub-old', formVersionId: 'version-0' });
     const forms = makeFormsStub();
     const service = new SubmissionsService(
       prisma as never,
@@ -501,7 +501,29 @@ describe('SubmissionsService.updateSubmission', () => {
       kpiScoringStub as never,
     );
 
-    await expect(service.updateSubmission('demo', 'sub-old', { team: 'y' }, 'admin-1')).rejects.toMatchObject({
+    await service.updateSubmission('demo', 'sub-old', { team: 'y' }, 'admin-1');
+
+    expect(prisma.formSubmission.findFirst).toHaveBeenCalledWith({
+      where: { id: 'sub-old', formVersion: { formId: 'form-1' } },
+    });
+    expect(prisma.formSubmission.update).toHaveBeenCalledWith({
+      where: { id: 'sub-old' },
+      data: { answers: { team: 'y' }, score: Prisma.DbNull },
+    });
+  });
+
+  it('rejects editing a submission that belongs to a different form entirely', async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.findFirst.mockResolvedValue(null);
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(
+      prisma as never,
+      forms as never,
+      turnstileStub as never,
+      kpiScoringStub as never,
+    );
+
+    await expect(service.updateSubmission('demo', 'sub-elsewhere', { team: 'y' }, 'admin-1')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
   });
@@ -532,5 +554,68 @@ describe('SubmissionsService.deleteAllSubmissions', () => {
       },
     });
     expect(result).toEqual({ deleted: 7 });
+  });
+});
+
+describe('SubmissionsService.list', () => {
+  // Publishing an edit creates a NEW FormVersion rather than mutating the
+  // old one (see FormsService.publishNewVersion) — list() must therefore
+  // span every version of the form, not just the latest, or a submission
+  // from before the most recent edit would silently vanish from this view
+  // even though the row itself is untouched.
+  it("queries by the form's id across every version, not just the latest version's id", async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.count.mockResolvedValue(0);
+    prisma.formSubmission.findMany.mockResolvedValue([]);
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(
+      prisma as never,
+      forms as never,
+      turnstileStub as never,
+      kpiScoringStub as never,
+    );
+
+    await service.list('demo', {});
+
+    const expectedWhere = { formVersion: { formId: 'form-1' }, AND: [] };
+    expect(prisma.formSubmission.count).toHaveBeenCalledWith({ where: expectedWhere });
+    expect(prisma.formSubmission.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expectedWhere }));
+  });
+});
+
+describe('SubmissionsService.deleteSubmission', () => {
+  it('finds and deletes a submission belonging to an older version of the form, not just the latest', async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.findFirst.mockResolvedValue({ id: 'sub-old' });
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(
+      prisma as never,
+      forms as never,
+      turnstileStub as never,
+      kpiScoringStub as never,
+    );
+
+    await service.deleteSubmission('demo', 'sub-old', 'admin-1');
+
+    expect(prisma.formSubmission.findFirst).toHaveBeenCalledWith({
+      where: { id: 'sub-old', formVersion: { formId: 'form-1' } },
+    });
+    expect(prisma.formSubmission.delete).toHaveBeenCalledWith({ where: { id: 'sub-old' } });
+  });
+
+  it('404s when the submission belongs to a different form entirely', async () => {
+    const prisma = makePrismaStub();
+    prisma.formSubmission.findFirst.mockResolvedValue(null);
+    const forms = makeFormsStub();
+    const service = new SubmissionsService(
+      prisma as never,
+      forms as never,
+      turnstileStub as never,
+      kpiScoringStub as never,
+    );
+
+    await expect(service.deleteSubmission('demo', 'sub-elsewhere', 'admin-1')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 });
