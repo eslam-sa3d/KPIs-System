@@ -5,6 +5,7 @@ import { LoadingState } from './loading-state';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { STATUS_LABEL, statusBadgeStyle, statusOf } from '../lib/kpi-status';
 
 const REVIEW_TYPE_LABEL: Record<string, string> = {
   self: 'Self',
@@ -21,11 +22,16 @@ const REVIEW_TYPE_LABEL: Record<string, string> = {
  */
 export function TeamMemberDetailDrawer({
   breakdown,
+  score,
   loading,
   error,
   onClose,
 }: {
   breakdown: TeamMemberBreakdown | null;
+  /** This person's overall blended score (0-5), from the team overview row
+   *  that opened this drawer — not refetched here, see TeamMember.score.
+   *  Only used as a fallback when they have no real totalScore yet. */
+  score: number | null;
   loading: boolean;
   error?: string | null;
   onClose: () => void;
@@ -49,11 +55,17 @@ export function TeamMemberDetailDrawer({
                 <div className="p-drawer-avatar">{breakdown.displayName.slice(0, 2).toUpperCase()}</div>
                 <SheetTitle className="p-drawer-name">{breakdown.displayName}</SheetTitle>
                 <div className="p-drawer-meta" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {breakdown.totalScore !== null && (
+                  {breakdown.totalScore !== null ? (
                     <Badge variant="secondary" className="border-transparent">
                       {breakdown.totalScore.toFixed(1)} ·{' '}
                       {breakdown.performanceLevel ? breakdown.performanceLevel.label : 'Unranked'}
                     </Badge>
+                  ) : (
+                    score !== null && (
+                      <Badge className="border-transparent" style={statusBadgeStyle(statusOf(score))}>
+                        {score.toFixed(1)} / 5 · {STATUS_LABEL[statusOf(score)]}
+                      </Badge>
+                    )
                   )}
                   <span>
                     {breakdown.submissions.length} scored submission{breakdown.submissions.length === 1 ? '' : 's'}
