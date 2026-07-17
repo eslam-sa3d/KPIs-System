@@ -50,7 +50,10 @@ export function orderedBands(levels: PerformanceLevelOption[]): Band[] {
  *  already applies for `performanceLevel` (see TeamMember.performanceLevel):
  *  a real matched level, else Unranked (has a latestScore but no range
  *  covers it), else Pending (no scored submission at all). */
-export function bandOf(member: { latestScore: number | null; performanceLevel: { id: string; label: string } | null }): BandKey {
+export function bandOf(member: {
+  latestScore: number | null;
+  performanceLevel: { id: string; label: string } | null;
+}): BandKey {
   if (member.performanceLevel) return member.performanceLevel.id;
   return member.latestScore !== null ? UNRANKED_BAND : PENDING_BAND;
 }
