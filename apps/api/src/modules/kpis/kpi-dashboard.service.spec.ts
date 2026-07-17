@@ -567,6 +567,78 @@ describe('KpiDashboardService', () => {
 
       expect(members[0]!.rawActivityCount).toBe(0);
     });
+
+    it('reports lastUpdated from raw activity when a member has no scored submission at all', async () => {
+      const uuidUserId = '22222222-2222-2222-2222-222222222222';
+      const definition = {
+        title: 'Sprint check-in',
+        fields: [{ key: 'team', label: 'Team member', type: 'person' }],
+      };
+      prisma.user.findMany.mockResolvedValue([
+        { ...coveredUser, id: uuidUserId, isActive: true, isKpiApplicable: true },
+      ]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      prisma.form.findMany.mockResolvedValue([
+        { id: 'form-2', slug: 'sprint-check-in', status: 'published', versions: [{ definition }], kpiMappings: [] },
+      ]);
+      prisma.formSubmission.count.mockResolvedValue(1);
+      prisma.formSubmission.findMany.mockResolvedValue([
+        {
+          id: 'sub-raw-1',
+          answers: { team: uuidUserId },
+          submittedById: uuidUserId,
+          createdAt: new Date('2026-03-05T09:00:00Z'),
+          formVersion: { formId: 'form-2' },
+        },
+      ]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.latestSubmission).toBeNull();
+      expect(members[0]!.lastUpdated).toBe('2026-03-05T09:00:00.000Z');
+    });
+
+    it('prefers the more recent of a scored submission and a raw-activity one for lastUpdated', async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      mockOneMapping(prisma); // form-1: mapped, scored submission below dated Jan 1
+      prisma.formSubmission.count.mockResolvedValue(1);
+      // loadScoredSubmissions queries by {id: {in: formIds}} with no status
+      // filter; loadRawActivity queries {status: 'published', ...} — args
+      // shape, not call order, tells the mock which path is asking, since
+      // both loadScoredSubmissions and loadRawActivity run inside the same
+      // Promise.all and their DB calls can interleave.
+      const rawDefinition = { title: 'Check-in', fields: [{ key: 'team', label: 'Team', type: 'person' }] };
+      prisma.form.findMany.mockImplementation(async (args: { where?: { status?: string } } = {}) => {
+        if (args.where?.status === 'published') {
+          return [
+            { id: 'form-2', slug: 'check-in', status: 'published', versions: [{ definition: rawDefinition }], kpiMappings: [] },
+          ];
+        }
+        return [{ id: 'form-1', versions: [{ definition: ratingFormDefinition }] }];
+      });
+      prisma.formSubmission.findMany.mockImplementation(
+        async (args: { where?: { formVersion?: { formId?: { in?: string[] } } } } = {}) => {
+          const formIds = args.where?.formVersion?.formId?.in ?? [];
+          if (formIds.includes('form-2')) {
+            return [
+              {
+                id: 'sub-raw-1',
+                answers: { team: 'user-1' },
+                submittedById: 'user-1',
+                createdAt: new Date('2026-02-15T09:00:00Z'),
+                formVersion: { formId: 'form-2' },
+              },
+            ];
+          }
+          return [submissionFixture({ submittedById: 'user-1', createdAt: new Date('2026-01-01T09:00:00Z') })];
+        },
+      );
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.lastUpdated).toBe('2026-02-15T09:00:00.000Z');
+    });
   });
 
   describe('getPersonBreakdown', () => {

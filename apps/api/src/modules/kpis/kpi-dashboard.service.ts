@@ -752,8 +752,14 @@ export class KpiDashboardService {
     }
 
     const rawActivityCountByPerson = new Map<string, number>();
+    // loadRawActivity returns most-recent-first, so the first entry seen per
+    // person here is their latest — feeds lastUpdated below alongside their
+    // latest scored submission, so a person with only unmapped-form activity
+    // (no scored submission at all) still shows a real last-updated date.
+    const rawActivityLatestByPerson = new Map<string, Date>();
     for (const a of rawActivity) {
       rawActivityCountByPerson.set(a.personId, (rawActivityCountByPerson.get(a.personId) ?? 0) + 1);
+      if (!rawActivityLatestByPerson.has(a.personId)) rawActivityLatestByPerson.set(a.personId, a.submittedAt);
     }
 
     // Visibility-gate-only blend, exactly as before — see the comment above.
@@ -803,6 +809,15 @@ export class KpiDashboardService {
       const totalScore = totalScoreValues.length > 0 ? round2(totalScoreValues.reduce((a, b) => a + b, 0)) : null;
       const performanceLevel = totalScore !== null ? matchPerformanceLevel(totalScore, allPerformanceLevels) : null;
 
+      // The more recent of this person's latest scored submission and their
+      // latest raw-activity one (an unmapped form can be more recent than
+      // any scored submission, or be the only activity they have at all).
+      const rawActivityLatest = rawActivityLatestByPerson.get(user.id) ?? null;
+      const lastUpdated =
+        latest && rawActivityLatest
+          ? (latest.submittedAt > rawActivityLatest ? latest.submittedAt : rawActivityLatest)
+          : (latest?.submittedAt ?? rawActivityLatest);
+
       return {
         id: user.id,
         displayName: user.displayName,
@@ -826,7 +841,7 @@ export class KpiDashboardService {
         previousSubmission: previous
           ? { raw: previous.raw, display: previous.display, submittedAt: previous.submittedAt.toISOString() }
           : null,
-        lastUpdated: latest ? latest.submittedAt.toISOString() : null,
+        lastUpdated: lastUpdated ? lastUpdated.toISOString() : null,
         rawActivityCount: rawActivityCountByPerson.get(user.id) ?? 0,
       };
     });

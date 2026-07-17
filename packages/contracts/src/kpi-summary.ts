@@ -67,6 +67,10 @@ export interface TeamMember {
    *  through the exact same mapping (same field, same scale) — otherwise
    *  there's nothing valid to compare against, so no trend is shown. */
   previousSubmission: ScoredSubmissionSummary | null;
+  /** The more recent of `latestSubmission`'s date and this person's latest
+   *  raw-activity submission's date (see `rawActivityCount`) — so someone
+   *  with only unmapped-form activity, no scored submission at all, still
+   *  shows a real date instead of null. */
   lastUpdated: string | null;
   /** Count of this person's own raw-activity submissions (see
    *  RawActivityEntry) — activity from forms with no KPI mapping at all that
