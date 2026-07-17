@@ -291,11 +291,13 @@ export class SubmissionsService {
   }
 
   /** Admin correction: re-validates against the CURRENT version's compiled schema (not the
-   *  version the respondent originally submitted against) — editing is a forward-looking fix. */
+   *  version the respondent originally submitted against) — editing is a forward-looking fix.
+   *  The submission itself can be from any version — list() surfaces every version's
+   *  submissions (see its own comment), so this lookup isn't limited to the latest one either. */
   async updateSubmission(formSlug: string, submissionId: string, rawAnswers: SubmissionAnswers, actorId: string) {
-    const { form, version, definition, settings } = await this.forms.getLatestVersion(formSlug);
+    const { form, definition, settings } = await this.forms.getLatestVersion(formSlug);
     const existing = await this.prisma.formSubmission.findFirst({
-      where: { id: submissionId, formVersionId: version.id },
+      where: { id: submissionId, formVersion: { formId: form.id } },
     });
     if (!existing) throw AppError.notFound('Submission', submissionId);
 
@@ -326,14 +328,20 @@ export class SubmissionsService {
     return submission;
   }
 
-  /** Paginated list with optional per-field equality filters (JSONB path query). */
+  /** Paginated list with optional per-field equality filters (JSONB path query).
+   *  Spans every version of the form, not just the latest — publishing an
+   *  edit creates a new FormVersion (see FormsService.publishNewVersion) so
+   *  that historical submissions keep validating against the schema they
+   *  were created with; scoping this list to only the latest version's id
+   *  would make every submission from before the most recent edit vanish
+   *  from this view even though the rows are untouched in the database. */
   async list(formSlug: string, query: PageQuery, filters: Record<string, string> = {}) {
-    const { version } = await this.forms.getLatestVersion(formSlug);
+    const { form } = await this.forms.getLatestVersion(formSlug);
 
     const { page, pageSize } = resolvePageBounds(query);
 
     const where = {
-      formVersionId: version.id,
+      formVersion: { formId: form.id },
       AND: Object.entries(filters).map(([key, value]) => ({
         answers: { path: [key], equals: value },
       })),
@@ -354,9 +362,12 @@ export class SubmissionsService {
   }
 
   async deleteSubmission(formSlug: string, submissionId: string, actorId: string) {
-    const { version } = await this.forms.getLatestVersion(formSlug);
+    // Scoped by form, not just the latest version — list() now surfaces
+    // submissions from every version (see its own comment), so a delete
+    // request for an older-version row must be able to find it too.
+    const { form } = await this.forms.getLatestVersion(formSlug);
     const submission = await this.prisma.formSubmission.findFirst({
-      where: { id: submissionId, formVersionId: version.id },
+      where: { id: submissionId, formVersion: { formId: form.id } },
     });
     if (!submission) throw AppError.notFound('Submission', submissionId);
 

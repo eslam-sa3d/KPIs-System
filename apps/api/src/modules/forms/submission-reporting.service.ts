@@ -33,12 +33,22 @@ export class SubmissionReportingService {
    *  `userId` optionally narrows every aggregate to only the submissions that
    *  name that person as the answer to ANY question — not just a dedicated
    *  'person' field, since one submission on a form like a QC checklist can
-   *  name several different people across several different questions. */
+   *  name several different people across several different questions.
+   *
+   *  Spans every version of the form, not just the latest (see list()'s own
+   *  comment on why) — a submission from before the most recent edit is
+   *  interpreted against the CURRENT version's field definitions here, same
+   *  as every other field on this type; a renamed/retyped/removed field
+   *  since then can under- or over-count that submission for the affected
+   *  question, a known, accepted limitation rather than one this pass
+   *  attempts to fully solve (each submission would need its own per-version
+   *  field definitions threaded through every aggregate below). */
   async summary(formSlug: string, userId?: string): Promise<FormResponseSummary> {
-    const { version, definition } = await this.forms.getLatestVersion(formSlug);
-    await assertSyncReportSizeOk(this.prisma, { formVersionId: version.id });
+    const { form, definition } = await this.forms.getLatestVersion(formSlug);
+    const scopedToForm = { formVersion: { formId: form.id } };
+    await assertSyncReportSizeOk(this.prisma, scopedToForm);
     const allSubmissions = await this.prisma.formSubmission.findMany({
-      where: { formVersionId: version.id },
+      where: scopedToForm,
       select: { answers: true, createdAt: true, score: true },
       orderBy: { createdAt: 'asc' },
     });
@@ -266,15 +276,19 @@ export class SubmissionReportingService {
     return Buffer.from(buffer);
   }
 
+  /** Spans every version of the form, same as summary() — and the same
+   *  known limitation applies (a submission from an older version is
+   *  formatted against the current version's field definitions). */
   private async buildExportTable(
     formSlug: string,
     actorId: string | null,
     auditAction = 'submissions.exported',
   ): Promise<{ header: string[]; rows: string[][] }> {
-    const { version, definition } = await this.forms.getLatestVersion(formSlug);
-    await assertSyncReportSizeOk(this.prisma, { formVersionId: version.id });
+    const { form, definition } = await this.forms.getLatestVersion(formSlug);
+    const scopedToForm = { formVersion: { formId: form.id } };
+    await assertSyncReportSizeOk(this.prisma, scopedToForm);
     const submissions = await this.prisma.formSubmission.findMany({
-      where: { formVersionId: version.id },
+      where: scopedToForm,
       orderBy: { createdAt: 'asc' },
       include: { submittedBy: { select: { email: true } } },
     });

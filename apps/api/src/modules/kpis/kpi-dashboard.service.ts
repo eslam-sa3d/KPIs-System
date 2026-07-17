@@ -332,26 +332,26 @@ export class KpiDashboardService {
       );
     }
 
-    const [forms, submissions] = await Promise.all([
-      this.prisma.form.findMany({
-        where: { id: { in: formIds } },
-        select: { id: true, versions: { orderBy: { version: 'desc' }, take: 1, select: { definition: true } } },
-      }),
-      this.prisma.formSubmission.findMany({
-        where: scoredSubmissionsWhere,
-        select: {
-          id: true,
-          answers: true,
-          submittedById: true,
-          createdAt: true,
-          formVersion: { select: { formId: true } },
-        },
-      }),
-    ]);
+    // Each submission carries its OWN version's definition, not the form's
+    // latest one — publishing an edit creates a new FormVersion rather than
+    // mutating the old one (see FormsService.publishNewVersion), precisely
+    // so a submission from before that edit still gets interpreted against
+    // the field types/keys that were actually true when it was made. Using
+    // the form's current definition for every submission would silently
+    // mis-score or drop older ones once a field is renamed, retyped, or
+    // removed.
+    const submissions = await this.prisma.formSubmission.findMany({
+      where: scoredSubmissionsWhere,
+      select: {
+        id: true,
+        answers: true,
+        submittedById: true,
+        createdAt: true,
+        formVersion: { select: { formId: true, definition: true } },
+      },
+    });
+    const definitionOf = (s: (typeof submissions)[number]) => s.formVersion.definition as unknown as FormDefinition;
 
-    const definitionByFormId = new Map(
-      forms.map((f) => [f.id, f.versions[0]?.definition as unknown as FormDefinition | undefined]),
-    );
     const submissionsByFormId = new Map<string, typeof submissions>();
     for (const s of submissions) {
       const list = submissionsByFormId.get(s.formVersion.formId);
@@ -360,16 +360,21 @@ export class KpiDashboardService {
     }
 
     // performance_level answers resolve against the live PerformanceLevel
-    // table — only fetched when at least one mapping's score field, context
-    // field, or comment field actually needs it (a context/comment field can
-    // be ANY field type — see form-kpi-mappings-panel.tsx), same lazy-fetch
+    // table — only fetched when at least one submission's own score/context/
+    // comment field actually needs it (a context/comment field can be ANY
+    // field type — see form-kpi-mappings-panel.tsx), scanned across every
+    // submission's own definition (not just the form's latest one) so an
+    // older version's use of the type is still detected, same lazy-fetch
     // rule as FormKpiScoringService's applyOneMapping.
-    const needsPerformanceLevels = activeMappings.some((m) => {
-      const fields = definitionByFormId.get(m.formId)?.fields;
-      return [m.scoreFieldKey, m.contextFieldKey, m.commentFieldKey].some(
-        (key) => key && fields?.find((f) => f.key === key)?.type === 'performance_level',
-      );
-    });
+    const fieldTypeOf = (s: (typeof submissions)[number], key: string | null) =>
+      key ? definitionOf(s).fields.find((f) => f.key === key)?.type : undefined;
+    const needsPerformanceLevels = activeMappings.some((m) =>
+      (submissionsByFormId.get(m.formId) ?? []).some((s) =>
+        [m.scoreFieldKey, m.contextFieldKey, m.commentFieldKey].some(
+          (key) => fieldTypeOf(s, key) === 'performance_level',
+        ),
+      ),
+    );
     // Selected columns cover both describeAnswer's display-string needs
     // (label) and rawFieldValue's numeric needs (minScore/maxScore/score,
     // for each submission's own contribution to a person's all-time total).
@@ -380,12 +385,11 @@ export class KpiDashboardService {
       : undefined;
     // score_label answers resolve against the live ScoreLabel table — same
     // lazy-fetch rule as performanceLevels above.
-    const needsScoreLabels = activeMappings.some((m) => {
-      const fields = definitionByFormId.get(m.formId)?.fields;
-      return [m.scoreFieldKey, m.contextFieldKey, m.commentFieldKey].some(
-        (key) => key && fields?.find((f) => f.key === key)?.type === 'score_label',
-      );
-    });
+    const needsScoreLabels = activeMappings.some((m) =>
+      (submissionsByFormId.get(m.formId) ?? []).some((s) =>
+        [m.scoreFieldKey, m.contextFieldKey, m.commentFieldKey].some((key) => fieldTypeOf(s, key) === 'score_label'),
+      ),
+    );
     const scoreLabels = needsScoreLabels
       ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true, score: true } })
       : undefined;
@@ -404,10 +408,9 @@ export class KpiDashboardService {
     };
     const candidates: Candidate[] = [];
     for (const mapping of activeMappings) {
-      const definition = definitionByFormId.get(mapping.formId);
-      const scoreField = definition?.fields.find((f) => f.key === mapping.scoreFieldKey);
-      if (!scoreField) continue;
       for (const submission of submissionsByFormId.get(mapping.formId) ?? []) {
+        const scoreField = definitionOf(submission).fields.find((f) => f.key === mapping.scoreFieldKey);
+        if (!scoreField) continue;
         const answers = submission.answers as SubmissionAnswers;
         const evaluateeId = resolveEvaluateeId(mapping.evaluateeFieldKeys, answers, submission.submittedById!);
         if (evaluateeId === null) continue;
@@ -427,12 +430,12 @@ export class KpiDashboardService {
       userIds.add(c.submission.submittedById!);
       // a context/comment field can be a 'person' field too — collect its
       // answer so the resolution below isn't a raw user id.
-      const fields = definitionByFormId.get(c.mapping.formId)?.fields;
+      const fields = definitionOf(c.submission).fields;
       const answers = c.submission.answers as SubmissionAnswers;
       for (const key of [c.mapping.contextFieldKey, c.mapping.commentFieldKey]) {
         if (!key) continue;
         const v = answers[key];
-        if (fields?.find((f) => f.key === key)?.type === 'person' && typeof v === 'string') userIds.add(v);
+        if (fields.find((f) => f.key === key)?.type === 'person' && typeof v === 'string') userIds.add(v);
       }
     }
     const users = await this.prisma.user.findMany({
@@ -449,10 +452,10 @@ export class KpiDashboardService {
       const evaluatorId = c.submission.submittedById!;
       const evaluator = userById.get(evaluatorId);
       const answers = c.submission.answers as SubmissionAnswers;
-      const fields = definitionByFormId.get(c.mapping.formId)?.fields;
+      const fields = definitionOf(c.submission).fields;
       const resolveContextText = (key: string | null) => {
         if (!key) return null;
-        const field = fields?.find((f) => f.key === key);
+        const field = fields.find((f) => f.key === key);
         const raw = answers[key] ?? null;
         const described = field && describeAnswer(field, raw, { performanceLevels, scoreLabels, personNames });
         return described?.display ?? answerToText(raw);
@@ -514,7 +517,6 @@ export class KpiDashboardService {
       select: {
         id: true,
         slug: true,
-        versions: { orderBy: { version: 'desc' }, take: 1, select: { definition: true } },
         kpiMappings: { select: { evaluationArea: { select: { isActive: true } } } },
       },
     });
@@ -527,6 +529,11 @@ export class KpiDashboardService {
     });
     if (submissionCount === 0 || submissionCount > MAX_SUBMISSIONS_FOR_DASHBOARD) return [];
 
+    // Each submission carries its OWN version's definition, not the form's
+    // latest one — same reasoning as loadScoredSubmissions' identical
+    // comment: an edit creates a new FormVersion rather than mutating the
+    // old one, so an older submission must still be interpreted against the
+    // field types/keys that were actually true when it was made.
     const submissions = await this.prisma.formSubmission.findMany({
       where: { formVersion: { formId: { in: formIds } } },
       select: {
@@ -534,19 +541,18 @@ export class KpiDashboardService {
         answers: true,
         submittedById: true,
         createdAt: true,
-        formVersion: { select: { formId: true } },
+        formVersion: { select: { formId: true, definition: true } },
       },
     });
+    const definitionOf = (s: (typeof submissions)[number]) => s.formVersion.definition as unknown as FormDefinition;
 
     const formById = new Map(unmappedForms.map((f) => [f.id, f]));
-    const definitionByFormId = new Map(
-      unmappedForms.map((f) => [f.id, f.versions[0]?.definition as unknown as FormDefinition | undefined]),
-    );
 
     // Same lazy performanceLevels/scoreLabels fetch rule as loadScoredSubmissions
     // — columns cover both describeAnswer's display needs (label) and
-    // rawFieldValue's numeric needs (minScore/maxScore/score).
-    const allFields = [...definitionByFormId.values()].flatMap((d) => d?.fields ?? []);
+    // rawFieldValue's numeric needs (minScore/maxScore/score). Scanned across
+    // every submission's own definition, not just each form's latest one.
+    const allFields = submissions.flatMap((s) => definitionOf(s).fields);
     const performanceLevels = allFields.some((f) => f.type === 'performance_level')
       ? await this.prisma.performanceLevel.findMany({
           select: { id: true, label: true, minScore: true, maxScore: true },
@@ -571,8 +577,8 @@ export class KpiDashboardService {
     const referencedUserIds = new Set<string>();
     for (const s of submissions) {
       const form = formById.get(s.formVersion.formId);
-      const definition = definitionByFormId.get(s.formVersion.formId);
-      if (!form || !definition) continue;
+      if (!form) continue;
+      const definition = definitionOf(s);
       const answers = s.answers as SubmissionAnswers;
       const personIds = detectReferencedUserIds(definition.fields, answers);
       if (s.submittedById) referencedUserIds.add(s.submittedById);

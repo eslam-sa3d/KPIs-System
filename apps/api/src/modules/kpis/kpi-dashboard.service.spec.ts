@@ -107,7 +107,12 @@ function submissionFixture(overrides: Record<string, unknown> = {}) {
     answers: { score: 4 },
     submittedById: 'evaluator-1',
     createdAt: new Date('2026-03-01T09:00:00Z'),
-    formVersion: { formId: 'form-1' },
+    // Each submission carries its OWN version's definition now (see
+    // loadScoredSubmissions/loadRawActivity) — not a separate form.findMany
+    // lookup — so this fixture's formVersion needs a real definition, not
+    // just a formId. Callers submitting against a different form/definition
+    // (e.g. loadRawActivity's unmapped-form tests) override this directly.
+    formVersion: { formId: 'form-1', definition: ratingFormDefinition },
     ...overrides,
   };
 }
@@ -647,6 +652,7 @@ describe('KpiDashboardService', () => {
           id: 'sub-1',
           submittedById: 'user-1',
           answers: { evaluatee: 'user-1', rating: 'label-over' },
+          formVersion: { formId: 'form-1', definition: scoreLabelDefinition },
         }),
       ]);
       prisma.scoreLabel.findMany.mockResolvedValue([
@@ -742,7 +748,7 @@ describe('KpiDashboardService', () => {
           answers: { team: uuidUserId, note: 'looking good' },
           submittedById: uuidUserId,
           createdAt: new Date('2026-03-01T09:00:00Z'),
-          formVersion: { formId: 'form-2' },
+          formVersion: { formId: 'form-2', definition },
         },
       ]);
 
@@ -775,7 +781,7 @@ describe('KpiDashboardService', () => {
           answers: { team: uuidUserId, rating: 'label-over' },
           submittedById: uuidUserId,
           createdAt: new Date('2026-03-01T09:00:00Z'),
-          formVersion: { formId: 'form-2' },
+          formVersion: { formId: 'form-2', definition },
         },
       ]);
       prisma.scoreLabel.findMany.mockResolvedValue([{ id: 'label-over', label: 'Over-Achieved', score: 3 }]);
@@ -839,7 +845,7 @@ describe('KpiDashboardService', () => {
                 answers: { team: 'user-1', rating: 'label-1' },
                 submittedById: 'user-1',
                 createdAt: new Date('2026-03-01T09:00:00Z'),
-                formVersion: { formId: 'form-2' },
+                formVersion: { formId: 'form-2', definition: rawDefinition },
               },
             ];
           }
@@ -882,7 +888,7 @@ describe('KpiDashboardService', () => {
           answers: { team: uuidUserId },
           submittedById: uuidUserId,
           createdAt: new Date('2026-03-05T09:00:00Z'),
-          formVersion: { formId: 'form-2' },
+          formVersion: { formId: 'form-2', definition },
         },
       ]);
 
@@ -927,7 +933,7 @@ describe('KpiDashboardService', () => {
                 answers: { team: 'user-1' },
                 submittedById: 'user-1',
                 createdAt: new Date('2026-02-15T09:00:00Z'),
-                formVersion: { formId: 'form-2' },
+                formVersion: { formId: 'form-2', definition: rawDefinition },
               },
             ];
           }
@@ -1104,7 +1110,7 @@ describe('KpiDashboardService', () => {
           answers: { team: uuidUserId, note: 'looking good' },
           submittedById: 'user-1',
           createdAt: new Date('2026-03-01T09:00:00Z'),
-          formVersion: { formId: 'form-2' },
+          formVersion: { formId: 'form-2', definition },
         },
       ]);
       mockUsers(prisma, [
