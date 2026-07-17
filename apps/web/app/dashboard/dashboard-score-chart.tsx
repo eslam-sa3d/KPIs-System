@@ -30,7 +30,7 @@ export function DashboardScoreChart({
           textColor="var(--text-3)"
           gridColor="var(--border)"
           barColor="var(--accent)"
-          countLabel="Total score"
+          countLabel="Score"
         />
       ) : (
         <p className="muted" style={{ fontSize: 12 }}>
