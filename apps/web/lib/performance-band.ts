@@ -35,13 +35,19 @@ export function sortLevelsDesc(levels: PerformanceLevelOption[]): PerformanceLev
 }
 
 /** Every band a status strip / filter pill list should show, in display
- *  order: each configured level (highest first), then Unranked, then
- *  Pending — always present even with zero current members, same as the
- *  old fixed five cards always showing. */
+ *  order: each configured level (highest first), then Pending — always
+ *  present even with zero current members, same as the old fixed five
+ *  cards always showing. Unranked (see bandOf) has no card/pill of its
+ *  own — with the open-ended-top, gap-fills-downward matching rule (see
+ *  matchPerformanceLevel server-side), any real score at or above the
+ *  lowest configured range's minScore always lands in a real level, so a
+ *  dedicated summary card for the rare below-every-range case wasn't
+ *  worth a permanent fifth tile. A member who does land there still shows
+ *  "Unranked" as their own row's status text — just not a whole-team
+ *  aggregate. */
 export function orderedBands(levels: PerformanceLevelOption[]): Band[] {
   return [
     ...sortLevelsDesc(levels).map((l) => ({ key: l.id, label: l.label })),
-    { key: UNRANKED_BAND, label: 'Unranked' },
     { key: PENDING_BAND, label: 'Pending' },
   ];
 }
