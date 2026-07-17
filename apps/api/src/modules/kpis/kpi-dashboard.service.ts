@@ -5,6 +5,7 @@ import {
   EvaluationAreaCadence,
   FormDefinition,
   MeasurementGaps,
+  RawActivityAnswer,
   RecentFeedback,
   SCORE_FIELD_TYPES,
   ScoreFieldType,
@@ -16,6 +17,7 @@ import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 import { RedisService } from '../../infra/redis.service';
 import { answerToText, describeAnswer, resolveEvaluateeId } from '../forms/score-resolution';
+import { detectReferencedUserIds } from '../forms/submission-person-detection';
 import { RbacService } from '../rbac/rbac.service';
 import {
   allowedFormIds,
@@ -141,6 +143,22 @@ export interface ScoredSubmission {
   comment: string | null;
   submittedAt: Date;
   submissionId: string;
+}
+
+/** One (form, submission, named person) tuple from an UNMAPPED form — see
+ *  loadRawActivity. Internal shape (carries `personId`/`submittedAt: Date`
+ *  for grouping/sorting) that getTeamOverviewImpl/getPersonBreakdownImpl map
+ *  down to the public RawActivityEntry contract shape, same relationship
+ *  ScoredSubmission has to ScoredSubmissionSummary/PersonSubmission. */
+export interface RawActivity {
+  formId: string;
+  formSlug: string;
+  formTitle: string;
+  personId: string;
+  submittedByName: string | null;
+  submissionId: string;
+  submittedAt: Date;
+  answers: RawActivityAnswer[];
 }
 
 function avg(values: number[]): number {
@@ -419,6 +437,134 @@ export class KpiDashboardService {
   }
 
   /**
+   * loadScoredSubmissions' counterpart for forms with NO active FormKpiMapping
+   * at all (a form with only inactive-area mappings counts as unmapped too,
+   * same as loadScoredSubmissions ignoring those) — real form activity that
+   * never reaches the scoring pipeline, but still names a real person via any
+   * 'person' field or any field whose answer is a real user id (see
+   * detectReferencedUserIds — the same generic detection that already makes a
+   * 'select' field with a "select a user" option resolve a name on the Forms →
+   * Responses page, with no mapping required there either). One
+   * RawActivityEntry PER named person, since a submission can name several
+   * (e.g. a QC checklist). Optionally scoped to the admin-configured
+   * dashboard-form-scope, same as loadScoredSubmissions. Unlike
+   * loadScoredSubmissions, silently caps out rather than throwing past
+   * MAX_SUBMISSIONS_FOR_DASHBOARD — this is an additive secondary signal
+   * riding on the same synchronous dashboard load as the primary scored path,
+   * which already has its own fail-loud guard.
+   */
+  private async loadRawActivity(allowedFormIdList?: string[] | null): Promise<RawActivity[]> {
+    const forms = await this.prisma.form.findMany({
+      where: {
+        status: 'published',
+        ...(allowedFormIdList ? { id: { in: allowedFormIdList } } : {}),
+      },
+      select: {
+        id: true,
+        slug: true,
+        versions: { orderBy: { version: 'desc' }, take: 1, select: { definition: true } },
+        kpiMappings: { select: { evaluationArea: { select: { isActive: true } } } },
+      },
+    });
+    const unmappedForms = forms.filter((f) => !f.kpiMappings.some((m) => m.evaluationArea.isActive));
+    if (unmappedForms.length === 0) return [];
+
+    const formIds = unmappedForms.map((f) => f.id);
+    const submissionCount = await this.prisma.formSubmission.count({
+      where: { formVersion: { formId: { in: formIds } } },
+    });
+    if (submissionCount === 0 || submissionCount > MAX_SUBMISSIONS_FOR_DASHBOARD) return [];
+
+    const submissions = await this.prisma.formSubmission.findMany({
+      where: { formVersion: { formId: { in: formIds } } },
+      select: {
+        id: true,
+        answers: true,
+        submittedById: true,
+        createdAt: true,
+        formVersion: { select: { formId: true } },
+      },
+    });
+
+    const formById = new Map(unmappedForms.map((f) => [f.id, f]));
+    const definitionByFormId = new Map(
+      unmappedForms.map((f) => [f.id, f.versions[0]?.definition as unknown as FormDefinition | undefined]),
+    );
+
+    // Same lazy performanceLevels/scoreLabels fetch rule as loadScoredSubmissions.
+    const allFields = [...definitionByFormId.values()].flatMap((d) => d?.fields ?? []);
+    const performanceLevels = allFields.some((f) => f.type === 'performance_level')
+      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
+      : undefined;
+    const scoreLabels = allFields.some((f) => f.type === 'score_label')
+      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true } })
+      : undefined;
+
+    type Candidate = {
+      form: (typeof unmappedForms)[number];
+      definition: FormDefinition;
+      submission: (typeof submissions)[number];
+      personIds: Set<string>;
+    };
+    const candidates: Candidate[] = [];
+    const referencedUserIds = new Set<string>();
+    for (const s of submissions) {
+      const form = formById.get(s.formVersion.formId);
+      const definition = definitionByFormId.get(s.formVersion.formId);
+      if (!form || !definition) continue;
+      const answers = s.answers as SubmissionAnswers;
+      const personIds = detectReferencedUserIds(definition.fields, answers);
+      if (s.submittedById) referencedUserIds.add(s.submittedById);
+      for (const id of personIds) referencedUserIds.add(id);
+      if (personIds.size === 0) continue; // nothing to attribute this to — skip, don't guess
+      candidates.push({ form, definition, submission: s, personIds });
+    }
+    if (candidates.length === 0) return [];
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [...referencedUserIds] } },
+      select: { id: true, displayName: true, isActive: true, isKpiApplicable: true },
+    });
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const personNames = new Map(users.map((u) => [u.id, u.displayName]));
+
+    const results: RawActivity[] = [];
+    for (const c of candidates) {
+      const submitter = c.submission.submittedById ? userById.get(c.submission.submittedById) : undefined;
+      const answers = c.submission.answers as SubmissionAnswers;
+      const describedAnswers = c.definition.fields
+        .filter((f) => f.type !== 'section_header')
+        .map((f) => {
+          const raw = answers[f.key];
+          if (raw === undefined) return null;
+          const described = describeAnswer(f, raw, { performanceLevels, scoreLabels, personNames });
+          const display = described?.display ?? answerToText(raw);
+          return display !== null ? { fieldKey: f.key, fieldLabel: f.label, display } : null;
+        })
+        .filter((a): a is RawActivityAnswer => a !== null);
+
+      // One entry PER named person — a submission naming several people
+      // shows up in each of their drawers/counts, same "one submission, several
+      // people" rule as summary()'s own userId narrowing.
+      for (const personId of c.personIds) {
+        const person = userById.get(personId);
+        if (!person || !person.isActive || !person.isKpiApplicable) continue;
+        results.push({
+          formId: c.form.id,
+          formSlug: c.form.slug,
+          formTitle: c.definition.title,
+          personId,
+          submittedByName: submitter?.displayName ?? null,
+          submissionId: c.submission.id,
+          submittedAt: c.submission.createdAt,
+          answers: describedAnswers,
+        });
+      }
+    }
+    return results.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
+  }
+
+  /**
    * The KPIs relevant to the caller: assigned to any of their roles or their
    * department. Each Evaluation Area comes with its own recent raw
    * submissions (see loadScoredSubmissions) — each one traceable to a real
@@ -533,7 +679,7 @@ export class KpiDashboardService {
           });
 
     const allowedFormIdList = await allowedFormIds(this.prisma);
-    const [users, kpis, legacyEntries, scored] = await Promise.all([
+    const [users, kpis, legacyEntries, scored, rawActivity] = await Promise.all([
       this.prisma.user.findMany({
         where: { isActive: true, isKpiApplicable: true },
         select: {
@@ -563,6 +709,7 @@ export class KpiDashboardService {
         select: { personId: true, evaluationAreaId: true, value: true, periodStart: true },
       }),
       this.loadScoredSubmissions(undefined, allowedFormIdList),
+      this.loadRawActivity(allowedFormIdList),
     ]);
 
     const scoredByPerson = new Map<string, ScoredSubmission[]>();
@@ -570,6 +717,11 @@ export class KpiDashboardService {
       const list = scoredByPerson.get(s.personId);
       if (list) list.push(s);
       else scoredByPerson.set(s.personId, [s]);
+    }
+
+    const rawActivityCountByPerson = new Map<string, number>();
+    for (const a of rawActivity) {
+      rawActivityCountByPerson.set(a.personId, (rawActivityCountByPerson.get(a.personId) ?? 0) + 1);
     }
 
     // Visibility-gate-only blend, exactly as before — see the comment above.
@@ -633,6 +785,7 @@ export class KpiDashboardService {
           ? { raw: previous.raw, display: previous.display, submittedAt: previous.submittedAt.toISOString() }
           : null,
         lastUpdated: latest ? latest.submittedAt.toISOString() : null,
+        rawActivityCount: rawActivityCountByPerson.get(user.id) ?? 0,
       };
     });
 
@@ -687,8 +840,12 @@ export class KpiDashboardService {
     ]);
     const areaIds = kpis.flatMap((kpi) => kpi.evaluationAreas.map((a) => a.id));
 
-    const scored = await this.loadScoredSubmissions(areaIds, allowedFormIdList);
+    const [scored, rawActivity] = await Promise.all([
+      this.loadScoredSubmissions(areaIds, allowedFormIdList),
+      this.loadRawActivity(allowedFormIdList),
+    ]);
     const personScored = scored.filter((s) => s.personId === personId).slice(0, RECENT_ENTRIES_TAKE);
+    const personRawActivity = rawActivity.filter((a) => a.personId === personId).slice(0, RECENT_ENTRIES_TAKE);
 
     return {
       personId: person.id,
@@ -710,6 +867,15 @@ export class KpiDashboardService {
           comment: scrubbed.comment,
         };
       }),
+      rawActivity: personRawActivity.map((a) => ({
+        formId: a.formId,
+        formSlug: a.formSlug,
+        formTitle: a.formTitle,
+        submittedByName: a.submittedByName,
+        submissionId: a.submissionId,
+        submittedAt: a.submittedAt.toISOString(),
+        answers: a.answers,
+      })),
     };
   }
 

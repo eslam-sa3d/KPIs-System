@@ -81,16 +81,21 @@ function mockOneMapping(prisma: ReturnType<typeof makePrismaStub>, overrides: Re
     ...overrides,
   };
   prisma.formKpiMapping.findMany.mockResolvedValue([mapping]);
-  // A superset shape: satisfies both loadScoredSubmissions' own
-  // {id, versions} query and getMeasurementGaps' separate {slug, versions,
-  // kpiMappings} query — both go through this same mocked fn, and a stub
-  // (unlike real Prisma) returns every field regardless of `select`.
+  // A superset shape: satisfies loadScoredSubmissions' own {id, versions}
+  // query, getMeasurementGaps' separate {slug, versions, kpiMappings:
+  // {scoreFieldKey}} query, and loadRawActivity's {kpiMappings:
+  // {evaluationArea: {isActive}}} query — all three go through this same
+  // mocked fn, and a stub (unlike real Prisma) returns every field
+  // regardless of `select`. `evaluationArea.isActive: true` here correctly
+  // makes loadRawActivity treat this form as mapped (excluded from raw
+  // activity), matching what mockOneMapping represents.
   prisma.form.findMany.mockResolvedValue([
     {
       id: 'form-1',
       slug: 'qa-form',
+      status: 'published',
       versions: [{ definition: ratingFormDefinition }],
-      kpiMappings: [{ scoreFieldKey: 'score' }],
+      kpiMappings: [{ scoreFieldKey: 'score', evaluationArea: { isActive: true } }],
     },
   ]);
   return mapping;
@@ -452,6 +457,58 @@ describe('KpiDashboardService', () => {
       expect(members.map((m) => m.id)).toEqual(['user-1']);
       expect(members[0]!.score).toBe(5);
     });
+
+    it('counts raw-activity submissions on unmapped forms, naming a person via a "select a user" option', async () => {
+      // detectReferencedUserIds only treats a non-'person' field's answer as a
+      // person reference when it's UUID-shaped (see UUID_PATTERN) — a real
+      // user id, not the short 'user-1'-style ids used elsewhere in this
+      // file, so this fixture needs its own UUID-shaped user.
+      const uuidUserId = '11111111-1111-1111-1111-111111111111';
+      const definition = {
+        title: 'Sprint check-in',
+        fields: [
+          {
+            key: 'team',
+            label: 'Team member',
+            type: 'select',
+            options: [{ value: uuidUserId, label: 'Covered User', userId: uuidUserId }],
+          },
+          { key: 'note', label: 'Note', type: 'short_text' },
+        ],
+      };
+      prisma.user.findMany.mockResolvedValue([
+        { ...coveredUser, id: uuidUserId, isActive: true, isKpiApplicable: true },
+      ]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      // Zero active-area mappings — genuinely unmapped, unlike mockOneMapping's form-1.
+      prisma.form.findMany.mockResolvedValue([
+        { id: 'form-2', slug: 'sprint-check-in', status: 'published', versions: [{ definition }], kpiMappings: [] },
+      ]);
+      prisma.formSubmission.count.mockResolvedValue(1);
+      prisma.formSubmission.findMany.mockResolvedValue([
+        {
+          id: 'sub-raw-1',
+          answers: { team: uuidUserId, note: 'looking good' },
+          submittedById: uuidUserId,
+          createdAt: new Date('2026-03-01T09:00:00Z'),
+          formVersion: { formId: 'form-2' },
+        },
+      ]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.rawActivityCount).toBe(1);
+    });
+
+    it('excludes a form with an active KPI mapping from raw-activity counts', async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      mockOneMapping(prisma); // form-1: kpiMappings: [{ evaluationArea: { isActive: true } }]
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.rawActivityCount).toBe(0);
+    });
   });
 
   describe('getPersonBreakdown', () => {
@@ -535,6 +592,61 @@ describe('KpiDashboardService', () => {
           },
         }),
       );
+    });
+
+    it("lists the person's raw-activity submissions from unmapped forms, with every answer formatted", async () => {
+      // detectReferencedUserIds only treats a non-'person' field's answer as a
+      // person reference when it's UUID-shaped (see UUID_PATTERN) — a real
+      // user id, not the short 'user-2'-style id used elsewhere in this file.
+      const uuidUserId = '22222222-2222-2222-2222-222222222222';
+      const definition = {
+        title: 'Sprint check-in',
+        fields: [
+          {
+            key: 'team',
+            label: 'Team member',
+            type: 'select',
+            options: [{ value: uuidUserId, label: 'Evaluatee', userId: uuidUserId }],
+          },
+          { key: 'note', label: 'Note', type: 'short_text' },
+        ],
+      };
+      prisma.user.findUnique.mockResolvedValue(person);
+      prisma.kpi.findMany.mockResolvedValue([{ evaluationAreas: [{ id: 'area-1' }] }]);
+      prisma.form.findMany.mockResolvedValue([
+        { id: 'form-2', slug: 'sprint-check-in', status: 'published', versions: [{ definition }], kpiMappings: [] },
+      ]);
+      prisma.formSubmission.count.mockResolvedValue(1);
+      prisma.formSubmission.findMany.mockResolvedValue([
+        {
+          id: 'sub-raw-1',
+          answers: { team: uuidUserId, note: 'looking good' },
+          submittedById: 'user-1',
+          createdAt: new Date('2026-03-01T09:00:00Z'),
+          formVersion: { formId: 'form-2' },
+        },
+      ]);
+      mockUsers(prisma, [
+        { id: 'user-1', displayName: 'Rater One' },
+        { id: uuidUserId, displayName: 'Evaluatee' },
+      ]);
+
+      const breakdown = await service.getPersonBreakdown(uuidUserId, actorId);
+
+      expect(breakdown.rawActivity).toEqual([
+        {
+          formId: 'form-2',
+          formSlug: 'sprint-check-in',
+          formTitle: 'Sprint check-in',
+          submittedByName: 'Rater One',
+          submissionId: 'sub-raw-1',
+          submittedAt: '2026-03-01T09:00:00.000Z',
+          answers: [
+            { fieldKey: 'team', fieldLabel: 'Team member', display: 'Evaluatee' },
+            { fieldKey: 'note', fieldLabel: 'Note', display: 'looking good' },
+          ],
+        },
+      ]);
     });
   });
 

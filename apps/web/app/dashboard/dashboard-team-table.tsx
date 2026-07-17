@@ -149,6 +149,15 @@ export function DashboardTeamTable({
                     <Badge className="border-transparent" style={statusBadgeStyle(memberStatus)}>
                       {STATUS_LABEL[memberStatus]}
                     </Badge>
+                    {m.rawActivityCount > 0 && (
+                      <span
+                        className="muted"
+                        style={{ fontSize: 10.5, marginLeft: 6 }}
+                        title={`${m.rawActivityCount} response(s) on form(s) with no KPI mapping yet`}
+                      >
+                        +{m.rawActivityCount} activity
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
                     {m.score !== null ? `${m.score.toFixed(1)} / 5` : '—'}

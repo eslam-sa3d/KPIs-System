@@ -94,6 +94,34 @@ export function TeamMemberDetailDrawer({
                     </div>
                   ))
                 )}
+                {breakdown.rawActivity && breakdown.rawActivity.length > 0 && (
+                  <div style={{ marginTop: 24 }}>
+                    <h4 className="muted" style={{ fontSize: 11, textTransform: 'uppercase', marginBottom: 8 }}>
+                      Other form activity ({breakdown.rawActivity.length})
+                    </h4>
+                    <p className="muted" style={{ fontSize: 10.5, marginBottom: 12 }}>
+                      Responses naming this person on forms with no KPI mapping yet — not scored.
+                    </p>
+                    {breakdown.rawActivity.map((a, i) => (
+                      <div key={`${a.submissionId}-${i}`} style={{ marginBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 500 }}>{a.formTitle}</span>
+                          <span className="muted" style={{ fontSize: 10.5 }}>
+                            {new Date(a.submittedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {a.submittedByName && ` · by ${a.submittedByName}`}
+                          </span>
+                        </div>
+                        <ul className="summary-samples" style={{ marginTop: 4 }}>
+                          {a.answers.map((ans) => (
+                            <li key={ans.fieldKey}>
+                              {ans.fieldLabel}: {ans.display}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )

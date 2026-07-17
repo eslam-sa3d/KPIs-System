@@ -56,6 +56,14 @@ export interface TeamMember {
    *  there's nothing valid to compare against, so no trend is shown. */
   previousSubmission: ScoredSubmissionSummary | null;
   lastUpdated: string | null;
+  /** Count of this person's own raw-activity submissions (see
+   *  RawActivityEntry) — activity from forms with no KPI mapping at all that
+   *  still name this person somewhere in their answers. Separate from and
+   *  never blended with `score`/`latestSubmission`, which stay strictly
+   *  scored/mapped. Always a number (0 when they have none), unlike the
+   *  null-means-never-scored idiom `latestSubmission` uses, since there's no
+   *  meaningful distinction between "never checked" and "zero" here. */
+  rawActivityCount: number;
 }
 
 /** Response of GET /v1/kpis/team-overview — shared verbatim between
@@ -80,6 +88,32 @@ export interface PersonSubmission extends ScoredSubmissionSummary {
   comment: string | null;
 }
 
+/** One answered field on a raw-activity submission (see RawActivityEntry) —
+ *  formatted the same way a ScoredSubmissionSummary.display is (via
+ *  describeAnswer), but a raw-activity submission has no single "the score
+ *  field", so this is every describable answer, not one value. */
+export interface RawActivityAnswer {
+  fieldKey: string;
+  fieldLabel: string;
+  display: string;
+}
+
+/** One submission to a form with zero active FormKpiMapping that names this
+ *  person somewhere in its answers (any 'person' field, or any field whose
+ *  answer is a real user id — see detectReferencedUserIds) — the dashboard's
+ *  signal that real form activity about this person exists even though no
+ *  KPI scoring pipeline is wired up for it yet. Never blended, never scored,
+ *  same "trace back to one real FormSubmission" posture as PersonSubmission. */
+export interface RawActivityEntry {
+  formId: string;
+  formSlug: string;
+  formTitle: string;
+  submittedByName: string | null;
+  submissionId: string;
+  submittedAt: string;
+  answers: RawActivityAnswer[];
+}
+
 /** Response of GET /v1/kpis/team-overview/:personId — a single team member's
  *  own scored submissions across every KPI that covers them, most recent
  *  first, for the dashboard's team member detail drawer. */
@@ -87,6 +121,11 @@ export interface TeamMemberBreakdown {
   personId: string;
   displayName: string;
   submissions: PersonSubmission[];
+  /** This person's own raw-activity entries (see RawActivityEntry), most
+   *  recent first — omitted/empty when they have none. Separate list from
+   *  `submissions` (scored) so the drawer can show both without conflating
+   *  them. */
+  rawActivity?: RawActivityEntry[];
 }
 
 /** A score-eligible question on a published form with no FormKpiMapping

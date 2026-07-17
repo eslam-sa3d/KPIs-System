@@ -67,6 +67,12 @@ export class FormKpiScoringService {
   ): Promise<void> {
     if (!enteredById) return;
 
+    // Every submission — mapped or not — can change the dashboard now (an
+    // unmapped form's raw activity is dashboard-visible too, see
+    // KpiDashboardService.loadRawActivity), so this always invalidates, even
+    // when there are zero mappings below.
+    await this.invalidateDashboardCache();
+
     const mappings = await this.prisma.formKpiMapping.findMany({
       where: { formId },
       include: { evaluationArea: true },
@@ -95,7 +101,6 @@ export class FormKpiScoringService {
         );
       }
     }
-    await this.invalidateDashboardCache();
   }
 
   /** performanceLevel rows are global, unchanging for the lifetime of a single
