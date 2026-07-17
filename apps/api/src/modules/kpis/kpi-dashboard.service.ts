@@ -16,7 +16,7 @@ import {
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 import { RedisService } from '../../infra/redis.service';
-import { answerToText, describeAnswer, normalizeScore, resolveEvaluateeId } from '../forms/score-resolution';
+import { answerToText, describeAnswer, rawFieldValue, resolveEvaluateeId } from '../forms/score-resolution';
 import { detectReferencedUserIds } from '../forms/submission-person-detection';
 import { RbacService } from '../rbac/rbac.service';
 import {
@@ -139,8 +139,8 @@ export interface ScoredSubmission {
   reviewType: string;
   raw: unknown;
   display: string;
-  /** The same raw answer normalized to a 0-5 KPI score (see normalizeScore)
-   *  — null when the field/answer has no well-defined numeric interpretation
+  /** The score field's own configured value, unscaled (see rawFieldValue)
+   *  — null when the field/answer has no well-defined configured number
    *  (e.g. a context-only free-text field). Summed across all of a person's
    *  scored submissions, all-time, for their dashboard total score. */
   value: number | null;
@@ -362,7 +362,7 @@ export class KpiDashboardService {
       );
     });
     // Selected columns cover both describeAnswer's display-string needs
-    // (label) and normalizeScore's numeric needs (minScore/maxScore/score,
+    // (label) and rawFieldValue's numeric needs (minScore/maxScore/score,
     // for each submission's own contribution to a person's all-time total).
     const performanceLevels = needsPerformanceLevels
       ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } })
@@ -404,7 +404,7 @@ export class KpiDashboardService {
         if (rawScore === undefined || rawScore === null) continue;
         const described = describeAnswer(scoreField, rawScore, { performanceLevels, scoreLabels });
         if (described === null) continue;
-        const value = normalizeScore(scoreField, rawScore, numericPerformanceLevels, scoreLabels);
+        const value = rawFieldValue(scoreField, rawScore, numericPerformanceLevels, scoreLabels);
         candidates.push({ mapping, submission, evaluateeId, described, value });
       }
     }

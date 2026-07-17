@@ -216,6 +216,44 @@ export function normalizeScore(
   }
 }
 
+/** A person's dashboard total score sums each submission's own configured
+ *  value — a score_label's exact `score`, a performance_level's range
+ *  midpoint, or a numeric field's raw answer — with no stretching onto a
+ *  common 0-5 scale (unlike normalizeScore above, which the older
+ *  EvaluationAreaEntry write path still depends on and this deliberately
+ *  leaves untouched). A field type with no single well-defined configured
+ *  number (select, multi_select, likert, ranking, and the rest normalizeScore
+ *  also excludes) contributes nothing rather than a synthesized position-
+ *  based value. */
+export function rawFieldValue(
+  field: FormField,
+  raw: SubmissionAnswers[string],
+  performanceLevels?: Array<{ id: string; minScore: number; maxScore: number }>,
+  scoreLabels?: Array<{ id: string; score: number }>,
+): number | null {
+  switch (field.type) {
+    case 'rating':
+    case 'nps':
+    case 'slider':
+    case 'number':
+      return typeof raw === 'number' ? raw : null;
+    case 'boolean':
+      return typeof raw === 'boolean' ? (raw ? 1 : 0) : null;
+    case 'performance_level': {
+      if (typeof raw !== 'string' || !performanceLevels) return null;
+      const level = performanceLevels.find((l) => l.id === raw);
+      return level ? (level.minScore + level.maxScore) / 2 : null;
+    }
+    case 'score_label': {
+      if (typeof raw !== 'string' || !scoreLabels) return null;
+      const label = scoreLabels.find((l) => l.id === raw);
+      return label ? label.score : null;
+    }
+    default:
+      return null;
+  }
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
