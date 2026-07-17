@@ -441,12 +441,70 @@ describe('KpiDashboardService', () => {
       expect(members[0]!.score).toBeNull();
     });
 
+    it("sums every one of a member's scored submissions, all-time, into totalScore — not blended/averaged like score", async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      mockOneMapping(prisma);
+      // rating/scale-5 answers of 4 and 5 normalize to 3.75 and 5 (see
+      // normalizeScore) — summed, not averaged, for totalScore.
+      prisma.formSubmission.findMany.mockResolvedValue([
+        submissionFixture({ id: 'sub-1', submittedById: 'user-1', answers: { score: 4 } }),
+        submissionFixture({ id: 'sub-2', submittedById: 'user-1', answers: { score: 5 } }),
+      ]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.totalScore).toBe(8.75);
+    });
+
+    it("matches totalScore against the configured Performance Level ranges (not score's fixed 0-5 bands)", async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      mockOneMapping(prisma);
+      prisma.formSubmission.findMany.mockResolvedValue([
+        submissionFixture({ id: 'sub-1', submittedById: 'user-1', answers: { score: 4 } }),
+        submissionFixture({ id: 'sub-2', submittedById: 'user-1', answers: { score: 5 } }),
+      ]);
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: 'level-low', label: 'Needs work', minScore: 0, maxScore: 5 },
+        { id: 'level-high', label: 'Outstanding', minScore: 5, maxScore: 10 },
+      ]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.totalScore).toBe(8.75);
+      expect(members[0]!.performanceLevel).toEqual({ id: 'level-high', label: 'Outstanding' });
+    });
+
+    it('reports performanceLevel as null when totalScore falls in a gap between configured ranges', async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      mockOneMapping(prisma);
+      prisma.formSubmission.findMany.mockResolvedValue([submissionFixture({ submittedById: 'user-1' })]);
+      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'Outstanding', minScore: 10, maxScore: 20 }]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.totalScore).not.toBeNull();
+      expect(members[0]!.performanceLevel).toBeNull();
+    });
+
+    it('reports totalScore and performanceLevel as null for a member with no scored submissions', async () => {
+      prisma.user.findMany.mockResolvedValue([coveredUser]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.totalScore).toBeNull();
+      expect(members[0]!.performanceLevel).toBeNull();
+    });
+
     it('restricts the roster to members whose score falls within an allowed Performance-Level range', async () => {
       const thirdUser = { ...coveredUser, id: 'user-3', displayName: 'Third User' };
       prisma.user.findMany.mockResolvedValue([coveredUser, thirdUser]);
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'level', scopeValues: ['level-1'] }]);
-      prisma.performanceLevel.findMany.mockResolvedValue([{ minScore: 4, maxScore: 5 }]);
+      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'Outstanding', minScore: 4, maxScore: 5 }]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([
         { personId: 'user-1', evaluationAreaId: 'area-1', value: 5, periodStart: new Date('2026-02-01') },
         { personId: 'user-3', evaluationAreaId: 'area-1', value: 1, periodStart: new Date('2026-02-01') },
@@ -558,6 +616,30 @@ describe('KpiDashboardService', () => {
       const breakdown = await service.getPersonBreakdown('user-2', actorId);
 
       expect(breakdown.submissions).toEqual([]);
+      expect(breakdown.totalScore).toBeNull();
+      expect(breakdown.performanceLevel).toBeNull();
+    });
+
+    it('sums all of this person\'s scored submissions into totalScore and matches it against a configured Performance Level', async () => {
+      prisma.user.findUnique.mockResolvedValue(person);
+      prisma.kpi.findMany.mockResolvedValue([{ evaluationAreas: [{ id: 'area-1' }] }]);
+      mockOneMapping(prisma, { evaluateeFieldKeys: ['evaluatee'] });
+      // rating/scale-5 answers of 2 and 5 normalize to 1.25 and 5 (see
+      // normalizeScore) — summed, not averaged, for totalScore.
+      prisma.formSubmission.findMany.mockResolvedValue([
+        submissionFixture({ id: 'sub-old', answers: { score: 2, evaluatee: 'user-2' } }),
+        submissionFixture({ id: 'sub-new', answers: { score: 5, evaluatee: 'user-2' } }),
+      ]);
+      mockUsers(prisma, [
+        { id: 'user-2', displayName: 'Evaluatee' },
+        { id: 'evaluator-1', displayName: 'Rater One' },
+      ]);
+      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'On track', minScore: 5, maxScore: 10 }]);
+
+      const breakdown = await service.getPersonBreakdown('user-2', actorId);
+
+      expect(breakdown.totalScore).toBe(6.25);
+      expect(breakdown.performanceLevel).toEqual({ id: 'level-1', label: 'On track' });
     });
 
     it('withholds the evaluator on an anonymous mapping from a caller without kpis:manage', async () => {

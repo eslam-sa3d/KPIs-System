@@ -318,7 +318,6 @@ export default function DashboardPage() {
 
         <TeamMemberDetailDrawer
           breakdown={currentMemberBreakdown}
-          score={teamMembers.find((m) => m.id === selectedMemberId)?.score ?? null}
           loading={selectedMemberId !== null && currentMemberBreakdown === null && !memberBreakdownError}
           error={selectedMemberId !== null ? memberBreakdownError : null}
           onClose={() => setSelectedMemberId(null)}

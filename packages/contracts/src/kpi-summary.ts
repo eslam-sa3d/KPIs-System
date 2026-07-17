@@ -46,6 +46,18 @@ export interface TeamMember {
    *  visibility gate; every other field on this type is a raw, per-submission
    *  value on its own native scale. */
   score: number | null;
+  /** Sum of every one of this person's scored submissions, all-time (not
+   *  blended/averaged, and not windowed to a period) — grows as they're
+   *  evaluated more. Distinct from `score` (the older 0-5 blend, still used
+   *  for the status cards and the Performance-Level visibility gate): this
+   *  is what a totalScore-scale Performance Level range (see
+   *  `performanceLevel`) is matched against. Null when they have no scored
+   *  submissions at all. */
+  totalScore: number | null;
+  /** The configured Performance Level whose range contains `totalScore` —
+   *  null when nothing is configured, or `totalScore` falls in a gap between
+   *  ranges, or `totalScore` itself is null. */
+  performanceLevel: { id: string; label: string } | null;
   /** The person's single most recent scored submission, across every KPI
    *  area that covers them — null when they've never been scored ("pending",
    *  not "scored a 0"). Includes which area/KPI it was for since a person
@@ -120,6 +132,11 @@ export interface RawActivityEntry {
 export interface TeamMemberBreakdown {
   personId: string;
   displayName: string;
+  /** Same all-time-sum/matched-range rule as TeamMember.totalScore/
+   *  performanceLevel — computed from every one of this person's scored
+   *  submissions, not just the recent ones in `submissions` below. */
+  totalScore: number | null;
+  performanceLevel: { id: string; label: string } | null;
   submissions: PersonSubmission[];
   /** This person's own raw-activity entries (see RawActivityEntry), most
    *  recent first — omitted/empty when they have none. Separate list from

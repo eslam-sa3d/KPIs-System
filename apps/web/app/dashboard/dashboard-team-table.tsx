@@ -147,7 +147,7 @@ export function DashboardTeamTable({
                   <TableCell className="muted">{m.roles.join(', ') || '—'}</TableCell>
                   <TableCell>
                     <Badge className="border-transparent" style={statusBadgeStyle(memberStatus)}>
-                      {STATUS_LABEL[memberStatus]}
+                      {m.performanceLevel ? m.performanceLevel.label : m.totalScore !== null ? 'Unranked' : 'Pending'}
                     </Badge>
                     {m.rawActivityCount > 0 && (
                       <span
@@ -160,7 +160,7 @@ export function DashboardTeamTable({
                     )}
                   </TableCell>
                   <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
-                    {m.score !== null ? `${m.score.toFixed(1)} / 5` : '—'}
+                    {m.totalScore !== null ? m.totalScore.toFixed(1) : '—'}
                   </TableCell>
                   <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
                     {m.lastUpdated ? new Date(m.lastUpdated).toLocaleDateString() : '—'}

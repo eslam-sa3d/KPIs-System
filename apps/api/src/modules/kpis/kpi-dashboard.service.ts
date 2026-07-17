@@ -16,7 +16,7 @@ import {
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 import { RedisService } from '../../infra/redis.service';
-import { answerToText, describeAnswer, resolveEvaluateeId } from '../forms/score-resolution';
+import { answerToText, describeAnswer, normalizeScore, resolveEvaluateeId } from '../forms/score-resolution';
 import { detectReferencedUserIds } from '../forms/submission-person-detection';
 import { RbacService } from '../rbac/rbac.service';
 import {
@@ -139,6 +139,11 @@ export interface ScoredSubmission {
   reviewType: string;
   raw: unknown;
   display: string;
+  /** The same raw answer normalized to a 0-5 KPI score (see normalizeScore)
+   *  — null when the field/answer has no well-defined numeric interpretation
+   *  (e.g. a context-only free-text field). Summed across all of a person's
+   *  scored submissions, all-time, for their dashboard total score. */
+  value: number | null;
   context: string | null;
   comment: string | null;
   submittedAt: Date;
@@ -167,6 +172,19 @@ function avg(values: number[]): number {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** The configured Performance Level whose [minScore, maxScore] range
+ *  contains a person's total score, or null when it falls in a gap between
+ *  configured ranges (or nothing is configured at all) — not a fallback to
+ *  the nearest range, since an admin-defined gap is a deliberate "unranked"
+ *  zone, not an oversight for this code to paper over. */
+function matchPerformanceLevel<T extends { id: string; label: string; minScore: number; maxScore: number }>(
+  total: number,
+  levels: T[],
+): { id: string; label: string } | null {
+  const match = levels.find((l) => total >= l.minScore && total <= l.maxScore);
+  return match ? { id: match.id, label: match.label } : null;
 }
 
 /** Blends a set of entries into a "latest period" value and a "period before
@@ -338,8 +356,11 @@ export class KpiDashboardService {
         (key) => key && fields?.find((f) => f.key === key)?.type === 'performance_level',
       );
     });
+    // Selected columns cover both describeAnswer's display-string needs
+    // (label) and normalizeScore's numeric needs (minScore/maxScore/score,
+    // for each submission's own contribution to a person's all-time total).
     const performanceLevels = needsPerformanceLevels
-      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
+      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } })
       : undefined;
     // score_label answers resolve against the live ScoreLabel table — same
     // lazy-fetch rule as performanceLevels above.
@@ -350,14 +371,20 @@ export class KpiDashboardService {
       );
     });
     const scoreLabels = needsScoreLabels
-      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true } })
+      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true, score: true } })
       : undefined;
+    const numericPerformanceLevels = performanceLevels?.map((l) => ({
+      id: l.id,
+      minScore: Number(l.minScore),
+      maxScore: Number(l.maxScore),
+    }));
 
     type Candidate = {
       mapping: (typeof activeMappings)[number];
       submission: (typeof submissions)[number];
       evaluateeId: string;
       described: { raw: unknown; display: string };
+      value: number | null;
     };
     const candidates: Candidate[] = [];
     for (const mapping of activeMappings) {
@@ -372,7 +399,8 @@ export class KpiDashboardService {
         if (rawScore === undefined || rawScore === null) continue;
         const described = describeAnswer(scoreField, rawScore, { performanceLevels, scoreLabels });
         if (described === null) continue;
-        candidates.push({ mapping, submission, evaluateeId, described });
+        const value = normalizeScore(scoreField, rawScore, numericPerformanceLevels, scoreLabels);
+        candidates.push({ mapping, submission, evaluateeId, described, value });
       }
     }
     if (candidates.length === 0) return [];
@@ -427,6 +455,7 @@ export class KpiDashboardService {
         reviewType: c.mapping.reviewType,
         raw: c.described.raw,
         display: c.described.display,
+        value: c.value,
         context: resolveContextText(c.mapping.contextFieldKey),
         comment: resolveContextText(c.mapping.commentFieldKey),
         submittedAt: c.submission.createdAt,
@@ -669,14 +698,17 @@ export class KpiDashboardService {
     // client as `score` now, to power the dashboard's status cards — because
     // a Performance Level range is defined on that same 0-5 scale and has
     // nothing else to compare a raw, per-mapping answer against.
-    const allowedLevelIds = await this.rbac.allowedDashboardLevelIds(userId);
-    const allowedRanges =
-      allowedLevelIds === null
-        ? null
-        : await this.prisma.performanceLevel.findMany({
-            where: { id: { in: allowedLevelIds } },
-            select: { minScore: true, maxScore: true },
-          });
+    const [allowedLevelIds, performanceLevelRows] = await Promise.all([
+      this.rbac.allowedDashboardLevelIds(userId),
+      this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } }),
+    ]);
+    const allPerformanceLevels = performanceLevelRows.map((l) => ({
+      id: l.id,
+      label: l.label,
+      minScore: Number(l.minScore),
+      maxScore: Number(l.maxScore),
+    }));
+    const allowedRanges = allowedLevelIds === null ? null : allPerformanceLevels.filter((l) => allowedLevelIds.includes(l.id));
 
     const allowedFormIdList = await allowedFormIds(this.prisma);
     const [users, kpis, legacyEntries, scored, rawActivity] = await Promise.all([
@@ -763,6 +795,14 @@ export class KpiDashboardService {
       // type/scale even under the same Evaluation Area.
       const previous = latest ? (personScored.find((s, i) => i > 0 && s.mappingId === latest.mappingId) ?? null) : null;
 
+      // All-time sum of every one of this person's scored submissions (not
+      // just recent ones, and not blended/averaged) — grows as they're
+      // evaluated more, matched against the admin-configured Performance
+      // Level ranges below rather than the fixed 0-5 status bands.
+      const totalScoreValues = personScored.map((s) => s.value).filter((v): v is number => v !== null);
+      const totalScore = totalScoreValues.length > 0 ? round2(totalScoreValues.reduce((a, b) => a + b, 0)) : null;
+      const performanceLevel = totalScore !== null ? matchPerformanceLevel(totalScore, allPerformanceLevels) : null;
+
       return {
         id: user.id,
         displayName: user.displayName,
@@ -772,6 +812,8 @@ export class KpiDashboardService {
         roles: user.roles.map((r) => r.role.name),
         hasKpi,
         score: legacyFinalScore(user.id),
+        totalScore,
+        performanceLevel,
         latestSubmission: latest
           ? {
               raw: latest.raw,
@@ -797,11 +839,7 @@ export class KpiDashboardService {
     const visibleMembers =
       allowedRanges === null
         ? members
-        : members.filter(
-            (m) =>
-              m.score !== null &&
-              allowedRanges.some((r) => m.score! >= Number(r.minScore) && m.score! <= Number(r.maxScore)),
-          );
+        : members.filter((m) => m.score !== null && allowedRanges.some((r) => m.score! >= r.minScore && m.score! <= r.maxScore));
 
     return { totalActiveUsers: visibleMembers.length, members: visibleMembers };
   }
@@ -830,26 +868,42 @@ export class KpiDashboardService {
     });
     if (!person) throw AppError.notFound('User', personId);
 
-    const [kpis, canSeeEvaluators, allowedFormIdList] = await Promise.all([
+    const [kpis, canSeeEvaluators, allowedFormIdList, performanceLevelRows] = await Promise.all([
       this.prisma.kpi.findMany({
         where: { isActive: true, ...(await myAssignmentFilter(this.prisma, personId)) },
         select: { evaluationAreas: { where: { isActive: true }, select: { id: true } } },
       }),
       canSeeAnonymousEvaluators(this.prisma, callerId),
       allowedFormIds(this.prisma),
+      this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } }),
     ]);
     const areaIds = kpis.flatMap((kpi) => kpi.evaluationAreas.map((a) => a.id));
+    const allPerformanceLevels = performanceLevelRows.map((l) => ({
+      id: l.id,
+      label: l.label,
+      minScore: Number(l.minScore),
+      maxScore: Number(l.maxScore),
+    }));
 
     const [scored, rawActivity] = await Promise.all([
       this.loadScoredSubmissions(areaIds, allowedFormIdList),
       this.loadRawActivity(allowedFormIdList),
     ]);
-    const personScored = scored.filter((s) => s.personId === personId).slice(0, RECENT_ENTRIES_TAKE);
+    const allPersonScored = scored.filter((s) => s.personId === personId);
+    const personScored = allPersonScored.slice(0, RECENT_ENTRIES_TAKE);
     const personRawActivity = rawActivity.filter((a) => a.personId === personId).slice(0, RECENT_ENTRIES_TAKE);
+
+    // Same all-time-sum rule as getTeamOverviewImpl — every scored
+    // submission this person has, not just the recent ones shown below.
+    const totalScoreValues = allPersonScored.map((s) => s.value).filter((v): v is number => v !== null);
+    const totalScore = totalScoreValues.length > 0 ? round2(totalScoreValues.reduce((a, b) => a + b, 0)) : null;
+    const performanceLevel = totalScore !== null ? matchPerformanceLevel(totalScore, allPerformanceLevels) : null;
 
     return {
       personId: person.id,
       displayName: person.displayName,
+      totalScore,
+      performanceLevel,
       submissions: personScored.map((s) => {
         const scrubbed = scrubAnonymousEntry(s, canSeeEvaluators);
         return {
