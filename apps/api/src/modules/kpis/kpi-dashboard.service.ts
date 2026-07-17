@@ -164,6 +164,14 @@ export interface RawActivity {
   submissionId: string;
   submittedAt: Date;
   answers: RawActivityAnswer[];
+  /** Sum of every scoreable field's own configured value (see
+   *  rawFieldValue) in this submission — every answered field counts, not
+   *  just one designated "score field" the way a FormKpiMapping requires.
+   *  Null when nothing in this submission has a well-defined numeric value.
+   *  Folded into a person's totalScore alongside their KPI-mapped scored
+   *  submissions, so a real answer counts whether or not the form it came
+   *  from has ever been wired up to a KPI. */
+  scoreValue: number | null;
 }
 
 function avg(values: number[]): number {
@@ -486,6 +494,13 @@ export class KpiDashboardService {
    * MAX_SUBMISSIONS_FOR_DASHBOARD — this is an additive secondary signal
    * riding on the same synchronous dashboard load as the primary scored path,
    * which already has its own fail-loud guard.
+   *
+   * Each entry also carries `scoreValue` (see RawActivity) — every
+   * scoreable field's own configured value, summed, so a real answer counts
+   * toward a person's totalScore whether or not an admin has ever wired the
+   * form up to a KPI. Deliberately still requires no FormKpiMapping to
+   * exist: a totalScore should reflect what people actually answered, not
+   * what an admin remembered to configure.
    */
   private async loadRawActivity(allowedFormIdList?: string[] | null): Promise<RawActivity[]> {
     const forms = await this.prisma.form.findMany({
@@ -525,14 +540,21 @@ export class KpiDashboardService {
       unmappedForms.map((f) => [f.id, f.versions[0]?.definition as unknown as FormDefinition | undefined]),
     );
 
-    // Same lazy performanceLevels/scoreLabels fetch rule as loadScoredSubmissions.
+    // Same lazy performanceLevels/scoreLabels fetch rule as loadScoredSubmissions
+    // — columns cover both describeAnswer's display needs (label) and
+    // rawFieldValue's numeric needs (minScore/maxScore/score).
     const allFields = [...definitionByFormId.values()].flatMap((d) => d?.fields ?? []);
     const performanceLevels = allFields.some((f) => f.type === 'performance_level')
-      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
+      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } })
       : undefined;
     const scoreLabels = allFields.some((f) => f.type === 'score_label')
-      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true } })
+      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true, score: true } })
       : undefined;
+    const numericPerformanceLevels = performanceLevels?.map((l) => ({
+      id: l.id,
+      minScore: Number(l.minScore),
+      maxScore: Number(l.maxScore),
+    }));
 
     type Candidate = {
       form: (typeof unmappedForms)[number];
@@ -576,6 +598,15 @@ export class KpiDashboardService {
           return display !== null ? { fieldKey: f.key, fieldLabel: f.label, display } : null;
         })
         .filter((a): a is RawActivityAnswer => a !== null);
+      // Every scoreable field in the submission counts, not just one
+      // designated "score field" — a QC checklist with three score_label
+      // questions contributes all three, unlike the one-field-per-mapping
+      // rule loadScoredSubmissions follows.
+      const scoreValues = c.definition.fields
+        .filter((f) => answers[f.key] !== undefined)
+        .map((f) => rawFieldValue(f, answers[f.key]!, numericPerformanceLevels, scoreLabels))
+        .filter((v): v is number => v !== null);
+      const scoreValue = scoreValues.length > 0 ? scoreValues.reduce((a, b) => a + b, 0) : null;
 
       // One entry PER named person — a submission naming several people
       // shows up in each of their drawers/counts, same "one submission, several
@@ -592,6 +623,7 @@ export class KpiDashboardService {
           submissionId: c.submission.id,
           submittedAt: c.submission.createdAt,
           answers: describedAnswers,
+          scoreValue,
         });
       }
     }
@@ -758,9 +790,16 @@ export class KpiDashboardService {
     // latest scored submission, so a person with only unmapped-form activity
     // (no scored submission at all) still shows a real last-updated date.
     const rawActivityLatestByPerson = new Map<string, Date>();
+    // Every scoreable answer on an unmapped form counts toward totalScore
+    // too — a real score shouldn't require an admin to have wired up a
+    // FormKpiMapping first.
+    const rawActivityScoreByPerson = new Map<string, number>();
     for (const a of rawActivity) {
       rawActivityCountByPerson.set(a.personId, (rawActivityCountByPerson.get(a.personId) ?? 0) + 1);
       if (!rawActivityLatestByPerson.has(a.personId)) rawActivityLatestByPerson.set(a.personId, a.submittedAt);
+      if (a.scoreValue !== null) {
+        rawActivityScoreByPerson.set(a.personId, (rawActivityScoreByPerson.get(a.personId) ?? 0) + a.scoreValue);
+      }
     }
 
     // Visibility-gate-only blend, exactly as before — see the comment above.
@@ -803,11 +842,18 @@ export class KpiDashboardService {
       const previous = latest ? (personScored.find((s, i) => i > 0 && s.mappingId === latest.mappingId) ?? null) : null;
 
       // All-time sum of every one of this person's scored submissions (not
-      // just recent ones, and not blended/averaged) — grows as they're
-      // evaluated more, matched against the admin-configured Performance
-      // Level ranges below rather than the fixed 0-5 status bands.
+      // just recent ones, and not blended/averaged) PLUS every scoreable
+      // answer on an unmapped form naming them (see rawFieldValue via
+      // loadRawActivity) — a real answer counts whether or not a
+      // FormKpiMapping has ever been set up for that form. Matched against
+      // the admin-configured Performance Level ranges below rather than the
+      // fixed 0-5 status bands.
       const totalScoreValues = personScored.map((s) => s.value).filter((v): v is number => v !== null);
-      const totalScore = totalScoreValues.length > 0 ? round2(totalScoreValues.reduce((a, b) => a + b, 0)) : null;
+      const rawScore = rawActivityScoreByPerson.get(user.id) ?? null;
+      const totalScore =
+        totalScoreValues.length > 0 || rawScore !== null
+          ? round2(totalScoreValues.reduce((a, b) => a + b, 0) + (rawScore ?? 0))
+          : null;
       // Matched only against a real totalScore — never the legacy
       // EvaluationAreaEntry blend (`score` below), which can hold seed/
       // migrated data with no connection to any Score Label or Performance
@@ -914,16 +960,21 @@ export class KpiDashboardService {
     ]);
     const allPersonScored = scored.filter((s) => s.personId === personId);
     const personScored = allPersonScored.slice(0, RECENT_ENTRIES_TAKE);
-    const personRawActivity = rawActivity.filter((a) => a.personId === personId).slice(0, RECENT_ENTRIES_TAKE);
+    const allPersonRawActivity = rawActivity.filter((a) => a.personId === personId);
+    const personRawActivity = allPersonRawActivity.slice(0, RECENT_ENTRIES_TAKE);
 
     // Same all-time-sum rule as getTeamOverviewImpl — every scored
-    // submission this person has, not just the recent ones shown below.
-    // Matched only against a real totalScore — never the legacy
-    // EvaluationAreaEntry blend, which can hold seed/migrated data with no
-    // connection to any Score Label or Performance Level an admin has
-    // actually configured.
+    // submission this person has PLUS every scoreable answer on an unmapped
+    // form naming them, not just the recent ones shown below. Matched only
+    // against a real totalScore — never the legacy EvaluationAreaEntry
+    // blend, which can hold seed/migrated data with no connection to any
+    // Score Label or Performance Level an admin has actually configured.
     const totalScoreValues = allPersonScored.map((s) => s.value).filter((v): v is number => v !== null);
-    const totalScore = totalScoreValues.length > 0 ? round2(totalScoreValues.reduce((a, b) => a + b, 0)) : null;
+    const rawScoreValues = allPersonRawActivity.map((a) => a.scoreValue).filter((v): v is number => v !== null);
+    const totalScore =
+      totalScoreValues.length > 0 || rawScoreValues.length > 0
+        ? round2([...totalScoreValues, ...rawScoreValues].reduce((a, b) => a + b, 0))
+        : null;
     const performanceLevel = totalScore !== null ? matchPerformanceLevel(totalScore, allPerformanceLevels) : null;
 
     return {

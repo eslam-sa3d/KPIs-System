@@ -700,6 +700,44 @@ describe('KpiDashboardService', () => {
       expect(members[0]!.rawActivityCount).toBe(1);
     });
 
+    it('folds a score_label answer on a form with NO KPI mapping into totalScore — a real answer counts with no mapping required', async () => {
+      const uuidUserId = '33333333-3333-3333-3333-333333333333';
+      const definition = {
+        title: 'Sprint check-in',
+        fields: [
+          { key: 'team', label: 'Team member', type: 'person' },
+          { key: 'rating', label: 'Rating', type: 'score_label' },
+        ],
+      };
+      prisma.user.findMany.mockResolvedValue([
+        { ...coveredUser, id: uuidUserId, isActive: true, isKpiApplicable: true },
+      ]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      // Zero active-area mappings — genuinely unmapped.
+      prisma.form.findMany.mockResolvedValue([
+        { id: 'form-2', slug: 'sprint-check-in', status: 'published', versions: [{ definition }], kpiMappings: [] },
+      ]);
+      prisma.formSubmission.count.mockResolvedValue(1);
+      prisma.formSubmission.findMany.mockResolvedValue([
+        {
+          id: 'sub-raw-1',
+          answers: { team: uuidUserId, rating: 'label-over' },
+          submittedById: uuidUserId,
+          createdAt: new Date('2026-03-01T09:00:00Z'),
+          formVersion: { formId: 'form-2' },
+        },
+      ]);
+      prisma.scoreLabel.findMany.mockResolvedValue([{ id: 'label-over', label: 'Over-Achieved', score: 3 }]);
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: 'level-over', label: 'Over-Achieved', minScore: 2, maxScore: 3 },
+      ]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.totalScore).toBe(3);
+      expect(members[0]!.performanceLevel).toEqual({ id: 'level-over', label: 'Over-Achieved' });
+    });
+
     it('excludes a form with an active KPI mapping from raw-activity counts', async () => {
       prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
@@ -708,6 +746,55 @@ describe('KpiDashboardService', () => {
       const { members } = await service.getTeamOverview(actorId);
 
       expect(members[0]!.rawActivityCount).toBe(0);
+    });
+
+    it('sums a KPI-mapped scored submission and an unmapped-form scoreable answer into the same totalScore', async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      mockOneMapping(prisma); // form-1 mapped, rating field, scored submission below answers 4
+      prisma.formSubmission.count.mockResolvedValue(1);
+      // form-1 is mapped so loadScoredSubmissions sees it; form-2 is
+      // unmapped so loadRawActivity sees it — args shape, not call order,
+      // tells the mock which path is asking (see the "prefers the more
+      // recent" lastUpdated test above for why).
+      const rawDefinition = {
+        title: 'Check-in',
+        fields: [
+          { key: 'team', label: 'Team', type: 'person' },
+          { key: 'rating', label: 'Rating', type: 'score_label' },
+        ],
+      };
+      prisma.form.findMany.mockImplementation(async (args: { where?: { status?: string } } = {}) => {
+        if (args.where?.status === 'published') {
+          return [
+            { id: 'form-2', slug: 'check-in', status: 'published', versions: [{ definition: rawDefinition }], kpiMappings: [] },
+          ];
+        }
+        return [{ id: 'form-1', versions: [{ definition: ratingFormDefinition }] }];
+      });
+      prisma.formSubmission.findMany.mockImplementation(
+        async (args: { where?: { formVersion?: { formId?: { in?: string[] } } } } = {}) => {
+          const formIds = args.where?.formVersion?.formId?.in ?? [];
+          if (formIds.includes('form-2')) {
+            return [
+              {
+                id: 'sub-raw-1',
+                answers: { team: 'user-1', rating: 'label-1' },
+                submittedById: 'user-1',
+                createdAt: new Date('2026-02-15T09:00:00Z'),
+                formVersion: { formId: 'form-2' },
+              },
+            ];
+          }
+          return [submissionFixture({ submittedById: 'user-1', answers: { score: 4 } })];
+        },
+      );
+      prisma.scoreLabel.findMany.mockResolvedValue([{ id: 'label-1', label: 'On track', score: 2 }]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      // rating raw 4 (unscaled, see rawFieldValue) + score_label 2 = 6.
+      expect(members[0]!.totalScore).toBe(6);
     });
 
     it('reports lastUpdated from raw activity when a member has no scored submission at all', async () => {
