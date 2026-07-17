@@ -6,7 +6,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, downloadFile } from '../lib/api-client';
-import { resolvePersonAnswer, resolvePerformanceLevelAnswer, resolveScoreLabelAnswer } from '../lib/resolve-person-answer';
+import {
+  resolvePersonAnswer,
+  resolvePerformanceLevelAnswer,
+  resolveScoreLabelAnswer,
+} from '../lib/resolve-person-answer';
 import { FieldInput, type SubmissionScore } from './form-renderer';
 
 export interface DetailedSubmission {

@@ -21,7 +21,11 @@ import { AccessControlPanel } from '../../../components/access-control-panel';
 import { ResponseSummary, ResponseSummaryData } from '../../../components/response-summary';
 import { ResponseDetailModal } from '../../../components/response-detail-modal';
 import { apiPaged, api, downloadFile } from '../../../lib/api-client';
-import { resolvePersonAnswer, resolvePerformanceLevelAnswer, resolveScoreLabelAnswer } from '../../../lib/resolve-person-answer';
+import {
+  resolvePersonAnswer,
+  resolvePerformanceLevelAnswer,
+  resolveScoreLabelAnswer,
+} from '../../../lib/resolve-person-answer';
 import { useSession } from '../../../lib/use-session';
 
 interface FormDetail {
