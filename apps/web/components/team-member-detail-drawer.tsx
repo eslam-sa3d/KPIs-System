@@ -52,9 +52,9 @@ export function TeamMemberDetailDrawer({
                 <div className="p-drawer-avatar">{breakdown.displayName.slice(0, 2).toUpperCase()}</div>
                 <SheetTitle className="p-drawer-name">{breakdown.displayName}</SheetTitle>
                 <div className="p-drawer-meta" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {breakdown.totalScore !== null && (
+                  {breakdown.latestScore !== null && (
                     <Badge className="border-transparent" style={bandBadgeStyle(bandOf(breakdown), levels)}>
-                      {breakdown.totalScore.toFixed(1)} ·{' '}
+                      {breakdown.latestScore.toFixed(1)} ·{' '}
                       {breakdown.performanceLevel ? breakdown.performanceLevel.label : 'Unranked'}
                     </Badge>
                   )}
@@ -99,8 +99,8 @@ export function TeamMemberDetailDrawer({
                       Other form activity ({breakdown.rawActivity.length})
                     </h4>
                     <p className="muted" style={{ fontSize: 10.5, marginBottom: 12 }}>
-                      Responses naming this person on forms with no KPI mapping yet — any scoreable answers still
-                      count toward their total above.
+                      Responses naming this person on forms with no KPI mapping yet — a scoreable answer here can
+                      still be their most recent score above.
                     </p>
                     {breakdown.rawActivity.map((a, i) => (
                       <div key={`${a.submissionId}-${i}`} style={{ marginBottom: 16 }}>

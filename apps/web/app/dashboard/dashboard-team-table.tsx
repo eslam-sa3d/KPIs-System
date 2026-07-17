@@ -133,8 +133,8 @@ export function DashboardTeamTable({
           ) : (
             memberTableData.map((m) => {
               const band = bandOf(m);
-              const statusLabel = m.performanceLevel ? m.performanceLevel.label : m.totalScore !== null ? 'Unranked' : 'Pending';
-              const scoreDisplay = m.totalScore !== null ? m.totalScore.toFixed(1) : '—';
+              const statusLabel = m.performanceLevel ? m.performanceLevel.label : m.latestScore !== null ? 'Unranked' : 'Pending';
+              const scoreDisplay = m.latestScore !== null ? m.latestScore.toFixed(1) : '—';
               return (
                 <TableRow
                   key={m.id}

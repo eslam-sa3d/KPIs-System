@@ -9,9 +9,9 @@ export interface PerformanceLevelOption {
   maxScore: number;
 }
 
-/** A dashboard "band" a team member's totalScore falls into — one per
+/** A dashboard "band" a team member's latestScore falls into — one per
  *  admin-configured Performance Level (highest range first), plus two fixed
- *  buckets: `UNRANKED_BAND` (has a real totalScore but no configured range
+ *  buckets: `UNRANKED_BAND` (has a real latestScore but no configured range
  *  covers it) and `PENDING_BAND` (no scored submission at all yet). Unlike
  *  the old fixed five-tier system, the count and labels here are always
  *  whatever's actually configured on the Configuration page. */
@@ -48,11 +48,11 @@ export function orderedBands(levels: PerformanceLevelOption[]): Band[] {
 
 /** Which band a member falls into — mirrors the exact same rule the API
  *  already applies for `performanceLevel` (see TeamMember.performanceLevel):
- *  a real matched level, else Unranked (has a totalScore but no range
+ *  a real matched level, else Unranked (has a latestScore but no range
  *  covers it), else Pending (no scored submission at all). */
-export function bandOf(member: { totalScore: number | null; performanceLevel: { id: string; label: string } | null }): BandKey {
+export function bandOf(member: { latestScore: number | null; performanceLevel: { id: string; label: string } | null }): BandKey {
   if (member.performanceLevel) return member.performanceLevel.id;
-  return member.totalScore !== null ? UNRANKED_BAND : PENDING_BAND;
+  return member.latestScore !== null ? UNRANKED_BAND : PENDING_BAND;
 }
 
 /** Brand color for a band, assigned by rank (highest configured range

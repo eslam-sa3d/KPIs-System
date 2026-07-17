@@ -9,8 +9,8 @@ const CountBarChart = dynamic(() => import('../../components/count-bar-chart'), 
   loading: () => <LoadingState label="Loading chart…" />,
 });
 
-/** Each scored member's own totalScore — one bar per person, distinct from
- *  "submissions by person" which counts raw activity, not this sum. */
+/** Each scored member's own latestScore — one bar per person, distinct from
+ *  "submissions by person" which counts raw activity, not this value. */
 export function DashboardScoreChart({
   show,
   scoreByPerson,

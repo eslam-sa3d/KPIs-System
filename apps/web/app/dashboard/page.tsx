@@ -166,7 +166,7 @@ export default function DashboardPage() {
     return teamMembers.filter((m) => m.jobTitle === jobTitleFilter);
   }, [teamMembers, jobTitleFilter]);
 
-  // Status strip: counts *people*, bucketed by their own totalScore's
+  // Status strip: counts *people*, bucketed by their own latestScore's
   // matched Performance Level — bandOf(m) is the exact same rule the team
   // table below uses per row, so the cards and the table always agree.
   const stats = useMemo(() => {
@@ -178,18 +178,18 @@ export default function DashboardPage() {
     });
     return counts;
   }, [filteredTeamMembers, bands]);
-  // Each card's headline number is the *average* totalScore of the people
+  // Each card's headline number is the *average* latestScore of the people
   // in that band, not how many of them there are — the member count moves
   // to subtext instead. Pending has no score to average, so it keeps
-  // showing its member count; Unranked does have real totalScores to
+  // showing its member count; Unranked does have real latestScores to
   // average even though none matched a configured range.
   const bandScoreAvg = useMemo(() => {
     const scoresByBand: Record<BandKey, number[]> = {};
     bands.forEach((b) => (scoresByBand[b.key] = []));
     filteredTeamMembers.forEach((m) => {
-      if (m.totalScore !== null) {
+      if (m.latestScore !== null) {
         const key = bandOf(m);
-        (scoresByBand[key] ??= []).push(m.totalScore);
+        (scoresByBand[key] ??= []).push(m.latestScore);
       }
     });
     const avg: Record<BandKey, number | null> = {};
@@ -200,12 +200,12 @@ export default function DashboardPage() {
     return avg;
   }, [filteredTeamMembers, bands]);
 
-  // Each scored member's own totalScore — one bar per person, distinct from
-  // "submissions by person" below which counts raw activity, not this sum.
+  // Each scored member's own latestScore — one bar per person, distinct from
+  // "submissions by person" below which counts raw activity, not this value.
   const scoreByPerson = useMemo(() => {
     return filteredTeamMembers
-      .filter((m): m is typeof m & { totalScore: number } => m.totalScore !== null)
-      .map((m) => ({ label: m.displayName, count: Math.round(m.totalScore * 10) / 10 }))
+      .filter((m): m is typeof m & { latestScore: number } => m.latestScore !== null)
+      .map((m) => ({ label: m.displayName, count: Math.round(m.latestScore * 10) / 10 }))
       .sort((a, b) => b.count - a.count);
   }, [filteredTeamMembers]);
   const hasScoreByPerson = scoreByPerson.length > 0;

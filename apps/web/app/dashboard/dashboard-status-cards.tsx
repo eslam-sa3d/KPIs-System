@@ -3,11 +3,11 @@
 import { CSSProperties } from 'react';
 import { Band, BandKey, PENDING_BAND, PerformanceLevelOption, bandBadgeStyle, bandColor } from '../../lib/performance-band';
 
-/** Status strip: counts *people*, bucketed by their own totalScore's
+/** Status strip: counts *people*, bucketed by their own latestScore's
  *  matched Performance Level — one card per admin-configured level (highest
  *  first), plus Unranked and Pending, always shown even at zero members, so
  *  the strip always reflects exactly what's configured on the Configuration
- *  page. Each card's headline number is the *average* totalScore of the
+ *  page. Each card's headline number is the *average* latestScore of the
  *  people in that band, not how many of them there are — the member count
  *  moves to subtext instead. Pending has no score to average, so it keeps
  *  showing its member count. */

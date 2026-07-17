@@ -46,20 +46,21 @@ export interface TeamMember {
    *  visibility gate; every other field on this type is a raw, per-submission
    *  value on its own native scale. */
   score: number | null;
-  /** Sum of every one of this person's scored submissions, all-time (not
-   *  blended/averaged, and not windowed to a period) — grows as they're
-   *  evaluated more. Distinct from `score` (the older 0-5 blend, still used
-   *  for the status cards and the Performance-Level visibility gate): this
-   *  is what a totalScore-scale Performance Level range (see
-   *  `performanceLevel`) is matched against. Null when they have no scored
-   *  submissions at all. */
-  totalScore: number | null;
-  /** The configured Performance Level `totalScore` falls into — always a
+  /** This person's single most recent scoreable answer's own configured
+   *  value — never summed or averaged across fields or submissions. Counts
+   *  both KPI-mapped scored submissions and unmapped-form activity equally
+   *  (see RawActivityEntry); whichever is more recent wins, so a real
+   *  answer counts whether or not a FormKpiMapping exists for the form it
+   *  came from. Distinct from `score` (the older EvaluationAreaEntry
+   *  blend, still used for the status cards and the Performance-Level
+   *  visibility gate). Null when they have no scoreable answer at all. */
+  latestScore: number | null;
+  /** The configured Performance Level `latestScore` falls into — always a
    *  real, admin-configured level from the Configuration page, never a
    *  hardcoded status band or a fallback to `score` (the older
    *  EvaluationAreaEntry blend, which can hold seed/migrated data
    *  unconnected to anything actually configured). Null when nothing is
-   *  configured, `totalScore` is null, or it's below every configured
+   *  configured, `latestScore` is null, or it's below every configured
    *  level's minScore. */
   performanceLevel: { id: string; label: string } | null;
   /** The person's single most recent scored submission, across every KPI
@@ -140,16 +141,16 @@ export interface RawActivityEntry {
 export interface TeamMemberBreakdown {
   personId: string;
   displayName: string;
-  /** Same all-time-sum rule as TeamMember.totalScore — computed from every
-   *  one of this person's scored submissions, not just the recent ones in
-   *  `submissions` below. Null until they have a real scored submission —
+  /** Same "most recent single answer wins" rule as TeamMember.latestScore —
+   *  considers this person's full history, not just the recent ones in
+   *  `submissions` below. Null until they have a real scoreable answer —
    *  never falls back to the older EvaluationAreaEntry blend, which can
    *  hold seed/migrated data unconnected to any admin-configured Score
    *  Label or Performance Level. */
-  totalScore: number | null;
-  /** The configured Performance Level `totalScore` falls into — always a
+  latestScore: number | null;
+  /** The configured Performance Level `latestScore` falls into — always a
    *  real, admin-configured level from the Configuration page, never a
-   *  hardcoded status band. Null when nothing is configured, `totalScore`
+   *  hardcoded status band. Null when nothing is configured, `latestScore`
    *  is null, or it's below every configured level's minScore. */
   performanceLevel: { id: string; label: string } | null;
   submissions: PersonSubmission[];
