@@ -85,7 +85,7 @@ export function DashboardTeamTable({
       <div className="page-title-row" style={{ marginBottom: 8 }}>
         <Input
           aria-label="Filter team members"
-          placeholder="Filter by name, email, department, or role…"
+          placeholder="Filter by name, email, department, or job title…"
           value={memberFilter}
           onChange={(e) => setMemberFilter(e.target.value)}
           style={{ maxWidth: 320 }}
@@ -110,7 +110,7 @@ export function DashboardTeamTable({
                 Department
               </button>
             </TableHead>
-            <TableHead>Role</TableHead>
+            <TableHead>Job title</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Score</TableHead>
             <TableHead
@@ -153,7 +153,7 @@ export function DashboardTeamTable({
                 >
                   <TableCell style={{ fontWeight: 500 }}>{m.displayName}</TableCell>
                   <TableCell className="muted">{m.department ?? '—'}</TableCell>
-                  <TableCell className="muted">{m.roles.join(', ') || '—'}</TableCell>
+                  <TableCell className="muted">{m.jobTitle ?? '—'}</TableCell>
                   <TableCell>
                     <Badge className="border-transparent" style={bandBadgeStyle(band, levels)}>
                       {statusLabel}

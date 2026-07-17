@@ -215,7 +215,7 @@ export default function DashboardPage() {
       if (coverageFilterMatches(memberCoverageFilter, m.latestSubmission !== null) === false) return false;
       if (memberStatusFilter !== 'all' && bandOf(m) !== memberStatusFilter) return false;
       if (!memberFilter.trim()) return true;
-      const haystack = `${m.displayName} ${m.email} ${m.department ?? ''} ${m.roles.join(' ')}`.toLowerCase();
+      const haystack = `${m.displayName} ${m.email} ${m.department ?? ''} ${m.jobTitle ?? ''}`.toLowerCase();
       return haystack.includes(memberFilter.trim().toLowerCase());
     });
     data = [...data].sort((a, b) => {
