@@ -27,10 +27,7 @@ export class ScoreLabelsController {
 
   @Post()
   @RequirePermissions('configuration:edit')
-  create(
-    @Body(new ZodValidationPipe(createScoreLabelSchema)) input: CreateScoreLabelInput,
-    @Req() req: AuthedRequest,
-  ) {
+  create(@Body(new ZodValidationPipe(createScoreLabelSchema)) input: CreateScoreLabelInput, @Req() req: AuthedRequest) {
     return this.labels.create(input, req.user.id);
   }
 

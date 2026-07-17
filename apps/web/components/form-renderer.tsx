@@ -12,7 +12,11 @@ import {
   type SubmissionAnswers,
 } from '@pulse/contracts';
 import { api, assetUrl } from '../lib/api-client';
-import { resolvePersonAnswer, resolvePerformanceLevelAnswer, resolveScoreLabelAnswer } from '../lib/resolve-person-answer';
+import {
+  resolvePersonAnswer,
+  resolvePerformanceLevelAnswer,
+  resolveScoreLabelAnswer,
+} from '../lib/resolve-person-answer';
 import type { Media } from '@pulse/contracts';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
