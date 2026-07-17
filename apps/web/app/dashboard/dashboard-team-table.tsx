@@ -125,19 +125,13 @@ export function DashboardTeamTable({
             </TableRow>
           ) : (
             memberTableData.map((m) => {
+              // Colors the badge only — statusLabel's actual text always
+              // comes from the API's performanceLevel (matched server-side
+              // against totalScore, or score as a fallback — see
+              // TeamMember.performanceLevel), never this hardcoded band.
               const memberStatus = statusOf(m.score);
-              // Once a member has a real totalScore (from an actual scored
-              // FormSubmission), that and its matched Performance Level are
-              // authoritative. Until then, fall back to the older blended
-              // score/status band so the table isn't blank for data that
-              // predates this feature — same fallback in the detail drawer.
-              const statusLabel = m.performanceLevel
-                ? m.performanceLevel.label
-                : m.totalScore !== null
-                  ? 'Unranked'
-                  : m.score !== null
-                    ? STATUS_LABEL[memberStatus]
-                    : 'Pending';
+              const hasAnyScore = m.totalScore !== null || m.score !== null;
+              const statusLabel = m.performanceLevel ? m.performanceLevel.label : hasAnyScore ? 'Unranked' : 'Pending';
               const scoreDisplay = m.totalScore !== null ? m.totalScore.toFixed(1) : m.score !== null ? `${m.score.toFixed(1)} / 5` : '—';
               return (
                 <TableRow

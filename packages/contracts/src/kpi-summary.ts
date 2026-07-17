@@ -55,8 +55,11 @@ export interface TeamMember {
    *  submissions at all. */
   totalScore: number | null;
   /** The configured Performance Level whose range contains `totalScore` —
-   *  null when nothing is configured, or `totalScore` falls in a gap between
-   *  ranges, or `totalScore` itself is null. */
+   *  or, when `totalScore` is null (no real scored submission yet), whose
+   *  range contains `score` (the older 0-5 blend) instead, so this is
+   *  always a real, admin-configured level from the Configuration page
+   *  rather than a hardcoded status band. Null when nothing is configured,
+   *  both are null, or neither falls in any configured range. */
   performanceLevel: { id: string; label: string } | null;
   /** The person's single most recent scored submission, across every KPI
    *  area that covers them — null when they've never been scored ("pending",
@@ -136,10 +139,17 @@ export interface RawActivityEntry {
 export interface TeamMemberBreakdown {
   personId: string;
   displayName: string;
+  /** Same older EvaluationAreaEntry-based blend as TeamMember.score — only
+   *  used as a fallback for `performanceLevel` below when `totalScore` is
+   *  null (this person has no real scored submission yet). */
+  score: number | null;
   /** Same all-time-sum/matched-range rule as TeamMember.totalScore/
    *  performanceLevel — computed from every one of this person's scored
    *  submissions, not just the recent ones in `submissions` below. */
   totalScore: number | null;
+  /** Matched against `totalScore` when present, otherwise against `score` —
+   *  always a real, admin-configured Performance Level from the
+   *  Configuration page, never a hardcoded status band. */
   performanceLevel: { id: string; label: string } | null;
   submissions: PersonSubmission[];
   /** This person's own raw-activity entries (see RawActivityEntry), most

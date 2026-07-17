@@ -807,7 +807,14 @@ export class KpiDashboardService {
       // Level ranges below rather than the fixed 0-5 status bands.
       const totalScoreValues = personScored.map((s) => s.value).filter((v): v is number => v !== null);
       const totalScore = totalScoreValues.length > 0 ? round2(totalScoreValues.reduce((a, b) => a + b, 0)) : null;
-      const performanceLevel = totalScore !== null ? matchPerformanceLevel(totalScore, allPerformanceLevels) : null;
+      const legacyScore = legacyFinalScore(user.id);
+      // Match against the real, admin-configured Performance Level ranges —
+      // totalScore when there's a real scored submission, otherwise the
+      // older EvaluationAreaEntry blend (also 0-5) rather than a hardcoded
+      // status band, so the label shown is always one the admin actually
+      // defined on the Configuration page, never a static fallback string.
+      const scoreForLevelMatch = totalScore ?? legacyScore;
+      const performanceLevel = scoreForLevelMatch !== null ? matchPerformanceLevel(scoreForLevelMatch, allPerformanceLevels) : null;
 
       // The more recent of this person's latest scored submission and their
       // latest raw-activity one (an unmapped form can be more recent than
@@ -826,7 +833,7 @@ export class KpiDashboardService {
         jobTitle: user.jobTitle?.label ?? null,
         roles: user.roles.map((r) => r.role.name),
         hasKpi,
-        score: legacyFinalScore(user.id),
+        score: legacyScore,
         totalScore,
         performanceLevel,
         latestSubmission: latest
@@ -900,6 +907,24 @@ export class KpiDashboardService {
       maxScore: Number(l.maxScore),
     }));
 
+    // Same legacy 0-5 blend as getTeamOverviewImpl's legacyFinalScore, for
+    // the same "fall back until this person has a real scored submission"
+    // rule below.
+    const legacyEntries = await this.prisma.evaluationAreaEntry.findMany({
+      where: { personId, person: { isActive: true }, ...legacyEntryFormFilter(allowedFormIdList) },
+      select: { evaluationAreaId: true, value: true, periodStart: true },
+    });
+    const legacyByArea = new Map<string, typeof legacyEntries>();
+    for (const entry of legacyEntries) {
+      const list = legacyByArea.get(entry.evaluationAreaId);
+      if (list) list.push(entry);
+      else legacyByArea.set(entry.evaluationAreaId, [entry]);
+    }
+    const legacyAreaValues = [...legacyByArea.values()]
+      .map((areaEntries) => blendedAreaValues(areaEntries).latestValue)
+      .filter((v): v is number => v !== null);
+    const legacyScore = legacyAreaValues.length > 0 ? round2(avg(legacyAreaValues)) : null;
+
     const [scored, rawActivity] = await Promise.all([
       this.loadScoredSubmissions(areaIds, allowedFormIdList),
       this.loadRawActivity(allowedFormIdList),
@@ -912,11 +937,13 @@ export class KpiDashboardService {
     // submission this person has, not just the recent ones shown below.
     const totalScoreValues = allPersonScored.map((s) => s.value).filter((v): v is number => v !== null);
     const totalScore = totalScoreValues.length > 0 ? round2(totalScoreValues.reduce((a, b) => a + b, 0)) : null;
-    const performanceLevel = totalScore !== null ? matchPerformanceLevel(totalScore, allPerformanceLevels) : null;
+    const scoreForLevelMatch = totalScore ?? legacyScore;
+    const performanceLevel = scoreForLevelMatch !== null ? matchPerformanceLevel(scoreForLevelMatch, allPerformanceLevels) : null;
 
     return {
       personId: person.id,
       displayName: person.displayName,
+      score: legacyScore,
       totalScore,
       performanceLevel,
       submissions: personScored.map((s) => {
