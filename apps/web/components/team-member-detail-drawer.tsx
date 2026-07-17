@@ -49,9 +49,9 @@ export function TeamMemberDetailDrawer({
                 <div className="p-drawer-avatar">{breakdown.displayName.slice(0, 2).toUpperCase()}</div>
                 <SheetTitle className="p-drawer-name">{breakdown.displayName}</SheetTitle>
                 <div className="p-drawer-meta" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {(breakdown.totalScore !== null || breakdown.score !== null) && (
+                  {breakdown.totalScore !== null && (
                     <Badge variant="secondary" className="border-transparent">
-                      {breakdown.totalScore !== null ? breakdown.totalScore.toFixed(1) : `${breakdown.score!.toFixed(1)} / 5`} ·{' '}
+                      {breakdown.totalScore.toFixed(1)} ·{' '}
                       {breakdown.performanceLevel ? breakdown.performanceLevel.label : 'Unranked'}
                     </Badge>
                   )}

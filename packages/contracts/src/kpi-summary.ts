@@ -54,12 +54,13 @@ export interface TeamMember {
    *  `performanceLevel`) is matched against. Null when they have no scored
    *  submissions at all. */
   totalScore: number | null;
-  /** The configured Performance Level whose range contains `totalScore` —
-   *  or, when `totalScore` is null (no real scored submission yet), whose
-   *  range contains `score` (the older 0-5 blend) instead, so this is
-   *  always a real, admin-configured level from the Configuration page
-   *  rather than a hardcoded status band. Null when nothing is configured,
-   *  both are null, or neither falls in any configured range. */
+  /** The configured Performance Level `totalScore` falls into — always a
+   *  real, admin-configured level from the Configuration page, never a
+   *  hardcoded status band or a fallback to `score` (the older
+   *  EvaluationAreaEntry blend, which can hold seed/migrated data
+   *  unconnected to anything actually configured). Null when nothing is
+   *  configured, `totalScore` is null, or it's below every configured
+   *  level's minScore. */
   performanceLevel: { id: string; label: string } | null;
   /** The person's single most recent scored submission, across every KPI
    *  area that covers them — null when they've never been scored ("pending",
@@ -139,17 +140,17 @@ export interface RawActivityEntry {
 export interface TeamMemberBreakdown {
   personId: string;
   displayName: string;
-  /** Same older EvaluationAreaEntry-based blend as TeamMember.score — only
-   *  used as a fallback for `performanceLevel` below when `totalScore` is
-   *  null (this person has no real scored submission yet). */
-  score: number | null;
-  /** Same all-time-sum/matched-range rule as TeamMember.totalScore/
-   *  performanceLevel — computed from every one of this person's scored
-   *  submissions, not just the recent ones in `submissions` below. */
+  /** Same all-time-sum rule as TeamMember.totalScore — computed from every
+   *  one of this person's scored submissions, not just the recent ones in
+   *  `submissions` below. Null until they have a real scored submission —
+   *  never falls back to the older EvaluationAreaEntry blend, which can
+   *  hold seed/migrated data unconnected to any admin-configured Score
+   *  Label or Performance Level. */
   totalScore: number | null;
-  /** Matched against `totalScore` when present, otherwise against `score` —
-   *  always a real, admin-configured Performance Level from the
-   *  Configuration page, never a hardcoded status band. */
+  /** The configured Performance Level `totalScore` falls into — always a
+   *  real, admin-configured level from the Configuration page, never a
+   *  hardcoded status band. Null when nothing is configured, `totalScore`
+   *  is null, or it's below every configured level's minScore. */
   performanceLevel: { id: string; label: string } | null;
   submissions: PersonSubmission[];
   /** This person's own raw-activity entries (see RawActivityEntry), most

@@ -127,12 +127,11 @@ export function DashboardTeamTable({
             memberTableData.map((m) => {
               // Colors the badge only — statusLabel's actual text always
               // comes from the API's performanceLevel (matched server-side
-              // against totalScore, or score as a fallback — see
-              // TeamMember.performanceLevel), never this hardcoded band.
+              // against totalScore — see TeamMember.performanceLevel),
+              // never this hardcoded band.
               const memberStatus = statusOf(m.score);
-              const hasAnyScore = m.totalScore !== null || m.score !== null;
-              const statusLabel = m.performanceLevel ? m.performanceLevel.label : hasAnyScore ? 'Unranked' : 'Pending';
-              const scoreDisplay = m.totalScore !== null ? m.totalScore.toFixed(1) : m.score !== null ? `${m.score.toFixed(1)} / 5` : '—';
+              const statusLabel = m.performanceLevel ? m.performanceLevel.label : m.totalScore !== null ? 'Unranked' : 'Pending';
+              const scoreDisplay = m.totalScore !== null ? m.totalScore.toFixed(1) : '—';
               return (
                 <TableRow
                   key={m.id}

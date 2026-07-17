@@ -174,17 +174,22 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** The configured Performance Level whose [minScore, maxScore] range
- *  contains a person's total score, or null when it falls in a gap between
- *  configured ranges (or nothing is configured at all) — not a fallback to
- *  the nearest range, since an admin-defined gap is a deliberate "unranked"
- *  zone, not an oversight for this code to paper over. */
+/** The configured Performance Level a person's total score falls into —
+ *  the highest-minScore level whose minScore the total still meets or
+ *  exceeds, open-ended at the top (a score above every level's maxScore
+ *  still lands in the top level, e.g. "Over-Achieved" starting at 2.0 also
+ *  covers a total of 5) and filling any gap between two configured ranges
+ *  by rounding down to the lower one. maxScore only breaks ties between
+ *  levels that share the same minScore. Null only when the total is below
+ *  every configured level's minScore, or nothing is configured at all. */
 function matchPerformanceLevel<T extends { id: string; label: string; minScore: number; maxScore: number }>(
   total: number,
   levels: T[],
 ): { id: string; label: string } | null {
-  const match = levels.find((l) => total >= l.minScore && total <= l.maxScore);
-  return match ? { id: match.id, label: match.label } : null;
+  const eligible = levels.filter((l) => total >= l.minScore);
+  if (eligible.length === 0) return null;
+  const match = eligible.reduce((best, l) => (l.minScore > best.minScore ? l : best));
+  return { id: match.id, label: match.label };
 }
 
 /** Blends a set of entries into a "latest period" value and a "period before
@@ -807,14 +812,12 @@ export class KpiDashboardService {
       // Level ranges below rather than the fixed 0-5 status bands.
       const totalScoreValues = personScored.map((s) => s.value).filter((v): v is number => v !== null);
       const totalScore = totalScoreValues.length > 0 ? round2(totalScoreValues.reduce((a, b) => a + b, 0)) : null;
-      const legacyScore = legacyFinalScore(user.id);
-      // Match against the real, admin-configured Performance Level ranges —
-      // totalScore when there's a real scored submission, otherwise the
-      // older EvaluationAreaEntry blend (also 0-5) rather than a hardcoded
-      // status band, so the label shown is always one the admin actually
-      // defined on the Configuration page, never a static fallback string.
-      const scoreForLevelMatch = totalScore ?? legacyScore;
-      const performanceLevel = scoreForLevelMatch !== null ? matchPerformanceLevel(scoreForLevelMatch, allPerformanceLevels) : null;
+      // Matched only against a real totalScore — never the legacy
+      // EvaluationAreaEntry blend (`score` below), which can hold seed/
+      // migrated data with no connection to any Score Label or Performance
+      // Level an admin has actually configured. Null (shown as "Pending")
+      // until this person has a real scored submission.
+      const performanceLevel = totalScore !== null ? matchPerformanceLevel(totalScore, allPerformanceLevels) : null;
 
       // The more recent of this person's latest scored submission and their
       // latest raw-activity one (an unmapped form can be more recent than
@@ -833,7 +836,7 @@ export class KpiDashboardService {
         jobTitle: user.jobTitle?.label ?? null,
         roles: user.roles.map((r) => r.role.name),
         hasKpi,
-        score: legacyScore,
+        score: legacyFinalScore(user.id),
         totalScore,
         performanceLevel,
         latestSubmission: latest
@@ -907,24 +910,6 @@ export class KpiDashboardService {
       maxScore: Number(l.maxScore),
     }));
 
-    // Same legacy 0-5 blend as getTeamOverviewImpl's legacyFinalScore, for
-    // the same "fall back until this person has a real scored submission"
-    // rule below.
-    const legacyEntries = await this.prisma.evaluationAreaEntry.findMany({
-      where: { personId, person: { isActive: true }, ...legacyEntryFormFilter(allowedFormIdList) },
-      select: { evaluationAreaId: true, value: true, periodStart: true },
-    });
-    const legacyByArea = new Map<string, typeof legacyEntries>();
-    for (const entry of legacyEntries) {
-      const list = legacyByArea.get(entry.evaluationAreaId);
-      if (list) list.push(entry);
-      else legacyByArea.set(entry.evaluationAreaId, [entry]);
-    }
-    const legacyAreaValues = [...legacyByArea.values()]
-      .map((areaEntries) => blendedAreaValues(areaEntries).latestValue)
-      .filter((v): v is number => v !== null);
-    const legacyScore = legacyAreaValues.length > 0 ? round2(avg(legacyAreaValues)) : null;
-
     const [scored, rawActivity] = await Promise.all([
       this.loadScoredSubmissions(areaIds, allowedFormIdList),
       this.loadRawActivity(allowedFormIdList),
@@ -935,15 +920,17 @@ export class KpiDashboardService {
 
     // Same all-time-sum rule as getTeamOverviewImpl — every scored
     // submission this person has, not just the recent ones shown below.
+    // Matched only against a real totalScore — never the legacy
+    // EvaluationAreaEntry blend, which can hold seed/migrated data with no
+    // connection to any Score Label or Performance Level an admin has
+    // actually configured.
     const totalScoreValues = allPersonScored.map((s) => s.value).filter((v): v is number => v !== null);
     const totalScore = totalScoreValues.length > 0 ? round2(totalScoreValues.reduce((a, b) => a + b, 0)) : null;
-    const scoreForLevelMatch = totalScore ?? legacyScore;
-    const performanceLevel = scoreForLevelMatch !== null ? matchPerformanceLevel(scoreForLevelMatch, allPerformanceLevels) : null;
+    const performanceLevel = totalScore !== null ? matchPerformanceLevel(totalScore, allPerformanceLevels) : null;
 
     return {
       personId: person.id,
       displayName: person.displayName,
-      score: legacyScore,
       totalScore,
       performanceLevel,
       submissions: personScored.map((s) => {

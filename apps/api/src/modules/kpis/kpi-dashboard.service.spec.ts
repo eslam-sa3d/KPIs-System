@@ -499,11 +499,11 @@ describe('KpiDashboardService', () => {
       expect(members[0]!.performanceLevel).toBeNull();
     });
 
-    it("matches performanceLevel against the legacy blended score when the member has no real totalScore yet — never a hardcoded status band", async () => {
+    it('never falls back to the legacy blended score for performanceLevel — stays null until a real totalScore exists', async () => {
       prisma.user.findMany.mockResolvedValue([coveredUser]);
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
-      // No FormKpiMapping/FormSubmission data at all — score comes purely
-      // from the older EvaluationAreaEntry write path.
+      // Legacy EvaluationAreaEntry data exists (e.g. old seed data), but no
+      // real FormKpiMapping/FormSubmission — performanceLevel must ignore it.
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([
         { personId: 'user-1', evaluationAreaId: 'area-1', value: 5, periodStart: new Date('2026-02-01') },
       ]);
@@ -515,20 +515,56 @@ describe('KpiDashboardService', () => {
 
       expect(members[0]!.totalScore).toBeNull();
       expect(members[0]!.score).toBe(5);
-      expect(members[0]!.performanceLevel).toEqual({ id: 'level-1', label: 'Over-Achieved' });
+      expect(members[0]!.performanceLevel).toBeNull();
     });
 
-    it('reports performanceLevel as null when neither totalScore nor the legacy score falls in any configured range', async () => {
-      prisma.user.findMany.mockResolvedValue([coveredUser]);
+    it("matches the highest-minScore level a totalScore still meets, open-ended above the top range's maxScore", async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
-      prisma.evaluationAreaEntry.findMany.mockResolvedValue([
-        { personId: 'user-1', evaluationAreaId: 'area-1', value: 5, periodStart: new Date('2026-02-01') },
+      mockOneMapping(prisma);
+      // rating/scale-5 of 5 normalizes to 5 (see normalizeScore) — above
+      // every configured range's maxScore (top range: 2.0-3.0).
+      prisma.formSubmission.findMany.mockResolvedValue([submissionFixture({ submittedById: 'user-1', answers: { score: 5 } })]);
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: 'level-over', label: 'Over-Achieved', minScore: 2, maxScore: 3 },
+        { id: 'level-achieved', label: 'Achieved', minScore: 1.1, maxScore: 1.9 },
+        { id: 'level-under', label: 'Under Achieved', minScore: 0, maxScore: 1 },
       ]);
-      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'Achieved', minScore: 1, maxScore: 2 }]);
 
       const { members } = await service.getTeamOverview(actorId);
 
-      expect(members[0]!.score).toBe(5);
+      expect(members[0]!.totalScore).toBe(5);
+      expect(members[0]!.performanceLevel).toEqual({ id: 'level-over', label: 'Over-Achieved' });
+    });
+
+    it('fills a gap between two configured ranges by rounding down to the lower one', async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      mockOneMapping(prisma);
+      // rating/scale-5 of 2 normalizes to 1.25 (see normalizeScore) — inside
+      // the 1.0-2.0 gap between "Under Achieved" (0-1) and "Achieved" (2-3).
+      prisma.formSubmission.findMany.mockResolvedValue([submissionFixture({ submittedById: 'user-1', answers: { score: 2 } })]);
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: 'level-achieved', label: 'Achieved', minScore: 2, maxScore: 3 },
+        { id: 'level-under', label: 'Under Achieved', minScore: 0, maxScore: 1 },
+      ]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.totalScore).toBe(1.25);
+      expect(members[0]!.performanceLevel).toEqual({ id: 'level-under', label: 'Under Achieved' });
+    });
+
+    it('reports performanceLevel as null when totalScore is below every configured range', async () => {
+      prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
+      prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
+      mockOneMapping(prisma);
+      prisma.formSubmission.findMany.mockResolvedValue([submissionFixture({ submittedById: 'user-1', answers: { score: 1 } })]);
+      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'Achieved', minScore: 1.1, maxScore: 1.9 }]);
+
+      const { members } = await service.getTeamOverview(actorId);
+
+      expect(members[0]!.totalScore).toBe(0);
       expect(members[0]!.performanceLevel).toBeNull();
     });
 
@@ -721,12 +757,11 @@ describe('KpiDashboardService', () => {
       const breakdown = await service.getPersonBreakdown('user-2', actorId);
 
       expect(breakdown.submissions).toEqual([]);
-      expect(breakdown.score).toBeNull();
       expect(breakdown.totalScore).toBeNull();
       expect(breakdown.performanceLevel).toBeNull();
     });
 
-    it('matches performanceLevel against the legacy blended score when this person has no real totalScore yet', async () => {
+    it('never falls back to the legacy blended score for performanceLevel — stays null until a real totalScore exists', async () => {
       prisma.user.findUnique.mockResolvedValue(person);
       prisma.kpi.findMany.mockResolvedValue([{ evaluationAreas: [{ id: 'area-1' }] }]);
       prisma.evaluationAreaEntry.findMany.mockResolvedValue([
@@ -739,8 +774,7 @@ describe('KpiDashboardService', () => {
       const breakdown = await service.getPersonBreakdown('user-2', actorId);
 
       expect(breakdown.totalScore).toBeNull();
-      expect(breakdown.score).toBe(5);
-      expect(breakdown.performanceLevel).toEqual({ id: 'level-1', label: 'Over-Achieved' });
+      expect(breakdown.performanceLevel).toBeNull();
     });
 
     it('sums all of this person\'s scored submissions into totalScore and matches it against a configured Performance Level', async () => {
