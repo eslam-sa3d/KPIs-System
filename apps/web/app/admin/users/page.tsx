@@ -9,8 +9,8 @@ export default function UsersAdminPage() {
 
   return (
     <PortalShell user={user}>
-      <h1>users</h1>
-      <p className="portal-subtitle">create accounts, assign roles, and manage access tiers</p>
+      <h1>Users</h1>
+      <p className="portal-subtitle">Create accounts, assign roles, and manage access tiers</p>
       <TeamMembersManager user={user} />
     </PortalShell>
   );

@@ -1,8 +1,3 @@
-'use client';
-
-import Image from 'next/image';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import {
   BarChart3,
   ChevronRight,
@@ -16,34 +11,33 @@ import {
 } from 'lucide-react';
 import type { BrandIdentity } from '@pulse/contracts';
 import { LandingHeroIllustration } from '../components/landing-hero-illustration';
-import { Button } from '@/components/ui/button';
-import { API_URL } from '../lib/api-client';
-import { asset } from '../lib/asset';
+import { LandingHeader } from '../components/landing-header';
+import { LandingFooter } from '../components/landing-footer';
 
 const DEFAULT_IDENTITY: BrandIdentity = {
   companyName: 'pulse by solutions',
-  headline: 'elevating what matters',
-  tagline: 'the intelligence behind what can’t fail',
+  headline: 'Elevating what matters',
+  tagline: 'The intelligence behind what can’t fail',
 };
 
 const PIPELINE = [
-  { icon: ClipboardList, label: 'plan' },
-  { icon: Settings, label: 'execute' },
-  { icon: Search, label: 'test' },
-  { icon: BarChart3, label: 'deliver' },
+  { icon: ClipboardList, label: 'Plan' },
+  { icon: Settings, label: 'Execute' },
+  { icon: Search, label: 'Test' },
+  { icon: BarChart3, label: 'Deliver' },
 ];
 
 const STATS = [
-  { value: '99.8%', label: 'test coverage' },
-  { value: '350+', label: 'apps delivered' },
-  { value: '4.9×', label: 'faster releases' },
+  { value: '99.8%', label: 'Test coverage' },
+  { value: '350+', label: 'Apps delivered' },
+  { value: '4.9×', label: 'Faster releases' },
 ];
 
 const PILLARS = [
-  { icon: Target, title: 'quality', body: 'we deliver excellence in every build, test, and release cycle.' },
-  { icon: Users, title: 'collaboration', body: 'we achieve more together — one team, one mission.' },
-  { icon: Lightbulb, title: 'innovation', body: 'we embrace change and bring new ideas to every challenge.' },
-  { icon: Shield, title: 'ownership', body: 'we take pride in our work and own outcomes end-to-end.' },
+  { icon: Target, title: 'Quality', body: 'We deliver excellence in every build, test, and release cycle.' },
+  { icon: Users, title: 'Collaboration', body: 'We achieve more together — one team, one mission.' },
+  { icon: Lightbulb, title: 'Innovation', body: 'We embrace change and bring new ideas to every challenge.' },
+  { icon: Shield, title: 'Ownership', body: 'We take pride in our work and own outcomes end-to-end.' },
 ];
 
 function HeartbeatLine({ className }: { className?: string }) {
@@ -62,31 +56,16 @@ function HeartbeatLine({ className }: { className?: string }) {
 }
 
 /**
- * Public landing page. Identity (name, headline, tagline, logo) is
- * admin-customizable via /v1/branding — defaults render instantly and the
- * fetched identity hydrates over them. The header and footer read from it;
- * the hero/pipeline/pillars content below is fixed brand copy.
+ * Public landing page. Fixed marketing copy renders as a server component
+ * with no client JS of its own; identity (name, headline, tagline, logo) is
+ * admin-customizable via /v1/branding, so the header/footer that read it are
+ * split out into their own client islands (see LandingHeader/LandingFooter)
+ * that fetch it and hydrate over the given defaults.
  */
 export default function LandingPage() {
-  const [identity, setIdentity] = useState<BrandIdentity>(DEFAULT_IDENTITY);
-
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/branding`)
-      .then((res) => res.json())
-      .then((envelope) => envelope?.success && setIdentity(envelope.data))
-      .catch(() => undefined); // keep defaults
-  }, []);
-
-  const logo = identity.logoUrl || asset('/brand/pulse-neg.svg');
-
   return (
     <main className="landing">
-      <header className="landing-header" data-surface="purple">
-        <Image src={logo} alt={identity.companyName} width={128} height={56} priority unoptimized />
-        <Button asChild>
-          <Link href="/login">sign in</Link>
-        </Button>
-      </header>
+      <LandingHeader defaultIdentity={DEFAULT_IDENTITY} />
 
       {/* ── hero ────────────────────────────────────────────────── */}
       <section className="landing-hero" data-surface="purple">
@@ -146,9 +125,9 @@ export default function LandingPage() {
       {/* ── pillars ─────────────────────────────────────────────── */}
       <section className="landing-pillars">
         <div className="landing-pillars-head">
-          <p className="landing-eyebrow">our foundation</p>
-          <h2>built on four pillars</h2>
-          <p className="landing-pillars-sub">the values that drive every test case, every sprint, every release.</p>
+          <p className="landing-eyebrow">Our foundation</p>
+          <h2>Built on four pillars</h2>
+          <p className="landing-pillars-sub">The values that drive every test case, every sprint, every release.</p>
         </div>
         <div className="landing-pillar-grid">
           {PILLARS.map(({ icon: Icon, title, body }) => (
@@ -176,12 +155,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="landing-footer">
-        <Image src={asset('/brand/pulse-neg.svg')} alt={identity.companyName} width={96} height={42} unoptimized />
-        <span className="muted">
-          © {new Date().getFullYear()} {identity.companyName}
-        </span>
-      </footer>
+      <LandingFooter defaultIdentity={DEFAULT_IDENTITY} />
     </main>
   );
 }

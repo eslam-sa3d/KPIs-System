@@ -47,7 +47,7 @@ export function FormSettingsPanel({
         body: JSON.stringify(payload),
       });
       onSaved(saved);
-      setNotice('settings saved');
+      setNotice('Settings saved');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Saving settings failed');
     } finally {
@@ -56,10 +56,10 @@ export function FormSettingsPanel({
   }
 
   return (
-    <Card>
+    <Card className="border-l-4 border-l-primary">
       <CardContent className="pt-6">
         <form className="builder" onSubmit={onSave}>
-          <h2 className="text-lg font-semibold mb-2">response settings</h2>
+          <h2 className="text-lg font-semibold mb-2">Response settings</h2>
 
           <span className="builder-required">
             <Checkbox
@@ -67,10 +67,10 @@ export function FormSettingsPanel({
               checked={draft.acceptingResponses}
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, acceptingResponses: checked === true }))}
             />
-            <label htmlFor="fs-accepting">accepting responses</label>
+            <label htmlFor="fs-accepting">Accepting responses</label>
           </span>
 
-          <label htmlFor="fs-opens">opens at (optional)</label>
+          <label htmlFor="fs-opens">Opens at (optional)</label>
           <Input
             id="fs-opens"
             type="date"
@@ -78,7 +78,7 @@ export function FormSettingsPanel({
             onChange={(e) => setDraft((d) => ({ ...d, opensAt: toIsoStartOfDay(e.target.value) }))}
           />
 
-          <label htmlFor="fs-closes">closes at (optional)</label>
+          <label htmlFor="fs-closes">Closes at (optional)</label>
           <Input
             id="fs-closes"
             type="date"
@@ -93,7 +93,7 @@ export function FormSettingsPanel({
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, oneResponsePerUser: checked === true }))}
             />
             <label htmlFor="fs-one-per-user">
-              limit to one response per person (signed-in users by account, anonymous respondents by browser)
+              Limit to one response per person (signed-in users by account, anonymous respondents by browser)
             </label>
           </span>
 
@@ -103,7 +103,7 @@ export function FormSettingsPanel({
               checked={draft.shuffleQuestions}
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, shuffleQuestions: checked === true }))}
             />
-            <label htmlFor="fs-shuffle-questions">shuffle question order per respondent</label>
+            <label htmlFor="fs-shuffle-questions">Shuffle question order per respondent</label>
           </span>
 
           <span className="builder-required">
@@ -113,11 +113,11 @@ export function FormSettingsPanel({
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, shuffleSections: checked === true }))}
             />
             <label htmlFor="fs-shuffle-sections">
-              shuffle page order per respondent (only takes effect on forms whose pages have no branching rules)
+              Shuffle page order per respondent (only takes effect on forms whose pages have no branching rules)
             </label>
           </span>
 
-          <label htmlFor="fs-max-responses">stop accepting responses after (optional)</label>
+          <label htmlFor="fs-max-responses">Stop accepting responses after (optional)</label>
           <Input
             id="fs-max-responses"
             type="number"
@@ -126,18 +126,18 @@ export function FormSettingsPanel({
             onChange={(e) =>
               setDraft((d) => ({ ...d, maxResponses: e.target.value === '' ? undefined : Number(e.target.value) }))
             }
-            placeholder="no limit"
+            placeholder="No limit"
           />
 
-          <label>response quotas (optional)</label>
+          <span className="field-label">Response quotas (optional)</span>
           <p className="muted" style={{ fontSize: 11, margin: '2px 0 8px' }}>
-            stop counting a specific answer once it hits its own limit — e.g. close after 50 responses where role =
+            Stop counting a specific answer once it hits its own limit — e.g. close after 50 responses where role =
             manager — independent of the blanket limit above.
           </p>
           {draft.quotas.map((quota, i) => (
             <div key={i} className="builder-required" style={{ flexWrap: 'wrap' }}>
               <Input
-                aria-label="field key"
+                aria-label="Field key"
                 value={quota.fieldKey}
                 onChange={(e) =>
                   setDraft((d) => ({
@@ -145,10 +145,10 @@ export function FormSettingsPanel({
                     quotas: d.quotas.map((q, qi) => (qi === i ? { ...q, fieldKey: e.target.value } : q)),
                   }))
                 }
-                placeholder="field key"
+                placeholder="Field key"
               />
               <Input
-                aria-label="equals"
+                aria-label="Equals"
                 value={quota.equals}
                 onChange={(e) =>
                   setDraft((d) => ({
@@ -156,10 +156,10 @@ export function FormSettingsPanel({
                     quotas: d.quotas.map((q, qi) => (qi === i ? { ...q, equals: e.target.value } : q)),
                   }))
                 }
-                placeholder="answer value"
+                placeholder="Answer value"
               />
               <Input
-                aria-label="limit"
+                aria-label="Limit"
                 type="number"
                 min={1}
                 value={quota.limit}
@@ -169,7 +169,7 @@ export function FormSettingsPanel({
                     quotas: d.quotas.map((q, qi) => (qi === i ? { ...q, limit: Number(e.target.value) } : q)),
                   }))
                 }
-                placeholder="limit"
+                placeholder="Limit"
               />
               <Button
                 type="button"
@@ -177,7 +177,7 @@ export function FormSettingsPanel({
                 size="sm"
                 onClick={() => setDraft((d) => ({ ...d, quotas: d.quotas.filter((_, qi) => qi !== i) }))}
               >
-                remove
+                Remove
               </Button>
             </div>
           ))}
@@ -185,6 +185,7 @@ export function FormSettingsPanel({
             type="button"
             variant="ghost"
             size="sm"
+            className="self-start"
             onClick={() => setDraft((d) => ({ ...d, quotas: [...d.quotas, { fieldKey: '', equals: '', limit: 50 }] }))}
           >
             + add quota
@@ -197,7 +198,7 @@ export function FormSettingsPanel({
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, allowRespondentEdit: checked === true }))}
             />
             <label htmlFor="fs-allow-edit">
-              let respondents edit their own response via a link shown after submitting
+              Let respondents edit their own response via a link shown after submitting
             </label>
           </span>
 
@@ -208,7 +209,7 @@ export function FormSettingsPanel({
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, requireCaptcha: checked === true }))}
             />
             <label htmlFor="fs-captcha">
-              require a CAPTCHA check on public link submissions (Cloudflare Turnstile — needs TURNSTILE_SECRET_KEY /
+              Require a CAPTCHA check on public link submissions (Cloudflare Turnstile — needs TURNSTILE_SECRET_KEY /
               NEXT_PUBLIC_TURNSTILE_SITE_KEY configured to take effect)
             </label>
           </span>
@@ -219,20 +220,20 @@ export function FormSettingsPanel({
               checked={draft.requireRespondentInfo}
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, requireRespondentInfo: checked === true }))}
             />
-            <label htmlFor="fs-respondent-info">ask for name &amp; email before a public link submission starts</label>
+            <label htmlFor="fs-respondent-info">Ask for name &amp; email before a public link submission starts</label>
           </span>
 
           {draft.requireRespondentInfo && (
             <>
-              <label>allowed email domains (optional)</label>
+              <span className="field-label">Allowed email domains (optional)</span>
               <p className="muted" style={{ fontSize: 11, margin: '2px 0 8px' }}>
-                restrict the gate&apos;s email to these domains, e.g. pulsebysolutions.com — leave empty to accept any
+                Restrict the gate&apos;s email to these domains, e.g. pulsebysolutions.com — leave empty to accept any
                 domain.
               </p>
               {draft.allowedEmailDomains.map((domain, i) => (
                 <div key={i} className="builder-required">
                   <Input
-                    aria-label="domain"
+                    aria-label="Domain"
                     value={domain}
                     onChange={(e) =>
                       setDraft((d) => ({
@@ -253,7 +254,7 @@ export function FormSettingsPanel({
                       }))
                     }
                   >
-                    remove
+                    Remove
                   </Button>
                 </div>
               ))}
@@ -261,6 +262,7 @@ export function FormSettingsPanel({
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="self-start"
                 onClick={() => setDraft((d) => ({ ...d, allowedEmailDomains: [...d.allowedEmailDomains, ''] }))}
               >
                 + add domain
@@ -268,60 +270,7 @@ export function FormSettingsPanel({
             </>
           )}
 
-          <label htmlFor="fs-webhook">webhook URL (optional)</label>
-          <Input
-            id="fs-webhook"
-            type="url"
-            value={draft.webhookUrl ?? ''}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, webhookUrl: e.target.value === '' ? undefined : e.target.value }))
-            }
-            placeholder="https://example.com/hooks/pulse-forms"
-          />
-          <p className="muted" style={{ fontSize: 11, margin: '2px 0 8px' }}>
-            every new response is POSTed here as JSON ({'{formSlug, submissionId, answers, score, createdAt}'});
-            delivery failures are logged and never block the submission.
-          </p>
-
-          <span className="builder-required">
-            <Checkbox
-              id="fs-quiz-mode"
-              checked={draft.quizMode}
-              onCheckedChange={(checked) => setDraft((d) => ({ ...d, quizMode: checked === true }))}
-            />
-            <label htmlFor="fs-quiz-mode">quiz mode — score responses against each question's correct answer</label>
-          </span>
-
-          {draft.quizMode && (
-            <>
-              <label htmlFor="fs-pass-threshold">pass threshold, % of points (optional)</label>
-              <Input
-                id="fs-pass-threshold"
-                type="number"
-                min={0}
-                max={100}
-                value={draft.passThresholdPercent ?? ''}
-                onChange={(e) =>
-                  setDraft((d) => ({
-                    ...d,
-                    passThresholdPercent: e.target.value === '' ? undefined : Number(e.target.value),
-                  }))
-                }
-                placeholder="no threshold"
-              />
-
-              <span className="builder-required">
-                <Checkbox
-                  id="fs-show-score"
-                  checked={draft.showScoreToRespondent}
-                  onCheckedChange={(checked) => setDraft((d) => ({ ...d, showScoreToRespondent: checked === true }))}
-                />
-                <label htmlFor="fs-show-score">show the score to the respondent after they submit</label>
-              </span>
-            </>
-          )}
-
-          <label htmlFor="fs-thanks">thank-you message</label>
+          <label htmlFor="fs-thanks">Thank-you message</label>
           <Input
             id="fs-thanks"
             value={draft.thankYouMessage}
@@ -330,7 +279,7 @@ export function FormSettingsPanel({
           />
 
           <Button type="submit" disabled={busy}>
-            {busy ? 'saving…' : 'save settings'}
+            {busy ? 'Saving…' : 'Save settings'}
           </Button>
           {notice && (
             <Alert>

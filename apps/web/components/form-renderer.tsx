@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, memo, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import {
   PIPE_TAG_PATTERN,
   resolveSectionPath,
@@ -11,16 +11,26 @@ import {
   type QuizScore,
   type SubmissionAnswers,
 } from '@pulse/contracts';
-import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
+import { api, assetUrl } from '../lib/api-client';
 import { resolvePersonAnswer, resolvePerformanceLevelAnswer, resolveScoreLabelAnswer } from '../lib/resolve-person-answer';
 import type { Media } from '@pulse/contracts';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { ContactInfoField } from './form-fields/contact-info-field';
+import { FileField } from './form-fields/file-field';
+import { GridField } from './form-fields/grid-field';
+import { HotSpotField } from './form-fields/hot-spot-field';
+import { LikertField } from './form-fields/likert-field';
+import { MultiSelectField } from './form-fields/multi-select-field';
+import { PerformanceLevelField } from './form-fields/performance-level-field';
+import { PersonField } from './form-fields/person-field';
+import { RankingField } from './form-fields/ranking-field';
+import { RatingField } from './form-fields/rating-field';
+import { ScoreLabelField } from './form-fields/score-label-field';
+import { SelectField } from './form-fields/select-field';
 
 interface UserOption {
   id: string;
@@ -52,7 +62,7 @@ function FieldMedia({ media }: { media: Media }) {
   }
   if (media.type === 'video' && media.url) {
     return (
-      <iframe src={media.url} title={media.alt ?? 'question video'} className="question-media-video" allowFullScreen />
+      <iframe src={media.url} title={media.alt ?? 'Question video'} className="question-media-video" allowFullScreen />
     );
   }
   return null;
@@ -137,66 +147,6 @@ export const FieldInput = memo(function FieldInput({
   uploadPath: string;
 }) {
   const id = `f-${field.key}`;
-  const [uploadState, setUploadState] = useState<{ busy: boolean; filename: string | null; error: string | null }>({
-    busy: false,
-    filename: null,
-    error: null,
-  });
-  // multi-file (maxFiles>1): filenames for ids uploaded THIS session — reloading an
-  // in-progress answer only shows ids, so older attachments fall back to a generic label
-  const [attachedNames, setAttachedNames] = useState<Record<string, string>>({});
-  // 'person' fields (the KPI-bridge evaluatee picker): live user search — fetched once per
-  // field instance, not per-field-type-branch, to keep this a top-level hook (rules-of-hooks).
-  const [userOptions, setUserOptions] = useState<UserOption[] | null>(null);
-  const [personFilter, setPersonFilter] = useState('');
-  useEffect(() => {
-    if (field.type !== 'person') return;
-    let cancelled = false;
-    api<UserOption[]>('/v1/users?pageSize=200')
-      .then((users) => {
-        if (!cancelled) setUserOptions(users);
-      })
-      .catch(() => {
-        if (!cancelled) setUserOptions([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [field.type]);
-  // 'performance_level' fields: live band list from the Configuration page's
-  // Performance Levels tab — same fetch-once-per-field-instance shape as 'person'.
-  const [performanceLevelOptions, setPerformanceLevelOptions] = useState<PerformanceLevelOption[] | null>(null);
-  useEffect(() => {
-    if (field.type !== 'performance_level') return;
-    let cancelled = false;
-    api<PerformanceLevelOption[]>('/v1/performance-levels')
-      .then((levels) => {
-        if (!cancelled) setPerformanceLevelOptions(levels);
-      })
-      .catch(() => {
-        if (!cancelled) setPerformanceLevelOptions([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [field.type]);
-  // 'score_label' fields: live list from the Configuration page's Score
-  // Labels tab — same fetch-once-per-field-instance shape as 'performance_level'.
-  const [scoreLabelOptions, setScoreLabelOptions] = useState<ScoreLabelOption[] | null>(null);
-  useEffect(() => {
-    if (field.type !== 'score_label') return;
-    let cancelled = false;
-    api<ScoreLabelOption[]>('/v1/score-labels')
-      .then((labels) => {
-        if (!cancelled) setScoreLabelOptions(labels);
-      })
-      .catch(() => {
-        if (!cancelled) setScoreLabelOptions([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [field.type]);
 
   switch (field.type) {
     case 'long_text':
@@ -216,48 +166,8 @@ export const FieldInput = memo(function FieldInput({
       return <Input id={id} type="time" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
     case 'boolean':
       return <Checkbox id={id} checked={Boolean(value)} onCheckedChange={(checked) => onChange(checked === true)} />;
-    case 'rating': {
-      const current = value as number | undefined;
-      if (field.style === 'stars') {
-        return (
-          <div className="scale-row star-row" role="radiogroup" aria-labelledby={`${id}-label`} id={id}>
-            {field.lowLabel && <span className="muted scale-cap">{field.lowLabel}</span>}
-            {Array.from({ length: field.scale }, (_, i) => i + 1).map((n) => (
-              <button
-                key={n}
-                type="button"
-                role="radio"
-                aria-checked={current === n}
-                aria-label={`${n} star${n === 1 ? '' : 's'}`}
-                className={`star-pill${current !== undefined && n <= current ? ' star-pill-active' : ''}`}
-                onClick={() => onChange(n)}
-              >
-                ★
-              </button>
-            ))}
-            {field.highLabel && <span className="muted scale-cap">{field.highLabel}</span>}
-          </div>
-        );
-      }
-      return (
-        <div className="scale-row" role="radiogroup" aria-labelledby={`${id}-label`} id={id}>
-          {field.lowLabel && <span className="muted scale-cap">{field.lowLabel}</span>}
-          {Array.from({ length: field.scale }, (_, i) => i + 1).map((n) => (
-            <button
-              key={n}
-              type="button"
-              role="radio"
-              aria-checked={current === n}
-              className={`scale-pill${current === n ? ' scale-pill-active' : ''}`}
-              onClick={() => onChange(n)}
-            >
-              {n}
-            </button>
-          ))}
-          {field.highLabel && <span className="muted scale-cap">{field.highLabel}</span>}
-        </div>
-      );
-    }
+    case 'rating':
+      return <RatingField field={field} value={value} onChange={onChange} />;
     case 'nps': {
       const current = value as number | undefined;
       return (
@@ -279,359 +189,18 @@ export const FieldInput = memo(function FieldInput({
         </div>
       );
     }
-    case 'select': {
-      const raw = (value as string) ?? '';
-      const isOther = raw.startsWith('other:');
-      if (field.layout === 'radio') {
-        return (
-          <RadioGroup
-            id={id}
-            value={isOther ? 'other:' : raw}
-            onValueChange={(v) => onChange(v)}
-            className="check-group"
-          >
-            {field.options.map((o) => (
-              <label key={o.value} className="check-item">
-                <RadioGroupItem value={o.value} />
-                {o.imageAssetId && (
-                  <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" loading="lazy" />
-                )}
-                {o.label}
-              </label>
-            ))}
-            {field.allowOther && (
-              <label className="check-item">
-                <RadioGroupItem value="other:" />
-                other:
-                {isOther && (
-                  <Input
-                    type="text"
-                    aria-label={`${field.label} other`}
-                    value={raw.slice(6)}
-                    onChange={(e) => onChange(`other:${e.target.value}`)}
-                  />
-                )}
-              </label>
-            )}
-          </RadioGroup>
-        );
-      }
-      return (
-        <>
-          <Select
-            value={isOther ? '__other' : raw || undefined}
-            onValueChange={(v) => onChange(v === '__other' ? 'other:' : v)}
-          >
-            <SelectTrigger id={id} className="w-full">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              {field.options.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-              {field.allowOther && <SelectItem value="__other">other…</SelectItem>}
-            </SelectContent>
-          </Select>
-          {isOther && (
-            <Input
-              type="text"
-              aria-label={`${field.label} other`}
-              placeholder="please specify"
-              value={raw.slice(6)}
-              onChange={(e) => onChange(`other:${e.target.value}`)}
-            />
-          )}
-        </>
-      );
-    }
-    case 'multi_select': {
-      const selected = (value as string[] | undefined) ?? [];
-      const otherEntry = selected.find((v) => v.startsWith('other:'));
-      return (
-        <span className="check-group" id={id}>
-          {field.options.map((o) => (
-            <label key={o.value} className="check-item">
-              <Checkbox
-                checked={selected.includes(o.value)}
-                onCheckedChange={(checked) =>
-                  onChange(checked ? [...selected, o.value] : selected.filter((v) => v !== o.value))
-                }
-              />
-              {o.imageAssetId && <img src={assetUrl(o.imageAssetId)} alt="" className="option-image" loading="lazy" />}
-              {o.label}
-            </label>
-          ))}
-          {field.allowOther && (
-            <label className="check-item">
-              <Checkbox
-                checked={otherEntry !== undefined}
-                onCheckedChange={(checked) =>
-                  onChange(checked ? [...selected, 'other:'] : selected.filter((v) => !v.startsWith('other:')))
-                }
-              />
-              other:
-              {otherEntry !== undefined && (
-                <Input
-                  type="text"
-                  aria-label={`${field.label} other`}
-                  value={otherEntry.slice(6)}
-                  onChange={(e) =>
-                    onChange(selected.map((v) => (v.startsWith('other:') ? `other:${e.target.value}` : v)))
-                  }
-                />
-              )}
-            </label>
-          )}
-        </span>
-      );
-    }
-    case 'likert': {
-      const current = (value as Record<string, number> | undefined) ?? {};
-      return (
-        <div className="likert" id={id} role="table">
-          <div className="likert-row likert-head" role="row">
-            <span role="columnheader" />
-            {field.scale.map((s) => (
-              <span key={s} role="columnheader" className="muted">
-                {s}
-              </span>
-            ))}
-          </div>
-          {field.statements.map((st) => (
-            <div key={st.value} className="likert-row" role="row">
-              <span role="rowheader">{st.label}</span>
-              {field.scale.map((s, idx) => (
-                <span key={s} role="cell">
-                  <input
-                    type="radio"
-                    name={`${id}-${st.value}`}
-                    aria-label={`${st.label}: ${s}`}
-                    checked={current[st.value] === idx}
-                    onChange={() => onChange({ ...current, [st.value]: idx })}
-                  />
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
-      );
-    }
-    case 'grid': {
-      const current = (value as Record<string, string | string[]> | undefined) ?? {};
-      const isMultiple = field.selection === 'multiple';
-      return (
-        <div className="likert" id={id} role="table">
-          <div className="likert-row likert-head" role="row">
-            <span role="columnheader" />
-            {field.columns.map((c) => (
-              <span key={c.value} role="columnheader" className="muted">
-                {c.label}
-              </span>
-            ))}
-          </div>
-          {field.rows.map((row) => {
-            const rowAnswer = current[row.value];
-            const rowSelected = isMultiple
-              ? ((rowAnswer as string[] | undefined) ?? [])
-              : (rowAnswer as string | undefined);
-            return (
-              <div key={row.value} className="likert-row" role="row">
-                <span role="rowheader">{row.label}</span>
-                {field.columns.map((c) => (
-                  <span key={c.value} role="cell">
-                    <input
-                      type={isMultiple ? 'checkbox' : 'radio'}
-                      name={isMultiple ? undefined : `${id}-${row.value}`}
-                      aria-label={`${row.label}: ${c.label}`}
-                      checked={isMultiple ? (rowSelected as string[]).includes(c.value) : rowSelected === c.value}
-                      onChange={(e) => {
-                        if (isMultiple) {
-                          const list = (rowSelected as string[]) ?? [];
-                          onChange({
-                            ...current,
-                            [row.value]: e.target.checked ? [...list, c.value] : list.filter((v) => v !== c.value),
-                          } as Record<string, string[]>);
-                        } else {
-                          onChange({ ...current, [row.value]: c.value } as Record<string, string>);
-                        }
-                      }}
-                    />
-                  </span>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
-    case 'ranking': {
-      const order = (value as string[] | undefined) ?? field.options.map((o) => o.value);
-      const labelOf = (v: string) => field.options.find((o) => o.value === v)?.label ?? v;
-      const imageOf = (v: string) => field.options.find((o) => o.value === v)?.imageAssetId;
-      const move = (index: number, delta: number) => {
-        const next = [...order];
-        const target = index + delta;
-        if (target < 0 || target >= next.length) return;
-        [next[index], next[target]] = [next[target]!, next[index]!];
-        onChange(next);
-      };
-      return (
-        <ol className="ranking" id={id}>
-          {order.map((v, i) => (
-            <li key={v} className="ranking-item">
-              <span>
-                {i + 1}.{' '}
-                {imageOf(v) && <img src={assetUrl(imageOf(v)!)} alt="" className="option-image" loading="lazy" />}
-                {labelOf(v)}
-              </span>
-              <span className="ranking-controls">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`move ${labelOf(v)} up`}
-                  onClick={() => move(i, -1)}
-                >
-                  <ArrowUp size={14} aria-hidden="true" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`move ${labelOf(v)} down`}
-                  onClick={() => move(i, 1)}
-                >
-                  <ArrowDown size={14} aria-hidden="true" />
-                </Button>
-              </span>
-            </li>
-          ))}
-        </ol>
-      );
-    }
-    case 'file': {
-      const fileField: Extract<FormField, { type: 'file' }> = field;
-      const multi = fileField.maxFiles > 1;
-
-      function validate(file: File): string | null {
-        if (!fileField.acceptedMimeTypes.includes(file.type)) {
-          return `"${file.type || 'unknown type'}" is not accepted here`;
-        }
-        if (file.size > fileField.maxSizeMb * 1024 * 1024) {
-          return `file exceeds the ${fileField.maxSizeMb}MB limit`;
-        }
-        return null;
-      }
-
-      async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-        const files = Array.from(e.target.files ?? []);
-        e.target.value = ''; // allow re-picking the same filename after an error
-        if (files.length === 0) return;
-
-        const currentIds = multi ? ((value as string[] | undefined) ?? []) : [];
-        if (multi && currentIds.length + files.length > fileField.maxFiles) {
-          setUploadState({ busy: false, filename: null, error: `up to ${fileField.maxFiles} files allowed` });
-          return;
-        }
-        for (const file of files) {
-          const problem = validate(file);
-          if (problem) {
-            setUploadState({ busy: false, filename: null, error: problem });
-            return;
-          }
-        }
-
-        setUploadState({ busy: true, filename: null, error: null });
-        try {
-          const uploaded = await Promise.all(
-            files.map((file) => uploadFile<{ id: string; filename: string }>(`${uploadPath}/${fileField.key}`, file)),
-          );
-          if (multi) {
-            setAttachedNames((names) => ({
-              ...names,
-              ...Object.fromEntries(uploaded.map((u) => [u.id, u.filename])),
-            }));
-            onChange([...currentIds, ...uploaded.map((u) => u.id)]);
-            setUploadState({ busy: false, filename: null, error: null });
-          } else {
-            setUploadState({ busy: false, filename: uploaded[0]!.filename, error: null });
-            onChange(uploaded[0]!.id);
-          }
-        } catch (cause) {
-          const message = cause instanceof ApiRequestError ? cause.message : 'upload failed';
-          setUploadState({ busy: false, filename: null, error: message });
-        }
-      }
-
-      if (multi) {
-        const ids = (value as string[] | undefined) ?? [];
-        return (
-          <div id={id}>
-            <Input
-              type="file"
-              multiple
-              aria-label={fileField.label}
-              accept={fileField.acceptedMimeTypes.join(',')}
-              onChange={(e) => void onPick(e)}
-              disabled={uploadState.busy || ids.length >= fileField.maxFiles}
-            />
-            <p className="muted">
-              {ids.length} / {fileField.maxFiles} files
-            </p>
-            {ids.length > 0 && (
-              <ul className="summary-samples">
-                {ids.map((fileId) => (
-                  <li key={fileId}>
-                    {attachedNames[fileId] ?? 'file attached'}{' '}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onChange(ids.filter((v) => v !== fileId))}
-                    >
-                      remove
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {uploadState.busy && <p className="muted">uploading…</p>}
-            {uploadState.error && (
-              <Alert variant="destructive">
-                <AlertDescription>{uploadState.error}</AlertDescription>
-              </Alert>
-            )}
-          </div>
-        );
-      }
-
-      const attachedName = uploadState.filename ?? (value ? 'file attached' : null);
-      return (
-        <div id={id}>
-          <Input
-            type="file"
-            aria-label={fileField.label}
-            accept={fileField.acceptedMimeTypes.join(',')}
-            onChange={(e) => void onPick(e)}
-            disabled={uploadState.busy}
-          />
-          {uploadState.busy && <p className="muted">uploading…</p>}
-          {attachedName && !uploadState.busy && (
-            <p className="muted file-attached">
-              <CheckCircle2 size={14} aria-hidden="true" className="file-attached-icon" />
-              {attachedName}
-            </p>
-          )}
-          {uploadState.error && (
-            <Alert variant="destructive">
-              <AlertDescription>{uploadState.error}</AlertDescription>
-            </Alert>
-          )}
-        </div>
-      );
-    }
+    case 'select':
+      return <SelectField field={field} value={value} onChange={onChange} />;
+    case 'multi_select':
+      return <MultiSelectField field={field} value={value} onChange={onChange} />;
+    case 'likert':
+      return <LikertField field={field} value={value} onChange={onChange} />;
+    case 'grid':
+      return <GridField field={field} value={value} onChange={onChange} />;
+    case 'ranking':
+      return <RankingField field={field} value={value} onChange={onChange} />;
+    case 'file':
+      return <FileField field={field} value={value} onChange={onChange} uploadPath={uploadPath} />;
     case 'slider': {
       const current = (value as number | undefined) ?? field.min;
       return (
@@ -651,142 +220,16 @@ export const FieldInput = memo(function FieldInput({
         </div>
       );
     }
-    case 'contact_info': {
-      const current = (value as Record<string, string> | undefined) ?? {};
-      const set = (part: string, v: string) => onChange({ ...current, [part]: v });
-      return (
-        <div className="contact-info-grid" id={id}>
-          <label htmlFor={`${id}-name`} className="muted">
-            name{field.requireName && ' *'}
-          </label>
-          <Input id={`${id}-name`} value={current.name ?? ''} onChange={(e) => set('name', e.target.value)} />
-          <label htmlFor={`${id}-email`} className="muted">
-            email{field.requireEmail && ' *'}
-          </label>
-          <Input
-            id={`${id}-email`}
-            type="email"
-            value={current.email ?? ''}
-            onChange={(e) => set('email', e.target.value)}
-          />
-          <label htmlFor={`${id}-phone`} className="muted">
-            phone{field.requirePhone && ' *'}
-          </label>
-          <Input
-            id={`${id}-phone`}
-            type="tel"
-            value={current.phone ?? ''}
-            onChange={(e) => set('phone', e.target.value)}
-          />
-        </div>
-      );
-    }
-    case 'hot_spot': {
-      const current = value as string | undefined;
-      return (
-        <div className="hot-spot-frame" id={id}>
-          <img src={assetUrl(field.imageAssetId)} alt="" className="hot-spot-image" loading="lazy" />
-          {field.regions.map((r) => (
-            <button
-              key={r.value}
-              type="button"
-              aria-label={r.label}
-              aria-pressed={current === r.value}
-              className={`hot-spot-region${current === r.value ? ' hot-spot-region-active' : ''}`}
-              style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.width}%`, height: `${r.height}%` }}
-              onClick={() => onChange(r.value)}
-            />
-          ))}
-        </div>
-      );
-    }
-    case 'person': {
-      const current = value as string | undefined;
-      const selectedUser = userOptions?.find((u) => u.id === current);
-      const candidates = (userOptions ?? []).filter(
-        (u) =>
-          u.displayName.toLowerCase().includes(personFilter.toLowerCase()) ||
-          u.email.toLowerCase().includes(personFilter.toLowerCase()),
-      );
-      return (
-        <span id={id}>
-          {selectedUser ? (
-            <span className="check-item">
-              {selectedUser.displayName} ({selectedUser.email}){' '}
-              <Button type="button" variant="ghost" size="sm" onClick={() => onChange('')}>
-                change
-              </Button>
-            </span>
-          ) : (
-            <>
-              <Input
-                type="text"
-                aria-label={`${field.label} search`}
-                placeholder={userOptions === null ? 'loading…' : 'search by name or email'}
-                value={personFilter}
-                disabled={userOptions === null}
-                onChange={(e) => setPersonFilter(e.target.value)}
-              />
-              {personFilter && candidates.length > 0 && (
-                <div
-                  role="listbox"
-                  aria-label={`${field.label} matches`}
-                  className="max-h-48 overflow-y-auto rounded-md border"
-                >
-                  {candidates.map((u) => (
-                    <Button
-                      key={u.id}
-                      type="button"
-                      variant="ghost"
-                      role="option"
-                      aria-selected={false}
-                      onClick={() => {
-                        onChange(u.id);
-                        setPersonFilter('');
-                      }}
-                      className="h-auto w-full justify-start rounded-none px-3 py-2 text-left text-sm font-normal"
-                    >
-                      {u.displayName} ({u.email})
-                    </Button>
-                  ))}
-                </div>
-              )}
-              {personFilter && candidates.length === 0 && userOptions !== null && <p className="muted">no matches</p>}
-            </>
-          )}
-        </span>
-      );
-    }
-    case 'performance_level': {
-      const raw = (value as string) ?? '';
-      return (
-        <RadioGroup id={id} value={raw} onValueChange={(v) => onChange(v)} className="check-group">
-          {(performanceLevelOptions ?? []).map((level) => (
-            <label key={level.id} className="check-item">
-              <RadioGroupItem value={level.id} />
-              {level.label}
-            </label>
-          ))}
-          {performanceLevelOptions === null && <p className="muted">loading…</p>}
-          {performanceLevelOptions?.length === 0 && <p className="muted">no performance levels configured yet</p>}
-        </RadioGroup>
-      );
-    }
-    case 'score_label': {
-      const raw = (value as string) ?? '';
-      return (
-        <RadioGroup id={id} value={raw} onValueChange={(v) => onChange(v)} className="check-group">
-          {(scoreLabelOptions ?? []).map((label) => (
-            <label key={label.id} className="check-item">
-              <RadioGroupItem value={label.id} />
-              {label.label}
-            </label>
-          ))}
-          {scoreLabelOptions === null && <p className="muted">loading…</p>}
-          {scoreLabelOptions?.length === 0 && <p className="muted">no score labels configured yet</p>}
-        </RadioGroup>
-      );
-    }
+    case 'contact_info':
+      return <ContactInfoField field={field} value={value} onChange={onChange} />;
+    case 'hot_spot':
+      return <HotSpotField field={field} value={value} onChange={onChange} />;
+    case 'person':
+      return <PersonField field={field} value={value} onChange={onChange} />;
+    case 'performance_level':
+      return <PerformanceLevelField field={field} value={value} onChange={onChange} />;
+    case 'score_label':
+      return <ScoreLabelField field={field} value={value} onChange={onChange} />;
     default:
       return <Input id={id} type="text" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
   }
@@ -992,7 +435,7 @@ export function FormRenderer({
 
   function onNext() {
     if (!pageIsComplete(pageFields)) {
-      setPageError('please answer every required question on this page');
+      setPageError('Please answer every required question on this page');
       return;
     }
     setPageError(null);
@@ -1015,7 +458,7 @@ export function FormRenderer({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (hasSections && !pageIsComplete(pageFields)) {
-      setPageError('please answer every required question on this page');
+      setPageError('Please answer every required question on this page');
       return;
     }
     setError(null);
@@ -1048,18 +491,18 @@ export function FormRenderer({
 
       {closed || notYetOpen ? (
         <div className="question-card msform-thanks">
-          <h2>{notYetOpen ? 'not open yet' : 'this form is closed'}</h2>
+          <h2>{notYetOpen ? 'Not open yet' : 'This form is closed'}</h2>
           <p className="muted">
             {notYetOpen
-              ? `responses open ${new Date(settings.opensAt!).toLocaleString()}`
-              : 'it is no longer accepting responses.'}
+              ? `Responses open ${new Date(settings.opensAt!).toLocaleString()}`
+              : 'It is no longer accepting responses.'}
           </p>
         </div>
       ) : submitted ? (
         <div className="question-card msform-thanks">
           <CheckCircle2 size={40} aria-hidden="true" className="msform-thanks-icon" />
           <h2>{settings.thankYouMessage}</h2>
-          <p className="muted">your response was recorded.</p>
+          <p className="muted">Your response was recorded.</p>
           {settings.quizMode && settings.showScoreToRespondent && submittedScore && (
             <p className="quiz-score">
               {submittedScore.percent !== null ? (
@@ -1069,12 +512,12 @@ export function FormRenderer({
                   {submittedScore.passed !== null && (
                     <span className={submittedScore.passed ? 'quiz-passed' : 'quiz-failed'}>
                       {' '}
-                      — {submittedScore.passed ? 'passed' : 'did not pass'}
+                      — {submittedScore.passed ? 'Passed' : 'Did not pass'}
                     </span>
                   )}
                 </>
               ) : (
-                'this quiz has no graded questions'
+                'This quiz has no graded questions'
               )}
             </p>
           )}
@@ -1083,14 +526,14 @@ export function FormRenderer({
             submittedScore?.perField &&
             Object.keys(submittedScore.perField).length > 0 && (
               <details className="quiz-feedback">
-                <summary>see feedback</summary>
+                <summary>See feedback</summary>
                 <ul>
                   {Object.entries(submittedScore.perField).map(([key, outcome]) => {
                     const field = definition.fields.find((f) => f.key === key);
                     return (
                       <li key={key}>
                         <span className={outcome.correct ? 'quiz-passed' : 'quiz-failed'}>
-                          {field?.label ?? key} — {outcome.correct ? 'correct' : 'incorrect'}
+                          {field?.label ?? key} — {outcome.correct ? 'Correct' : 'Incorrect'}
                         </span>
                         {outcome.feedback && <p className="muted">{outcome.feedback}</p>}
                       </li>
@@ -1101,7 +544,7 @@ export function FormRenderer({
             )}
           {submittedEditToken && editUrlFor && (
             <p className="muted">
-              <a href={editUrlFor(submittedEditToken)}>edit your response</a>
+              <a href={editUrlFor(submittedEditToken)}>Edit your response</a>
             </p>
           )}
           <Button
@@ -1121,7 +564,7 @@ export function FormRenderer({
               window.scrollTo({ top: 0 });
             }}
           >
-            submit another response
+            Submit another response
           </Button>
         </div>
       ) : (
@@ -1140,7 +583,7 @@ export function FormRenderer({
           {hasSections && (
             <div style={{ marginBottom: 8 }}>
               <p className="muted" style={{ margin: 0 }}>
-                page {currentIndex + 1} of {path.length}
+                Page {currentIndex + 1} of {path.length}
                 {currentSection?.title ? ` — ${currentSection.title}` : ''}
               </p>
               {currentSection?.description && <p className="muted">{currentSection.description}</p>}
@@ -1223,11 +666,11 @@ export function FormRenderer({
               // button's type after React's synchronous re-render) submit the form on
               // the very click that was only supposed to navigate to the next page.
               <Button key="next" type="button" onClick={onNext}>
-                next →
+                Next →
               </Button>
             ) : (
               <Button key="submit" type="submit">
-                submit
+                Submit
               </Button>
             )}
           </div>

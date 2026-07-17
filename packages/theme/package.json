@@ -11,10 +11,6 @@
   },
   "scripts": {
     "lint": "eslint src",
-    "typecheck": "tsc --noEmit",
-    "generate:m3": "node scripts/generate-m3-tokens.mjs"
-  },
-  "devDependencies": {
-    "@material/material-color-utilities": "^0.4.0"
+    "typecheck": "tsc --noEmit"
   }
 }

@@ -12,13 +12,13 @@ import { LoadingState } from './loading-state';
 import { ThemeToggle } from './theme-toggle';
 
 const NAV_ITEMS: Array<{ href: string; label: string; permission?: string }> = [
-  { href: '/dashboard', label: 'dashboard', permission: 'dashboards:view' },
-  { href: '/forms', label: 'forms' },
+  { href: '/dashboard', label: 'Dashboard', permission: 'dashboards:view' },
+  { href: '/forms', label: 'Forms' },
   { href: '/admin/kpis', label: 'KPIs', permission: 'kpis:edit' },
-  { href: '/admin/users', label: 'users', permission: 'users:view' },
-  { href: '/admin/roles', label: 'roles', permission: 'roles:view' },
-  { href: '/admin/settings', label: 'settings', permission: 'settings:edit' },
-  { href: '/admin/configuration', label: 'configuration', permission: 'configuration:view' },
+  { href: '/admin/users', label: 'Users', permission: 'users:view' },
+  { href: '/admin/roles', label: 'Roles', permission: 'roles:view' },
+  { href: '/admin/settings', label: 'Settings', permission: 'settings:edit' },
+  { href: '/admin/configuration', label: 'Configuration', permission: 'configuration:view' },
 ];
 
 export const can = (user: AuthenticatedUser | null, permission: string): boolean =>
@@ -53,11 +53,11 @@ export function PortalShell({ user, children }: { user: AuthenticatedUser | null
       <div className="portal">
         <header className="portal-header" data-surface="purple">
           <div className="portal-header-nav">
-            <Image src={asset('/brand/pulse-neg.svg')} alt="pulse by solutions" width={110} height={48} />
+            <Image src={asset('/brand/pulse-neg.svg')} alt="Pulse by solutions" width={110} height={48} />
           </div>
         </header>
         <main className="portal-main">
-          <LoadingState label="loading your session…" />
+          <LoadingState label="Loading your session…" />
         </main>
       </div>
     );
@@ -68,9 +68,9 @@ export function PortalShell({ user, children }: { user: AuthenticatedUser | null
       <header className="portal-header" data-surface="purple">
         <div className="portal-header-nav">
           <Link href="/dashboard" onClick={() => setMenuOpen(false)}>
-            <Image src={asset('/brand/pulse-neg.svg')} alt="pulse by solutions" width={110} height={48} />
+            <Image src={asset('/brand/pulse-neg.svg')} alt="Pulse by solutions" width={110} height={48} />
           </Link>
-          <nav className="portal-nav-desktop" aria-label="main navigation">
+          <nav className="portal-nav-desktop" aria-label="Main navigation">
             {visibleItems.map((item) => (
               <Link
                 key={item.href}
@@ -90,14 +90,14 @@ export function PortalShell({ user, children }: { user: AuthenticatedUser | null
             {user?.displayName}
           </Link>
           <Button variant="ghost" size="sm" className="portal-signout-desktop" onClick={onSignOut}>
-            sign out
+            Sign out
           </Button>
           <button
             type="button"
             className="nav-toggle"
             aria-expanded={menuOpen}
             aria-controls="portal-mobile-nav"
-            aria-label={menuOpen ? 'close menu' : 'open menu'}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             onClick={() => setMenuOpen((open) => !open)}
           >
             <span className={`nav-toggle-bars${menuOpen ? ' nav-toggle-bars-open' : ''}`} aria-hidden="true" />
@@ -108,7 +108,7 @@ export function PortalShell({ user, children }: { user: AuthenticatedUser | null
       <nav
         id="portal-mobile-nav"
         className={`portal-nav-mobile${menuOpen ? ' portal-nav-mobile-open' : ''}`}
-        aria-label="main navigation"
+        aria-label="Main navigation"
         aria-hidden={!menuOpen}
         data-surface="purple"
       >
@@ -130,7 +130,7 @@ export function PortalShell({ user, children }: { user: AuthenticatedUser | null
             </Link>
           )}
           <Button variant="ghost" size="sm" onClick={onSignOut}>
-            sign out
+            Sign out
           </Button>
         </div>
       </nav>

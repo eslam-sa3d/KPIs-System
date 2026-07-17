@@ -1,28 +1,29 @@
 import { z } from 'zod';
+import { emailSchema, passwordSchema } from './primitives';
 
 export const loginSchema = z.object({
-  email: z.string().email().max(254),
-  password: z.string().min(8).max(128),
+  email: emailSchema,
+  password: passwordSchema,
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(8).max(128),
-  newPassword: z.string().min(8).max(128),
+  currentPassword: passwordSchema,
+  newPassword: passwordSchema,
 });
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email().max(254),
+  email: emailSchema,
 });
 
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(1),
-  newPassword: z.string().min(8).max(128),
+  newPassword: passwordSchema,
 });
 
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

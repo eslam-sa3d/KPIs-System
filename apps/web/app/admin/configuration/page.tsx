@@ -12,14 +12,14 @@ export default function ConfigurationPage() {
 
   return (
     <PortalShell user={user}>
-      <h1>configuration</h1>
-      <p className="portal-subtitle">scoring configuration</p>
+      <h1>Configuration</h1>
+      <p className="portal-subtitle">Scoring configuration</p>
 
       <Tabs defaultValue="performance-levels">
         <TabsList>
-          <TabsTrigger value="performance-levels">performance levels</TabsTrigger>
-          <TabsTrigger value="score-labels">score labels</TabsTrigger>
-          <TabsTrigger value="job-titles">job titles</TabsTrigger>
+          <TabsTrigger value="performance-levels">Performance levels</TabsTrigger>
+          <TabsTrigger value="score-labels">Score labels</TabsTrigger>
+          <TabsTrigger value="job-titles">Job titles</TabsTrigger>
         </TabsList>
         <TabsContent value="performance-levels">
           <PerformanceLevelsManager user={user} />

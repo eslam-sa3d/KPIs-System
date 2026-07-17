@@ -46,7 +46,7 @@ export const chartSeries = [
 ] as const;
 
 export const typography = {
-  fontFamily: "'stc forward', Arial, 'Helvetica Neue', sans-serif",
+  fontFamily: "Arial, 'Helvetica Neue', sans-serif",
   weights: { thin: 100, light: 300, regular: 400, medium: 500, bold: 700, extrabold: 800 },
   /**
    * Brand rules:

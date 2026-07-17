@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, FormEvent, useState } from 'react';
+import { useAsyncAction } from '@/lib/use-async-action';
 import {
   ArrowLeft,
   Building2,
@@ -29,7 +30,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '../../../lib/api-client';
 import { useSession } from '../../../lib/use-session';
 import { useResource } from '../../../lib/use-resource';
-import { useReveal } from '../../../lib/use-reveal';
 
 interface PermissionGrant {
   resource: string;
@@ -61,25 +61,25 @@ interface PerformanceLevelOption {
 
 /** Friendlier labels than the raw resource/action strings the catalog returns. */
 const RESOURCE_LABEL: Record<string, string> = {
-  users: 'users',
-  roles: 'roles',
-  departments: 'departments',
-  project_groups: 'project groups',
+  users: 'Users',
+  roles: 'Roles',
+  departments: 'Departments',
+  project_groups: 'Project groups',
   kpis: 'KPIs',
   kpi_entries: 'KPI entries',
-  forms: 'forms',
-  form_submissions: 'form submissions',
-  dashboards: 'dashboard',
-  branding: 'branding',
-  settings: 'settings',
-  configuration: 'configuration',
+  forms: 'Forms',
+  form_submissions: 'Form submissions',
+  dashboards: 'Dashboard',
+  branding: 'Branding',
+  settings: 'Settings',
+  configuration: 'Configuration',
 };
 
 const ACTION_LABEL: Record<string, string> = {
-  view: 'view',
-  edit: 'edit',
-  activate_deactivate: 'activate / deactivate',
-  delete: 'delete',
+  view: 'View',
+  edit: 'Edit',
+  activate_deactivate: 'Activate / deactivate',
+  delete: 'Delete',
 };
 
 /** One small glance-cue per resource card — purely visual, matching this
@@ -143,7 +143,7 @@ function PermissionFields({
 
   return (
     <div>
-      <p className="perm-grid-hint">grouped by resource — check an action to grant it</p>
+      <p className="perm-grid-hint">Grouped by resource — check an action to grant it</p>
       <div className="perm-grid">
         {catalog.resources
           .filter((resource) => resource !== 'dashboards')
@@ -205,14 +205,14 @@ function PermissionFields({
               aria-label={`${DASHBOARD_SCOPE_KEY} scope`}
               className="perm-scope-select"
             >
-              <option value="all">all levels</option>
-              <option value="level">specific level(s)</option>
+              <option value="all">All levels</option>
+              <option value="level">Specific level(s)</option>
             </select>
           </label>
           {dashboardScope === 'level' && (
             <div className="check-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
               {performanceLevels.length === 0 ? (
-                <span className="muted">no performance levels configured yet</span>
+                <span className="muted">No performance levels configured yet</span>
               ) : (
                 performanceLevels.map((level) => (
                   <label key={level.id} className="check-item" style={{ marginInlineStart: 20 }}>
@@ -251,7 +251,7 @@ export default function RolesAdminPage() {
   const { data: roles, reload } = useResource<RoleRow[]>(user ? '/v1/roles' : null);
   const { data: catalog } = useResource<Catalog>(user ? '/v1/roles/permission-catalog' : null);
   const { data: performanceLevels } = useResource<PerformanceLevelOption[]>(user ? '/v1/performance-levels' : null);
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError, run } = useAsyncAction();
   const [creatingRole, setCreatingRole] = useState(false);
   const [renamingRoleId, setRenamingRoleId] = useState<string | null>(null);
   const [editingPermissionsRoleId, setEditingPermissionsRoleId] = useState<string | null>(null);
@@ -264,48 +264,38 @@ export default function RolesAdminPage() {
 
   async function onRename(roleId: string, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
     const name = new FormData(event.currentTarget).get('name');
-    try {
+    await run(async () => {
       await api(`/v1/roles/${roleId}`, { method: 'PATCH', body: JSON.stringify({ name }) });
       setRenamingRoleId(null);
       reload();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Renaming the role failed');
-    }
+    }, 'Renaming the role failed');
   }
 
   async function onToggleActive(role: RoleRow) {
-    setError(null);
-    try {
+    await run(async () => {
       await api(`/v1/roles/${role.id}/status`, { method: 'PATCH', body: JSON.stringify({ isActive: !role.isActive }) });
       reload();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Updating the role failed');
-    }
+    }, 'Updating the role failed');
   }
 
   async function onDelete(roleId: string) {
-    setError(null);
-    try {
+    await run(async () => {
       await api(`/v1/roles/${roleId}`, { method: 'DELETE' });
       setConfirmDeleteRoleId(null);
       reload();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Deleting the role failed');
-    }
+    }, 'Deleting the role failed');
   }
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
     const form = new FormData(event.currentTarget);
     const permissions = readPermissions(form);
     if (permissions.length === 0) {
       setError('Select at least one permission');
       return;
     }
-    try {
+    await run(async () => {
       await api('/v1/roles', {
         method: 'POST',
         body: JSON.stringify({
@@ -317,35 +307,28 @@ export default function RolesAdminPage() {
       (event.target as HTMLFormElement).reset();
       setCreatingRole(false);
       reload();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Creating the role failed');
-    }
+    }, 'Creating the role failed');
   }
 
   async function onSavePermissions(roleId: string, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
     const permissions = readPermissions(new FormData(event.currentTarget));
     if (permissions.length === 0) {
       setError('Select at least one permission');
       return;
     }
-    try {
+    await run(async () => {
       await api(`/v1/roles/${roleId}/permissions`, { method: 'PUT', body: JSON.stringify(permissions) });
       setEditingPermissionsRoleId(null);
       reload();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Updating permissions failed');
-    }
+    }, 'Updating permissions failed');
   }
-
-  const scopeRef = useReveal<HTMLDivElement>('tbody tr', roles !== null && roles.length > 0);
 
   return (
     <PortalShell user={user}>
-      <div ref={scopeRef}>
+      <div>
         <div className="page-title-row">
-          <h1>roles</h1>
+          <h1>Roles</h1>
           {canEdit && catalog && !creatingRole && (
             <Button
               type="button"
@@ -354,7 +337,7 @@ export default function RolesAdminPage() {
               onClick={() => setCreatingRole(true)}
             >
               <Plus size={16} aria-hidden="true" />
-              new role
+              New role
             </Button>
           )}
         </div>
@@ -375,24 +358,24 @@ export default function RolesAdminPage() {
                 onClick={() => setCreatingRole(false)}
               >
                 <ArrowLeft size={16} aria-hidden="true" />
-                back to roles
+                Back to roles
               </Button>
               <form className="builder" onSubmit={onCreate}>
-                <h2 className="text-lg font-semibold mb-2">new role</h2>
-                <label htmlFor="r-name">role name</label>
+                <h2 className="text-lg font-semibold mb-2">New role</h2>
+                <label htmlFor="r-name">Role name</label>
                 <Input id="r-name" name="name" required minLength={2} autoFocus />
-                <label htmlFor="r-desc">description</label>
+                <label htmlFor="r-desc">Description</label>
                 <Input id="r-desc" name="description" />
-                <span className="field-label">permissions</span>
+                <span className="field-label">Permissions</span>
                 <PermissionFields
                   catalog={catalog}
                   performanceLevels={performanceLevels ?? []}
                   defaultPermissions={[]}
                 />
                 <span className="builder-field-actions">
-                  <Button type="submit">create role</Button>
+                  <Button type="submit">Create role</Button>
                   <Button type="button" variant="ghost" onClick={() => setCreatingRole(false)}>
-                    cancel
+                    Cancel
                   </Button>
                 </span>
               </form>
@@ -404,16 +387,16 @@ export default function RolesAdminPage() {
           <LoadingState />
         ) : roles.length === 0 ? (
           <div className="empty-state">
-            <h2>no roles yet</h2>
-            <p className="muted">create the first custom role above to start composing access tiers.</p>
+            <h2>No roles yet</h2>
+            <p className="muted">Create the first custom role above to start composing access tiers.</p>
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>role</TableHead>
-                <TableHead>members</TableHead>
-                <TableHead>permissions</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Members</TableHead>
+                <TableHead>Permissions</TableHead>
                 {canManageColumn && <TableHead />}
               </TableRow>
             </TableHeader>
@@ -426,10 +409,10 @@ export default function RolesAdminPage() {
                         <form className="inline-form" onSubmit={(e) => onRename(role.id, e)}>
                           <Input name="name" defaultValue={role.name} required minLength={2} autoFocus />
                           <Button type="submit" variant="ghost" size="sm">
-                            save
+                            Save
                           </Button>
                           <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingRoleId(null)}>
-                            cancel
+                            Cancel
                           </Button>
                         </form>
                       ) : (
@@ -456,7 +439,7 @@ export default function RolesAdminPage() {
                     {canManageColumn && (
                       <TableCell>
                         {!role.isSystem && renamingRoleId !== role.id && (
-                          <span className="builder-field-actions">
+                          <span className="row-actions">
                             {canEdit && (
                               <Button
                                 type="button"
@@ -464,7 +447,7 @@ export default function RolesAdminPage() {
                                 size="sm"
                                 onClick={() => setRenamingRoleId(role.id)}
                               >
-                                rename
+                                Rename
                               </Button>
                             )}
                             {canEdit && catalog && (
@@ -476,20 +459,20 @@ export default function RolesAdminPage() {
                                   setEditingPermissionsRoleId(editingPermissionsRoleId === role.id ? null : role.id)
                                 }
                               >
-                                {editingPermissionsRoleId === role.id ? 'close' : 'edit permissions'}
+                                {editingPermissionsRoleId === role.id ? 'Close' : 'Edit permissions'}
                               </Button>
                             )}
                             {canToggleStatus && (
                               <Button type="button" variant="ghost" size="sm" onClick={() => onToggleActive(role)}>
-                                {role.isActive ? 'deactivate' : 'reactivate'}
+                                {role.isActive ? 'Deactivate' : 'Reactivate'}
                               </Button>
                             )}
                             {canDelete &&
                               (confirmDeleteRoleId === role.id ? (
                                 <>
-                                  <span className="muted">delete permanently?</span>
+                                  <span className="muted">Delete permanently?</span>
                                   <Button type="button" variant="ghost" size="sm" onClick={() => onDelete(role.id)}>
-                                    confirm delete
+                                    Confirm delete
                                   </Button>
                                   <Button
                                     type="button"
@@ -497,7 +480,7 @@ export default function RolesAdminPage() {
                                     size="sm"
                                     onClick={() => setConfirmDeleteRoleId(null)}
                                   >
-                                    cancel
+                                    Cancel
                                   </Button>
                                 </>
                               ) : (
@@ -507,7 +490,7 @@ export default function RolesAdminPage() {
                                   size="sm"
                                   onClick={() => setConfirmDeleteRoleId(role.id)}
                                 >
-                                  delete
+                                  Delete
                                 </Button>
                               ))}
                           </span>
@@ -526,7 +509,7 @@ export default function RolesAdminPage() {
                           />
                           <span className="builder-field-actions">
                             <Button type="submit" size="sm">
-                              save permissions
+                              Save permissions
                             </Button>
                             <Button
                               type="button"
@@ -534,7 +517,7 @@ export default function RolesAdminPage() {
                               size="sm"
                               onClick={() => setEditingPermissionsRoleId(null)}
                             >
-                              cancel
+                              Cancel
                             </Button>
                           </span>
                         </form>

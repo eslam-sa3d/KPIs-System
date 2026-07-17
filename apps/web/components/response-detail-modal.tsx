@@ -135,26 +135,26 @@ export function ResponseDetailModal({
       >
         <DialogHeader>
           <DialogTitle>
-            response {index + 1} of {total}
+            Response {index + 1} of {total}
           </DialogTitle>
           <p className="muted" style={{ margin: '4px 0 0' }}>
-            {submission.submittedBy?.displayName ?? 'anonymous'} · {new Date(submission.createdAt).toLocaleString()}
+            {submission.submittedBy?.displayName ?? 'Anonymous'} · {new Date(submission.createdAt).toLocaleString()}
           </p>
           {submission.score && submission.score.percent !== null && (
             <p className="quiz-score" style={{ margin: '4px 0 0', fontSize: 'var(--font-size-md)' }}>
-              score: <strong>{submission.score.earnedPoints}</strong> / {submission.score.totalPoints} (
+              Score: <strong>{submission.score.earnedPoints}</strong> / {submission.score.totalPoints} (
               {submission.score.percent}%)
               {submission.score.passed !== null && (
                 <span className={submission.score.passed ? 'quiz-passed' : 'quiz-failed'}>
                   {' '}
-                  — {submission.score.passed ? 'passed' : 'did not pass'}
+                  — {submission.score.passed ? 'Passed' : 'Did not pass'}
                 </span>
               )}
             </p>
           )}
           {canEdit && !editing && (
             <Button variant="ghost" size="sm" className="w-fit" onClick={() => setEditing(true)}>
-              edit
+              Edit
             </Button>
           )}
         </DialogHeader>
@@ -196,7 +196,7 @@ export function ResponseDetailModal({
                           size="sm"
                           onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${value}`, field.label)}
                         >
-                          download attachment
+                          Download attachment
                         </Button>
                       ) : field.type === 'file' && Array.isArray(value) && value.length > 0 ? (
                         <span className="builder-field-actions">
@@ -209,7 +209,7 @@ export function ResponseDetailModal({
                                 downloadFile(`/v1/forms/${slug}/uploads/${uploadId}`, `${field.label}-${i + 1}`)
                               }
                             >
-                              download {i + 1}
+                              Download {i + 1}
                             </Button>
                           ))}
                         </span>
@@ -234,10 +234,10 @@ export function ResponseDetailModal({
                   setSaveError(null);
                 }}
               >
-                cancel
+                Cancel
               </Button>
               <Button disabled={saving} onClick={onSave}>
-                {saving ? 'saving…' : 'save'}
+                {saving ? 'Saving…' : 'Save'}
               </Button>
             </>
           ) : (
@@ -246,7 +246,7 @@ export function ResponseDetailModal({
                 ← previous
               </Button>
               <Button variant="ghost" onClick={() => onNext?.()} disabled={!onNext}>
-                next →
+                Next →
               </Button>
             </>
           )}

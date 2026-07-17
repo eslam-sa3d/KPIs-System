@@ -28,10 +28,13 @@ import { AssetsService } from './modules/forms/assets.service';
 import { FileUploadsService } from './modules/forms/file-uploads.service';
 import { FormAccessGuard } from './modules/forms/form-access.guard';
 import { FormKpiMappingsService } from './modules/forms/form-kpi-mappings.service';
+import { FormKpiScoringService } from './modules/forms/form-kpi-scoring.service';
 import { FormsService } from './modules/forms/forms.service';
+import { SubmissionReportingService } from './modules/forms/submission-reporting.service';
 import { SubmissionsService } from './modules/forms/submissions.service';
 import { TurnstileService } from './modules/forms/turnstile.service';
 import { HealthController } from './modules/health/health.controller';
+import { KpiDashboardService } from './modules/kpis/kpi-dashboard.service';
 import { KpisController } from './modules/kpis/kpis.controller';
 import { KpisService } from './modules/kpis/kpis.service';
 import { PermissionsGuard } from './modules/rbac/permissions.guard';
@@ -81,9 +84,12 @@ import { RolesController } from './modules/rbac/roles.controller';
     UsersService,
     RbacService,
     KpisService,
+    KpiDashboardService,
     FormsService,
     FormKpiMappingsService,
+    FormKpiScoringService,
     SubmissionsService,
+    SubmissionReportingService,
     TurnstileService,
     FileUploadsService,
     AssetsService,

@@ -10,14 +10,14 @@ export default function AccountPage() {
 
   return (
     <PortalShell user={user}>
-      <h1>account</h1>
+      <h1>Account</h1>
       <p className="portal-subtitle">{user?.email}</p>
 
       <Card>
         <CardHeader>
-          <CardTitle>change password</CardTitle>
+          <CardTitle>Change password</CardTitle>
           <CardDescription>
-            changing your password signs you out of every other device — you&apos;ll need to sign in again here too.
+            Changing your password signs you out of every other device — you&apos;ll need to sign in again here too.
           </CardDescription>
         </CardHeader>
         <CardContent>

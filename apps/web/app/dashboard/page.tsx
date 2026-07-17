@@ -1,6 +1,5 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
 import type {
   DashboardFormScope,
@@ -11,25 +10,17 @@ import type {
 } from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
 import { TeamMemberDetailDrawer } from '../../components/team-member-detail-drawer';
-import { FormMultiSelectCombobox } from '../../components/form-multi-select-combobox';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import { LoadingState } from '@/components/loading-state';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '../../lib/api-client';
 import { useSession } from '../../lib/use-session';
 import { useResource } from '../../lib/use-resource';
-import { useReveal } from '../../lib/use-reveal';
-import { STATUS_ICON, STATUS_LABEL, STATUS_ORDER, StatusKey, statusBadgeStyle, statusOf } from '../../lib/kpi-status';
-
-// Lazy-loaded: recharts only ships once the dashboard actually renders a chart.
-const CountBarChart = dynamic(() => import('../../components/count-bar-chart'), {
-  ssr: false,
-  loading: () => <LoadingState label="loading chart…" />,
-});
+import { StatusKey, statusOf } from '../../lib/kpi-status';
+import { DashboardFormScopePicker } from './dashboard-form-scope-picker';
+import { DashboardJobTitlePills } from './dashboard-job-title-pills';
+import { DashboardStatusCards } from './dashboard-status-cards';
+import { DashboardScoreChart } from './dashboard-score-chart';
+import { DashboardRecentFeedback } from './dashboard-recent-feedback';
+import { DashboardTeamTable } from './dashboard-team-table';
 
 /** A single (FormKpiMapping, FormSubmission) pair, exactly as KpisService's
  *  loadScoredSubmissions produces it — raw, on its own scale, never blended
@@ -127,7 +118,7 @@ export default function DashboardPage() {
       void reloadTeamOverview();
       void reloadRecentFeedback();
     } catch (cause) {
-      setFormScopeError(cause instanceof Error ? cause.message : 'the request failed');
+      setFormScopeError(cause instanceof Error ? cause.message : 'The request failed');
     } finally {
       setFormScopeSaving(false);
     }
@@ -244,82 +235,37 @@ export default function DashboardPage() {
     setMemberSort((current) => (current.key === key ? { key, dir: (current.dir * -1) as 1 | -1 } : { key, dir: -1 }));
   }
 
-  const dashboardRef = useReveal<HTMLDivElement>('.p-kpi-card, .p-card, .p-table-card', kpis !== null);
-
   return (
     <PortalShell user={user}>
-      <div className="p-dashboard" ref={dashboardRef}>
+      <div className="p-dashboard">
         <div className="page-title-row">
           <div>
             <h1>KPI dashboard</h1>
             <p className="portal-subtitle" style={{ margin: '4px 0 0' }}>
-              click any card or row for details
+              Click any card or row for details
             </p>
           </div>
         </div>
 
-        {canSeeTeamOverview && (
-          <div
-            className="p-card"
-            style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}
-          >
-            <span className="muted">
-              showing data from:{' '}
-              {formScope === null
-                ? 'loading…'
-                : selectedFormIds.size === 0
-                  ? 'all forms'
-                  : [...selectedFormIds].map((id) => scopeForms?.find((f) => f.id === id)?.title ?? id).join(', ')}
-            </span>
-            {canEditFormScope && (
-              <>
-                <FormMultiSelectCombobox
-                  selectedIds={selectedFormIds}
-                  onToggle={onToggleScopeForm}
-                  disabled={formScopeSaving}
-                  triggerLabel="choose a form"
-                />
-                {selectedFormIds.size > 0 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={formScopeSaving}
-                    onClick={() => void persistFormScope([])}
-                  >
-                    show all forms
-                  </Button>
-                )}
-                {formScopeSaving && <Spinner className="size-4" />}
-              </>
-            )}
-          </div>
-        )}
-        {formScopeError && (
-          <Alert variant="destructive" style={{ marginBottom: 16 }}>
-            <AlertDescription>{formScopeError}</AlertDescription>
-          </Alert>
-        )}
+        <DashboardFormScopePicker
+          canSeeTeamOverview={canSeeTeamOverview}
+          formScope={formScope}
+          scopeForms={scopeForms}
+          selectedFormIds={selectedFormIds}
+          canEditFormScope={canEditFormScope}
+          onToggleScopeForm={onToggleScopeForm}
+          formScopeSaving={formScopeSaving}
+          onShowAllForms={() => void persistFormScope([])}
+          formScopeError={formScopeError}
+        />
 
-        {canSeeTeamOverview && teamOverview && jobTitleOptions.length > 0 && (
-          <div className="p-filter-pills" style={{ marginBottom: 20 }}>
-            <Badge asChild variant={jobTitleFilter === 'all' ? 'default' : 'outline'} className="cursor-pointer py-1">
-              <button onClick={() => setJobTitleFilter('all')}>all job titles ({teamMembers.length})</button>
-            </Badge>
-            {jobTitleOptions.map((title) => (
-              <Badge
-                key={title}
-                asChild
-                variant={jobTitleFilter === title ? 'default' : 'outline'}
-                className="cursor-pointer py-1"
-              >
-                <button onClick={() => setJobTitleFilter(title)}>
-                  {title} ({teamMembers.filter((m) => m.jobTitle === title).length})
-                </button>
-              </Badge>
-            ))}
-          </div>
-        )}
+        <DashboardJobTitlePills
+          show={Boolean(canSeeTeamOverview && teamOverview)}
+          jobTitleOptions={jobTitleOptions}
+          jobTitleFilter={jobTitleFilter}
+          setJobTitleFilter={setJobTitleFilter}
+          teamMembers={teamMembers}
+        />
 
         {kpis === null ? (
           <div
@@ -330,219 +276,43 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            {canSeeTeamOverview && teamOverview && (
-              <div className="p-kpi-strip">
-                {STATUS_ORDER.map((s) => (
-                  <button
-                    key={s}
-                    className={`p-kpi-card p-status-${s}${memberStatusFilter === s ? ' active' : ''}`}
-                    onClick={() => setMemberStatusFilter(memberStatusFilter === s ? 'all' : s)}
-                  >
-                    <div className="p-kpi-icon">{STATUS_ICON[s]}</div>
-                    <div className="p-kpi-label">{STATUS_LABEL[s]}</div>
-                    <div className="p-kpi-val">
-                      {s === 'pending' || bandScoreAvg[s] === null ? stats[s] : bandScoreAvg[s]!.toFixed(1)}
-                    </div>
-                    <div className="p-kpi-sub">
-                      {s === 'pending'
-                        ? 'no entries yet'
-                        : `${stats[s]} member${stats[s] === 1 ? '' : 's'} · ${
-                            filteredTeamMembers.length ? Math.round((stats[s] / filteredTeamMembers.length) * 100) : 0
-                          }% of team`}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+            <DashboardStatusCards
+              show={Boolean(canSeeTeamOverview && teamOverview)}
+              memberStatusFilter={memberStatusFilter}
+              setMemberStatusFilter={setMemberStatusFilter}
+              bandScoreAvg={bandScoreAvg}
+              stats={stats}
+              filteredTeamMemberCount={filteredTeamMembers.length}
+            />
 
-            {canSeeTeamOverview && teamOverview && (
-              <div className="p-card" style={{ marginBottom: 16 }}>
-                <div className="p-card-title">Score by team member</div>
-                {hasScoreByPerson ? (
-                  <CountBarChart
-                    data={scoreByPerson}
-                    textColor="var(--text-3)"
-                    gridColor="var(--border)"
-                    barColor="var(--accent)"
-                    countLabel="score / 5"
-                  />
-                ) : (
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    no scored team members yet.
-                  </p>
-                )}
-              </div>
-            )}
+            <DashboardScoreChart
+              show={Boolean(canSeeTeamOverview && teamOverview)}
+              scoreByPerson={scoreByPerson}
+              hasScoreByPerson={hasScoreByPerson}
+            />
 
-            {canSeeTeamOverview && recentFeedback && recentFeedback.entries.length > 0 && (
-              <div className="p-card" style={{ marginBottom: 16 }}>
-                <div className="p-card-title">Recent feedback</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 380, overflowY: 'auto' }}>
-                  {recentFeedback.entries.map((entry) => (
-                    <div key={entry.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
-                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 3 }}>
-                        {entry.kpiName} · {entry.areaName} — {entry.personName}{' '}
-                        <span style={{ fontFamily: 'var(--mono)', fontWeight: 600 }}>{entry.display}</span>
-                        <span className="muted"> · {new Date(entry.createdAt).toLocaleDateString()}</span>
-                      </div>
-                      {entry.comment && <div style={{ fontSize: 13, fontStyle: 'italic' }}>“{entry.comment}”</div>}
-                      {entry.context && (
-                        <div style={{ fontSize: 12, color: 'var(--text-2)' }}>context: {entry.context}</div>
-                      )}
-                      <div className="muted" style={{ fontSize: 10.5, marginTop: 2 }}>
-                        by {entry.evaluatorName}
-                        {entry.anonymous && ' (anonymous)'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <DashboardRecentFeedback canSeeTeamOverview={canSeeTeamOverview} recentFeedback={recentFeedback} />
 
-            {canSeeTeamOverview && teamOverview && (
-              <div className="p-table-card">
-                <div className="p-table-header">
-                  <div className="p-filter-pills">
-                    {(['all', 'scored', 'pending'] as const).map((s) => (
-                      <Badge
-                        key={s}
-                        asChild
-                        variant={memberCoverageFilter === s ? 'default' : 'outline'}
-                        className="cursor-pointer py-1"
-                      >
-                        <button onClick={() => setMemberCoverageFilter(s)}>{s === 'all' ? 'All' : s}</button>
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="p-filter-pills">
-                    {(['all', ...STATUS_ORDER] as const).map((s) => (
-                      <Badge
-                        key={s}
-                        asChild
-                        variant={memberStatusFilter === s ? 'default' : 'outline'}
-                        className="cursor-pointer py-1"
-                      >
-                        <button onClick={() => setMemberStatusFilter(s)}>
-                          {s === 'all' ? 'All' : STATUS_LABEL[s]}
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                  <span className="muted" style={{ fontSize: 11 }}>
-                    sort: {memberSort.key} {memberSort.dir > 0 ? '↑' : '↓'}
-                  </span>
-                </div>
-                <div className="page-title-row" style={{ marginBottom: 8 }}>
-                  <Input
-                    aria-label="filter team members"
-                    placeholder="filter by name, email, department, or role…"
-                    value={memberFilter}
-                    onChange={(e) => setMemberFilter(e.target.value)}
-                    style={{ maxWidth: 320 }}
-                  />
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead
-                        className="p-th-sortable"
-                        aria-sort={
-                          memberSort.key === 'name' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
-                        }
-                      >
-                        <button type="button" onClick={() => sortMembersBy('name')}>
-                          name
-                        </button>
-                      </TableHead>
-                      <TableHead
-                        className="p-th-sortable"
-                        aria-sort={
-                          memberSort.key === 'department' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
-                        }
-                      >
-                        <button type="button" onClick={() => sortMembersBy('department')}>
-                          department
-                        </button>
-                      </TableHead>
-                      <TableHead>role</TableHead>
-                      <TableHead>status</TableHead>
-                      <TableHead>score</TableHead>
-                      <TableHead
-                        className="p-th-sortable"
-                        aria-sort={
-                          memberSort.key === 'updated' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'
-                        }
-                      >
-                        <button type="button" onClick={() => sortMembersBy('updated')}>
-                          last updated
-                        </button>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {memberTableData.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="muted" style={{ textAlign: 'center' }}>
-                          {teamMembers.length === 0 ? 'no active team members.' : 'no team members match this filter.'}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      memberTableData.map((m) => {
-                        const memberStatus = statusOf(m.score);
-                        return (
-                          <TableRow
-                            key={m.id}
-                            tabIndex={0}
-                            role="button"
-                            aria-label={`view ${m.displayName}'s rate`}
-                            onClick={() => setSelectedMemberId(m.id)}
-                            onKeyDown={(e) => {
-                              if (e.target !== e.currentTarget) return;
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                setSelectedMemberId(m.id);
-                              }
-                            }}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <TableCell style={{ fontWeight: 500 }}>{m.displayName}</TableCell>
-                            <TableCell className="muted">{m.department ?? '—'}</TableCell>
-                            <TableCell className="muted">{m.roles.join(', ') || '—'}</TableCell>
-                            <TableCell>
-                              <Badge className="border-transparent" style={statusBadgeStyle(memberStatus)}>
-                                {STATUS_LABEL[memberStatus]}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
-                              {m.score !== null ? `${m.score.toFixed(1)} / 5` : '—'}
-                            </TableCell>
-                            <TableCell className="muted" style={{ fontFamily: 'var(--mono)' }}>
-                              {m.lastUpdated ? new Date(m.lastUpdated).toLocaleDateString() : '—'}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-                <div className="p-table-footer">
-                  <span className="p-tf-count">
-                    showing {memberTableData.length} of {filteredTeamMembers.length} team members
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setMemberCoverageFilter('all');
-                      setMemberStatusFilter('all');
-                      setMemberFilter('');
-                    }}
-                  >
-                    clear filters
-                  </Button>
-                </div>
-              </div>
-            )}
+            <DashboardTeamTable
+              show={Boolean(canSeeTeamOverview && teamOverview)}
+              memberCoverageFilter={memberCoverageFilter}
+              setMemberCoverageFilter={setMemberCoverageFilter}
+              memberStatusFilter={memberStatusFilter}
+              setMemberStatusFilter={setMemberStatusFilter}
+              memberSort={memberSort}
+              sortMembersBy={sortMembersBy}
+              memberFilter={memberFilter}
+              setMemberFilter={setMemberFilter}
+              memberTableData={memberTableData}
+              totalTeamMemberCount={teamMembers.length}
+              filteredTeamMemberCount={filteredTeamMembers.length}
+              onSelectMember={setSelectedMemberId}
+              onClearFilters={() => {
+                setMemberCoverageFilter('all');
+                setMemberStatusFilter('all');
+                setMemberFilter('');
+              }}
+            />
           </>
         )}
 

@@ -110,4 +110,3 @@ Kept here deliberately rather than only in a one-off review, so drift is visible
 - File uploads are stored as Postgres blobs, not object storage — a deliberate scale tradeoff (see the comment on `FileUpload` in `schema.prisma`), fine today, worth re-litigating before either upload volume or traffic grows meaningfully.
 - Passwords: argon2id. Secrets via environment/secret manager, never committed.
 - Audit log table records role/permission mutations and data exports.
-- `@material/material-color-utilities@0.4.0` (used by `packages/theme`) ships broken relative ESM imports upstream; `patches/` carries a pnpm patch fixing it — see `patches/README.md` before bumping that dependency's version.

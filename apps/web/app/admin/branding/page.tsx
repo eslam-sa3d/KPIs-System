@@ -34,7 +34,7 @@ export default function BrandingAdminPage() {
         }),
       });
       setIdentity(saved);
-      setNotice('brand identity saved — the landing page updates immediately');
+      setNotice('Brand identity saved — the landing page updates immediately');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Saving failed');
     }
@@ -42,8 +42,8 @@ export default function BrandingAdminPage() {
 
   return (
     <PortalShell user={user}>
-      <h1>branding</h1>
-      <p className="portal-subtitle">customize the company identity on the landing page</p>
+      <h1>Branding</h1>
+      <p className="portal-subtitle">Customize the company identity on the landing page</p>
 
       {identity === null ? (
         <LoadingState />
@@ -51,15 +51,15 @@ export default function BrandingAdminPage() {
         <Card>
           <CardContent className="pt-6">
             <form className="builder" onSubmit={onSave}>
-              <label htmlFor="b-name">company name</label>
+              <label htmlFor="b-name">Company name</label>
               <Input id="b-name" name="companyName" defaultValue={identity.companyName} required />
-              <label htmlFor="b-headline">landing headline</label>
+              <label htmlFor="b-headline">Landing headline</label>
               <Input id="b-headline" name="headline" defaultValue={identity.headline ?? ''} />
-              <label htmlFor="b-tagline">tagline</label>
+              <label htmlFor="b-tagline">Tagline</label>
               <Input id="b-tagline" name="tagline" defaultValue={identity.tagline ?? ''} />
-              <label htmlFor="b-logo">logo URL (optional — defaults to the pulse logo)</label>
+              <label htmlFor="b-logo">Logo URL (optional — defaults to the pulse logo)</label>
               <Input id="b-logo" name="logoUrl" defaultValue={identity.logoUrl ?? ''} />
-              <Button type="submit">save identity</Button>
+              <Button type="submit">Save identity</Button>
               <div className="space-y-2 mb-4">
                 {notice && (
                   <Alert>

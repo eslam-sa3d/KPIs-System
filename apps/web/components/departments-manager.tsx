@@ -104,8 +104,8 @@ function EntityGroupManager({
         <Card>
           <CardContent className="pt-6">
             <form className="inline-form" onSubmit={onCreate}>
-              <Input name="name" required minLength={2} placeholder={`new ${noun} name`} aria-label={`${noun} name`} />
-              <Button type="submit">create {noun}</Button>
+              <Input name="name" required minLength={2} placeholder={`New ${noun} name`} aria-label={`${noun} name`} />
+              <Button type="submit">Create {noun}</Button>
             </form>
             {notice && (
               <Alert className="mt-4">
@@ -128,14 +128,14 @@ function EntityGroupManager({
           <span className="empty-state-icon">
             <Building2 size={22} aria-hidden="true" />
           </span>
-          <h2>no {noun}s yet</h2>
-          <p className="muted">create the first {noun} above to start assigning users to it.</p>
+          <h2>No {noun}s yet</h2>
+          <p className="muted">Create the first {noun} above to start assigning users to it.</p>
         </div>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>name</TableHead>
+              <TableHead>Name</TableHead>
               {(canEdit || canDelete) && <TableHead />}
             </TableRow>
           </TableHeader>
@@ -148,10 +148,10 @@ function EntityGroupManager({
                       <form className="inline-form" onSubmit={(e) => onRename(g.id, e)}>
                         <Input name="name" defaultValue={g.name} required minLength={2} autoFocus />
                         <Button type="submit" variant="ghost" size="sm">
-                          save
+                          Save
                         </Button>
                         <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingId(null)}>
-                          cancel
+                          Cancel
                         </Button>
                       </form>
                     ) : (
@@ -169,7 +169,7 @@ function EntityGroupManager({
                               size="sm"
                               onClick={() => setExpandedId(expandedId === g.id ? null : g.id)}
                             >
-                              {expandedId === g.id ? 'hide members' : 'members'}
+                              {expandedId === g.id ? 'Hide members' : 'Members'}
                             </Button>
                           )}
                           {canEdit && (
@@ -177,7 +177,7 @@ function EntityGroupManager({
                               type="button"
                               variant="ghost"
                               size="icon-sm"
-                              aria-label={`rename ${g.name}`}
+                              aria-label={`Rename ${g.name}`}
                               onClick={() => setRenamingId(g.id)}
                             >
                               <Pencil size={14} aria-hidden="true" />
@@ -186,9 +186,9 @@ function EntityGroupManager({
                           {canDelete &&
                             (confirmDeleteId === g.id ? (
                               <>
-                                <span className="muted">delete?</span>
+                                <span className="muted">Delete?</span>
                                 <Button type="button" variant="destructive" size="sm" onClick={() => onDelete(g.id)}>
-                                  confirm
+                                  Confirm
                                 </Button>
                                 <Button
                                   type="button"
@@ -196,7 +196,7 @@ function EntityGroupManager({
                                   size="sm"
                                   onClick={() => setConfirmDeleteId(null)}
                                 >
-                                  cancel
+                                  Cancel
                                 </Button>
                               </>
                             ) : (
@@ -207,7 +207,7 @@ function EntityGroupManager({
                                 className="text-destructive hover:text-destructive"
                                 onClick={() => setConfirmDeleteId(g.id)}
                               >
-                                delete
+                                Delete
                               </Button>
                             ))}
                         </span>

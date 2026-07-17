@@ -24,9 +24,25 @@ export default function PieBreakdown({
   total: number;
   onSegmentClick?: (value: string) => void;
 }) {
-  const data = Object.entries(counts)
+  const sorted = Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
     .map(([value, count]) => ({ value, label: optionLabels?.[value] ?? value, count }));
+
+  // chartSeries is a fixed, accessibility-validated palette that must never be
+  // cycled (see its own doc comment) — beyond that many distinct categories,
+  // fold the smallest ones into a single "Other" slice instead of reusing colors.
+  const data =
+    sorted.length > chartSeries.length
+      ? [
+          ...sorted.slice(0, chartSeries.length - 1),
+          {
+            value: '__other__',
+            label: 'Other',
+            count: sorted.slice(chartSeries.length - 1).reduce((sum, s) => sum + s.count, 0),
+          },
+        ]
+      : sorted;
+  const colorFor = (i: number) => (i < chartSeries.length ? chartSeries[i] : palette.secondary.silver);
 
   return (
     <div className="summary-pie">
@@ -35,7 +51,7 @@ export default function PieBreakdown({
           <PieChart>
             <Pie data={data} dataKey="count" nameKey="label" outerRadius={80}>
               {data.map((entry, i) => (
-                <Cell key={entry.value} fill={chartSeries[i % chartSeries.length]} />
+                <Cell key={entry.value} fill={colorFor(i)} />
               ))}
             </Pie>
             <RechartsTooltip
@@ -55,13 +71,15 @@ export default function PieBreakdown({
       <ul className="summary-pie-legend">
         {data.map(({ value, label, count }, i) => (
           <li key={value} className="summary-pie-legend-row">
-            {onSegmentClick ? (
+            {/* the folded "Other" bucket isn't one real stored answer value, so
+                it can't drive click-to-filter like every other real segment */}
+            {onSegmentClick && value !== '__other__' ? (
               <button
                 type="button"
                 className="summary-pie-legend-row-inner summary-bar-row-clickable"
                 onClick={() => onSegmentClick(value)}
               >
-                <span className="summary-pie-swatch" style={{ background: chartSeries[i % chartSeries.length] }} />
+                <span className="summary-pie-swatch" style={{ background: colorFor(i) }} />
                 <span className="summary-bar-label">{label}</span>
                 <span className="summary-bar-count muted">
                   {count} ({total ? Math.round((count / total) * 100) : 0}%)
@@ -69,7 +87,7 @@ export default function PieBreakdown({
               </button>
             ) : (
               <span className="summary-pie-legend-row-inner">
-                <span className="summary-pie-swatch" style={{ background: chartSeries[i % chartSeries.length] }} />
+                <span className="summary-pie-swatch" style={{ background: colorFor(i) }} />
                 <span className="summary-bar-label">{label}</span>
                 <span className="summary-bar-count muted">
                   {count} ({total ? Math.round((count / total) * 100) : 0}%)

@@ -60,7 +60,7 @@ export function compileAnswerValidator(definition: FormDefinition) {
   };
 }
 
-export function isVisible(field: FormField, answers: SubmissionAnswers): boolean {
+function isVisible(field: FormField, answers: SubmissionAnswers): boolean {
   const rule = field.visibleWhen;
   if (!rule) return true;
   const actual = answers[rule.fieldKey];
@@ -177,11 +177,11 @@ function validatorFor(field: FormField): ZodTypeAny {
       return z.enum(values as [string, ...string[]]);
     }
     case 'person':
-      // structural shape only — SubmissionsService resolves this against a
-      // real, active user at persist time, the actual trust boundary.
+      // structural shape only — FormKpiScoringService resolves this against a
+      // real, active user when scoring a KPI mapping, the actual trust boundary.
       return z.string().uuid();
     case 'performance_level':
-      // structural shape only — SubmissionsService resolves this against the
+      // structural shape only — FormKpiScoringService resolves this against the
       // live PerformanceLevel table when scoring a KPI mapping.
       return z.string().uuid();
     case 'score_label':

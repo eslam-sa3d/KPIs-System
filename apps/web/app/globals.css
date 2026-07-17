@@ -10,14 +10,14 @@
 @source '../components';
 @source '../lib';
 
-/* Every shadcn variable aliases onto the existing --color-* / --md-sys-color-*
+/* Every shadcn variable aliases onto the existing --color-* / --pulse-role-*
    chain (packages/theme) — nothing here is a new hardcoded color. inline
    keeps these as live var() references rather than baking a static value at
    build time, so they keep following the same light/dark/system swap the
    rest of the app already does.
 
    --color-primary/--color-accent/--color-border below reference
-   --md-sys-color-* directly, not the same-named --color-primary/
+   --pulse-role-* directly, not the same-named --color-primary/
    --color-accent/--color-border alias one layer up in tokens.css — aliasing
    a @theme var onto a CSS custom property of the exact same name is
    circular (the property ends up referencing itself) and silently resolves
@@ -36,19 +36,19 @@
   --color-foreground: var(--color-text);
   --color-card: var(--color-surface);
   --color-card-foreground: var(--color-text);
-  --color-popover: var(--md-sys-color-surface-container-high);
+  --color-popover: var(--pulse-role-surface-container-high);
   --color-popover-foreground: var(--color-text);
-  --color-primary: var(--md-sys-color-primary);
+  --color-primary: var(--pulse-role-primary);
   --color-primary-foreground: var(--color-on-primary);
-  --color-secondary: var(--md-sys-color-secondary-container);
-  --color-secondary-foreground: var(--md-sys-color-on-secondary-container);
-  --color-muted: var(--md-sys-color-surface-container-high);
+  --color-secondary: var(--pulse-role-secondary-container);
+  --color-secondary-foreground: var(--pulse-role-on-secondary-container);
+  --color-muted: var(--pulse-role-surface-container-high);
   --color-muted-foreground: var(--color-text-muted);
-  --color-accent: var(--md-sys-color-tertiary);
-  --color-accent-foreground: var(--md-sys-color-on-tertiary);
+  --color-accent: var(--pulse-role-tertiary);
+  --color-accent-foreground: var(--pulse-role-on-tertiary);
   --color-destructive: var(--color-danger);
-  --color-destructive-foreground: var(--md-sys-color-on-error);
-  --color-border: var(--md-sys-color-outline-variant);
+  --color-destructive-foreground: var(--pulse-role-on-error);
+  --color-border: var(--pulse-role-outline-variant);
   --color-input: var(--color-border);
   --color-ring: var(--color-primary);
 
@@ -60,11 +60,11 @@
 
   --font-sans: var(--font-family-base);
 
-  --radius-sm: var(--md-sys-shape-corner-small);
-  --radius-md: var(--md-sys-shape-corner-medium);
-  --radius-lg: var(--md-sys-shape-corner-large);
-  --radius-xl: var(--md-sys-shape-corner-extra-large);
-  --radius: var(--md-sys-shape-corner-medium);
+  --radius-sm: var(--pulse-radius-small);
+  --radius-md: var(--pulse-radius-medium);
+  --radius-lg: var(--pulse-radius-large);
+  --radius-xl: var(--pulse-radius-extra-large);
+  --radius: var(--pulse-radius-medium);
 }
 
 @layer base, legacy-base, legacy-components, components, utilities;
@@ -73,7 +73,7 @@
    states: explicit light, explicit dark, or absent ("system", OS-driven).
    This mirrors that exact same three-way logic so shadcn's literal `dark:`
    utilities (a handful inside its own component source) stay correct in all
-   three states, matching how m3-scheme.css already resolves --md-sys-color-*. */
+   three states, matching how tokens.css already resolves --pulse-role-*. */
 @custom-variant dark {
   &:where([data-theme='dark'], [data-theme='dark'] *) {
     @slot;
@@ -104,16 +104,16 @@
 
   body {
     font-family: var(--font-family-base);
-    font-weight: var(--md-sys-typescale-body-large-weight);
-    font-size: var(--md-sys-typescale-body-large-size);
-    /* unitless, not the fixed md-sys-typescale-body-large-line-height rem value —
+    font-weight: var(--pulse-type-body-large-weight);
+    font-size: var(--pulse-type-body-large-size);
+    /* unitless, not the fixed --pulse-type-body-large-line-height rem value —
      a fixed length inherits as-is into every descendant regardless of its own
      font-size, which would blow out line spacing on every smaller/larger text
      size elsewhere in the app that doesn't set its own line-height. Unitless
      inherits as a ratio recomputed per element instead (and 1.5 is body-large's
      own 24px/16px ratio anyway, so this element is unaffected either way). */
     line-height: var(--line-height-base);
-    letter-spacing: var(--md-sys-typescale-body-large-tracking);
+    letter-spacing: var(--pulse-type-body-large-tracking);
     color: var(--color-text);
     background: var(--color-bg);
     overflow-x: hidden;
@@ -130,13 +130,13 @@
    for size/line-height; the brand's own lighter weight overrides M3's default
    regular-400 headline weight). */
   h1 {
-    font-size: var(--md-sys-typescale-headline-large-size);
-    line-height: var(--md-sys-typescale-headline-large-line-height);
+    font-size: var(--pulse-type-headline-large-size);
+    line-height: var(--pulse-type-headline-large-line-height);
     font-weight: var(--font-weight-light);
   }
   h2 {
-    font-size: var(--md-sys-typescale-title-large-size);
-    line-height: var(--md-sys-typescale-title-large-line-height);
+    font-size: var(--pulse-type-title-large-size);
+    line-height: var(--pulse-type-title-large-line-height);
     font-weight: var(--font-weight-light);
   }
 
@@ -162,9 +162,9 @@
   }
 
   h3 {
-    font-size: var(--md-sys-typescale-title-medium-size);
-    line-height: var(--md-sys-typescale-title-medium-line-height);
-    letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+    font-size: var(--pulse-type-title-medium-size);
+    line-height: var(--pulse-type-title-medium-line-height);
+    letter-spacing: var(--pulse-type-title-medium-tracking);
     font-weight: var(--font-weight-light);
   }
 }
@@ -174,10 +174,10 @@
     display: inline-block;
     background: var(--color-primary);
     color: var(--color-on-primary);
-    font-size: var(--md-sys-typescale-label-large-size);
-    line-height: var(--md-sys-typescale-label-large-line-height);
-    letter-spacing: var(--md-sys-typescale-label-large-tracking);
-    font-weight: var(--md-sys-typescale-label-large-weight);
+    font-size: var(--pulse-type-label-large-size);
+    line-height: var(--pulse-type-label-large-line-height);
+    letter-spacing: var(--pulse-type-label-large-tracking);
+    font-weight: var(--pulse-type-label-large-weight);
     padding: var(--space-3) var(--space-8);
     border: none;
     border-radius: var(--radius-md);
@@ -188,30 +188,30 @@
 
   /* M3 state layer: on-primary blended into primary at spec opacities. */
   .btn-primary:hover {
-    background: color-mix(in srgb, var(--color-on-primary) var(--md-sys-state-hover-opacity), var(--color-primary));
+    background: color-mix(in srgb, var(--color-on-primary) var(--pulse-state-hover-opacity), var(--color-primary));
   }
 
   .btn-primary:focus-visible {
-    background: color-mix(in srgb, var(--color-on-primary) var(--md-sys-state-focus-opacity), var(--color-primary));
+    background: color-mix(in srgb, var(--color-on-primary) var(--pulse-state-focus-opacity), var(--color-primary));
     outline: 2px solid var(--color-on-primary);
     outline-offset: -4px;
   }
 
   .btn-primary:active {
-    background: color-mix(in srgb, var(--color-on-primary) var(--md-sys-state-pressed-opacity), var(--color-primary));
+    background: color-mix(in srgb, var(--color-on-primary) var(--pulse-state-pressed-opacity), var(--color-primary));
   }
 
   .btn-ghost {
     background: transparent;
     color: var(--color-text);
-    font-size: var(--md-sys-typescale-label-large-size);
-    line-height: var(--md-sys-typescale-label-large-line-height);
-    letter-spacing: var(--md-sys-typescale-label-large-tracking);
-    font-weight: var(--md-sys-typescale-label-large-weight);
+    font-size: var(--pulse-type-label-large-size);
+    line-height: var(--pulse-type-label-large-line-height);
+    letter-spacing: var(--pulse-type-label-large-tracking);
+    font-weight: var(--pulse-type-label-large-weight);
     padding: var(--space-2) var(--space-4);
     /* M3 outlined buttons use the stronger `outline` role, not the decorative
      `outline-variant` most borders in this app use (--color-border). */
-    border: 1px solid var(--md-sys-color-outline);
+    border: 1px solid var(--pulse-role-outline);
     border-radius: var(--radius-md);
     cursor: pointer;
     transition:
@@ -223,18 +223,18 @@
    background at spec opacities. */
   .btn-ghost:hover {
     border-color: var(--color-text-muted);
-    background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
+    background: color-mix(in srgb, var(--color-text) var(--pulse-state-hover-opacity), transparent);
   }
 
   .btn-ghost:focus-visible {
     border-color: var(--color-primary);
-    background: color-mix(in srgb, var(--color-text) var(--md-sys-state-focus-opacity), transparent);
+    background: color-mix(in srgb, var(--color-text) var(--pulse-state-focus-opacity), transparent);
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
 
   .btn-ghost:active {
-    background: color-mix(in srgb, var(--color-text) var(--md-sys-state-pressed-opacity), transparent);
+    background: color-mix(in srgb, var(--color-text) var(--pulse-state-pressed-opacity), transparent);
   }
 
   .muted {
@@ -278,7 +278,7 @@
   .login-card input {
     font: inherit;
     padding: var(--space-3);
-    border: 1px solid var(--md-sys-color-outline);
+    border: 1px solid var(--pulse-role-outline);
     border-radius: var(--radius-sm);
     transition:
       border-color var(--transition-fast),
@@ -433,39 +433,6 @@
     text-decoration: underline;
   }
 
-  /* Theme toggle — visible at every viewport size (unlike the user-name/sign-out
-   pair above), same contextual-token + state-layer pattern as .portal-nav-desktop
-   a / .nav-toggle so it reads correctly whether the header is on its default
-   surface or the purple [data-surface] override. */
-  .theme-toggle {
-    background: transparent;
-    color: var(--color-text);
-    border: 1px solid var(--color-text);
-    border-radius: var(--radius-md);
-    padding: var(--space-1) var(--space-3);
-    font-size: var(--md-sys-typescale-label-large-size);
-    line-height: var(--md-sys-typescale-label-large-line-height);
-    letter-spacing: var(--md-sys-typescale-label-large-tracking);
-    font-weight: var(--md-sys-typescale-label-large-weight);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background var(--transition-fast);
-  }
-
-  .theme-toggle:hover {
-    background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), var(--color-bg));
-  }
-
-  .theme-toggle:focus-visible {
-    background: color-mix(in srgb, var(--color-text) var(--md-sys-state-focus-opacity), var(--color-bg));
-    outline: 2px solid var(--color-text);
-    outline-offset: 2px;
-  }
-
-  .theme-toggle:active {
-    background: color-mix(in srgb, var(--color-text) var(--md-sys-state-pressed-opacity), var(--color-bg));
-  }
-
   /* hamburger toggle — 44px square tap target */
   .nav-toggle {
     display: inline-flex;
@@ -563,7 +530,7 @@
 
   .portal-nav-mobile a:hover,
   .portal-nav-mobile a:focus-visible {
-    background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), var(--color-bg));
+    background: color-mix(in srgb, var(--color-text) var(--pulse-state-hover-opacity), var(--color-bg));
   }
 
   .portal-nav-mobile a.portal-nav-active {
@@ -625,16 +592,16 @@
   .p-dashboard {
     --bg: var(--color-bg);
     --surface: var(--color-surface);
-    --card: var(--md-sys-color-surface-container);
-    --card-hover: color-mix(in srgb, var(--text) var(--md-sys-state-hover-opacity), var(--card));
+    --card: var(--pulse-role-surface-container);
+    --card-hover: color-mix(in srgb, var(--text) var(--pulse-state-hover-opacity), var(--card));
     --border: var(--color-border);
-    --border-strong: var(--md-sys-color-outline);
+    --border-strong: var(--pulse-role-outline);
     --text: var(--color-text);
     --text-2: var(--color-text);
     --text-3: var(--color-text-muted);
     --accent: var(--color-primary);
     --accent-glow: color-mix(in srgb, var(--color-primary) 12%, transparent);
-    --accent-light: var(--md-sys-color-primary-fixed-dim);
+    --accent-light: var(--pulse-role-primary-fixed-dim);
     --green: var(--pulse-chart-oasis);
     --green-bg: color-mix(in srgb, var(--pulse-chart-oasis) 12%, transparent);
     --amber: var(--pulse-chart-sunset);
@@ -652,25 +619,6 @@
     color: var(--text);
     font-size: 14px;
     line-height: 1.5;
-  }
-
-  /* small toolbar button (export, etc.) — brand-neutral so it sits fine next
-   to .btn-primary/.btn-ghost without competing for primary-action weight */
-  .p-theme-toggle {
-    font-size: 12px;
-    padding: 7px 12px;
-    border-radius: var(--dash-radius);
-    border: 1px solid var(--border-strong);
-    background: var(--card);
-    color: var(--text-2);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.15s;
-  }
-
-  .p-theme-toggle:hover {
-    background: var(--card-hover);
-    color: var(--text);
   }
 
   /* ── KPI score strip ───────────────────────────────────────────── */
@@ -739,13 +687,6 @@
   }
 
   /* ── cards / charts row ────────────────────────────────────────── */
-  .p-charts-row {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-
   .p-card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -760,83 +701,6 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     margin-bottom: 12px;
-  }
-
-  .p-bar-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-    cursor: pointer;
-    padding: 3px 6px;
-    border-radius: 6px;
-    transition: background 0.12s;
-    border: none;
-    background: none;
-    width: 100%;
-    font: inherit;
-    color: inherit;
-    text-align: left;
-  }
-
-  .p-bar-row:hover {
-    background: var(--card-hover);
-  }
-
-  .p-bar-label {
-    font-size: 11px;
-    color: var(--text-2);
-    width: 120px;
-    flex-shrink: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .p-bar-track {
-    flex: 1;
-    height: 7px;
-    background: color-mix(in srgb, var(--text) 8%, transparent);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .p-bar-fill {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .p-bar-score {
-    width: 40px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text);
-    text-align: right;
-    font-family: var(--mono);
-    flex-shrink: 0;
-  }
-
-  .p-legend-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 10px;
-  }
-
-  .p-legend-item {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    color: var(--text-3);
-  }
-
-  .p-legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
-    flex-shrink: 0;
   }
 
   /* ── status color families (bg tint / accent) — mapped to the pulse brand
@@ -886,63 +750,6 @@
     border-radius: var(--dash-radius-lg);
     overflow: hidden;
     margin-bottom: 16px;
-  }
-
-  .p-table-card .data-table {
-    background: var(--card);
-    border: none;
-    border-radius: 0;
-    /* fixed layout so the columns stretch to fill the card instead of
-     shrink-wrapping their content and leaving empty space on the right —
-     name is the one flexible column, everything else gets a fixed share */
-    table-layout: fixed;
-  }
-
-  .p-table-card .data-table th,
-  .p-table-card .data-table td {
-    border-bottom-color: var(--border);
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .p-table-card .data-table th:nth-child(2),
-  .p-table-card .data-table td:nth-child(2) {
-    width: 14%;
-  }
-
-  .p-table-card .data-table th:nth-child(3),
-  .p-table-card .data-table td:nth-child(3) {
-    width: 10%;
-  }
-
-  .p-table-card .data-table th:nth-child(4),
-  .p-table-card .data-table td:nth-child(4) {
-    width: 10%;
-  }
-
-  .p-table-card .data-table th:nth-child(5),
-  .p-table-card .data-table td:nth-child(5) {
-    width: 14%;
-  }
-
-  .p-table-card .data-table th:nth-child(6),
-  .p-table-card .data-table td:nth-child(6) {
-    width: 12%;
-  }
-
-  .p-table-card .data-table th:nth-child(7),
-  .p-table-card .data-table td:nth-child(7) {
-    width: 10%;
-  }
-
-  .p-table-card .data-table th {
-    color: var(--text-3);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 600;
   }
 
   .p-table-header {
@@ -1002,47 +809,6 @@
     outline-offset: -2px;
   }
 
-  .p-th-sorted {
-    color: var(--accent);
-  }
-
-  .p-sort-icon {
-    margin-left: 4px;
-    opacity: 0.5;
-  }
-
-  .p-score-ring {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 46px;
-    height: 34px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 700;
-    border: 2px solid;
-    font-family: var(--mono);
-    color: var(--kc, var(--text-3));
-    border-color: var(--kc, var(--text-3));
-  }
-
-  .p-action-btn {
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: var(--dash-radius);
-    border: 1px solid var(--border);
-    background: none;
-    color: var(--text-3);
-    cursor: pointer;
-    font-family: inherit;
-    transition: all 0.12s;
-  }
-
-  .p-action-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
   /* ── detail drawer (outer overlay/positioning now owned by shadcn Sheet;
    these remaining rules only style the drawer's own header/content) ──── */
   .p-drawer-header {
@@ -1084,45 +850,6 @@
     padding: 18px 20px;
   }
 
-  .p-d-kpi-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-bottom: 18px;
-  }
-
-  .p-d-kpi {
-    background: var(--card);
-    border-radius: var(--dash-radius);
-    padding: 12px;
-    text-align: center;
-    border: 1px solid var(--border);
-  }
-
-  .p-d-kv {
-    font-size: 18px;
-    font-weight: 700;
-    font-family: var(--mono);
-    color: var(--text);
-  }
-
-  .p-d-kl {
-    font-size: 10px;
-    color: var(--text-3);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-top: 3px;
-  }
-
-  .p-d-section-title {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-3);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 10px;
-  }
-
   /* ── responsive: dashboard-specific grids ─────────────────────────── */
   @media (min-width: 640px) {
     .p-kpi-strip {
@@ -1134,80 +861,6 @@
     .p-kpi-strip {
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     }
-
-    .p-charts-row {
-      grid-template-columns: 1.5fr 1fr;
-    }
-  }
-
-  /* ── KPI stat tiles ────────────────────────────────────────────── */
-  .tile-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: var(--space-4);
-  }
-
-  .kpi-tile {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    padding: var(--space-6);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-  }
-
-  .kpi-code {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    letter-spacing: 0.04em;
-  }
-
-  .kpi-tile h3 {
-    font-size: var(--font-size-md);
-    font-weight: var(--font-weight-medium);
-  }
-
-  /* numbers may be bold per brand rules (highlights, numbers, percentages) */
-  .kpi-value {
-    font-size: var(--font-size-display);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-text);
-    line-height: var(--line-height-tight);
-  }
-
-  .kpi-unit {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-regular);
-    color: var(--color-text-muted);
-  }
-
-  .kpi-tile footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: var(--font-size-sm);
-  }
-
-  .status-chip {
-    font-size: var(--md-sys-typescale-label-medium-size);
-    line-height: var(--md-sys-typescale-label-medium-line-height);
-    letter-spacing: var(--md-sys-typescale-label-medium-tracking);
-    font-weight: var(--md-sys-typescale-label-medium-weight);
-    padding: 2px var(--space-2);
-    border-radius: var(--md-sys-shape-corner-full);
-    white-space: nowrap;
-  }
-
-  .status-on {
-    color: #00593f; /* oasis, darkened for 4.5:1 text contrast on its tint */
-    background: color-mix(in srgb, var(--color-success) 18%, white);
-  }
-
-  .status-off {
-    color: #8f2800; /* sunset, darkened for 4.5:1 text contrast on its tint */
-    background: color-mix(in srgb, var(--color-warning) 18%, white);
   }
 
   .empty-state {
@@ -1224,7 +877,7 @@
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: var(--md-sys-color-surface-container-high);
+    background: var(--pulse-role-surface-container-high);
     color: var(--color-text-muted);
     margin-bottom: var(--space-4);
   }
@@ -1236,17 +889,12 @@
     gap: var(--space-2);
     padding: var(--space-2) 0;
     color: var(--color-text-muted);
-    font-size: var(--md-sys-typescale-body-small-size);
+    font-size: var(--pulse-type-body-small-size);
   }
 
   .empty-state-inline svg {
     flex-shrink: 0;
     opacity: 0.7;
-  }
-
-  .sparkline {
-    width: 100%;
-    height: 36px;
   }
 
   .page-title-row {
@@ -1258,66 +906,6 @@
     margin-bottom: var(--space-2);
   }
 
-  /* ── data tables ───────────────────────────────────────────────── */
-  /* display:block lets the table scroll horizontally on narrow screens while
-   thead/tbody/tr/td keep their default table-* display values (the standard
-   CSS-only responsive-table technique) — no JSX wrapper needed anywhere. */
-  .data-table {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    border-collapse: collapse;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-  }
-
-  .data-table th,
-  .data-table td {
-    text-align: left;
-    padding: var(--space-3) var(--space-4);
-    border-bottom: 1px solid var(--color-border);
-    font-size: var(--font-size-sm);
-    max-width: 320px;
-  }
-
-  .data-table th {
-    font-size: var(--md-sys-typescale-label-medium-size);
-    line-height: var(--md-sys-typescale-label-medium-line-height);
-    letter-spacing: var(--md-sys-typescale-label-medium-tracking);
-    font-weight: var(--md-sys-typescale-label-medium-weight);
-    color: var(--color-text-muted);
-  }
-
-  .data-table tbody tr:last-child td {
-    border-bottom: none;
-  }
-
-  .data-table tbody tr[role='button'] {
-    transition: background var(--transition-fast);
-  }
-
-  .data-table tbody tr[role='button']:hover {
-    background: color-mix(in srgb, var(--color-text) 8%, var(--color-surface));
-  }
-
-  .data-table tbody tr[role='button']:focus-visible {
-    background: color-mix(in srgb, var(--color-text) 10%, var(--color-surface));
-    outline: 2px solid var(--color-primary);
-    outline-offset: -2px;
-  }
-
-  .data-table tbody tr[role='button']:active {
-    background: color-mix(in srgb, var(--color-text) 10%, var(--color-surface));
-  }
-
-  .data-table a {
-    color: var(--color-primary);
-    font-weight: var(--font-weight-medium);
-  }
-
   /* ── form builder & fill ───────────────────────────────────────── */
   .builder,
   .fill-form {
@@ -1325,11 +913,6 @@
     flex-direction: column;
     gap: var(--space-3);
     max-width: 560px;
-  }
-
-  .fill-field label {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
   }
 
   .builder label {
@@ -1355,7 +938,7 @@
     width: 100%;
     font: inherit;
     padding: var(--space-3);
-    border: 1px solid var(--md-sys-color-outline);
+    border: 1px solid var(--pulse-role-outline);
     border-radius: var(--radius-sm);
     background: var(--color-surface);
     color: var(--color-text);
@@ -1388,14 +971,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-    padding: var(--space-5) var(--space-6);
+    padding: var(--space-4) var(--space-5);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-left: 4px solid transparent;
     border-radius: var(--radius-md);
-    transition:
-      border-left-color 200ms ease,
-      box-shadow 200ms ease;
+    transition: box-shadow 200ms ease;
   }
 
   /* One step up the M3 surface-container tone ladder from its parent .admin-card
@@ -1403,14 +983,8 @@
    reads as barely-there at a glance. KPI page only; the form builder's own
    .builder-field usage is unaffected. */
   .builder-field.kpi-area {
-    background: var(--md-sys-color-surface-container);
-    margin-bottom: var(--space-8);
-  }
-
-  .builder-field:hover,
-  .builder-field:focus-within,
-  .builder-field.is-active {
-    border-left-color: var(--pulse-purple);
+    background: var(--pulse-role-surface-container);
+    margin-bottom: var(--space-5);
   }
 
   .builder-field.is-dragging,
@@ -1440,8 +1014,8 @@
 
   .field-head-row {
     display: flex;
-    align-items: flex-end;
-    gap: var(--space-4);
+    align-items: flex-start;
+    gap: var(--space-3);
   }
 
   .field-drag-handle {
@@ -1479,33 +1053,6 @@
     background: var(--pulse-purple);
   }
 
-  .field-image-btn {
-    flex: 0 0 auto;
-    width: 40px;
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-surface);
-    color: var(--color-text-muted);
-    font-size: 16px;
-    cursor: pointer;
-    margin-bottom: 1px;
-  }
-
-  .field-image-btn:hover {
-    border-color: var(--pulse-purple);
-    color: var(--pulse-purple);
-  }
-
-  .field-image-btn.is-on {
-    border-color: var(--pulse-purple);
-    background: color-mix(in srgb, var(--pulse-purple) 10%, var(--color-surface));
-    color: var(--pulse-purple);
-  }
-
   .field-title-group {
     flex: 1 1 auto;
     min-width: 0;
@@ -1513,30 +1060,6 @@
 
   .field-type-group {
     flex: 0 0 200px;
-  }
-
-  .field-expand-btn {
-    flex: 0 0 auto;
-    width: 32px;
-    height: 32px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--color-text-muted);
-    font-size: 14px;
-    cursor: pointer;
-    transition:
-      background 200ms ease,
-      color 200ms ease,
-      transform 200ms ease;
-  }
-
-  .field-expand-btn:hover {
-    background: color-mix(in srgb, var(--pulse-purple) 10%, transparent);
-    color: var(--pulse-purple);
   }
 
   /* ── question card: collapsed-by-default detail, expands on focus/click ── */
@@ -1580,18 +1103,17 @@
     background: color-mix(in srgb, var(--pulse-purple) 6%, var(--color-surface));
   }
 
-  .field-type-dropdown {
-    position: relative;
-  }
-
   .field-type-summary {
     display: flex;
     align-items: center;
     gap: var(--space-2);
     width: 100%;
+    /* matches the shared Input component's h-9 (2.25rem) — this is a bare
+     <button>, not <Input>, so it doesn't inherit that height on its own. */
+    height: 2.25rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    padding: var(--space-3);
+    padding: 0 var(--space-3);
     background: var(--color-surface);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
@@ -1617,10 +1139,6 @@
     flex: 0 0 auto;
   }
 
-  .field-type-dropdown[open] .field-type-summary {
-    border-color: var(--pulse-purple);
-  }
-
   .field-type-icon {
     flex: 0 0 auto;
     display: inline-flex;
@@ -1629,24 +1147,6 @@
     width: 18px;
     font-size: 13px;
     color: var(--color-text-muted);
-  }
-
-  .field-type-menu {
-    position: absolute;
-    z-index: 5;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    max-height: 280px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 6px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-card);
   }
 
   .field-type-option {
@@ -1706,12 +1206,6 @@
     gap: var(--space-1);
   }
 
-  .fill-field {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
   /* ── builder-only: rounded/accented panels for pages & theme sections ──
    (question fields get their accent from .builder-field's hover/focus-within
    rule instead — excluded here so the two don't fight over border-left) */
@@ -1745,7 +1239,7 @@
     );
     color: var(--pulse-air);
     border-radius: var(--radius-md);
-    padding: var(--space-8);
+    padding: var(--space-6);
     background-size: cover;
     background-position: center;
   }
@@ -1775,7 +1269,7 @@
     display: block;
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
-    margin-bottom: var(--space-2);
+    margin-bottom: var(--space-1);
   }
 
   .msform-banner-edit .msform-required-hint {
@@ -1788,8 +1282,8 @@
     align-items: center;
     gap: var(--space-3);
     padding: var(--space-2) var(--space-3);
-    margin-bottom: var(--space-4);
-    background: var(--md-sys-color-primary-container);
+    margin-bottom: var(--space-3);
+    background: var(--pulse-role-primary-container);
     border-radius: var(--radius-md);
     font-size: var(--font-size-sm);
   }
@@ -1817,7 +1311,7 @@
     background: transparent;
     border: none;
     border-bottom: 2px solid color-mix(in srgb, var(--pulse-air) 40%, transparent);
-    padding: var(--space-1) 0;
+    padding: var(--space-2) var(--space-3);
     outline: none;
   }
 
@@ -1827,6 +1321,7 @@
 
   .msform-title-input::placeholder {
     color: color-mix(in srgb, var(--pulse-air) 55%, transparent);
+    font-weight: var(--font-weight-regular);
   }
 
   .msform-banner-edit .msform-title-input {
@@ -1850,10 +1345,10 @@
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    padding: var(--space-6);
+    padding: var(--space-5);
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-2);
     transition: box-shadow var(--transition-fast);
   }
 
@@ -2054,8 +1549,8 @@
     font: inherit;
     font-weight: var(--font-weight-medium);
     color: var(--pulse-purple);
-    background: color-mix(in srgb, var(--pulse-purple) 6%, var(--color-surface));
-    border: 2px solid color-mix(in srgb, var(--pulse-purple) 30%, transparent);
+    background: color-mix(in srgb, var(--pulse-purple) 8%, var(--color-surface));
+    border: 2px dashed color-mix(in srgb, var(--pulse-purple) 45%, transparent);
     border-radius: var(--radius-md);
     padding: var(--space-4);
     cursor: pointer;
@@ -2065,8 +1560,9 @@
   }
 
   .msform-add-field:hover {
-    background: color-mix(in srgb, var(--pulse-purple) 14%, var(--color-surface));
+    background: color-mix(in srgb, var(--pulse-purple) 16%, var(--color-surface));
     border-color: var(--pulse-purple);
+    border-style: solid;
   }
 
   .msform-thanks {
@@ -2114,8 +1610,8 @@
 
   /* ── admin pages ───────────────────────────────────────────────── */
   .admin-card {
-    padding: var(--space-6);
-    margin: var(--space-4) 0 var(--space-6);
+    padding: var(--space-5);
+    margin: var(--space-3) 0 var(--space-4);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
@@ -2137,8 +1633,8 @@
   }
 
   .admin-card h2 {
-    font-size: var(--md-sys-typescale-title-large-size);
-    line-height: var(--md-sys-typescale-title-large-line-height);
+    font-size: var(--pulse-type-title-large-size);
+    line-height: var(--pulse-type-title-large-line-height);
     font-weight: var(--font-weight-medium);
     margin-bottom: var(--space-2);
   }
@@ -2160,7 +1656,7 @@
   .inline-form select {
     font: inherit;
     padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--md-sys-color-outline);
+    border: 1px solid var(--pulse-role-outline);
     border-radius: var(--radius-sm);
     background: var(--color-surface);
     color: var(--color-text);
@@ -2304,36 +1800,13 @@
   /* M3 assist-chip pattern: primary-container/on-primary-container roles,
    not a hand-picked opacity over the raw brand hex. */
   .perm-chip {
-    font-size: var(--md-sys-typescale-label-small-size);
-    line-height: var(--md-sys-typescale-label-small-line-height);
-    letter-spacing: var(--md-sys-typescale-label-small-tracking);
-    background: var(--md-sys-color-primary-container);
-    color: var(--md-sys-color-on-primary-container);
-    border-radius: var(--md-sys-shape-corner-small);
+    font-size: var(--pulse-type-label-small-size);
+    line-height: var(--pulse-type-label-small-line-height);
+    letter-spacing: var(--pulse-type-label-small-tracking);
+    background: var(--pulse-role-primary-container);
+    color: var(--pulse-role-on-primary-container);
+    border-radius: var(--pulse-radius-small);
     padding: 2px var(--space-2);
-  }
-
-  /* ── KPI detail chart ──────────────────────────────────────────── */
-  .kpi-tile {
-    cursor: pointer;
-  }
-
-  .kpi-tile-open {
-    border-color: var(--color-primary);
-  }
-
-  .kpi-detail {
-    margin-top: var(--space-6);
-    padding: var(--space-6);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-  }
-
-  .kpi-detail h2 {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-medium);
-    margin-bottom: var(--space-4);
   }
 
   /* ── landing page ──────────────────────────────────────────────── */
@@ -2503,7 +1976,7 @@
     align-items: center;
     gap: var(--space-3);
     padding: var(--space-2) var(--space-6);
-    border-radius: var(--md-sys-shape-corner-full);
+    border-radius: var(--pulse-radius-full);
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: rgba(255, 255, 255, 0.06);
     color: var(--pulse-air);
@@ -2550,7 +2023,7 @@
 
   .landing-stats span {
     color: var(--color-text-muted);
-    font-size: var(--md-sys-typescale-label-medium-size);
+    font-size: var(--pulse-type-label-medium-size);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     font-weight: var(--font-weight-medium);
@@ -2559,7 +2032,7 @@
   /* ── pillars ───────────────────────────────────────────────────── */
   .landing-pillars {
     padding: var(--space-16) clamp(var(--space-4), 6vw, var(--space-16));
-    background: var(--md-sys-color-surface-container-low);
+    background: var(--pulse-role-surface-container-low);
   }
 
   .landing-pillars-head {
@@ -2569,7 +2042,7 @@
   }
 
   .landing-eyebrow {
-    font-size: var(--md-sys-typescale-label-medium-size);
+    font-size: var(--pulse-type-label-medium-size);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     font-weight: var(--font-weight-medium);
@@ -2603,7 +2076,7 @@
   }
 
   .landing-pillar-card:hover {
-    border-color: var(--md-sys-color-outline);
+    border-color: var(--pulse-role-outline);
   }
 
   .landing-pillar-icon {
@@ -2613,7 +2086,7 @@
     width: 48px;
     height: 48px;
     border-radius: var(--radius-md);
-    background: var(--md-sys-color-primary-container);
+    background: var(--pulse-role-primary-container);
     color: var(--color-primary);
     margin-bottom: var(--space-5);
   }
@@ -2636,7 +2109,7 @@
     margin-top: var(--space-4);
     width: 2rem;
     height: 2px;
-    border-radius: var(--md-sys-shape-corner-full);
+    border-radius: var(--pulse-radius-full);
     background: var(--pulse-coral);
     transition: width var(--transition-base);
   }
@@ -2715,7 +2188,7 @@
 
   /* ── form builder: description + field ordering ──────────────────── */
   .msform-desc-label {
-    margin-top: var(--space-3);
+    margin-top: var(--space-1);
   }
 
   .msform-desc-input {
@@ -2725,12 +2198,13 @@
     background: transparent;
     border: none;
     border-bottom: 1px solid color-mix(in srgb, var(--pulse-air) 30%, transparent);
-    padding: var(--space-1) 0;
+    padding: var(--space-2) var(--space-3);
     outline: none;
   }
 
   .msform-desc-input::placeholder {
     color: color-mix(in srgb, var(--pulse-air) 50%, transparent);
+    font-weight: var(--font-weight-regular);
   }
 
   .msform-banner-edit .msform-desc-input {
@@ -2757,14 +2231,11 @@
     border-top: 1px solid var(--color-border);
   }
 
-  .field-actions-primary {
+  .field-actions-primary,
+  .field-actions-secondary {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-  }
-
-  .field-kebab {
-    position: relative;
   }
 
   .field-kebab-summary {
@@ -2789,45 +2260,6 @@
   .field-kebab-summary:hover {
     background: color-mix(in srgb, var(--pulse-purple) 10%, transparent);
     color: var(--pulse-purple);
-  }
-
-  .field-kebab-menu {
-    position: absolute;
-    z-index: 5;
-    bottom: calc(100% + 6px);
-    right: 0;
-    min-width: 200px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 6px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-card);
-  }
-
-  .field-kebab-menu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: var(--space-2) var(--space-3);
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    font: inherit;
-    color: var(--color-text);
-    cursor: pointer;
-  }
-
-  .field-kebab-menu button:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--pulse-purple) 8%, transparent);
-    color: var(--pulse-purple);
-  }
-
-  .field-kebab-menu button:disabled {
-    color: var(--color-text-muted);
-    cursor: not-allowed;
   }
 
   .builder-field-actions .btn-ghost {
@@ -2885,7 +2317,7 @@
     justify-content: center;
     flex-shrink: 0;
     border-radius: var(--radius-md);
-    background: var(--md-sys-color-primary-container);
+    background: var(--pulse-role-primary-container);
     color: var(--color-primary);
   }
 
@@ -2898,7 +2330,7 @@
     width: 30px;
     height: 30px;
     border-radius: var(--radius-sm);
-    background: var(--md-sys-color-surface-container-high);
+    background: var(--pulse-role-surface-container-high);
     color: var(--color-text-muted);
   }
 
@@ -2951,12 +2383,42 @@
   }
 
   .weight-ring-sm {
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
   }
 
   .weight-ring-sm .weight-ring-value {
-    font-size: 8px;
+    font-size: 12px;
+  }
+
+  .weight-ring-xs {
+    width: 32px;
+    height: 32px;
+  }
+
+  .weight-ring-xs::after {
+    inset: 3px;
+  }
+
+  .weight-ring-xs .weight-ring-value {
+    font-size: 11px;
+    letter-spacing: -0.3px;
+  }
+
+  /* Icon/ring + label pairing for list rows (sub-criteria) — mirrors
+   hierarchy-title-row's gap so a WeightRing badge gets the same breathing
+   room a hierarchy-dot got for free from its own margin. */
+  .kpi-subcriteria-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  /* The gap above already provides the spacing hierarchy-dot's own
+   margin-right was for — avoid doubling it up when weight is unset and
+   the dot fallback renders inside this same flex label. */
+  .kpi-subcriteria-label .hierarchy-dot {
+    margin-right: 0;
   }
 
   /* Search */
@@ -2978,8 +2440,8 @@
   .kpi-search input {
     width: 100%;
     padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-3) * 2 + 16px);
-    border: 1px solid var(--md-sys-color-outline);
-    border-radius: var(--md-sys-shape-corner-full);
+    border: 1px solid var(--pulse-role-outline);
+    border-radius: var(--pulse-radius-full);
     background: var(--color-surface);
     color: var(--color-text);
     font: inherit;
@@ -3032,15 +2494,15 @@
 
   .insight-card {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-5);
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6);
     border: none;
     border-radius: var(--radius-md);
     background: color-mix(in srgb, var(--ic, var(--pulse-moon-light)) 12%, transparent);
     font: inherit;
-    text-align: center;
+    text-align: left;
     transition: transform var(--transition-fast);
   }
 
@@ -3055,8 +2517,8 @@
   }
 
   .insight-card .hierarchy-icon-sm {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     border-radius: var(--radius-md);
     background: color-mix(in srgb, var(--ic, var(--pulse-moon-light)) 22%, transparent);
     color: var(--ic, var(--pulse-moon-light));
@@ -3064,20 +2526,20 @@
   }
 
   .insight-card .hierarchy-icon-sm svg {
-    width: 21px;
-    height: 21px;
+    width: 23px;
+    height: 23px;
   }
 
   .insight-card .weight-ring-sm {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     flex-shrink: 0;
   }
 
   .insight-card-body {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: 4px;
     min-width: 0;
   }
@@ -3166,7 +2628,7 @@
   }
 
   .kpi-list-item:hover {
-    background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
+    background: color-mix(in srgb, var(--color-text) var(--pulse-state-hover-opacity), transparent);
   }
 
   .kpi-list-item:focus-visible {
@@ -3175,7 +2637,7 @@
   }
 
   .kpi-list-item.is-selected {
-    background: var(--md-sys-color-primary-container);
+    background: var(--pulse-role-primary-container);
     border-color: var(--color-primary);
   }
 
@@ -3233,18 +2695,31 @@
 
   .kpi-area-head {
     display: flex;
-    flex-wrap: wrap;
+    /* nowrap deliberately, not wrap: .hover-actions reserves layout space even
+     while invisible (opacity: 0, not display: none — see its own rule), so a
+     long area name wrapping the actions group onto its own line leaves a
+     large blank gap below the header until it's hovered. The title truncates
+     instead (see .hierarchy-title-row/strong overrides below) so the actions
+     group always stays put on the same line. */
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3) var(--space-4);
-    padding: var(--space-4) var(--space-4) var(--space-3);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .kpi-area-head .hierarchy-title-row {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
   }
 
   .kpi-area-head .hierarchy-icon-sm {
     width: 40px;
     height: 40px;
+    flex-shrink: 0;
     border-radius: var(--radius-md);
-    background: var(--md-sys-color-primary-container);
+    background: var(--pulse-role-primary-container);
     color: var(--color-primary);
   }
 
@@ -3254,14 +2729,22 @@
   }
 
   .kpi-area-head strong {
-    font-size: var(--md-sys-typescale-title-large-size);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--pulse-type-title-large-size);
+  }
+
+  .kpi-area-head .hover-actions {
+    flex-shrink: 0;
   }
 
   .kpi-subcriteria-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    padding: 0 var(--space-4) var(--space-6);
+    gap: var(--space-2);
+    padding: 0 var(--space-4) var(--space-4);
   }
 
   .kpi-subcriteria-row {
@@ -3277,7 +2760,7 @@
   }
 
   .kpi-subcriteria-row:hover {
-    background: color-mix(in srgb, var(--color-text) var(--md-sys-state-hover-opacity), transparent);
+    background: color-mix(in srgb, var(--color-text) var(--pulse-state-hover-opacity), transparent);
   }
 
   /* Rename/delete fade in on hover or keyboard focus instead of sitting
@@ -3342,56 +2825,6 @@
     font-size: var(--font-size-sm);
     padding-left: var(--space-4);
     border-left: 1px solid var(--color-border);
-  }
-
-  /* ── toggle switch (required) ─────────────────────────────────── */
-  .switch {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    cursor: pointer;
-  }
-
-  .switch input {
-    position: absolute;
-    opacity: 0;
-    width: 1px;
-    height: 1px;
-  }
-
-  .switch-track {
-    display: block;
-    position: relative;
-    width: 36px;
-    height: 20px;
-    background: var(--color-border);
-    border-radius: 999px;
-    transition: background 200ms ease;
-  }
-
-  .switch-thumb {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-    transition: transform 200ms ease;
-  }
-
-  .switch input:checked + .switch-track {
-    background: var(--pulse-purple);
-  }
-
-  .switch input:checked + .switch-track .switch-thumb {
-    transform: translateX(16px);
-  }
-
-  .switch input:focus-visible + .switch-track {
-    outline: 2px solid var(--pulse-purple);
-    outline-offset: 2px;
   }
 
   /* ── scale controls: rating / NPS ─────────────────────────────────── */
@@ -3794,17 +3227,8 @@
       padding: var(--space-4);
     }
 
-    .kpi-detail {
-      padding: var(--space-4);
-    }
-
     .empty-state {
       padding: var(--space-6);
-    }
-
-    /* stat tiles: bold display-size numbers are a lot at 375px — step down */
-    .kpi-value {
-      font-size: var(--font-size-xl);
     }
 
     .summary-headline strong {
@@ -3820,10 +3244,6 @@
     }
 
     .perm-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .tile-grid {
       grid-template-columns: 1fr;
     }
   }
@@ -3893,97 +3313,6 @@
 
   .response-modal-qa dd {
     font-weight: var(--font-weight-medium);
-  }
-
-  /* dashboard spreadsheet import popup */
-  .import-status-card {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    background: color-mix(in srgb, var(--pulse-purple) 6%, transparent);
-    border: 1px solid color-mix(in srgb, var(--pulse-purple) 20%, transparent);
-    border-radius: var(--radius-md);
-  }
-
-  .import-status-icon {
-    font-size: 20px;
-    flex-shrink: 0;
-  }
-
-  .import-status-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-size: var(--font-size-sm);
-    min-width: 0;
-  }
-
-  .import-status-text strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .import-status-text .muted {
-    font-size: 12px;
-  }
-
-  .import-reset-btn {
-    margin-left: auto;
-    flex-shrink: 0;
-  }
-
-  .import-dropzone {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-1);
-    padding: var(--space-6) var(--space-4);
-    border: 1.5px dashed var(--color-border);
-    border-radius: var(--radius-md);
-    text-align: center;
-    font-size: var(--font-size-sm);
-    color: var(--color-text);
-    cursor: pointer;
-    transition:
-      border-color var(--transition-fast),
-      background var(--transition-fast);
-  }
-
-  .import-dropzone:hover,
-  .import-dropzone:focus-visible {
-    border-color: var(--pulse-purple);
-    background: color-mix(in srgb, var(--pulse-purple) 4%, transparent);
-    outline: none;
-  }
-
-  .import-dropzone-active {
-    border-color: var(--pulse-purple);
-    background: color-mix(in srgb, var(--pulse-purple) 8%, transparent);
-  }
-
-  .import-dropzone-busy {
-    cursor: default;
-    color: var(--color-text-muted);
-  }
-
-  .import-dropzone-icon {
-    font-size: 22px;
-    color: var(--pulse-purple);
-    margin-bottom: 2px;
-  }
-
-  @media (max-width: 480px) {
-    .response-modal-card {
-      max-height: 100vh;
-      border-radius: 0;
-    }
-
-    .response-modal-backdrop {
-      padding: 0;
-    }
   }
 
   /* Bulk KPI-mapping: maps many form questions to Evaluation Areas in one

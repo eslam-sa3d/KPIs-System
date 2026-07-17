@@ -189,22 +189,6 @@ export async function downloadFile(path: string, fallbackFilename: string): Prom
   URL.revokeObjectURL(url);
 }
 
-/** Builds and downloads a CSV from data already in the browser (e.g. a
- *  client-computed dashboard export) — no server round-trip needed. */
-export function downloadCsv(filename: string, rows: Array<Array<string | number>>): void {
-  const escape = (cell: string | number) => {
-    const s = String(cell);
-    return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
-  };
-  const csv = rows.map((row) => row.map(escape).join(',')).join('\n');
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 /** Restores the session from the refresh cookie (e.g. after a hard reload). */
 export async function restoreSession(): Promise<AuthenticatedUser | null> {
   if (currentUser) return currentUser;

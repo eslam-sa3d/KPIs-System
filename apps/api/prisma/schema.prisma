@@ -109,14 +109,22 @@ model Permission {
   @@unique([resource, action])
 }
 
+enum PermissionScope {
+  all
+  department
+  project_group
+  own
+  level
+}
+
 model RolePermission {
   roleId       String
   permissionId String
-  /// Row-level scope: "all" | "department" | "project_group" | "own" | "level"
-  scope        String   @default("all")
+  /// Row-level scope narrowing this grant.
+  scope        PermissionScope @default(all)
   /// Only meaningful when scope = "level" (dashboards:view): the PerformanceLevel
   /// ids this grant is restricted to. Empty/ignored for every other scope value.
-  scopeValues  String[] @default([])
+  scopeValues  String[]        @default([])
 
   role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
@@ -199,19 +207,26 @@ model KpiAssignment {
   @@index([departmentId])
 }
 
+enum EvaluationAreaCadence {
+  weekly
+  monthly
+  quarterly
+  yearly
+}
+
 /// A named sub-category under a KPI (e.g. "Leadership & People Management",
 /// matching the QA evaluation surveys this system is modeled on). Carries
 /// its own cadence — different areas under the same KPI can be scored on
 /// different rhythms.
 model EvaluationArea {
-  id        String   @id @default(uuid())
+  id        String                @id @default(uuid())
   kpiId     String
-  kpi       Kpi      @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  kpi       Kpi                   @relation(fields: [kpiId], references: [id], onDelete: Cascade)
   name      String
-  cadence   String // "weekly" | "monthly" | "quarterly" | "yearly"
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  cadence   EvaluationAreaCadence
+  isActive  Boolean               @default(true)
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
 
   entries      EvaluationAreaEntry[]
   formMappings FormKpiMapping[]
@@ -258,7 +273,12 @@ model EvaluationAreaEntry {
   /// record time ('self' | 'peer' | 'manager' | '360') — kept even if the
   /// mapping's own reviewType later changes, so history doesn't shift under
   /// it. Null for entries recorded before this concept existed, or via the
-  /// direct (non-forms) recording API.
+  /// direct (non-forms) recording API. Left as a plain String rather than a
+  /// Prisma enum: '360' isn't a valid Prisma enum member identifier without
+  /// a `@map` indirection that would desync the DB-level name from the
+  /// `ReviewType` union already enforced by every write path via
+  /// `z.enum(REVIEW_TYPES)` in @pulse/contracts — not worth the added
+  /// read/write translation layer for what Zod already guarantees.
   reviewType       String?
   /// Denormalized copy of the originating FormKpiMapping.anonymous at record
   /// time — whether enteredBy should be withheld from non-kpis:manage
@@ -287,35 +307,46 @@ model EvaluationAreaEntry {
   @@unique([evaluationAreaId, personId, periodStart, periodEnd, enteredById, mappingId], map: "EvaluationAreaEntry_area_person_period_evaluator_mapping_key")
   @@index([evaluationAreaId, periodStart])
   @@index([personId])
+  @@index([enteredById])
   @@index([submissionId])
   @@index([mappingId])
 }
 
 // ─────────────────────────── Schema-driven Form Builder ────────────────────────
 
+enum FormStatus {
+  draft
+  published
+  archived
+}
+
 model Form {
-  id          String   @id @default(uuid())
-  slug        String   @unique
-  status      String   @default("draft") // "draft" | "published" | "archived"
+  id          String     @id @default(uuid())
+  slug        String     @unique
+  status      FormStatus @default(draft)
   /// FormSettings JSON: acceptingResponses, opensAt/closesAt, oneResponsePerUser…
   settings    Json?
   /// Non-null enables the anonymous public fill link (/f?token=…)
-  publicToken String?  @unique
+  publicToken String?    @unique
   /// When true, only the creator, a FormCollaborator, or a forms:manage holder
   /// may view/fill/manage this form via the portal — independent of the
   /// anonymous public link above, which stays open-to-anyone once enabled.
-  restricted  Boolean  @default(false)
+  restricted  Boolean    @default(false)
   /// Simple free-text tag for the forms list filter — not a nested hierarchy.
   folder      String?
   createdById String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   versions      FormVersion[]
   fileUploads   FormFileUpload[]
   assets        FormAsset[]
   collaborators FormCollaborator[]
   kpiMappings   FormKpiMapping[]
+
+  @@index([status])
+  @@index([createdById])
+  @@index([folder])
 }
 
 /// A specific person granted access to one restricted form, bypassing the
@@ -501,6 +532,7 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@index([createdAt])
+  @@index([actorId])
 }
 
 /// Branding configuration for the landing page/portal (logo URL, strings).

@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 // Lazy-loaded: recharts only ships once a card actually renders a pie chart.
 const PieBreakdown = dynamic(() => import('./response-pie-breakdown'), {
   ssr: false,
-  loading: () => <LoadingState label="loading chart…" />,
+  loading: () => <LoadingState label="Loading chart…" />,
 });
 
 export type ResponseSummaryData = FormResponseSummary;
@@ -92,9 +92,9 @@ export function ResponseSummary({
       <Card className="summary-headline">
         <CardContent>
           <strong>{data.responses}</strong>
-          <span className="muted">total responses</span>
+          <span className="muted">Total responses</span>
           {data.lastResponseAt && (
-            <span className="muted">last response {new Date(data.lastResponseAt).toLocaleString()}</span>
+            <span className="muted">Last response {new Date(data.lastResponseAt).toLocaleString()}</span>
           )}
         </CardContent>
       </Card>
@@ -102,9 +102,9 @@ export function ResponseSummary({
       {data.quiz && (
         <Card className="summary-field-card">
           <CardContent>
-            <h3>quiz results</h3>
+            <h3>Quiz results</h3>
             <p className="muted">
-              average score <strong>{data.quiz.averagePercent}%</strong>
+              Average score <strong>{data.quiz.averagePercent}%</strong>
               {data.quiz.passRate !== undefined && (
                 <>
                   {' '}
@@ -153,7 +153,7 @@ export function ResponseSummary({
 
             {(field.type === 'number' || field.type === 'rating') && field.average != null && (
               <p className="muted">
-                average <strong>{field.average.toFixed(1)}</strong>
+                Average <strong>{field.average.toFixed(1)}</strong>
                 {field.min != null && field.max != null && ` · range ${field.min}–${field.max}`}
               </p>
             )}

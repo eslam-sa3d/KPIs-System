@@ -3,7 +3,11 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 
-const ACCEPTED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']);
+// SVG is deliberately excluded — these are served back publicly with no
+// Content-Disposition (see getForDownload), and an SVG can carry an inline
+// <script>/event-handler payload, making it a stored-XSS vector unlike the
+// other accepted raster formats.
+const ACCEPTED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const MAX_BYTES = 5 * 1024 * 1024;
 const ORPHAN_AGE_MS = 24 * 60 * 60 * 1000;
 

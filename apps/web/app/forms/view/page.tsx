@@ -18,7 +18,6 @@ import { FormRenderer, SubmissionScore } from '../../../components/form-renderer
 import { FormSettingsPanel } from '../../../components/form-settings-panel';
 import { ShareLinkPanel } from '../../../components/share-link-panel';
 import { AccessControlPanel } from '../../../components/access-control-panel';
-import { FormKpiMappingsPanel } from '../../../components/form-kpi-mappings-panel';
 import { ResponseSummary, ResponseSummaryData } from '../../../components/response-summary';
 import { ResponseDetailModal } from '../../../components/response-detail-modal';
 import { apiPaged, api, downloadFile } from '../../../lib/api-client';
@@ -61,7 +60,7 @@ function FormView() {
   const [rows, setRows] = useState<SubmissionRow[] | null>(null);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [page, setPage] = useState(1);
-  const SUBMISSIONS_PAGE_SIZE = 50;
+  const SUBMISSIONS_PAGE_SIZE = 25;
   const [summary, setSummary] = useState<ResponseSummaryData | null>(null);
   // narrows the summary to only submissions naming this person as the answer to
   // any question — '' means "everyone". Kept separate from `fieldFilter` (which
@@ -205,7 +204,7 @@ function FormView() {
     await api(`/v1/forms/${slug}/submissions/${submissionId}`, { method: 'DELETE' });
     setRows((current) => (current ? current.filter((r) => r.id !== submissionId) : current));
     setConfirmDeleteRowId(null);
-    setNotice('submission deleted');
+    setNotice('Submission deleted');
     setTimeout(() => setNotice(null), 3000);
   }
 
@@ -254,7 +253,7 @@ function FormView() {
       <Button asChild variant="ghost" size="sm" className="mb-2">
         <Link href="/forms">
           <ArrowLeft size={16} aria-hidden="true" />
-          back to forms
+          Back to forms
         </Link>
       </Button>
       <div className="page-title-row">
@@ -263,14 +262,14 @@ function FormView() {
             <ClipboardList size={18} aria-hidden="true" />
           </span>
           <h1>{definition.title}</h1>
-          <StatusBadge active={settings.acceptingResponses} label={settings.acceptingResponses ? 'open' : 'closed'} />
+          <StatusBadge active={settings.acceptingResponses} label={settings.acceptingResponses ? 'Open' : 'Closed'} />
         </div>
         {canManage && (
           <span className="row-actions">
             <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary">
               <Link href={`/forms/new?edit=${encodeURIComponent(slug)}`}>
                 <Pencil size={13} aria-hidden="true" />
-                edit form
+                Edit form
               </Link>
             </Button>
             <Button
@@ -280,7 +279,7 @@ function FormView() {
               className="text-primary hover:text-primary"
               onClick={onDuplicate}
             >
-              duplicate form
+              Duplicate form
             </Button>
           </span>
         )}
@@ -288,11 +287,11 @@ function FormView() {
       {definition.description && <p className="portal-subtitle">{definition.description}</p>}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-        <TabsList variant="line" aria-label="form views">
-          <TabsTrigger value="form">form</TabsTrigger>
-          <TabsTrigger value="submissions">submissions</TabsTrigger>
-          <TabsTrigger value="summary">summary</TabsTrigger>
-          {canManage && <TabsTrigger value="settings">settings</TabsTrigger>}
+        <TabsList variant="line" aria-label="Form views">
+          <TabsTrigger value="form">Form</TabsTrigger>
+          <TabsTrigger value="submissions">Submissions</TabsTrigger>
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+          {canManage && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="form">
@@ -305,28 +304,28 @@ function FormView() {
         </TabsContent>
 
         <TabsContent value="submissions">
-          <section aria-label="submissions">
+          <section aria-label="Submissions">
             {fieldFilter && (
               <Alert>
                 <AlertDescription>
-                  filtered by {fieldFilter.label}: <strong>{fieldFilter.value}</strong>{' '}
+                  Filtered by {fieldFilter.label}: <strong>{fieldFilter.value}</strong>{' '}
                   <Button variant="ghost" size="sm" onClick={() => setFieldFilter(null)}>
-                    clear
+                    Clear
                   </Button>
                 </AlertDescription>
               </Alert>
             )}
             <div className="page-title-row">
               <Input
-                aria-label="filter submissions"
-                placeholder="filter…"
+                aria-label="Filter submissions"
+                placeholder="Filter…"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 style={{ flex: '0 1 180px' }}
               />
               <span className="builder-required date-range-filter">
                 <label htmlFor="submissions-date-from" className="muted" style={{ fontSize: 12 }}>
-                  from
+                  From
                 </label>
                 <Input
                   id="submissions-date-from"
@@ -335,7 +334,7 @@ function FormView() {
                   onChange={(e) => setDateFrom(e.target.value)}
                 />
                 <label htmlFor="submissions-date-to" className="muted" style={{ fontSize: 12 }}>
-                  to
+                  To
                 </label>
                 <Input
                   id="submissions-date-to"
@@ -350,7 +349,7 @@ function FormView() {
                 onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export`, `${slug}.csv`)}
               >
                 <Download size={14} aria-hidden="true" />
-                export CSV
+                Export CSV
               </Button>
               <Button
                 variant="outline"
@@ -358,23 +357,23 @@ function FormView() {
                 onClick={() => downloadFile(`/v1/forms/${slug}/submissions/export.xlsx`, `${slug}.xlsx`)}
               >
                 <Download size={14} aria-hidden="true" />
-                export xlsx
+                Export xlsx
               </Button>
               {canModerate &&
                 (rows?.length ?? 0) > 0 &&
                 (confirmDeleteAll ? (
                   <>
-                    <span className="muted">delete all {rows?.length ?? 0} responses?</span>
+                    <span className="muted">Delete all {rows?.length ?? 0} responses?</span>
                     <Button variant="ghost" size="sm" onClick={onDeleteAll}>
-                      confirm delete all
+                      Confirm delete all
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteAll(false)}>
-                      cancel
+                      Cancel
                     </Button>
                   </>
                 ) : (
                   <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteAll(true)}>
-                    delete all responses
+                    Delete all responses
                   </Button>
                 ))}
             </div>
@@ -386,13 +385,13 @@ function FormView() {
             {rows === null ? (
               <LoadingState />
             ) : filteredRows.length === 0 ? (
-              <p className="muted">no submissions{filter ? ' match the filter' : ' yet'}.</p>
+              <p className="muted">No submissions{filter ? ' match the filter' : ' yet'}.</p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>submitted</TableHead>
-                    <TableHead>by</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead>By</TableHead>
                     {definition.fields.map((f) => (
                       <TableHead key={f.key}>{f.label}</TableHead>
                     ))}
@@ -414,7 +413,7 @@ function FormView() {
                                 size="sm"
                                 onClick={() => downloadFile(`/v1/forms/${slug}/uploads/${value}`, f.label)}
                               >
-                                download
+                                Download
                               </Button>
                             ) : f.type === 'file' && Array.isArray(value) && value.length > 0 ? (
                               <span className="builder-field-actions">
@@ -463,13 +462,13 @@ function FormView() {
                             className="text-primary hover:text-primary"
                             onClick={() => setSelectedRowId(row.id)}
                           >
-                            view
+                            View
                           </Button>
                           {canModerate &&
                             (confirmDeleteRowId === row.id ? (
                               <>
                                 <Button variant="destructive" size="sm" onClick={() => onDelete(row.id)}>
-                                  confirm
+                                  Confirm
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -477,7 +476,7 @@ function FormView() {
                                   className="text-primary hover:text-primary"
                                   onClick={() => setConfirmDeleteRowId(null)}
                                 >
-                                  cancel
+                                  Cancel
                                 </Button>
                               </>
                             ) : (
@@ -487,7 +486,7 @@ function FormView() {
                                 className="text-destructive hover:text-destructive"
                                 onClick={() => setConfirmDeleteRowId(row.id)}
                               >
-                                delete
+                                Delete
                               </Button>
                             ))}
                         </span>
@@ -499,9 +498,9 @@ function FormView() {
             )}
 
             {pagination && pagination.totalItems > 0 && (
-              <div className="page-title-row" aria-label="submissions pagination">
+              <div className="page-title-row" aria-label="Submissions pagination">
                 <span className="muted">
-                  showing {(pagination.page - 1) * pagination.pageSize + 1}
+                  Showing {(pagination.page - 1) * pagination.pageSize + 1}
                   {'–'}
                   {Math.min(pagination.page * pagination.pageSize, pagination.totalItems)} of {pagination.totalItems}
                   {filter || dateFrom || dateTo ? ' (filter/date range only search the loaded page)' : ''}
@@ -513,10 +512,10 @@ function FormView() {
                     disabled={pagination.page <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
-                    previous
+                    Previous
                   </Button>
                   <span className="muted">
-                    page {pagination.page} of {pagination.totalPages}
+                    Page {pagination.page} of {pagination.totalPages}
                   </span>
                   <Button
                     variant="outline"
@@ -524,7 +523,7 @@ function FormView() {
                     disabled={pagination.page >= pagination.totalPages}
                     onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
                   >
-                    next
+                    Next
                   </Button>
                 </span>
               </div>
@@ -562,11 +561,11 @@ function FormView() {
         </TabsContent>
 
         <TabsContent value="summary">
-          <section aria-label="response summary">
+          <section aria-label="Response summary">
             {summary && summary.respondents.length > 0 && (
               <div className="page-title-row" style={{ marginBottom: 8 }}>
                 <label htmlFor="summary-user-filter" className="muted" style={{ fontSize: 13 }}>
-                  filter by person
+                  Filter by person
                 </label>
                 <Select
                   value={summaryUserId || '__all__'}
@@ -576,7 +575,7 @@ function FormView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">everyone</SelectItem>
+                    <SelectItem value="__all__">Everyone</SelectItem>
                     {summary.respondents.map((r) => (
                       <SelectItem key={r.id} value={r.id}>
                         {r.displayName}
@@ -596,7 +595,7 @@ function FormView() {
 
         {canManage && (
           <TabsContent value="settings">
-            <section aria-label="form settings">
+            <section aria-label="Form settings">
               <FormSettingsPanel
                 formId={form.id}
                 settings={settings}
@@ -610,7 +609,6 @@ function FormView() {
                   setDetail((d) => (d ? { ...d, form: { ...d.form, restricted: next } } : d))
                 }
               />
-              <FormKpiMappingsPanel formId={form.id} definition={definition} />
             </section>
           </TabsContent>
         )}
