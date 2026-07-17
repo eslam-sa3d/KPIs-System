@@ -1,13 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type {
-  DashboardFormScope,
-  FormListItem,
-  RecentFeedback,
-  TeamMemberBreakdown,
-  TeamOverview,
-} from '@pulse/contracts';
+import type { DashboardFormScope, FormListItem, TeamMemberBreakdown, TeamOverview } from '@pulse/contracts';
 import { PortalShell, can } from '../../components/portal-shell';
 import { TeamMemberDetailDrawer } from '../../components/team-member-detail-drawer';
 import { Spinner } from '@/components/ui/spinner';
@@ -19,7 +13,6 @@ import { DashboardFormScopePicker } from './dashboard-form-scope-picker';
 import { DashboardJobTitlePills } from './dashboard-job-title-pills';
 import { DashboardStatusCards } from './dashboard-status-cards';
 import { DashboardScoreChart } from './dashboard-score-chart';
-import { DashboardRecentFeedback } from './dashboard-recent-feedback';
 import { DashboardTeamTable } from './dashboard-team-table';
 
 /** A single (FormKpiMapping, FormSubmission) pair, exactly as KpisService's
@@ -94,12 +87,6 @@ export default function DashboardPage() {
     user && canSeeTeamOverview ? '/v1/kpis/team-overview' : null,
   );
 
-  // recent context/comment feedback, org-wide — the qualitative signal
-  // usually buried one entry at a time inside a person's own drawer
-  const { data: recentFeedback, reload: reloadRecentFeedback } = useResource<RecentFeedback>(
-    user && canSeeTeamOverview ? '/v1/kpis/recent-feedback' : null,
-  );
-
   // which forms' submissions currently feed the dashboard — global,
   // admin-managed, shared across every user (see DashboardFormScope)
   const canEditFormScope = can(user, 'dashboards:edit');
@@ -123,7 +110,6 @@ export default function DashboardPage() {
       // The scope affects almost every widget below — refresh them all.
       void reloadKpis();
       void reloadTeamOverview();
-      void reloadRecentFeedback();
     } catch (cause) {
       setFormScopeError(cause instanceof Error ? cause.message : 'The request failed');
     } finally {
@@ -294,8 +280,6 @@ export default function DashboardPage() {
               scoreByPerson={scoreByPerson}
               hasScoreByPerson={hasScoreByPerson}
             />
-
-            <DashboardRecentFeedback canSeeTeamOverview={canSeeTeamOverview} recentFeedback={recentFeedback} />
 
             <DashboardTeamTable
               show={Boolean(canSeeTeamOverview && teamOverview)}
