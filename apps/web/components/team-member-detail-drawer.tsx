@@ -5,7 +5,7 @@ import { LoadingState } from './loading-state';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { STATUS_LABEL, statusBadgeStyle, statusOf } from '../lib/kpi-status';
+import { PerformanceLevelOption, bandBadgeStyle, bandOf } from '../lib/performance-band';
 
 const REVIEW_TYPE_LABEL: Record<string, string> = {
   self: 'Self',
@@ -22,15 +22,13 @@ const REVIEW_TYPE_LABEL: Record<string, string> = {
  */
 export function TeamMemberDetailDrawer({
   breakdown,
-  score,
+  levels,
   loading,
   error,
   onClose,
 }: {
   breakdown: TeamMemberBreakdown | null;
-  /** This person's overall blended score (0-5), from the team overview row
-   *  that opened this drawer — not refetched here, see TeamMember.score. */
-  score: number | null;
+  levels: PerformanceLevelOption[];
   loading: boolean;
   error?: string | null;
   onClose: () => void;
@@ -54,9 +52,10 @@ export function TeamMemberDetailDrawer({
                 <div className="p-drawer-avatar">{breakdown.displayName.slice(0, 2).toUpperCase()}</div>
                 <SheetTitle className="p-drawer-name">{breakdown.displayName}</SheetTitle>
                 <div className="p-drawer-meta" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {score !== null && (
-                    <Badge className="border-transparent" style={statusBadgeStyle(statusOf(score))}>
-                      {score.toFixed(1)} / 5 · {STATUS_LABEL[statusOf(score)]}
+                  {breakdown.latestScore !== null && (
+                    <Badge className="border-transparent" style={bandBadgeStyle(bandOf(breakdown), levels)}>
+                      {breakdown.latestScore.toFixed(1)} ·{' '}
+                      {breakdown.performanceLevel ? breakdown.performanceLevel.label : 'Unranked'}
                     </Badge>
                   )}
                   <span>
@@ -93,6 +92,35 @@ export function TeamMemberDetailDrawer({
                       )}
                     </div>
                   ))
+                )}
+                {breakdown.rawActivity && breakdown.rawActivity.length > 0 && (
+                  <div style={{ marginTop: 24 }}>
+                    <h4 className="muted" style={{ fontSize: 11, textTransform: 'uppercase', marginBottom: 8 }}>
+                      Other form activity ({breakdown.rawActivity.length})
+                    </h4>
+                    <p className="muted" style={{ fontSize: 10.5, marginBottom: 12 }}>
+                      Responses naming this person on forms with no KPI mapping yet — a scoreable answer here can
+                      still be their most recent score above.
+                    </p>
+                    {breakdown.rawActivity.map((a, i) => (
+                      <div key={`${a.submissionId}-${i}`} style={{ marginBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 500 }}>{a.formTitle}</span>
+                          <span className="muted" style={{ fontSize: 10.5 }}>
+                            {new Date(a.submittedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {a.submittedByName && ` · by ${a.submittedByName}`}
+                          </span>
+                        </div>
+                        <ul className="summary-samples" style={{ marginTop: 4 }}>
+                          {a.answers.map((ans) => (
+                            <li key={ans.fieldKey}>
+                              {ans.fieldLabel}: {ans.display}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </>

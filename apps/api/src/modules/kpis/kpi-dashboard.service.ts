@@ -5,6 +5,7 @@ import {
   EvaluationAreaCadence,
   FormDefinition,
   MeasurementGaps,
+  RawActivityAnswer,
   RecentFeedback,
   SCORE_FIELD_TYPES,
   ScoreFieldType,
@@ -15,7 +16,8 @@ import {
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../infra/prisma.service';
 import { RedisService } from '../../infra/redis.service';
-import { answerToText, describeAnswer, resolveEvaluateeId } from '../forms/score-resolution';
+import { answerToText, describeAnswer, rawFieldValue, resolveEvaluateeId } from '../forms/score-resolution';
+import { detectReferencedUserIds } from '../forms/submission-person-detection';
 import { RbacService } from '../rbac/rbac.service';
 import {
   allowedFormIds,
@@ -137,10 +139,40 @@ export interface ScoredSubmission {
   reviewType: string;
   raw: unknown;
   display: string;
+  /** The score field's own configured value, unscaled (see rawFieldValue)
+   *  — null when the field/answer has no well-defined configured number
+   *  (e.g. a context-only free-text field). A person's dashboard latestScore
+   *  is whichever of their submissions (scored or raw activity) is most
+   *  recent among the ones with a non-null value here. */
+  value: number | null;
   context: string | null;
   comment: string | null;
   submittedAt: Date;
   submissionId: string;
+}
+
+/** One (form, submission, named person) tuple from an UNMAPPED form — see
+ *  loadRawActivity. Internal shape (carries `personId`/`submittedAt: Date`
+ *  for grouping/sorting) that getTeamOverviewImpl/getPersonBreakdownImpl map
+ *  down to the public RawActivityEntry contract shape, same relationship
+ *  ScoredSubmission has to ScoredSubmissionSummary/PersonSubmission. */
+export interface RawActivity {
+  formId: string;
+  formSlug: string;
+  formTitle: string;
+  personId: string;
+  submittedByName: string | null;
+  submissionId: string;
+  submittedAt: Date;
+  answers: RawActivityAnswer[];
+  /** This submission's own first answered scoreable field's own configured
+   *  value (see rawFieldValue) — not summed across fields, and no
+   *  designated "score field" required the way a FormKpiMapping needs one.
+   *  Null when nothing in this submission has a well-defined numeric value.
+   *  A person's latestScore is whichever of their submissions (this or a
+   *  KPI-mapped one) is most recent — see getTeamOverviewImpl — never a
+   *  sum across submissions either. */
+  scoreValue: number | null;
 }
 
 function avg(values: number[]): number {
@@ -149,6 +181,24 @@ function avg(values: number[]): number {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** The configured Performance Level a person's total score falls into —
+ *  the highest-minScore level whose minScore the total still meets or
+ *  exceeds, open-ended at the top (a score above every level's maxScore
+ *  still lands in the top level, e.g. "Over-Achieved" starting at 2.0 also
+ *  covers a total of 5) and filling any gap between two configured ranges
+ *  by rounding down to the lower one. maxScore only breaks ties between
+ *  levels that share the same minScore. Null only when the total is below
+ *  every configured level's minScore, or nothing is configured at all. */
+function matchPerformanceLevel<T extends { id: string; label: string; minScore: number; maxScore: number }>(
+  total: number,
+  levels: T[],
+): { id: string; label: string } | null {
+  const eligible = levels.filter((l) => total >= l.minScore);
+  if (eligible.length === 0) return null;
+  const match = eligible.reduce((best, l) => (l.minScore > best.minScore ? l : best));
+  return { id: match.id, label: match.label };
 }
 
 /** Blends a set of entries into a "latest period" value and a "period before
@@ -320,8 +370,11 @@ export class KpiDashboardService {
         (key) => key && fields?.find((f) => f.key === key)?.type === 'performance_level',
       );
     });
+    // Selected columns cover both describeAnswer's display-string needs
+    // (label) and rawFieldValue's numeric needs (minScore/maxScore/score,
+    // for each submission's own contribution to a person's all-time total).
     const performanceLevels = needsPerformanceLevels
-      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
+      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } })
       : undefined;
     // score_label answers resolve against the live ScoreLabel table — same
     // lazy-fetch rule as performanceLevels above.
@@ -332,14 +385,20 @@ export class KpiDashboardService {
       );
     });
     const scoreLabels = needsScoreLabels
-      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true } })
+      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true, score: true } })
       : undefined;
+    const numericPerformanceLevels = performanceLevels?.map((l) => ({
+      id: l.id,
+      minScore: Number(l.minScore),
+      maxScore: Number(l.maxScore),
+    }));
 
     type Candidate = {
       mapping: (typeof activeMappings)[number];
       submission: (typeof submissions)[number];
       evaluateeId: string;
       described: { raw: unknown; display: string };
+      value: number | null;
     };
     const candidates: Candidate[] = [];
     for (const mapping of activeMappings) {
@@ -354,7 +413,8 @@ export class KpiDashboardService {
         if (rawScore === undefined || rawScore === null) continue;
         const described = describeAnswer(scoreField, rawScore, { performanceLevels, scoreLabels });
         if (described === null) continue;
-        candidates.push({ mapping, submission, evaluateeId, described });
+        const value = rawFieldValue(scoreField, rawScore, numericPerformanceLevels, scoreLabels);
+        candidates.push({ mapping, submission, evaluateeId, described, value });
       }
     }
     if (candidates.length === 0) return [];
@@ -409,11 +469,166 @@ export class KpiDashboardService {
         reviewType: c.mapping.reviewType,
         raw: c.described.raw,
         display: c.described.display,
+        value: c.value,
         context: resolveContextText(c.mapping.contextFieldKey),
         comment: resolveContextText(c.mapping.commentFieldKey),
         submittedAt: c.submission.createdAt,
         submissionId: c.submission.id,
       });
+    }
+    return results.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
+  }
+
+  /**
+   * loadScoredSubmissions' counterpart for forms with NO active FormKpiMapping
+   * at all (a form with only inactive-area mappings counts as unmapped too,
+   * same as loadScoredSubmissions ignoring those) — real form activity that
+   * never reaches the scoring pipeline, but still names a real person via any
+   * 'person' field or any field whose answer is a real user id (see
+   * detectReferencedUserIds — the same generic detection that already makes a
+   * 'select' field with a "select a user" option resolve a name on the Forms →
+   * Responses page, with no mapping required there either). One
+   * RawActivityEntry PER named person, since a submission can name several
+   * (e.g. a QC checklist). Optionally scoped to the admin-configured
+   * dashboard-form-scope, same as loadScoredSubmissions. Unlike
+   * loadScoredSubmissions, silently caps out rather than throwing past
+   * MAX_SUBMISSIONS_FOR_DASHBOARD — this is an additive secondary signal
+   * riding on the same synchronous dashboard load as the primary scored path,
+   * which already has its own fail-loud guard.
+   *
+   * Each entry also carries `scoreValue` (see RawActivity) — this
+   * submission's own first scoreable field's configured value, so a real
+   * answer counts toward a person's latestScore whether or not an admin has
+   * ever wired the form up to a KPI. Deliberately still requires no
+   * FormKpiMapping to exist: latestScore should reflect what people
+   * actually answered, not what an admin remembered to configure.
+   */
+  private async loadRawActivity(allowedFormIdList?: string[] | null): Promise<RawActivity[]> {
+    const forms = await this.prisma.form.findMany({
+      where: {
+        status: 'published',
+        ...(allowedFormIdList ? { id: { in: allowedFormIdList } } : {}),
+      },
+      select: {
+        id: true,
+        slug: true,
+        versions: { orderBy: { version: 'desc' }, take: 1, select: { definition: true } },
+        kpiMappings: { select: { evaluationArea: { select: { isActive: true } } } },
+      },
+    });
+    const unmappedForms = forms.filter((f) => !f.kpiMappings.some((m) => m.evaluationArea.isActive));
+    if (unmappedForms.length === 0) return [];
+
+    const formIds = unmappedForms.map((f) => f.id);
+    const submissionCount = await this.prisma.formSubmission.count({
+      where: { formVersion: { formId: { in: formIds } } },
+    });
+    if (submissionCount === 0 || submissionCount > MAX_SUBMISSIONS_FOR_DASHBOARD) return [];
+
+    const submissions = await this.prisma.formSubmission.findMany({
+      where: { formVersion: { formId: { in: formIds } } },
+      select: {
+        id: true,
+        answers: true,
+        submittedById: true,
+        createdAt: true,
+        formVersion: { select: { formId: true } },
+      },
+    });
+
+    const formById = new Map(unmappedForms.map((f) => [f.id, f]));
+    const definitionByFormId = new Map(
+      unmappedForms.map((f) => [f.id, f.versions[0]?.definition as unknown as FormDefinition | undefined]),
+    );
+
+    // Same lazy performanceLevels/scoreLabels fetch rule as loadScoredSubmissions
+    // — columns cover both describeAnswer's display needs (label) and
+    // rawFieldValue's numeric needs (minScore/maxScore/score).
+    const allFields = [...definitionByFormId.values()].flatMap((d) => d?.fields ?? []);
+    const performanceLevels = allFields.some((f) => f.type === 'performance_level')
+      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } })
+      : undefined;
+    const scoreLabels = allFields.some((f) => f.type === 'score_label')
+      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true, score: true } })
+      : undefined;
+    const numericPerformanceLevels = performanceLevels?.map((l) => ({
+      id: l.id,
+      minScore: Number(l.minScore),
+      maxScore: Number(l.maxScore),
+    }));
+
+    type Candidate = {
+      form: (typeof unmappedForms)[number];
+      definition: FormDefinition;
+      submission: (typeof submissions)[number];
+      personIds: Set<string>;
+    };
+    const candidates: Candidate[] = [];
+    const referencedUserIds = new Set<string>();
+    for (const s of submissions) {
+      const form = formById.get(s.formVersion.formId);
+      const definition = definitionByFormId.get(s.formVersion.formId);
+      if (!form || !definition) continue;
+      const answers = s.answers as SubmissionAnswers;
+      const personIds = detectReferencedUserIds(definition.fields, answers);
+      if (s.submittedById) referencedUserIds.add(s.submittedById);
+      for (const id of personIds) referencedUserIds.add(id);
+      if (personIds.size === 0) continue; // nothing to attribute this to — skip, don't guess
+      candidates.push({ form, definition, submission: s, personIds });
+    }
+    if (candidates.length === 0) return [];
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [...referencedUserIds] } },
+      select: { id: true, displayName: true, isActive: true, isKpiApplicable: true },
+    });
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const personNames = new Map(users.map((u) => [u.id, u.displayName]));
+
+    const results: RawActivity[] = [];
+    for (const c of candidates) {
+      const submitter = c.submission.submittedById ? userById.get(c.submission.submittedById) : undefined;
+      const answers = c.submission.answers as SubmissionAnswers;
+      const describedAnswers = c.definition.fields
+        .filter((f) => f.type !== 'section_header')
+        .map((f) => {
+          const raw = answers[f.key];
+          if (raw === undefined) return null;
+          const described = describeAnswer(f, raw, { performanceLevels, scoreLabels, personNames });
+          const display = described?.display ?? answerToText(raw);
+          return display !== null ? { fieldKey: f.key, fieldLabel: f.label, display } : null;
+        })
+        .filter((a): a is RawActivityAnswer => a !== null);
+      // The submission's own first answered scoreable field, in field-
+      // definition order — same "one submission contributes one value" rule
+      // loadScoredSubmissions follows via its single configured
+      // scoreFieldKey, just without requiring a FormKpiMapping to name
+      // which field that is. Not summed across fields; see the person-level
+      // "most recent single answer wins" rule below.
+      const scoreValue =
+        c.definition.fields
+          .filter((f) => answers[f.key] !== undefined)
+          .map((f) => rawFieldValue(f, answers[f.key]!, numericPerformanceLevels, scoreLabels))
+          .find((v): v is number => v !== null) ?? null;
+
+      // One entry PER named person — a submission naming several people
+      // shows up in each of their drawers/counts, same "one submission, several
+      // people" rule as summary()'s own userId narrowing.
+      for (const personId of c.personIds) {
+        const person = userById.get(personId);
+        if (!person || !person.isActive || !person.isKpiApplicable) continue;
+        results.push({
+          formId: c.form.id,
+          formSlug: c.form.slug,
+          formTitle: c.definition.title,
+          personId,
+          submittedByName: submitter?.displayName ?? null,
+          submissionId: c.submission.id,
+          submittedAt: c.submission.createdAt,
+          answers: describedAnswers,
+          scoreValue,
+        });
+      }
     }
     return results.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
   }
@@ -517,23 +732,22 @@ export class KpiDashboardService {
   }
 
   private async getTeamOverviewImpl(userId: string): Promise<TeamOverview> {
-    // null = unrestricted; [] = restricted with nothing selected (sees no one);
-    // non-empty = restricted to whichever Performance Level bands are allowed.
-    // The gate runs on the old normalized 0-5 blend — also returned to the
-    // client as `score` now, to power the dashboard's status cards — because
-    // a Performance Level range is defined on that same 0-5 scale and has
-    // nothing else to compare a raw, per-mapping answer against.
-    const allowedLevelIds = await this.rbac.allowedDashboardLevelIds(userId);
-    const allowedRanges =
-      allowedLevelIds === null
-        ? null
-        : await this.prisma.performanceLevel.findMany({
-            where: { id: { in: allowedLevelIds } },
-            select: { minScore: true, maxScore: true },
-          });
+    // null = unrestricted; [] = restricted with nothing selected (sees no
+    // one); non-empty = restricted to whichever Performance Levels are
+    // allowed — checked below against each member's own performanceLevel.
+    const [allowedLevelIds, performanceLevelRows] = await Promise.all([
+      this.rbac.allowedDashboardLevelIds(userId),
+      this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } }),
+    ]);
+    const allPerformanceLevels = performanceLevelRows.map((l) => ({
+      id: l.id,
+      label: l.label,
+      minScore: Number(l.minScore),
+      maxScore: Number(l.maxScore),
+    }));
 
     const allowedFormIdList = await allowedFormIds(this.prisma);
-    const [users, kpis, legacyEntries, scored] = await Promise.all([
+    const [users, kpis, legacyEntries, scored, rawActivity] = await Promise.all([
       this.prisma.user.findMany({
         where: { isActive: true, isKpiApplicable: true },
         select: {
@@ -563,6 +777,7 @@ export class KpiDashboardService {
         select: { personId: true, evaluationAreaId: true, value: true, periodStart: true },
       }),
       this.loadScoredSubmissions(undefined, allowedFormIdList),
+      this.loadRawActivity(allowedFormIdList),
     ]);
 
     const scoredByPerson = new Map<string, ScoredSubmission[]>();
@@ -570,6 +785,24 @@ export class KpiDashboardService {
       const list = scoredByPerson.get(s.personId);
       if (list) list.push(s);
       else scoredByPerson.set(s.personId, [s]);
+    }
+
+    const rawActivityByPerson = new Map<string, RawActivity[]>();
+    for (const a of rawActivity) {
+      const list = rawActivityByPerson.get(a.personId);
+      if (list) list.push(a);
+      else rawActivityByPerson.set(a.personId, [a]);
+    }
+
+    const rawActivityCountByPerson = new Map<string, number>();
+    // loadRawActivity returns most-recent-first, so the first entry seen per
+    // person here is their latest — feeds lastUpdated below alongside their
+    // latest scored submission, so a person with only unmapped-form activity
+    // (no scored submission at all) still shows a real last-updated date.
+    const rawActivityLatestByPerson = new Map<string, Date>();
+    for (const a of rawActivity) {
+      rawActivityCountByPerson.set(a.personId, (rawActivityCountByPerson.get(a.personId) ?? 0) + 1);
+      if (!rawActivityLatestByPerson.has(a.personId)) rawActivityLatestByPerson.set(a.personId, a.submittedAt);
     }
 
     // Visibility-gate-only blend, exactly as before — see the comment above.
@@ -611,6 +844,39 @@ export class KpiDashboardService {
       // type/scale even under the same Evaluation Area.
       const previous = latest ? (personScored.find((s, i) => i > 0 && s.mappingId === latest.mappingId) ?? null) : null;
 
+      // The single most recent scoreable answer this person has — never
+      // summed or averaged across fields or submissions. Considers both
+      // KPI-mapped scored submissions and unmapped-form activity (see
+      // rawFieldValue via loadRawActivity) equally; whichever is more
+      // recent wins, so a real answer counts whether or not a
+      // FormKpiMapping has ever been set up for that form. Matched against
+      // the admin-configured Performance Level ranges below rather than the
+      // fixed 0-5 status bands.
+      const personRawActivity = rawActivityByPerson.get(user.id) ?? [];
+      const latestScored = personScored.find((s) => s.value !== null) ?? null;
+      const latestRaw = personRawActivity.find((a) => a.scoreValue !== null) ?? null;
+      const latestScore =
+        latestScored && (!latestRaw || latestScored.submittedAt >= latestRaw.submittedAt)
+          ? round2(latestScored.value!)
+          : latestRaw
+            ? round2(latestRaw.scoreValue!)
+            : null;
+      // Matched only against a real latestScore — never the legacy
+      // EvaluationAreaEntry blend (`score` below), which can hold seed/
+      // migrated data with no connection to any Score Label or Performance
+      // Level an admin has actually configured. Null (shown as "Pending")
+      // until this person has a real scored answer.
+      const performanceLevel = latestScore !== null ? matchPerformanceLevel(latestScore, allPerformanceLevels) : null;
+
+      // The more recent of this person's latest scored submission and their
+      // latest raw-activity one (an unmapped form can be more recent than
+      // any scored submission, or be the only activity they have at all).
+      const rawActivityLatest = rawActivityLatestByPerson.get(user.id) ?? null;
+      const lastUpdated =
+        latest && rawActivityLatest
+          ? (latest.submittedAt > rawActivityLatest ? latest.submittedAt : rawActivityLatest)
+          : (latest?.submittedAt ?? rawActivityLatest);
+
       return {
         id: user.id,
         displayName: user.displayName,
@@ -620,6 +886,8 @@ export class KpiDashboardService {
         roles: user.roles.map((r) => r.role.name),
         hasKpi,
         score: legacyFinalScore(user.id),
+        latestScore,
+        performanceLevel,
         latestSubmission: latest
           ? {
               raw: latest.raw,
@@ -632,23 +900,22 @@ export class KpiDashboardService {
         previousSubmission: previous
           ? { raw: previous.raw, display: previous.display, submittedAt: previous.submittedAt.toISOString() }
           : null,
-        lastUpdated: latest ? latest.submittedAt.toISOString() : null,
+        lastUpdated: lastUpdated ? lastUpdated.toISOString() : null,
+        rawActivityCount: rawActivityCountByPerson.get(user.id) ?? 0,
       };
     });
 
-    // dashboards:view scope='level': narrow the roster to people whose
-    // blended score falls inside one of the caller's allowed Performance
-    // Level ranges. allowedRanges === null means unrestricted (skip
-    // filtering entirely); [] means restricted-but-nothing-selected, so
-    // everyone with no matching range (i.e. everyone) is dropped.
+    // dashboards:view scope='level': narrow the roster to people whose own
+    // performanceLevel (see above — matched against their real latestScore,
+    // same as everywhere else on the dashboard) is one of the caller's
+    // allowed Performance Levels. allowedLevelIds === null means
+    // unrestricted (skip filtering entirely); [] means restricted-but-
+    // nothing-selected, so everyone with no matching level (i.e. everyone,
+    // including the unranked/never-scored) is dropped.
     const visibleMembers =
-      allowedRanges === null
+      allowedLevelIds === null
         ? members
-        : members.filter(
-            (m) =>
-              m.score !== null &&
-              allowedRanges.some((r) => m.score! >= Number(r.minScore) && m.score! <= Number(r.maxScore)),
-          );
+        : members.filter((m) => m.performanceLevel !== null && allowedLevelIds.includes(m.performanceLevel.id));
 
     return { totalActiveUsers: visibleMembers.length, members: visibleMembers };
   }
@@ -677,22 +944,54 @@ export class KpiDashboardService {
     });
     if (!person) throw AppError.notFound('User', personId);
 
-    const [kpis, canSeeEvaluators, allowedFormIdList] = await Promise.all([
+    const [kpis, canSeeEvaluators, allowedFormIdList, performanceLevelRows] = await Promise.all([
       this.prisma.kpi.findMany({
         where: { isActive: true, ...(await myAssignmentFilter(this.prisma, personId)) },
         select: { evaluationAreas: { where: { isActive: true }, select: { id: true } } },
       }),
       canSeeAnonymousEvaluators(this.prisma, callerId),
       allowedFormIds(this.prisma),
+      this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } }),
     ]);
     const areaIds = kpis.flatMap((kpi) => kpi.evaluationAreas.map((a) => a.id));
+    const allPerformanceLevels = performanceLevelRows.map((l) => ({
+      id: l.id,
+      label: l.label,
+      minScore: Number(l.minScore),
+      maxScore: Number(l.maxScore),
+    }));
 
-    const scored = await this.loadScoredSubmissions(areaIds, allowedFormIdList);
-    const personScored = scored.filter((s) => s.personId === personId).slice(0, RECENT_ENTRIES_TAKE);
+    const [scored, rawActivity] = await Promise.all([
+      this.loadScoredSubmissions(areaIds, allowedFormIdList),
+      this.loadRawActivity(allowedFormIdList),
+    ]);
+    const allPersonScored = scored.filter((s) => s.personId === personId);
+    const personScored = allPersonScored.slice(0, RECENT_ENTRIES_TAKE);
+    const allPersonRawActivity = rawActivity.filter((a) => a.personId === personId);
+    const personRawActivity = allPersonRawActivity.slice(0, RECENT_ENTRIES_TAKE);
+
+    // Same "most recent single answer wins" rule as getTeamOverviewImpl —
+    // never summed or averaged, and considers this person's full history
+    // (not just the recent slice shown below), across both KPI-mapped
+    // scored submissions and unmapped-form activity equally. Matched only
+    // against a real latestScore — never the legacy EvaluationAreaEntry
+    // blend, which can hold seed/migrated data with no connection to any
+    // Score Label or Performance Level an admin has actually configured.
+    const latestScored = allPersonScored.find((s) => s.value !== null) ?? null;
+    const latestRaw = allPersonRawActivity.find((a) => a.scoreValue !== null) ?? null;
+    const latestScore =
+      latestScored && (!latestRaw || latestScored.submittedAt >= latestRaw.submittedAt)
+        ? round2(latestScored.value!)
+        : latestRaw
+          ? round2(latestRaw.scoreValue!)
+          : null;
+    const performanceLevel = latestScore !== null ? matchPerformanceLevel(latestScore, allPerformanceLevels) : null;
 
     return {
       personId: person.id,
       displayName: person.displayName,
+      latestScore,
+      performanceLevel,
       submissions: personScored.map((s) => {
         const scrubbed = scrubAnonymousEntry(s, canSeeEvaluators);
         return {
@@ -710,6 +1009,15 @@ export class KpiDashboardService {
           comment: scrubbed.comment,
         };
       }),
+      rawActivity: personRawActivity.map((a) => ({
+        formId: a.formId,
+        formSlug: a.formSlug,
+        formTitle: a.formTitle,
+        submittedByName: a.submittedByName,
+        submissionId: a.submissionId,
+        submittedAt: a.submittedAt.toISOString(),
+        answers: a.answers,
+      })),
     };
   }
 

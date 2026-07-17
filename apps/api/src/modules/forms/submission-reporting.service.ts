@@ -5,11 +5,7 @@ import { PrismaService } from '../../infra/prisma.service';
 import { FormsService } from './forms.service';
 import { QuizScore } from './quiz-scoring';
 import { assertSyncReportSizeOk } from './submission-size-guard';
-
-/** Detects a raw User id stored where a display name is expected — a 'person' field's
- *  answer always matches; some forms also store a per-area evaluatee id in an ordinary
- *  text field, so this is checked against every field, not just ones typed 'person'. */
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { UUID_PATTERN, detectReferencedUserIds } from './submission-person-detection';
 
 /**
  * MS-Forms-style aggregate reads over a form's submissions: the per-question
@@ -57,18 +53,10 @@ export class SubmissionReportingService {
     // scan is always over the FULL, unfiltered submission set — `respondents`
     // below is meant to stay the complete filter-dropdown option list even once
     // `userId` narrows everything else in this response.
-    const personFieldKeys = new Set(definition.fields.filter((f) => f.type === 'person').map((f) => f.key));
     const candidateIds = new Set<string>();
     for (const s of allSubmissions) {
       const answers = s.answers as SubmissionAnswers;
-      for (const field of definition.fields) {
-        const v = answers[field.key];
-        if (typeof v === 'string' && v && (personFieldKeys.has(field.key) || UUID_PATTERN.test(v))) {
-          candidateIds.add(v);
-        } else if (Array.isArray(v)) {
-          for (const item of v) if (typeof item === 'string' && UUID_PATTERN.test(item)) candidateIds.add(item);
-        }
-      }
+      for (const id of detectReferencedUserIds(definition.fields, answers)) candidateIds.add(id);
     }
     const personNames = candidateIds.size
       ? new Map(
@@ -308,11 +296,7 @@ export class SubmissionReportingService {
     const candidateIds = new Set<string>();
     for (const s of submissions) {
       const answers = s.answers as SubmissionAnswers;
-      for (const field of definition.fields) {
-        const v = answers[field.key];
-        if (typeof v !== 'string' || !v) continue;
-        if (personFieldKeys.has(field.key) || UUID_PATTERN.test(v)) candidateIds.add(v);
-      }
+      for (const id of detectReferencedUserIds(definition.fields, answers)) candidateIds.add(id);
     }
     const personNames = candidateIds.size
       ? new Map(

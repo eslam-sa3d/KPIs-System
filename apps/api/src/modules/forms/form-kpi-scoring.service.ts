@@ -7,7 +7,7 @@ import { RedisService } from '../../infra/redis.service';
 import { DASHBOARD_CACHE_GENERATION_KEY } from '../kpis/kpi-dashboard.service';
 import { assertSyncReportSizeOk } from './submission-size-guard';
 import { FormsService } from './forms.service';
-import { answerToText, describeAnswer, resolveEvaluateeId } from './score-resolution';
+import { answerToText, describeAnswer, normalizeScore, resolveEvaluateeId } from './score-resolution';
 
 type PerformanceLevelLookup = { id: string; label: string; minScore: number; maxScore: number };
 type ScoreLabelLookup = { id: string; label: string; score: number };
@@ -67,6 +67,12 @@ export class FormKpiScoringService {
   ): Promise<void> {
     if (!enteredById) return;
 
+    // Every submission — mapped or not — can change the dashboard now (an
+    // unmapped form's raw activity is dashboard-visible too, see
+    // KpiDashboardService.loadRawActivity), so this always invalidates, even
+    // when there are zero mappings below.
+    await this.invalidateDashboardCache();
+
     const mappings = await this.prisma.formKpiMapping.findMany({
       where: { formId },
       include: { evaluationArea: true },
@@ -95,7 +101,6 @@ export class FormKpiScoringService {
         );
       }
     }
-    await this.invalidateDashboardCache();
   }
 
   /** performanceLevel rows are global, unchanging for the lifetime of a single
@@ -322,89 +327,6 @@ export class FormKpiScoringService {
     await this.invalidateDashboardCache();
     return { scored, skipped };
   }
-}
-
-/** Normalizes a raw answer to a 0-5 KPI score using that field's own configured
- *  range/options. Returns null for a degenerate (zero-width, single-option) range,
- *  an answer shape that doesn't match the field type, an unrecognized option value
- *  (including a free-text "other:" answer — no fixed position to score), an
- *  unrecognized performance_level/score_label id, or a field type with no
- *  well-defined numeric interpretation at all (short_text, long_text, date,
- *  time, file, contact_info, hot_spot, person, ranking, grid, section_header).
- *
- *  `performanceLevels`/`scoreLabels` are only needed (and only fetched by the
- *  caller) when `field.type` is 'performance_level'/'score_label' respectively
- *  — every other case normalizes purely from the field definition. */
-function normalizeScore(
-  field: FormField,
-  raw: SubmissionAnswers[string],
-  performanceLevels?: Array<{ id: string; minScore: number; maxScore: number }>,
-  scoreLabels?: Array<{ id: string; score: number }>,
-): number | null {
-  switch (field.type) {
-    case 'rating': {
-      if (typeof raw !== 'number' || field.scale <= 1) return null;
-      return clamp(((raw - 1) / (field.scale - 1)) * 5, 0, 5);
-    }
-    case 'nps':
-      if (typeof raw !== 'number') return null;
-      return clamp((raw / 10) * 5, 0, 5);
-    case 'slider': {
-      if (typeof raw !== 'number') return null;
-      const range = field.max - field.min;
-      if (range <= 0) return null;
-      return clamp(((raw - field.min) / range) * 5, 0, 5);
-    }
-    case 'number': {
-      if (typeof raw !== 'number') return null;
-      // With a configured range, normalize against it like a slider; without one,
-      // treat the raw value as already meant to sit on a 0-5 scale and just clamp.
-      if (field.min !== undefined && field.max !== undefined) {
-        const range = field.max - field.min;
-        if (range <= 0) return null;
-        return clamp(((raw - field.min) / range) * 5, 0, 5);
-      }
-      return clamp(raw, 0, 5);
-    }
-    case 'boolean':
-      if (typeof raw !== 'boolean') return null;
-      return raw ? 5 : 0;
-    case 'select': {
-      if (typeof raw !== 'string' || raw.startsWith('other:') || field.options.length <= 1) return null;
-      const index = field.options.findIndex((o) => o.value === raw);
-      if (index === -1) return null;
-      return clamp((index / (field.options.length - 1)) * 5, 0, 5);
-    }
-    case 'multi_select': {
-      if (!Array.isArray(raw) || field.options.length === 0) return null;
-      return clamp((raw.length / field.options.length) * 5, 0, 5);
-    }
-    case 'likert': {
-      if (raw === null || typeof raw !== 'object' || Array.isArray(raw) || field.scale.length <= 1) return null;
-      const indices = Object.values(raw).filter((v): v is number => typeof v === 'number');
-      if (indices.length === 0) return null;
-      const average = indices.reduce((sum, v) => sum + v, 0) / indices.length;
-      return clamp((average / (field.scale.length - 1)) * 5, 0, 5);
-    }
-    case 'performance_level': {
-      if (typeof raw !== 'string' || !performanceLevels) return null;
-      const level = performanceLevels.find((l) => l.id === raw);
-      if (!level) return null;
-      return clamp((level.minScore + level.maxScore) / 2, 0, 5);
-    }
-    case 'score_label': {
-      if (typeof raw !== 'string' || !scoreLabels) return null;
-      const label = scoreLabels.find((l) => l.id === raw);
-      if (!label) return null;
-      return clamp(label.score, 0, 5);
-    }
-    default:
-      return null;
-  }
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 /** Calendar-boundary period containing `at`, in UTC, for the given Evaluation Area cadence. */

@@ -46,6 +46,23 @@ export interface TeamMember {
    *  visibility gate; every other field on this type is a raw, per-submission
    *  value on its own native scale. */
   score: number | null;
+  /** This person's single most recent scoreable answer's own configured
+   *  value — never summed or averaged across fields or submissions. Counts
+   *  both KPI-mapped scored submissions and unmapped-form activity equally
+   *  (see RawActivityEntry); whichever is more recent wins, so a real
+   *  answer counts whether or not a FormKpiMapping exists for the form it
+   *  came from. Distinct from `score` (the older EvaluationAreaEntry
+   *  blend, still used for the status cards and the Performance-Level
+   *  visibility gate). Null when they have no scoreable answer at all. */
+  latestScore: number | null;
+  /** The configured Performance Level `latestScore` falls into — always a
+   *  real, admin-configured level from the Configuration page, never a
+   *  hardcoded status band or a fallback to `score` (the older
+   *  EvaluationAreaEntry blend, which can hold seed/migrated data
+   *  unconnected to anything actually configured). Null when nothing is
+   *  configured, `latestScore` is null, or it's below every configured
+   *  level's minScore. */
+  performanceLevel: { id: string; label: string } | null;
   /** The person's single most recent scored submission, across every KPI
    *  area that covers them — null when they've never been scored ("pending",
    *  not "scored a 0"). Includes which area/KPI it was for since a person
@@ -55,7 +72,19 @@ export interface TeamMember {
    *  through the exact same mapping (same field, same scale) — otherwise
    *  there's nothing valid to compare against, so no trend is shown. */
   previousSubmission: ScoredSubmissionSummary | null;
+  /** The more recent of `latestSubmission`'s date and this person's latest
+   *  raw-activity submission's date (see `rawActivityCount`) — so someone
+   *  with only unmapped-form activity, no scored submission at all, still
+   *  shows a real date instead of null. */
   lastUpdated: string | null;
+  /** Count of this person's own raw-activity submissions (see
+   *  RawActivityEntry) — activity from forms with no KPI mapping at all that
+   *  still name this person somewhere in their answers. Separate from and
+   *  never blended with `score`/`latestSubmission`, which stay strictly
+   *  scored/mapped. Always a number (0 when they have none), unlike the
+   *  null-means-never-scored idiom `latestSubmission` uses, since there's no
+   *  meaningful distinction between "never checked" and "zero" here. */
+  rawActivityCount: number;
 }
 
 /** Response of GET /v1/kpis/team-overview — shared verbatim between
@@ -80,13 +109,56 @@ export interface PersonSubmission extends ScoredSubmissionSummary {
   comment: string | null;
 }
 
+/** One answered field on a raw-activity submission (see RawActivityEntry) —
+ *  formatted the same way a ScoredSubmissionSummary.display is (via
+ *  describeAnswer), but a raw-activity submission has no single "the score
+ *  field", so this is every describable answer, not one value. */
+export interface RawActivityAnswer {
+  fieldKey: string;
+  fieldLabel: string;
+  display: string;
+}
+
+/** One submission to a form with zero active FormKpiMapping that names this
+ *  person somewhere in its answers (any 'person' field, or any field whose
+ *  answer is a real user id — see detectReferencedUserIds) — the dashboard's
+ *  signal that real form activity about this person exists even though no
+ *  KPI scoring pipeline is wired up for it yet. Never blended, never scored,
+ *  same "trace back to one real FormSubmission" posture as PersonSubmission. */
+export interface RawActivityEntry {
+  formId: string;
+  formSlug: string;
+  formTitle: string;
+  submittedByName: string | null;
+  submissionId: string;
+  submittedAt: string;
+  answers: RawActivityAnswer[];
+}
+
 /** Response of GET /v1/kpis/team-overview/:personId — a single team member's
  *  own scored submissions across every KPI that covers them, most recent
  *  first, for the dashboard's team member detail drawer. */
 export interface TeamMemberBreakdown {
   personId: string;
   displayName: string;
+  /** Same "most recent single answer wins" rule as TeamMember.latestScore —
+   *  considers this person's full history, not just the recent ones in
+   *  `submissions` below. Null until they have a real scoreable answer —
+   *  never falls back to the older EvaluationAreaEntry blend, which can
+   *  hold seed/migrated data unconnected to any admin-configured Score
+   *  Label or Performance Level. */
+  latestScore: number | null;
+  /** The configured Performance Level `latestScore` falls into — always a
+   *  real, admin-configured level from the Configuration page, never a
+   *  hardcoded status band. Null when nothing is configured, `latestScore`
+   *  is null, or it's below every configured level's minScore. */
+  performanceLevel: { id: string; label: string } | null;
   submissions: PersonSubmission[];
+  /** This person's own raw-activity entries (see RawActivityEntry), most
+   *  recent first — omitted/empty when they have none. Separate list from
+   *  `submissions` (scored) so the drawer can show both without conflating
+   *  them. */
+  rawActivity?: RawActivityEntry[];
 }
 
 /** A score-eligible question on a published form with no FormKpiMapping
