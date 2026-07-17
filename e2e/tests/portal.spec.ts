@@ -197,10 +197,14 @@ test.describe('KPI module (create → evaluation area → score via a mapped for
     await expect(page.getByText(/thank you/i)).toBeVisible();
 
     // the dashboard no longer lists individual KPIs (that per-KPI table was
-    // removed) — the team members table's blended score is now the stable,
-    // still-visible thing this submission's EvaluationAreaEntry feeds into.
+    // removed) — the team members table's Score column is now the stable,
+    // still-visible thing this submission feeds into: the person's
+    // latestScore, their single most recent scoreable answer's own
+    // configured value (here, the unscaled rating radio "4" they picked —
+    // see rawFieldValue), shown plainly with no "/5" suffix since the scale
+    // is no longer fixed.
     await page.goto('/dashboard');
     const adminRow = page.getByRole('button', { name: "view Platform Admin's rate" });
-    await expect(adminRow.getByText(/\d(\.\d)? \/ 5/)).toBeVisible();
+    await expect(adminRow.getByText('4.0', { exact: true })).toBeVisible();
   });
 });
