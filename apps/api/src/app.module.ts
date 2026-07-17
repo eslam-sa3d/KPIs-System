@@ -17,6 +17,8 @@ import { JobTitlesController } from './modules/configuration/job-titles.controll
 import { JobTitlesService } from './modules/configuration/job-titles.service';
 import { PerformanceLevelsController } from './modules/configuration/performance-levels.controller';
 import { PerformanceLevelsService } from './modules/configuration/performance-levels.service';
+import { ScoreLabelsController } from './modules/configuration/score-labels.controller';
+import { ScoreLabelsService } from './modules/configuration/score-labels.service';
 import { DemoDataService } from './modules/settings/demo-data.service';
 import { SettingsController } from './modules/settings/settings.controller';
 import { DepartmentsController, ProjectGroupsController, UsersController } from './modules/users/users.controller';
@@ -67,6 +69,7 @@ import { RolesController } from './modules/rbac/roles.controller';
     BrandingController,
     SettingsController,
     PerformanceLevelsController,
+    ScoreLabelsController,
     JobTitlesController,
   ],
   providers: [
@@ -86,6 +89,7 @@ import { RolesController } from './modules/rbac/roles.controller';
     AssetsService,
     DemoDataService,
     PerformanceLevelsService,
+    ScoreLabelsService,
     JobTitlesService,
     // Guard chain runs in registration order:
     { provide: APP_GUARD, useClass: ThrottlerGuard }, // 1. rate limit

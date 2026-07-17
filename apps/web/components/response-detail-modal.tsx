@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, downloadFile } from '../lib/api-client';
-import { resolvePersonAnswer, resolvePerformanceLevelAnswer } from '../lib/resolve-person-answer';
+import { resolvePersonAnswer, resolvePerformanceLevelAnswer, resolveScoreLabelAnswer } from '../lib/resolve-person-answer';
 import { FieldInput, type SubmissionScore } from './form-renderer';
 
 export interface DetailedSubmission {
@@ -22,16 +22,17 @@ function formatAnswer(
   field: FormField,
   personNames: Record<string, string>,
   performanceLevelLabels: Record<string, string>,
+  scoreLabelLabels: Record<string, string>,
 ): string {
   if (value === undefined || value === null || value === '') return '—';
-  // 'performance_level' answers are a PerformanceLevel id; 'person' (or
-  // UUID-shaped) answers are a User's id — neither is a displayable string
-  // as stored, so resolve to a label/name, the same resolution the
-  // submissions table applies.
+  // 'performance_level'/'score_label' answers are a PerformanceLevel/ScoreLabel
+  // id; 'person' (or UUID-shaped) answers are a User's id — none is a
+  // displayable string as stored, so resolve to a label/name, the same
+  // resolution the submissions table applies.
   if (typeof value === 'string') {
-    return field.type === 'performance_level'
-      ? resolvePerformanceLevelAnswer(value, performanceLevelLabels)
-      : resolvePersonAnswer(value, personNames, field.type === 'person');
+    if (field.type === 'performance_level') return resolvePerformanceLevelAnswer(value, performanceLevelLabels);
+    if (field.type === 'score_label') return resolveScoreLabelAnswer(value, scoreLabelLabels);
+    return resolvePersonAnswer(value, personNames, field.type === 'person');
   }
   if (Array.isArray(value)) {
     return value
@@ -56,6 +57,7 @@ export function ResponseDetailModal({
   canEdit,
   personNames,
   performanceLevelLabels,
+  scoreLabelLabels,
   onClose,
   onPrev,
   onNext,
@@ -74,6 +76,9 @@ export function ResponseDetailModal({
   /** PerformanceLevel id -> label, so a 'performance_level' answer shows e.g.
    *  "Outstanding" instead of the raw id */
   performanceLevelLabels: Record<string, string>;
+  /** ScoreLabel id -> label, so a 'score_label' answer shows e.g. "Outstanding"
+   *  instead of the raw id */
+  scoreLabelLabels: Record<string, string>;
   onClose: () => void;
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
@@ -209,7 +214,7 @@ export function ResponseDetailModal({
                           ))}
                         </span>
                       ) : (
-                        formatAnswer(value, field, personNames, performanceLevelLabels)
+                        formatAnswer(value, field, personNames, performanceLevelLabels, scoreLabelLabels)
                       )}
                     </dd>
                   </div>

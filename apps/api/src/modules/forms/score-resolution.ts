@@ -28,6 +28,7 @@ export interface AnswerDescription {
 
 export interface DescribeAnswerContext {
   performanceLevels?: Array<{ id: string; label: string }>;
+  scoreLabels?: Array<{ id: string; label: string }>;
   /** userId -> displayName, for resolving a 'person' field's answer (that
    *  User's id) back to a name. Missing entries fall back to '(deleted
    *  user)', same as summary()'s own person resolution. */
@@ -63,7 +64,7 @@ export function describeAnswer(
   raw: SubmissionAnswers[string],
   ctx: DescribeAnswerContext = {},
 ): AnswerDescription | null {
-  const { performanceLevels, personNames } = ctx;
+  const { performanceLevels, scoreLabels, personNames } = ctx;
   switch (field.type) {
     case 'rating':
       if (typeof raw !== 'number') return null;
@@ -112,6 +113,11 @@ export function describeAnswer(
       if (typeof raw !== 'string' || !performanceLevels) return null;
       const level = performanceLevels.find((l) => l.id === raw);
       return level ? { raw, display: level.label } : null;
+    }
+    case 'score_label': {
+      if (typeof raw !== 'string' || !scoreLabels) return null;
+      const label = scoreLabels.find((l) => l.id === raw);
+      return label ? { raw, display: label.label } : null;
     }
     case 'ranking': {
       if (!Array.isArray(raw)) return null;

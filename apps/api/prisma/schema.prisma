@@ -526,6 +526,18 @@ model PerformanceLevel {
   updatedAt DateTime @updatedAt
 }
 
+/// Names a single point on the 0-5 EvaluationAreaEntry score scale (e.g.
+/// "Outstanding" for 5) — the Configuration page's Score Labels tab.
+/// Separate from PerformanceLevel (which names a range): purely a
+/// labeling/display concern, not read anywhere else yet.
+model ScoreLabel {
+  id        String   @id @default(uuid())
+  label     String
+  score     Int // 0-5, whole number
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 /// A named job title — the Configuration page's Job Titles tab. Plain
 /// label, no relation to User yet (not currently assignable to anyone).
 model JobTitle {

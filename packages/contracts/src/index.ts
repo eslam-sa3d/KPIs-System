@@ -11,4 +11,5 @@ export * from './job-titles';
 export * from './kpi-summary';
 export * from './performance-levels';
 export * from './rbac';
+export * from './score-labels';
 export * from './users';

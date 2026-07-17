@@ -12,7 +12,7 @@ import {
   type SubmissionAnswers,
 } from '@pulse/contracts';
 import { api, ApiRequestError, assetUrl, uploadFile } from '../lib/api-client';
-import { resolvePersonAnswer, resolvePerformanceLevelAnswer } from '../lib/resolve-person-answer';
+import { resolvePersonAnswer, resolvePerformanceLevelAnswer, resolveScoreLabelAnswer } from '../lib/resolve-person-answer';
 import type { Media } from '@pulse/contracts';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -29,6 +29,11 @@ interface UserOption {
 }
 
 interface PerformanceLevelOption {
+  id: string;
+  label: string;
+}
+
+interface ScoreLabelOption {
   id: string;
   label: string;
 }
@@ -73,14 +78,15 @@ export const isVisible = (field: FormField, answers: SubmissionAnswers) => {
   }
 };
 
-/** Resolves one piped-in answer to displayable text — a 'person'/'performance_level'
- *  answer (or a select/multi_select/ranking option built via the "link to a user"
- *  picker) is stored as an id, not the label a respondent should see. */
+/** Resolves one piped-in answer to displayable text — a 'person'/'performance_level'/
+ *  'score_label' answer (or a select/multi_select/ranking option built via the "link
+ *  to a user" picker) is stored as an id, not the label a respondent should see. */
 function resolvePipedValue(
   value: SubmissionAnswers[string] | undefined,
   field: FormField | undefined,
   personNames: Record<string, string>,
   performanceLevelLabels: Record<string, string>,
+  scoreLabelLabels: Record<string, string>,
 ): string {
   if (value === undefined || value === null || value === '') return '';
   if (typeof value === 'object' && !Array.isArray(value)) return ''; // compound answers (likert/contact_info) aren't piped
@@ -90,6 +96,7 @@ function resolvePipedValue(
       : undefined;
   const resolveScalar = (v: string): string => {
     if (field?.type === 'performance_level') return resolvePerformanceLevelAnswer(v, performanceLevelLabels);
+    if (field?.type === 'score_label') return resolveScoreLabelAnswer(v, scoreLabelLabels);
     if (optionLabels) return optionLabels[v] ?? v;
     return resolvePersonAnswer(v, personNames, field?.type === 'person');
   };
@@ -107,9 +114,10 @@ export function applyPiping(
   fieldByKey: Map<string, FormField>,
   personNames: Record<string, string>,
   performanceLevelLabels: Record<string, string>,
+  scoreLabelLabels: Record<string, string>,
 ): string {
   return text.replace(PIPE_TAG_PATTERN, (_match, key: string) =>
-    resolvePipedValue(answers[key], fieldByKey.get(key), personNames, performanceLevelLabels),
+    resolvePipedValue(answers[key], fieldByKey.get(key), personNames, performanceLevelLabels, scoreLabelLabels),
   );
 }
 
@@ -167,6 +175,23 @@ export const FieldInput = memo(function FieldInput({
       })
       .catch(() => {
         if (!cancelled) setPerformanceLevelOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [field.type]);
+  // 'score_label' fields: live list from the Configuration page's Score
+  // Labels tab — same fetch-once-per-field-instance shape as 'performance_level'.
+  const [scoreLabelOptions, setScoreLabelOptions] = useState<ScoreLabelOption[] | null>(null);
+  useEffect(() => {
+    if (field.type !== 'score_label') return;
+    let cancelled = false;
+    api<ScoreLabelOption[]>('/v1/score-labels')
+      .then((labels) => {
+        if (!cancelled) setScoreLabelOptions(labels);
+      })
+      .catch(() => {
+        if (!cancelled) setScoreLabelOptions([]);
       });
     return () => {
       cancelled = true;
@@ -747,6 +772,21 @@ export const FieldInput = memo(function FieldInput({
         </RadioGroup>
       );
     }
+    case 'score_label': {
+      const raw = (value as string) ?? '';
+      return (
+        <RadioGroup id={id} value={raw} onValueChange={(v) => onChange(v)} className="check-group">
+          {(scoreLabelOptions ?? []).map((label) => (
+            <label key={label.id} className="check-item">
+              <RadioGroupItem value={label.id} />
+              {label.label}
+            </label>
+          ))}
+          {scoreLabelOptions === null && <p className="muted">loading…</p>}
+          {scoreLabelOptions?.length === 0 && <p className="muted">no score labels configured yet</p>}
+        </RadioGroup>
+      );
+    }
     default:
       return <Input id={id} type="text" value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
   }
@@ -887,6 +927,21 @@ export function FormRenderer({
       })
       .catch(() => {
         if (!cancelled) setPipingPerformanceLevelLabels({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [definition]);
+  const [pipingScoreLabelLabels, setPipingScoreLabelLabels] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!definition.fields.some((f) => f.type === 'score_label')) return;
+    let cancelled = false;
+    api<ScoreLabelOption[]>('/v1/score-labels')
+      .then((labels) => {
+        if (!cancelled) setPipingScoreLabelLabels(Object.fromEntries(labels.map((l) => [l.id, l.label])));
+      })
+      .catch(() => {
+        if (!cancelled) setPipingScoreLabelLabels({});
       });
     return () => {
       cancelled = true;
@@ -1104,9 +1159,17 @@ export function FormRenderer({
                 fieldByKey,
                 pipingPersonNames,
                 pipingPerformanceLevelLabels,
+                pipingScoreLabelLabels,
               );
               const helpText = field.helpText
-                ? applyPiping(field.helpText, answers, fieldByKey, pipingPersonNames, pipingPerformanceLevelLabels)
+                ? applyPiping(
+                    field.helpText,
+                    answers,
+                    fieldByKey,
+                    pipingPersonNames,
+                    pipingPerformanceLevelLabels,
+                    pipingScoreLabelLabels,
+                  )
                 : undefined;
               if (field.type === 'section_header') {
                 return (

@@ -22,6 +22,7 @@ export const BRANCH_TRIGGER_TYPES: FieldType[] = [
   'hot_spot',
   'time',
   'performance_level',
+  'score_label',
 ];
 
 /**
@@ -71,8 +72,15 @@ export const FIELD_TYPES = [
    *  against the PerformanceLevel table at render and submit time, so editing
    *  a level's label/range updates every form using it without republishing.
    *  Its answer normalizes to the midpoint of the chosen level's own range —
-   *  see SCORE_FIELD_TYPES. */
+   *  see SCORE_FIELD_TYPES. Superseded by 'score_label' in the form builder's
+   *  add-field dropdown, but kept as a supported type for any existing field. */
   'performance_level',
+  /** Single choice among the live-configured Score Labels (Configuration page
+   *  → Score Labels tab), e.g. "Outstanding" / "Meets Expectations". Same
+   *  resolve-at-render-time pattern as 'performance_level', but each label
+   *  names one exact 0-5 score rather than a range — its answer normalizes
+   *  directly to that score, no midpoint math. See SCORE_FIELD_TYPES. */
+  'score_label',
 ] as const;
 
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -300,6 +308,10 @@ export const formFieldSchema = z.discriminatedUnion('type', [
    *  base field; the option list and each level's score range are resolved
    *  at render/submit time, the same live-lookup split as 'person'. */
   baseField.extend({ type: z.literal('performance_level') }),
+  /** Single choice among the live Score Labels — the answer is a ScoreLabel
+   *  id, not free text. Same live-lookup split as 'performance_level', but
+   *  each label names one exact score rather than a range. */
+  baseField.extend({ type: z.literal('score_label') }),
 ]);
 
 /** Per-form collection settings (MS-Forms parity). */

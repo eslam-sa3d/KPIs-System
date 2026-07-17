@@ -442,6 +442,7 @@ export function fromDefinitionField(field: FormField): DraftField {
     case 'section_header':
     case 'person':
     case 'performance_level':
+    case 'score_label':
       break;
   }
   return draft;

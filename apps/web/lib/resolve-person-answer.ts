@@ -25,3 +25,10 @@ export function resolvePersonAnswer(
 export function resolvePerformanceLevelAnswer(value: string, performanceLevelLabels: Record<string, string>): string {
   return performanceLevelLabels[value] ?? value;
 }
+
+/** Resolves a 'score_label' answer (a ScoreLabel id, not free text) to its
+ *  label — same live-lookup split as resolvePerformanceLevelAnswer, against
+ *  the Configuration page's live Score Labels list instead. */
+export function resolveScoreLabelAnswer(value: string, scoreLabelLabels: Record<string, string>): string {
+  return scoreLabelLabels[value] ?? value;
+}

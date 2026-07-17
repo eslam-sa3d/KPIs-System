@@ -389,6 +389,17 @@ export class KpisService {
     const performanceLevels = needsPerformanceLevels
       ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
       : undefined;
+    // score_label answers resolve against the live ScoreLabel table — same
+    // lazy-fetch rule as performanceLevels above.
+    const needsScoreLabels = activeMappings.some((m) => {
+      const fields = definitionByFormId.get(m.formId)?.fields;
+      return [m.scoreFieldKey, m.contextFieldKey, m.commentFieldKey].some(
+        (key) => key && fields?.find((f) => f.key === key)?.type === 'score_label',
+      );
+    });
+    const scoreLabels = needsScoreLabels
+      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true } })
+      : undefined;
 
     type Candidate = {
       mapping: (typeof activeMappings)[number];
@@ -407,7 +418,7 @@ export class KpisService {
         if (evaluateeId === null) continue;
         const rawScore = answers[mapping.scoreFieldKey];
         if (rawScore === undefined || rawScore === null) continue;
-        const described = describeAnswer(scoreField, rawScore, { performanceLevels });
+        const described = describeAnswer(scoreField, rawScore, { performanceLevels, scoreLabels });
         if (described === null) continue;
         candidates.push({ mapping, submission, evaluateeId, described });
       }
@@ -447,7 +458,7 @@ export class KpisService {
         if (!key) return null;
         const field = fields?.find((f) => f.key === key);
         const raw = answers[key] ?? null;
-        const described = field && describeAnswer(field, raw, { performanceLevels, personNames });
+        const described = field && describeAnswer(field, raw, { performanceLevels, scoreLabels, personNames });
         return described?.display ?? answerToText(raw);
       };
       results.push({

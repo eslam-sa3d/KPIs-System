@@ -34,6 +34,7 @@ function makePrismaStub() {
       delete: vi.fn(),
     },
     performanceLevel: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
+    scoreLabel: { findMany: vi.fn(async (): Promise<unknown[]> => []) },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(async (arg: unknown) => (Array.isArray(arg) ? Promise.all(arg) : (arg as () => unknown)())),
   };
@@ -791,6 +792,31 @@ describe('SubmissionsService — Forms→KPI bridge', () => {
       expect(prisma.evaluationAreaEntry.upsert).not.toHaveBeenCalled();
     });
 
+    it("score_label: scores by the chosen label's configured score", async () => {
+      const { prisma, service } = makeService({ type: 'score_label' });
+      prisma.scoreLabel.findMany.mockResolvedValue([
+        { id: '22222222-2222-4222-8222-222222222222', score: 5 },
+        { id: '33333333-3333-4333-8333-333333333333', score: 0 },
+      ]);
+      await service.submit(
+        'demo',
+        { evaluatee: '11111111-1111-4111-8111-111111111111', score: '22222222-2222-4222-8222-222222222222' },
+        'evaluator-1',
+      );
+      expect(prisma.evaluationAreaEntry.upsert.mock.calls[0]![0].create.value).toBe(5);
+    });
+
+    it('score_label: an id matching no configured label is skipped', async () => {
+      const { prisma, service } = makeService({ type: 'score_label' });
+      prisma.scoreLabel.findMany.mockResolvedValue([{ id: '22222222-2222-4222-8222-222222222222', score: 5 }]);
+      await service.submit(
+        'demo',
+        { evaluatee: '11111111-1111-4111-8111-111111111111', score: '44444444-4444-4444-8444-444444444444' },
+        'evaluator-1',
+      );
+      expect(prisma.evaluationAreaEntry.upsert).not.toHaveBeenCalled();
+    });
+
     it('a type with no numeric interpretation (short_text) is never scored', async () => {
       const { prisma, service } = makeService({ type: 'short_text' });
       await service.submit(
@@ -1157,6 +1183,32 @@ describe('SubmissionsService.summary', () => {
     const level = summary.fields.find((f) => f.key === 'level')!;
     expect(level.counts).toEqual({ [levelId]: 1 });
     expect(level.optionLabels).toEqual({ [levelId]: 'Associate Expert (Project Lead)' });
+  });
+
+  it("keys a score_label field's counts by the raw label id and exposes optionLabels resolving it to that label's own label", async () => {
+    const prisma = makePrismaStub();
+    const labelId = 'aba51f55-559d-4372-87a3-dcafe0b302eb';
+    const definition = formDefinitionSchema.parse({
+      title: 'qc eval',
+      fields: [{ key: 'level', label: 'Score', type: 'score_label' }],
+    });
+    const forms = {
+      getLatestVersion: vi.fn(async () => ({
+        form: activeForm,
+        version: { id: 'v1' },
+        definition,
+        settings: formSettingsSchema.parse({}),
+      })),
+    };
+    prisma.scoreLabel.findMany.mockResolvedValue([{ id: labelId, label: 'Outstanding' }]);
+    prisma.formSubmission.findMany.mockResolvedValue([{ answers: { level: labelId }, createdAt: new Date() }]);
+
+    const service = new SubmissionsService(prisma as never, forms as never, turnstileStub as never);
+    const summary = await service.summary('qc-eval');
+
+    const level = summary.fields.find((f) => f.key === 'level')!;
+    expect(level.counts).toEqual({ [labelId]: 1 });
+    expect(level.optionLabels).toEqual({ [labelId]: 'Outstanding' });
   });
 });
 

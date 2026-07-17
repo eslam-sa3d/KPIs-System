@@ -22,7 +22,7 @@ import { FormKpiMappingsPanel } from '../../../components/form-kpi-mappings-pane
 import { ResponseSummary, ResponseSummaryData } from '../../../components/response-summary';
 import { ResponseDetailModal } from '../../../components/response-detail-modal';
 import { apiPaged, api, downloadFile } from '../../../lib/api-client';
-import { resolvePersonAnswer, resolvePerformanceLevelAnswer } from '../../../lib/resolve-person-answer';
+import { resolvePersonAnswer, resolvePerformanceLevelAnswer, resolveScoreLabelAnswer } from '../../../lib/resolve-person-answer';
 import { useSession } from '../../../lib/use-session';
 
 interface FormDetail {
@@ -82,6 +82,7 @@ function FormView() {
   // store a per-area evaluatee id in an ordinary text field instead.
   const [personNames, setPersonNames] = useState<Record<string, string>>({});
   const [performanceLevelLabels, setPerformanceLevelLabels] = useState<Record<string, string>>({});
+  const [scoreLabelLabels, setScoreLabelLabels] = useState<Record<string, string>>({});
 
   const reloadDetail = useCallback(() => {
     if (slug) void api<FormDetail>(`/v1/forms/${encodeURIComponent(slug)}`).then(setDetail);
@@ -125,6 +126,21 @@ function FormView() {
       })
       .catch(() => {
         if (!cancelled) setPerformanceLevelLabels({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail]);
+
+  useEffect(() => {
+    if (!detail) return;
+    let cancelled = false;
+    api<Array<{ id: string; label: string }>>('/v1/score-labels')
+      .then((labels) => {
+        if (!cancelled) setScoreLabelLabels(Object.fromEntries(labels.map((l) => [l.id, l.label])));
+      })
+      .catch(() => {
+        if (!cancelled) setScoreLabelLabels({});
       });
     return () => {
       cancelled = true;
@@ -418,6 +434,8 @@ function FormView() {
                             ) : typeof value === 'string' && value ? (
                               f.type === 'performance_level' ? (
                                 resolvePerformanceLevelAnswer(value, performanceLevelLabels)
+                              ) : f.type === 'score_label' ? (
+                                resolveScoreLabelAnswer(value, scoreLabelLabels)
                               ) : (
                                 resolvePersonAnswer(value, personNames, f.type === 'person')
                               )
@@ -526,6 +544,7 @@ function FormView() {
                   canEdit={canModerate}
                   personNames={personNames}
                   performanceLevelLabels={performanceLevelLabels}
+                  scoreLabelLabels={scoreLabelLabels}
                   onClose={() => setSelectedRowId(null)}
                   onPrev={selectedIndex > 0 ? () => setSelectedRowId(filteredRows[selectedIndex - 1]!.id) : null}
                   onNext={

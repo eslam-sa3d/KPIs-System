@@ -378,7 +378,11 @@ export class SubmissionsService {
             maxScore: Number(l.maxScore),
           }))
         : undefined;
-    const value = normalizeScore(scoreField, rawScore, performanceLevels);
+    const scoreLabels =
+      scoreField.type === 'score_label' || contextField?.type === 'score_label' || commentField?.type === 'score_label'
+        ? (await this.prisma.scoreLabel.findMany()).map((l) => ({ id: l.id, label: l.label, score: l.score }))
+        : undefined;
+    const value = normalizeScore(scoreField, rawScore, performanceLevels, scoreLabels);
     if (value === null) return false;
 
     const evaluatee = await this.prisma.user.findUnique({ where: { id: evaluateeId } });
@@ -405,7 +409,7 @@ export class SubmissionsService {
     const resolveContextText = (key: string | null, field: FormField | undefined) => {
       if (!key) return null;
       const raw = answers[key] ?? null;
-      const described = field && describeAnswer(field, raw, { performanceLevels, personNames });
+      const described = field && describeAnswer(field, raw, { performanceLevels, scoreLabels, personNames });
       return described?.display ?? answerToText(raw);
     };
     const context = resolveContextText(mapping.contextFieldKey, contextField);
@@ -680,6 +684,11 @@ export class SubmissionsService {
     const performanceLevels = needsPerformanceLevels
       ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
       : [];
+    // score_label answers store a ScoreLabel id — same lazy-fetch rule.
+    const needsScoreLabels = definition.fields.some((f) => f.type === 'score_label');
+    const scoreLabels = needsScoreLabels
+      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true } })
+      : [];
 
     const fields: FormFieldSummary[] = definition.fields
       .filter((field) => field.type !== 'section_header') // display-only, never has an answer
@@ -694,7 +703,7 @@ export class SubmissionsService {
           label: field.label,
           type: field.type,
           answered,
-          optionLabels: optionLabelsFor(field, performanceLevels),
+          optionLabels: optionLabelsFor(field, performanceLevels, scoreLabels),
         };
 
         switch (field.type) {
@@ -792,9 +801,10 @@ export class SubmissionsService {
             const names = (values as string[]).map((id) => personNames.get(id) ?? '(deleted user)');
             return { ...base, samples: names.slice(-5).reverse() };
           }
-          case 'performance_level': {
+          case 'performance_level':
+          case 'score_label': {
             // same counts-by-raw-value shape as 'select' — optionLabels (built
-            // with performanceLevels above) resolves each id to its label.
+            // with performanceLevels/scoreLabels above) resolves each id to its label.
             const counts: Record<string, number> = {};
             for (const v of values as string[]) counts[v] = (counts[v] ?? 0) + 1;
             return { ...base, counts };
@@ -953,15 +963,21 @@ export class SubmissionsService {
         )
       : new Map<string, string>();
 
-    // performance_level answers store a PerformanceLevel id, and select/multi_select/
-    // ranking options built via the "link to a user" picker store that user's id AS
-    // the option value — same resolution as summary(), reused here so an export
-    // doesn't leak either kind of raw id.
+    // performance_level/score_label answers store a PerformanceLevel/ScoreLabel id, and
+    // select/multi_select/ranking options built via the "link to a user" picker store
+    // that user's id AS the option value — same resolution as summary(), reused here
+    // so an export doesn't leak any of these raw ids.
     const needsPerformanceLevels = definition.fields.some((f) => f.type === 'performance_level');
     const performanceLevels = needsPerformanceLevels
       ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true } })
       : [];
-    const optionLabelsByKey = new Map(definition.fields.map((f) => [f.key, optionLabelsFor(f, performanceLevels)]));
+    const needsScoreLabels = definition.fields.some((f) => f.type === 'score_label');
+    const scoreLabels = needsScoreLabels
+      ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true } })
+      : [];
+    const optionLabelsByKey = new Map(
+      definition.fields.map((f) => [f.key, optionLabelsFor(f, performanceLevels, scoreLabels)]),
+    );
 
     const keys = definition.fields.map((f) => f.key);
     const header = ['submitted_at', 'submitted_by', 'respondent_name', 'respondent_email', ...keys];
@@ -1000,17 +1016,18 @@ export class SubmissionsService {
  *  range/options. Returns null for a degenerate (zero-width, single-option) range,
  *  an answer shape that doesn't match the field type, an unrecognized option value
  *  (including a free-text "other:" answer — no fixed position to score), an
- *  unrecognized performance_level id, or a field type with no well-defined
- *  numeric interpretation at all (short_text, long_text, date, time, file,
- *  contact_info, hot_spot, person, ranking, grid, section_header).
+ *  unrecognized performance_level/score_label id, or a field type with no
+ *  well-defined numeric interpretation at all (short_text, long_text, date,
+ *  time, file, contact_info, hot_spot, person, ranking, grid, section_header).
  *
- *  `performanceLevels` is only needed (and only fetched by the caller) when
- *  `field.type === 'performance_level'` — every other case normalizes purely
- *  from the field definition. */
+ *  `performanceLevels`/`scoreLabels` are only needed (and only fetched by the
+ *  caller) when `field.type` is 'performance_level'/'score_label' respectively
+ *  — every other case normalizes purely from the field definition. */
 function normalizeScore(
   field: FormField,
   raw: SubmissionAnswers[string],
   performanceLevels?: Array<{ id: string; minScore: number; maxScore: number }>,
+  scoreLabels?: Array<{ id: string; score: number }>,
 ): number | null {
   switch (field.type) {
     case 'rating': {
@@ -1062,6 +1079,12 @@ function normalizeScore(
       const level = performanceLevels.find((l) => l.id === raw);
       if (!level) return null;
       return clamp((level.minScore + level.maxScore) / 2, 0, 5);
+    }
+    case 'score_label': {
+      if (typeof raw !== 'string' || !scoreLabels) return null;
+      const label = scoreLabels.find((l) => l.id === raw);
+      if (!label) return null;
+      return clamp(label.score, 0, 5);
     }
     default:
       return null;
@@ -1129,13 +1152,15 @@ function normalizeLabel(label: string): string {
  *  built via the form builder's "link to a user" picker stores that user's
  *  id AS the value (see apps/web's field-transforms.ts), so this is what
  *  lets FormFieldSummary.optionLabels resolve it back to a name. Returns
- *  undefined for field types with nothing to resolve. `performanceLevels` is
- *  only consulted for a 'performance_level' field — its options live in the
- *  global PerformanceLevel table, not the field definition itself, unlike
- *  every other case here. */
+ *  undefined for field types with nothing to resolve. `performanceLevels`/
+ *  `scoreLabels` are only consulted for a 'performance_level'/'score_label'
+ *  field respectively — their options live in the global PerformanceLevel/
+ *  ScoreLabel tables, not the field definition itself, unlike every other
+ *  case here. */
 function optionLabelsFor(
   field: FormField,
   performanceLevels: Array<{ id: string; label: string }>,
+  scoreLabels: Array<{ id: string; label: string }> = [],
 ): Record<string, string> | undefined {
   switch (field.type) {
     case 'select':
@@ -1150,6 +1175,8 @@ function optionLabelsFor(
       return Object.fromEntries(field.regions.map((r) => [r.value, r.label]));
     case 'performance_level':
       return Object.fromEntries(performanceLevels.map((l) => [l.id, l.label]));
+    case 'score_label':
+      return Object.fromEntries(scoreLabels.map((l) => [l.id, l.label]));
     default:
       return undefined;
   }

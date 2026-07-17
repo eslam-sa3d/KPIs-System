@@ -192,6 +192,19 @@ describe('describeAnswer', () => {
     expect(describeAnswer(level, 'level-1')).toBeNull();
   });
 
+  it("score_label: shows the resolved label's own label", () => {
+    const field: FormField = { key: 'q', label: 'Score', type: 'score_label', required: true };
+    expect(describeAnswer(field, 'label-1', { scoreLabels: [{ id: 'label-1', label: 'Outstanding' }] })).toEqual({
+      raw: 'label-1',
+      display: 'Outstanding',
+    });
+  });
+
+  it('score_label: returns null without a scoreLabels lookup', () => {
+    const field: FormField = { key: 'q', label: 'Score', type: 'score_label', required: true };
+    expect(describeAnswer(field, 'label-1')).toBeNull();
+  });
+
   it('ranking: joins matched option labels in submitted order', () => {
     const ranking: FormField = {
       key: 'q',

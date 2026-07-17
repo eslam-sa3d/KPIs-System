@@ -117,7 +117,12 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [bulkResult, setBulkResult] = useState<BulkMappingResult | null>(null);
 
   const scoreFields = definition.fields.filter(
-    (f) => f.type === 'rating' || f.type === 'nps' || f.type === 'slider' || f.type === 'performance_level',
+    (f) =>
+      f.type === 'rating' ||
+      f.type === 'nps' ||
+      f.type === 'slider' ||
+      f.type === 'performance_level' ||
+      f.type === 'score_label',
   );
   // A 'person' field, or a 'select' field with at least one option added via
   // "select a user" in the builder — either can supply the evaluatee's id.

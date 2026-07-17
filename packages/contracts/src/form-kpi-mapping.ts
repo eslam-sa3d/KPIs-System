@@ -12,11 +12,11 @@ import type { FormField } from './form-schema';
  * rating/nps/slider/number scale by their own configured range, boolean is
  * no=0/yes=5, select scores by the chosen option's position in the list,
  * multi_select by the fraction of options selected, likert by the average
- * statement position, and performance_level by the midpoint of the chosen
- * level's own configured score range. Every other type (short_text,
- * long_text, date, time, file, contact_info, hot_spot, person, ranking,
- * grid, section_header) has no numeric interpretation and can't be a score
- * field.
+ * statement position, performance_level by the midpoint of the chosen
+ * level's own configured score range, and score_label by the chosen label's
+ * own configured score directly. Every other type (short_text, long_text,
+ * date, time, file, contact_info, hot_spot, person, ranking, grid,
+ * section_header) has no numeric interpretation and can't be a score field.
  *
  * `evaluateeFieldKeys` optionally names one or more candidate fields whose
  * answer is the evaluatee's user id — each a 'person' field, or a 'select'
@@ -42,6 +42,7 @@ export const SCORE_FIELD_TYPES = [
   'multi_select',
   'likert',
   'performance_level',
+  'score_label',
 ] as const;
 export type ScoreFieldType = (typeof SCORE_FIELD_TYPES)[number];
 

@@ -9,7 +9,7 @@ export const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: 'boolean', label: 'yes / no' },
   { value: 'rating', label: 'rating (2–10)' },
   { value: 'nps', label: 'net promoter score (0–10)' },
-  { value: 'performance_level', label: 'performance level' },
+  { value: 'score_label', label: 'score label' },
   { value: 'select', label: 'choice (one answer)' },
   { value: 'multi_select', label: 'choice (multiple answers)' },
   { value: 'likert', label: 'likert matrix' },
@@ -43,4 +43,5 @@ export const FIELD_TYPE_ICON: Record<FieldType, string> = {
   hot_spot: '⌖',
   person: '🧑',
   performance_level: '🏆',
+  score_label: '🏅',
 };

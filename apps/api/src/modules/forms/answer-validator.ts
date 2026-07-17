@@ -184,6 +184,10 @@ function validatorFor(field: FormField): ZodTypeAny {
       // structural shape only — SubmissionsService resolves this against the
       // live PerformanceLevel table when scoring a KPI mapping.
       return z.string().uuid();
+    case 'score_label':
+      // structural shape only — SubmissionsService resolves this against the
+      // live ScoreLabel table when scoring a KPI mapping.
+      return z.string().uuid();
     case 'grid': {
       const rowKeys = field.rows.map((r) => r.value) as [string, ...string[]];
       const columnEnum = z.enum(field.columns.map((c) => c.value) as [string, ...string[]]);
