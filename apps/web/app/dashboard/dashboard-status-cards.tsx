@@ -1,7 +1,14 @@
 'use client';
 
 import { CSSProperties } from 'react';
-import { Band, BandKey, PENDING_BAND, PerformanceLevelOption, bandBadgeStyle, bandColor } from '../../lib/performance-band';
+import {
+  Band,
+  BandKey,
+  PENDING_BAND,
+  PerformanceLevelOption,
+  bandBadgeStyle,
+  bandColor,
+} from '../../lib/performance-band';
 
 /** Status strip: counts *people*, bucketed by their own latestScore's
  *  matched Performance Level — one card per admin-configured level (highest
@@ -42,7 +49,10 @@ export function DashboardStatusCards({
         // background formula the old fixed .p-status-* classes used — a
         // dynamic per-band color instead of a fixed class, same visual
         // treatment either way.
-        const cardStyle = { '--kc': bandColor(b.key, levels), background: bandBadgeStyle(b.key, levels).background } as CSSProperties;
+        const cardStyle = {
+          '--kc': bandColor(b.key, levels),
+          background: bandBadgeStyle(b.key, levels).background,
+        } as CSSProperties;
         return (
           <button
             key={b.key}

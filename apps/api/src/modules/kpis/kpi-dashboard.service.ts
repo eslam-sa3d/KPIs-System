@@ -374,7 +374,9 @@ export class KpiDashboardService {
     // (label) and rawFieldValue's numeric needs (minScore/maxScore/score,
     // for each submission's own contribution to a person's all-time total).
     const performanceLevels = needsPerformanceLevels
-      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } })
+      ? await this.prisma.performanceLevel.findMany({
+          select: { id: true, label: true, minScore: true, maxScore: true },
+        })
       : undefined;
     // score_label answers resolve against the live ScoreLabel table — same
     // lazy-fetch rule as performanceLevels above.
@@ -546,7 +548,9 @@ export class KpiDashboardService {
     // rawFieldValue's numeric needs (minScore/maxScore/score).
     const allFields = [...definitionByFormId.values()].flatMap((d) => d?.fields ?? []);
     const performanceLevels = allFields.some((f) => f.type === 'performance_level')
-      ? await this.prisma.performanceLevel.findMany({ select: { id: true, label: true, minScore: true, maxScore: true } })
+      ? await this.prisma.performanceLevel.findMany({
+          select: { id: true, label: true, minScore: true, maxScore: true },
+        })
       : undefined;
     const scoreLabels = allFields.some((f) => f.type === 'score_label')
       ? await this.prisma.scoreLabel.findMany({ select: { id: true, label: true, score: true } })
@@ -874,7 +878,9 @@ export class KpiDashboardService {
       const rawActivityLatest = rawActivityLatestByPerson.get(user.id) ?? null;
       const lastUpdated =
         latest && rawActivityLatest
-          ? (latest.submittedAt > rawActivityLatest ? latest.submittedAt : rawActivityLatest)
+          ? latest.submittedAt > rawActivityLatest
+            ? latest.submittedAt
+            : rawActivityLatest
           : (latest?.submittedAt ?? rawActivityLatest);
 
       return {

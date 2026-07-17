@@ -1,0 +1,5 @@
+{
+  "apps/**/*.{ts,tsx}": "prettier --write",
+  "packages/**/*.{ts,tsx}": "prettier --write",
+  "e2e/**/*.ts": "prettier --write"
+}

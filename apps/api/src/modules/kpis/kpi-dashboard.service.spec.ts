@@ -449,8 +449,18 @@ describe('KpiDashboardService', () => {
       // onto any common scale) — the newer submission (5) wins over the
       // older one (4); if this were summed it'd be 9.
       prisma.formSubmission.findMany.mockResolvedValue([
-        submissionFixture({ id: 'sub-1', submittedById: 'user-1', answers: { score: 4 }, createdAt: new Date('2026-02-01T09:00:00Z') }),
-        submissionFixture({ id: 'sub-2', submittedById: 'user-1', answers: { score: 5 }, createdAt: new Date('2026-03-01T09:00:00Z') }),
+        submissionFixture({
+          id: 'sub-1',
+          submittedById: 'user-1',
+          answers: { score: 4 },
+          createdAt: new Date('2026-02-01T09:00:00Z'),
+        }),
+        submissionFixture({
+          id: 'sub-2',
+          submittedById: 'user-1',
+          answers: { score: 5 },
+          createdAt: new Date('2026-03-01T09:00:00Z'),
+        }),
       ]);
 
       const { members } = await service.getTeamOverview(actorId);
@@ -463,8 +473,18 @@ describe('KpiDashboardService', () => {
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       mockOneMapping(prisma);
       prisma.formSubmission.findMany.mockResolvedValue([
-        submissionFixture({ id: 'sub-1', submittedById: 'user-1', answers: { score: 4 }, createdAt: new Date('2026-02-01T09:00:00Z') }),
-        submissionFixture({ id: 'sub-2', submittedById: 'user-1', answers: { score: 5 }, createdAt: new Date('2026-03-01T09:00:00Z') }),
+        submissionFixture({
+          id: 'sub-1',
+          submittedById: 'user-1',
+          answers: { score: 4 },
+          createdAt: new Date('2026-02-01T09:00:00Z'),
+        }),
+        submissionFixture({
+          id: 'sub-2',
+          submittedById: 'user-1',
+          answers: { score: 5 },
+          createdAt: new Date('2026-03-01T09:00:00Z'),
+        }),
       ]);
       prisma.performanceLevel.findMany.mockResolvedValue([
         { id: 'level-low', label: 'Needs work', minScore: 0, maxScore: 4 },
@@ -482,7 +502,9 @@ describe('KpiDashboardService', () => {
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       mockOneMapping(prisma);
       prisma.formSubmission.findMany.mockResolvedValue([submissionFixture({ submittedById: 'user-1' })]);
-      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'Outstanding', minScore: 10, maxScore: 20 }]);
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: 'level-1', label: 'Outstanding', minScore: 10, maxScore: 20 },
+      ]);
 
       const { members } = await service.getTeamOverview(actorId);
 
@@ -525,7 +547,9 @@ describe('KpiDashboardService', () => {
       mockOneMapping(prisma);
       // rating/scale-5 of 5 normalizes to 5 (see normalizeScore) — above
       // every configured range's maxScore (top range: 2.0-3.0).
-      prisma.formSubmission.findMany.mockResolvedValue([submissionFixture({ submittedById: 'user-1', answers: { score: 5 } })]);
+      prisma.formSubmission.findMany.mockResolvedValue([
+        submissionFixture({ submittedById: 'user-1', answers: { score: 5 } }),
+      ]);
       prisma.performanceLevel.findMany.mockResolvedValue([
         { id: 'level-over', label: 'Over-Achieved', minScore: 2, maxScore: 3 },
         { id: 'level-achieved', label: 'Achieved', minScore: 1.1, maxScore: 1.9 },
@@ -545,7 +569,9 @@ describe('KpiDashboardService', () => {
       // rawFieldValue sums a rating field's raw answer as-is — a raw of 2
       // sums to latestScore 2, inside the 1-3 gap between "Under Achieved"
       // (0-1) and "Achieved" (3-5).
-      prisma.formSubmission.findMany.mockResolvedValue([submissionFixture({ submittedById: 'user-1', answers: { score: 2 } })]);
+      prisma.formSubmission.findMany.mockResolvedValue([
+        submissionFixture({ submittedById: 'user-1', answers: { score: 2 } }),
+      ]);
       prisma.performanceLevel.findMany.mockResolvedValue([
         { id: 'level-achieved', label: 'Achieved', minScore: 3, maxScore: 5 },
         { id: 'level-under', label: 'Under Achieved', minScore: 0, maxScore: 1 },
@@ -561,8 +587,12 @@ describe('KpiDashboardService', () => {
       prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       mockOneMapping(prisma);
-      prisma.formSubmission.findMany.mockResolvedValue([submissionFixture({ submittedById: 'user-1', answers: { score: 1 } })]);
-      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'Achieved', minScore: 2, maxScore: 3 }]);
+      prisma.formSubmission.findMany.mockResolvedValue([
+        submissionFixture({ submittedById: 'user-1', answers: { score: 1 } }),
+      ]);
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: 'level-1', label: 'Achieved', minScore: 2, maxScore: 3 },
+      ]);
 
       const { members } = await service.getTeamOverview(actorId);
 
@@ -594,7 +624,13 @@ describe('KpiDashboardService', () => {
           anonymous: false,
           contextFieldKey: null,
           commentFieldKey: null,
-          evaluationArea: { id: 'area-1', name: 'Leadership', isActive: true, kpiId: 'kpi-1', kpi: { name: 'QA Lead Evaluation' } },
+          evaluationArea: {
+            id: 'area-1',
+            name: 'Leadership',
+            isActive: true,
+            kpiId: 'kpi-1',
+            kpi: { name: 'QA Lead Evaluation' },
+          },
         },
       ]);
       prisma.form.findMany.mockResolvedValue([
@@ -607,7 +643,11 @@ describe('KpiDashboardService', () => {
         },
       ]);
       prisma.formSubmission.findMany.mockResolvedValue([
-        submissionFixture({ id: 'sub-1', submittedById: 'user-1', answers: { evaluatee: 'user-1', rating: 'label-over' } }),
+        submissionFixture({
+          id: 'sub-1',
+          submittedById: 'user-1',
+          answers: { evaluatee: 'user-1', rating: 'label-over' },
+        }),
       ]);
       prisma.scoreLabel.findMany.mockResolvedValue([
         { id: 'label-under', label: 'Under Achieved', score: 1 },
@@ -627,11 +667,19 @@ describe('KpiDashboardService', () => {
     });
 
     it("restricts the roster to members whose own performanceLevel is one of the caller's allowed Performance Levels", async () => {
-      const thirdUser = { ...coveredUser, id: 'user-3', displayName: 'Third User', isActive: true, isKpiApplicable: true };
+      const thirdUser = {
+        ...coveredUser,
+        id: 'user-3',
+        displayName: 'Third User',
+        isActive: true,
+        isKpiApplicable: true,
+      };
       prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }, thirdUser]);
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'level', scopeValues: ['level-1'] }]);
-      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'Outstanding', minScore: 4, maxScore: 5 }]);
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: 'level-1', label: 'Outstanding', minScore: 4, maxScore: 5 },
+      ]);
       mockOneMapping(prisma);
       // user-1's latestScore (5) matches level-1 (4-5); user-3's (1) doesn't
       // — self-assessment submissions (mockOneMapping's default
@@ -652,7 +700,9 @@ describe('KpiDashboardService', () => {
       prisma.user.findMany.mockResolvedValue([{ ...coveredUser, isActive: true, isKpiApplicable: true }]);
       prisma.kpi.findMany.mockResolvedValue([coveringKpi]);
       prisma.rolePermission.findMany.mockResolvedValue([{ scope: 'level', scopeValues: [] }]);
-      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'Outstanding', minScore: 4, maxScore: 5 }]);
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: 'level-1', label: 'Outstanding', minScore: 4, maxScore: 5 },
+      ]);
 
       const { members } = await service.getTeamOverview(actorId);
 
@@ -768,7 +818,13 @@ describe('KpiDashboardService', () => {
       prisma.form.findMany.mockImplementation(async (args: { where?: { status?: string } } = {}) => {
         if (args.where?.status === 'published') {
           return [
-            { id: 'form-2', slug: 'check-in', status: 'published', versions: [{ definition: rawDefinition }], kpiMappings: [] },
+            {
+              id: 'form-2',
+              slug: 'check-in',
+              status: 'published',
+              versions: [{ definition: rawDefinition }],
+              kpiMappings: [],
+            },
           ];
         }
         return [{ id: 'form-1', versions: [{ definition: ratingFormDefinition }] }];
@@ -788,7 +844,11 @@ describe('KpiDashboardService', () => {
             ];
           }
           return [
-            submissionFixture({ submittedById: 'user-1', answers: { score: 4 }, createdAt: new Date('2026-01-01T09:00:00Z') }),
+            submissionFixture({
+              submittedById: 'user-1',
+              answers: { score: 4 },
+              createdAt: new Date('2026-01-01T09:00:00Z'),
+            }),
           ];
         },
       );
@@ -846,7 +906,13 @@ describe('KpiDashboardService', () => {
       prisma.form.findMany.mockImplementation(async (args: { where?: { status?: string } } = {}) => {
         if (args.where?.status === 'published') {
           return [
-            { id: 'form-2', slug: 'check-in', status: 'published', versions: [{ definition: rawDefinition }], kpiMappings: [] },
+            {
+              id: 'form-2',
+              slug: 'check-in',
+              status: 'published',
+              versions: [{ definition: rawDefinition }],
+              kpiMappings: [],
+            },
           ];
         }
         return [{ id: 'form-1', versions: [{ definition: ratingFormDefinition }] }];
@@ -965,7 +1031,9 @@ describe('KpiDashboardService', () => {
         { id: 'user-2', displayName: 'Evaluatee' },
         { id: 'evaluator-1', displayName: 'Rater One' },
       ]);
-      prisma.performanceLevel.findMany.mockResolvedValue([{ id: 'level-1', label: 'On track', minScore: 5, maxScore: 10 }]);
+      prisma.performanceLevel.findMany.mockResolvedValue([
+        { id: 'level-1', label: 'On track', minScore: 5, maxScore: 10 },
+      ]);
 
       const breakdown = await service.getPersonBreakdown('user-2', actorId);
 

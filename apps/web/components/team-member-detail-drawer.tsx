@@ -99,8 +99,8 @@ export function TeamMemberDetailDrawer({
                       Other form activity ({breakdown.rawActivity.length})
                     </h4>
                     <p className="muted" style={{ fontSize: 10.5, marginBottom: 12 }}>
-                      Responses naming this person on forms with no KPI mapping yet — a scoreable answer here can
-                      still be their most recent score above.
+                      Responses naming this person on forms with no KPI mapping yet — a scoreable answer here can still
+                      be their most recent score above.
                     </p>
                     {breakdown.rawActivity.map((a, i) => (
                       <div key={`${a.submissionId}-${i}`} style={{ marginBottom: 16 }}>
