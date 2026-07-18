@@ -66,19 +66,25 @@ async function main() {
 }
 
 /** Default 0-5 score bands for the Configuration page's Performance Levels
- *  tab. Matched by label so re-running the seed never duplicates rows, but
- *  also never overwrites ranges an admin has since edited. */
+ *  tab — seeded once, only when the table is completely empty. The seed
+ *  script runs on every boot (see the Render start command), and matching
+ *  by label (the old behavior) couldn't tell "never seeded" apart from "an
+ *  admin deliberately deleted this default" — deleting one just made it
+ *  look unseeded again, so it silently reappeared on the next deploy. An
+ *  empty-table check has no such ambiguity: any row at all, default or
+ *  custom, means an admin has already taken ownership of this list, so the
+ *  seed backs off entirely instead of reintroducing anything by label. */
 async function seedPerformanceLevels() {
-  const defaults = [
-    { label: 'Outstanding', minScore: 4.0, maxScore: 5.0 },
-    { label: 'Meets Expectations', minScore: 2.0, maxScore: 3.9 },
-    { label: 'Need Improvement', minScore: 1.1, maxScore: 1.9 },
-    { label: 'Below Expectations', minScore: 0, maxScore: 1.0 },
-  ];
-  for (const level of defaults) {
-    const existing = await prisma.performanceLevel.findFirst({ where: { label: level.label } });
-    if (!existing) await prisma.performanceLevel.create({ data: level });
-  }
+  const alreadyConfigured = (await prisma.performanceLevel.count()) > 0;
+  if (alreadyConfigured) return;
+  await prisma.performanceLevel.createMany({
+    data: [
+      { label: 'Outstanding', minScore: 4.0, maxScore: 5.0 },
+      { label: 'Meets Expectations', minScore: 2.0, maxScore: 3.9 },
+      { label: 'Need Improvement', minScore: 1.1, maxScore: 1.9 },
+      { label: 'Below Expectations', minScore: 0, maxScore: 1.0 },
+    ],
+  });
   console.log('Seeded default performance levels');
 }
 
