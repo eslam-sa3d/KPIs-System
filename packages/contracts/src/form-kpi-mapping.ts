@@ -23,10 +23,20 @@ import type { FormField } from './form-schema';
  * field with at least one user-linked option (see isEvaluateeField below).
  * They're tried in order and the first one actually answered wins — useful
  * when a form has several mutually-exclusive "who is this about" fields
- * (e.g. one per project) and only one is filled in per submission. Omitted
- * or empty means self-assessment: the submitter scores themselves. If
- * candidates are configured but none were answered, no evaluatee resolves —
- * scoring does NOT fall back to self in that case.
+ * (e.g. one per project) and only one is filled in per submission. Empty
+ * means self-assessment: the submitter scores themselves.
+ *
+ * A form with at least one evaluatee-capable field must say which mode it
+ * wants — `selfAssessment: true`, or a non-empty `evaluateeFieldKeys` — the
+ * API rejects a request that supplies neither (see requireExplicitEvaluateeChoice
+ * in form-kpi-mappings.service.ts). Leaving this ambiguous used to silently
+ * default to self-assessment, which meant every submission scored whoever
+ * filled the form out rather than whoever they were evaluating — a bug that
+ * went undetected for a long time on a real form because nothing forced the
+ * choice. A form with no evaluatee-capable field at all has no real
+ * decision to make, so self-assessment is forced regardless of this flag.
+ * If candidates are configured but none were answered on a submission, no
+ * evaluatee resolves — scoring does NOT fall back to self in that case.
  *
  * Deliberately out of scope for this pass: more than one mapping per
  * (form, evaluationArea) pair.
@@ -58,6 +68,10 @@ export const createFormKpiMappingSchema = z.object({
    *  evaluationAreaId (validated server-side). */
   subCriteriaId: z.string().uuid().optional(),
   evaluateeFieldKeys: z.array(z.string().min(1).max(64)).max(20).optional(),
+  /** Explicit opt-in to self-assessment — required (along with a non-empty
+   *  evaluateeFieldKeys being the alternative) whenever the form has any
+   *  evaluatee-capable field at all; see the module doc comment above. */
+  selfAssessment: z.boolean().optional(),
   scoreFieldKey: z.string().min(1).max(64),
   reviewType: z.enum(REVIEW_TYPES).default('peer'),
   /** Withholds the evaluator's identity from anyone without kpis:manage
@@ -106,6 +120,13 @@ export interface FormKpiMapping {
 export interface FormKpiMappingWithArea extends FormKpiMapping {
   evaluationArea: { id: string; name: string; kpiId: string; cadence: EvaluationAreaCadence };
   subCriteria: { id: string; name: string } | null;
+  /** Null when this mapping's score field can normalize right now. Non-null
+   *  names the reason it can't — e.g. its scoreFieldKey is a 'score_label'
+   *  field and Configuration → Score Labels has zero rows configured, so
+   *  every submission through this mapping silently scores nothing until
+   *  that's fixed. Computed fresh on every list() call — see
+   *  FormKpiMappingsService.readinessWarningFor. */
+  readinessWarning: string | null;
 }
 
 /**
@@ -121,6 +142,9 @@ export interface FormKpiMappingWithArea extends FormKpiMapping {
  */
 export const bulkCreateFormKpiMappingSchema = z.object({
   evaluateeFieldKeys: z.array(z.string().min(1).max(64)).max(20).optional(),
+  /** Same explicit opt-in as createFormKpiMappingSchema — required for the
+   *  whole batch whenever the form has any evaluatee-capable field. */
+  selfAssessment: z.boolean().optional(),
   reviewType: z.enum(REVIEW_TYPES).default('peer'),
   anonymous: z.boolean().default(false),
   contextFieldKey: z.string().min(1).max(64).optional(),
@@ -143,9 +167,15 @@ export interface BulkCreateFormKpiMappingResult {
   skipped: Array<{ evaluationAreaId: string; reason: string }>;
 }
 
-/** Result of re-running a mapping against submissions that predate it —
- *  see FormKpiMappingsService.backfill. */
+/** Result of re-running a mapping against submissions that predate it — see
+ *  FormKpiScoringService.backfillMapping. `skippedReasons` breaks the raw
+ *  `skipped` count down by why each submission didn't score (e.g. "answer
+ *  could not be scored (no matching Score Label/Performance Level
+ *  configured)") — surfacing this was the whole point of adding it:
+ *  previously the only way to find out why a backfill scored 0 was to read
+ *  the source and manually trace submissions by hand. */
 export interface BackfillResult {
   scored: number;
   skipped: number;
+  skippedReasons: Record<string, number>;
 }

@@ -575,7 +575,7 @@ describe('FormKpiScoringService.backfillMapping', () => {
 
     const result = await service.backfillMapping('form-1', 'mapping-1');
 
-    expect(result).toEqual({ scored: 2, skipped: 0 });
+    expect(result).toEqual({ scored: 2, skipped: 0, skippedReasons: {} });
     expect(prisma.evaluationAreaEntry.upsert).toHaveBeenCalledTimes(2);
     const [first, second] = prisma.evaluationAreaEntry.upsert.mock.calls.map((c) => c[0]);
     // monthly cadence: each submission scores into ITS OWN month, not today's
@@ -597,8 +597,41 @@ describe('FormKpiScoringService.backfillMapping', () => {
 
     const result = await service.backfillMapping('form-1', 'mapping-1');
 
-    expect(result).toEqual({ scored: 0, skipped: 1 });
+    expect(result).toEqual({
+      scored: 0,
+      skipped: 1,
+      skippedReasons: { 'anonymous submission (no evaluator)': 1 },
+    });
     expect(prisma.evaluationAreaEntry.upsert).not.toHaveBeenCalled();
+  });
+
+  it('breaks down why submissions were skipped when a score answer cannot be normalized', async () => {
+    prisma.formKpiMapping.findFirst.mockResolvedValue(mapping);
+    prisma.user.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', isActive: true });
+    prisma.formSubmission.findMany.mockResolvedValue([
+      {
+        id: 'sub-old-1',
+        answers: { evaluatee: '11111111-1111-4111-8111-111111111111' }, // score field never answered
+        submittedById: 'evaluator-1',
+        createdAt: new Date('2025-01-15T00:00:00.000Z'),
+      },
+      {
+        id: 'sub-old-2',
+        answers: {}, // no evaluatee answered either
+        submittedById: 'evaluator-2',
+        createdAt: new Date('2025-02-15T00:00:00.000Z'),
+      },
+    ]);
+    const service = new FormKpiScoringService(prisma as never, makeFormsStub() as never, redisStub as never);
+
+    const result = await service.backfillMapping('form-1', 'mapping-1');
+
+    expect(result.scored).toBe(0);
+    expect(result.skipped).toBe(2);
+    expect(result.skippedReasons).toEqual({
+      'score field was not answered': 1,
+      'no evaluatee field was answered': 1,
+    });
   });
 
   it('rejects a mapping that does not belong to this form', async () => {

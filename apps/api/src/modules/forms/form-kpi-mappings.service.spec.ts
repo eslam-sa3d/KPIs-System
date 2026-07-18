@@ -72,6 +72,8 @@ function makePrismaStub() {
         }),
       ),
     },
+    scoreLabel: { count: vi.fn(async (): Promise<number> => 0) },
+    performanceLevel: { count: vi.fn(async (): Promise<number> => 0) },
     auditLog: { create: vi.fn() },
   };
 }
@@ -153,10 +155,41 @@ describe('FormKpiMappingsService.create', () => {
     expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
   });
 
-  it('creates a self-assessment mapping when evaluateeFieldKeys is omitted', async () => {
+  it('creates a self-assessment mapping when selfAssessment is explicitly true', async () => {
     const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     const { evaluateeFieldKeys: _omit, ...withoutEvaluatee } = validInput;
-    await service.create('form-1', withoutEvaluatee, 'admin-1');
+    await service.create('form-1', { ...withoutEvaluatee, selfAssessment: true }, 'admin-1');
+
+    expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ evaluateeFieldKeys: [] }),
+    });
+  });
+
+  it('rejects when the form has an evaluatee-capable field and neither evaluateeFieldKeys nor selfAssessment is given', async () => {
+    // This is the actual production bug this validation exists to catch: a
+    // mapping created with neither used to silently default to self-assessment,
+    // scoring the submitter instead of whoever they were evaluating.
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
+    const { evaluateeFieldKeys: _omit, ...withoutEvaluatee } = validInput;
+    await expect(service.create('form-1', withoutEvaluatee, 'admin-1')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
+  });
+
+  it('forces self-assessment with no error when the form has no evaluatee-capable field at all', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
+    forms.getLatestVersion.mockResolvedValueOnce({
+      definition: formDefinitionSchema.parse({
+        title: 'no evaluatee fields',
+        fields: [
+          { key: 'score', label: 'Score', type: 'rating', scale: 5 },
+          { key: 'notes', label: 'Notes', type: 'long_text' },
+        ],
+      }),
+    });
+    const { evaluateeFieldKeys: _omit, ...withoutEvaluatee } = validInput;
+    await service.create('form-1', { ...withoutEvaluatee, scoreFieldKey: 'score' }, 'admin-1');
 
     expect(prisma.formKpiMapping.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ evaluateeFieldKeys: [] }),
@@ -302,12 +335,18 @@ describe('FormKpiMappingsService.update', () => {
     expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
   });
 
-  it('clears a previously-set evaluateeFieldKeys/context/comment/subCriteria when omitted from the update', async () => {
+  it('clears a previously-set evaluateeFieldKeys/context/comment/subCriteria back to self-assessment when explicitly chosen', async () => {
     const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
     await service.update(
       'form-1',
       'mapping-1',
-      { evaluationAreaId: 'area-1', scoreFieldKey: 'score', reviewType: 'peer' as const, anonymous: false },
+      {
+        evaluationAreaId: 'area-1',
+        scoreFieldKey: 'score',
+        reviewType: 'peer' as const,
+        anonymous: false,
+        selfAssessment: true,
+      },
       'admin-1',
     );
 
@@ -320,6 +359,19 @@ describe('FormKpiMappingsService.update', () => {
         commentFieldKey: null,
       }),
     });
+  });
+
+  it('rejects clearing evaluateeFieldKeys on update without explicitly choosing self-assessment', async () => {
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
+    await expect(
+      service.update(
+        'form-1',
+        'mapping-1',
+        { evaluationAreaId: 'area-1', scoreFieldKey: 'score', reviewType: 'peer' as const, anonymous: false },
+        'admin-1',
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(prisma.formKpiMapping.update).not.toHaveBeenCalled();
   });
 
   it('rejects updating a mapping that does not belong to this form', async () => {
@@ -557,17 +609,28 @@ describe('FormKpiMappingsService.bulkCreate', () => {
     );
   });
 
-  it('creates every row as self-assessment when evaluateeFieldKeys is omitted', async () => {
+  it('creates every row as self-assessment when selfAssessment is explicitly true', async () => {
     const prisma = makeBulkPrismaStub();
     const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
     const { evaluateeFieldKeys: _omit, ...withoutEvaluatee } = bulkInput;
 
-    const result = await service.bulkCreate('form-1', withoutEvaluatee, 'admin-1');
+    const result = await service.bulkCreate('form-1', { ...withoutEvaluatee, selfAssessment: true }, 'admin-1');
 
     expect(result.created).toHaveLength(2);
     expect(prisma.formKpiMapping.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ evaluateeFieldKeys: [] }) }),
     );
+  });
+
+  it('rejects the whole batch when the form has an evaluatee-capable field and neither evaluateeFieldKeys nor selfAssessment is given', async () => {
+    const prisma = makeBulkPrismaStub();
+    const service = new FormKpiMappingsService(prisma as never, makeFormsStub() as never, redisStub as never);
+    const { evaluateeFieldKeys: _omit, ...withoutEvaluatee } = bulkInput;
+
+    await expect(service.bulkCreate('form-1', withoutEvaluatee, 'admin-1')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(prisma.formKpiMapping.create).not.toHaveBeenCalled();
   });
 
   it('does not audit-log when nothing was created', async () => {
@@ -586,5 +649,65 @@ describe('FormKpiMappingsService.bulkCreate', () => {
     );
 
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('FormKpiMappingsService.list', () => {
+  function makeListPrismaStub(rows: unknown[]) {
+    return {
+      formKpiMapping: { findMany: vi.fn(async () => rows) },
+      form: { findUnique: vi.fn(async () => ({ id: 'form-1', slug: 'demo' })) },
+      scoreLabel: { count: vi.fn(async (): Promise<number> => 0) },
+      performanceLevel: { count: vi.fn(async (): Promise<number> => 0) },
+    };
+  }
+
+  const scoreLabelDefinition = formDefinitionSchema.parse({
+    title: 'qc',
+    fields: [{ key: 'quality', label: 'Quality', type: 'score_label', required: true }],
+  });
+
+  it('returns an empty array without ever fetching the form when there are no mappings', async () => {
+    const prisma = makeListPrismaStub([]);
+    const forms = { getLatestVersion: vi.fn() };
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
+
+    const result = await service.list('form-1');
+
+    expect(result).toEqual([]);
+    expect(forms.getLatestVersion).not.toHaveBeenCalled();
+  });
+
+  it('flags a score_label mapping with a readinessWarning when zero Score Labels are configured', async () => {
+    const prisma = makeListPrismaStub([{ id: 'mapping-1', formId: 'form-1', scoreFieldKey: 'quality' }]);
+    const forms = { getLatestVersion: vi.fn(async () => ({ definition: scoreLabelDefinition })) };
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
+
+    const [result] = await service.list('form-1');
+
+    expect(result!.readinessWarning).toMatch(/Score Labels/);
+  });
+
+  it('does not flag a score_label mapping once at least one Score Label is configured', async () => {
+    const prisma = makeListPrismaStub([{ id: 'mapping-1', formId: 'form-1', scoreFieldKey: 'quality' }]);
+    prisma.scoreLabel.count.mockResolvedValue(1);
+    const forms = { getLatestVersion: vi.fn(async () => ({ definition: scoreLabelDefinition })) };
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
+
+    const [result] = await service.list('form-1');
+
+    expect(result!.readinessWarning).toBeNull();
+  });
+
+  it('does not query Score Label/Performance Level counts when no mapping needs them', async () => {
+    const prisma = makeListPrismaStub([{ id: 'mapping-1', formId: 'form-1', scoreFieldKey: 'score' }]);
+    const forms = { getLatestVersion: vi.fn(async () => ({ definition })) };
+    const service = new FormKpiMappingsService(prisma as never, forms as never, redisStub as never);
+
+    const [result] = await service.list('form-1');
+
+    expect(result!.readinessWarning).toBeNull();
+    expect(prisma.scoreLabel.count).not.toHaveBeenCalled();
+    expect(prisma.performanceLevel.count).not.toHaveBeenCalled();
   });
 });

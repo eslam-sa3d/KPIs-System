@@ -94,6 +94,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   const [evaluationAreaId, setEvaluationAreaId] = useState('');
   const [scoreFieldKey, setScoreFieldKey] = useState('');
   const [evaluateeFieldKeys, setEvaluateeFieldKeys] = useState<Set<string>>(new Set());
+  const [selfAssessment, setSelfAssessment] = useState(false);
   const [reviewType, setReviewType] = useState<ReviewType>('peer');
   const [anonymous, setAnonymous] = useState(false);
   const [contextFieldKey, setContextFieldKey] = useState('');
@@ -109,6 +110,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
 
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkEvaluateeFieldKeys, setBulkEvaluateeFieldKeys] = useState<Set<string>>(new Set());
+  const [bulkSelfAssessment, setBulkSelfAssessment] = useState(false);
   const [bulkReviewType, setBulkReviewType] = useState<ReviewType>('peer');
   const [bulkAnonymous, setBulkAnonymous] = useState(false);
   const [bulkContextFieldKey, setBulkContextFieldKey] = useState('');
@@ -166,7 +168,11 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
     return definition.fields.find((f) => f.key === key)?.label ?? key;
   }
 
+  // Self-assessment and "who this is about" are mutually exclusive modes —
+  // checking a candidate field always means it's no longer self-assessment,
+  // same as the server's own requireExplicitEvaluateeChoice rule.
   function onToggleEvaluateeField(key: string) {
+    setSelfAssessment(false);
     setEvaluateeFieldKeys((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
@@ -176,12 +182,23 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   }
 
   function onToggleBulkEvaluateeField(key: string) {
+    setBulkSelfAssessment(false);
     setBulkEvaluateeFieldKeys((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
+  }
+
+  function onSelectSelfAssessment(checked: boolean) {
+    setSelfAssessment(checked);
+    if (checked) setEvaluateeFieldKeys(new Set());
+  }
+
+  function onSelectBulkSelfAssessment(checked: boolean) {
+    setBulkSelfAssessment(checked);
+    if (checked) setBulkEvaluateeFieldKeys(new Set());
   }
 
   function areaName(id: string) {
@@ -194,6 +211,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
     setEvaluationAreaId('');
     setScoreFieldKey('');
     setEvaluateeFieldKeys(new Set());
+    setSelfAssessment(false);
     setReviewType('peer');
     setAnonymous(false);
     setContextFieldKey('');
@@ -210,6 +228,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
     setEvaluationAreaId(m.evaluationAreaId);
     setScoreFieldKey(m.scoreFieldKey);
     setEvaluateeFieldKeys(new Set(m.evaluateeFieldKeys));
+    setSelfAssessment(m.evaluateeFieldKeys.length === 0);
     setReviewType(m.reviewType);
     setAnonymous(m.anonymous);
     setContextFieldKey(m.contextFieldKey ?? '');
@@ -217,8 +236,13 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
     setError(null);
   }
 
+  // Mirrors the server's requireExplicitEvaluateeChoice: either self-assessment
+  // is explicitly chosen, at least one evaluatee field is checked, or there's
+  // nothing eligible to pick from at all (self-assessment is the only option).
+  const evaluateeChoiceMade = selfAssessment || evaluateeFieldKeys.size > 0 || evaluateeFields.length === 0;
+
   async function onSaveMapping() {
-    if (!evaluationAreaId || !scoreFieldKey) return;
+    if (!evaluationAreaId || !scoreFieldKey || !evaluateeChoiceMade) return;
     setBusy(true);
     setError(null);
     try {
@@ -227,7 +251,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         scoreFieldKey,
         reviewType,
         anonymous,
-        ...(evaluateeFieldKeys.size > 0 ? { evaluateeFieldKeys: [...evaluateeFieldKeys] } : {}),
+        ...(evaluateeFieldKeys.size > 0 ? { evaluateeFieldKeys: [...evaluateeFieldKeys] } : { selfAssessment: true }),
         ...(contextFieldKey ? { contextFieldKey } : {}),
         ...(commentFieldKey ? { commentFieldKey } : {}),
       });
@@ -264,13 +288,16 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
     setError(null);
     setNotice(null);
     try {
-      const result = await api<{ scored: number; skipped: number }>(
+      const result = await api<{ scored: number; skipped: number; skippedReasons: Record<string, number> }>(
         `/v1/forms/${formId}/kpi-mappings/${mappingId}/backfill`,
         { method: 'POST' },
       );
+      const reasonsList = Object.entries(result.skippedReasons)
+        .map(([reason, count]) => `${count} ${reason}`)
+        .join('; ');
       setNotice(
         `Scored ${result.scored} existing submission${result.scored === 1 ? '' : 's'} into "${areaLabel}"` +
-          (result.skipped > 0 ? ` · skipped ${result.skipped}` : ''),
+          (result.skipped > 0 ? ` · skipped ${result.skipped} (${reasonsList})` : ''),
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'the request failed');
@@ -292,9 +319,10 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
   }
 
   const bulkMappedCount = unmappedScoreFields.filter((f) => bulkSelections[f.key]).length;
+  const bulkEvaluateeChoiceMade = bulkSelfAssessment || bulkEvaluateeFieldKeys.size > 0 || evaluateeFields.length === 0;
 
   async function onBulkCreate() {
-    if (bulkMappedCount === 0) return;
+    if (bulkMappedCount === 0 || !bulkEvaluateeChoiceMade) return;
     setBusy(true);
     setError(null);
     setBulkResult(null);
@@ -304,7 +332,9 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
         body: JSON.stringify({
           reviewType: bulkReviewType,
           anonymous: bulkAnonymous,
-          ...(bulkEvaluateeFieldKeys.size > 0 ? { evaluateeFieldKeys: [...bulkEvaluateeFieldKeys] } : {}),
+          ...(bulkEvaluateeFieldKeys.size > 0
+            ? { evaluateeFieldKeys: [...bulkEvaluateeFieldKeys] }
+            : { selfAssessment: true }),
           ...(bulkContextFieldKey ? { contextFieldKey: bulkContextFieldKey } : {}),
           ...(bulkCommentFieldKey ? { commentFieldKey: bulkCommentFieldKey } : {}),
           mappings: unmappedScoreFields
@@ -362,6 +392,11 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     {m.anonymous && ' · anonymous'} · evaluatee:{' '}
                     {m.evaluateeFieldKeys.length > 0 ? m.evaluateeFieldKeys.map(fieldLabel).join(', ') : 'Self'}, score:{' '}
                     {fieldLabel(m.scoreFieldKey)}{' '}
+                    {m.readinessWarning && (
+                      <Alert variant="destructive" style={{ marginTop: 4, marginBottom: 4 }}>
+                        <AlertDescription>{m.readinessWarning}</AlertDescription>
+                      </Alert>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"
@@ -445,26 +480,37 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
               </SelectContent>
             </Select>
             <span className="field-label">
-              Who this is about — check every candidate field; whichever one is actually answered on a submission wins
-              (leave all unchecked for self-assessment)
+              Who this is about — choose self-assessment, or check every candidate field (whichever one is actually
+              answered on a submission wins). This must be set explicitly; it's no longer implied by leaving everything
+              unchecked.
             </span>
             {evaluateeFields.length === 0 ? (
               <p className="muted">
                 No eligible field on this form — add a &quot;person&quot; field, or a &quot;select&quot; field with a
-                user-linked option, to enable peer/manager/360 scoring.
+                user-linked option, to enable peer/manager/360 scoring. Every submission scores the submitter
+                (self-assessment) since there's nothing else to pick from.
               </p>
             ) : (
-              <span className="check-group">
-                {evaluateeFields.map((f) => (
-                  <label key={f.key} className="check-item">
-                    <Checkbox
-                      checked={evaluateeFieldKeys.has(f.key)}
-                      onCheckedChange={() => onToggleEvaluateeField(f.key)}
-                    />{' '}
-                    {f.label}
-                  </label>
-                ))}
-              </span>
+              <>
+                <label className="check-item">
+                  <Checkbox
+                    checked={selfAssessment}
+                    onCheckedChange={(checked) => onSelectSelfAssessment(checked === true)}
+                  />
+                  Self-assessment (the submitter scores themselves)
+                </label>
+                <span className="check-group">
+                  {evaluateeFields.map((f) => (
+                    <label key={f.key} className="check-item">
+                      <Checkbox
+                        checked={evaluateeFieldKeys.has(f.key)}
+                        onCheckedChange={() => onToggleEvaluateeField(f.key)}
+                      />{' '}
+                      {f.label}
+                    </label>
+                  ))}
+                </span>
+              </>
             )}
             <Select value={reviewType} onValueChange={(v) => setReviewType(v as ReviewType)}>
               <SelectTrigger aria-label="Review type">
@@ -511,7 +557,7 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
             <Button
               type="button"
               variant="ghost"
-              disabled={busy || !evaluationAreaId || !scoreFieldKey}
+              disabled={busy || !evaluationAreaId || !scoreFieldKey || !evaluateeChoiceMade}
               onClick={onSaveMapping}
             >
               {editingMappingId ? 'Save changes' : 'Add mapping'}
@@ -554,23 +600,34 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                       </SelectContent>
                     </Select>
                     <span className="field-label">
-                      Who this batch is about — check every candidate field; whichever one is actually answered on a
-                      submission wins (leave all unchecked for self-assessment)
+                      Who this batch is about — choose self-assessment, or check every candidate field (whichever one is
+                      actually answered on a submission wins). Must be set explicitly.
                     </span>
                     {evaluateeFields.length === 0 ? (
-                      <p className="muted">No eligible field on this form.</p>
+                      <p className="muted">
+                        No eligible field on this form — every submission scores the submitter (self-assessment).
+                      </p>
                     ) : (
-                      <span className="check-group">
-                        {evaluateeFields.map((f) => (
-                          <label key={f.key} className="check-item">
-                            <Checkbox
-                              checked={bulkEvaluateeFieldKeys.has(f.key)}
-                              onCheckedChange={() => onToggleBulkEvaluateeField(f.key)}
-                            />{' '}
-                            {f.label}
-                          </label>
-                        ))}
-                      </span>
+                      <>
+                        <label className="check-item">
+                          <Checkbox
+                            checked={bulkSelfAssessment}
+                            onCheckedChange={(checked) => onSelectBulkSelfAssessment(checked === true)}
+                          />
+                          Self-assessment (the submitter scores themselves)
+                        </label>
+                        <span className="check-group">
+                          {evaluateeFields.map((f) => (
+                            <label key={f.key} className="check-item">
+                              <Checkbox
+                                checked={bulkEvaluateeFieldKeys.has(f.key)}
+                                onCheckedChange={() => onToggleBulkEvaluateeField(f.key)}
+                              />{' '}
+                              {f.label}
+                            </label>
+                          ))}
+                        </span>
+                      </>
                     )}
                     <label className="check-item">
                       <Checkbox
@@ -656,7 +713,12 @@ export function FormKpiMappingsPanel({ formId, definition }: { formId: string; d
                     </Table>
 
                     <div className="row-actions">
-                      <Button type="button" size="sm" disabled={busy || bulkMappedCount === 0} onClick={onBulkCreate}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={busy || bulkMappedCount === 0 || !bulkEvaluateeChoiceMade}
+                        onClick={onBulkCreate}
+                      >
                         Map {bulkMappedCount} question{bulkMappedCount === 1 ? '' : 's'}
                       </Button>
                       <Button type="button" variant="ghost" size="sm" onClick={() => setBulkOpen(false)}>

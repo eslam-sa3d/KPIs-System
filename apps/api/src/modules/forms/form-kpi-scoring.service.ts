@@ -12,6 +12,11 @@ import { answerToText, describeAnswer, normalizeScore, resolveEvaluateeId } from
 type PerformanceLevelLookup = { id: string; label: string; minScore: number; maxScore: number };
 type ScoreLabelLookup = { id: string; label: string; score: number };
 
+/** Every reason applyOneMapping can decline to score a submission, surfaced
+ *  all the way out to backfillMapping's caller — see BackfillResult in
+ *  @pulse/contracts for why this replaced a bare boolean. */
+type ApplyOneMappingResult = { scored: true } | { scored: false; reason: string };
+
 /**
  * The Forms→KPI bridge: applies a form's FormKpiMappings to a submission's
  * answers (live, on every submit/edit) or replays one mapping against every
@@ -150,16 +155,18 @@ export class FormKpiScoringService {
     at: Date,
     getPerformanceLevels: () => Promise<PerformanceLevelLookup[]>,
     getScoreLabels: () => Promise<ScoreLabelLookup[]>,
-  ): Promise<boolean> {
-    if (!mapping.evaluationArea.isActive) return false;
+  ): Promise<ApplyOneMappingResult> {
+    if (!mapping.evaluationArea.isActive) return { scored: false, reason: 'evaluation area is inactive' };
 
     const evaluateeId = resolveEvaluateeId(mapping.evaluateeFieldKeys, answers, enteredById);
-    if (evaluateeId === null) return false;
+    if (evaluateeId === null) return { scored: false, reason: 'no evaluatee field was answered' };
     const rawScore = answers[mapping.scoreFieldKey];
-    if (rawScore === undefined || rawScore === null) return false;
+    if (rawScore === undefined || rawScore === null) {
+      return { scored: false, reason: 'score field was not answered' };
+    }
 
     const scoreField = fieldsByKey.get(mapping.scoreFieldKey);
-    if (!scoreField) return false;
+    if (!scoreField) return { scored: false, reason: 'score field no longer exists on this form' };
     const contextField = mapping.contextFieldKey ? fieldsByKey.get(mapping.contextFieldKey) : undefined;
     const commentField = mapping.commentFieldKey ? fieldsByKey.get(mapping.commentFieldKey) : undefined;
     // Only fetched when actually needed — a context/comment field can be ANY
@@ -175,10 +182,15 @@ export class FormKpiScoringService {
         ? await getScoreLabels()
         : undefined;
     const value = normalizeScore(scoreField, rawScore, performanceLevels, scoreLabels);
-    if (value === null) return false;
+    if (value === null) {
+      return {
+        scored: false,
+        reason: 'answer could not be scored (no matching Score Label/Performance Level configured)',
+      };
+    }
 
     const evaluatee = await this.prisma.user.findUnique({ where: { id: evaluateeId } });
-    if (!evaluatee || !evaluatee.isActive) return false;
+    if (!evaluatee || !evaluatee.isActive) return { scored: false, reason: 'evaluatee is not an active user' };
 
     // A context/comment field can be a 'person' field too — resolve only the
     // (at most two) ids actually referenced rather than a broad lookup.
@@ -265,7 +277,7 @@ export class FormKpiScoringService {
         submissionId,
       },
     });
-    return true;
+    return { scored: true };
   }
 
   /**
@@ -277,7 +289,10 @@ export class FormKpiScoringService {
    * in (via its own createdAt), not the period containing today. Idempotent:
    * re-running it just re-upserts the same entries.
    */
-  async backfillMapping(formId: string, mappingId: string): Promise<{ scored: number; skipped: number }> {
+  async backfillMapping(
+    formId: string,
+    mappingId: string,
+  ): Promise<{ scored: number; skipped: number; skippedReasons: Record<string, number> }> {
     const mapping = await this.prisma.formKpiMapping.findFirst({
       where: { id: mappingId, formId },
       include: { evaluationArea: true },
@@ -298,14 +313,17 @@ export class FormKpiScoringService {
     });
 
     let scored = 0;
-    let skipped = 0;
+    const skippedReasons: Record<string, number> = {};
+    const recordSkip = (reason: string) => {
+      skippedReasons[reason] = (skippedReasons[reason] ?? 0) + 1;
+    };
     for (const submission of submissions) {
       if (!submission.submittedById) {
-        skipped++; // same rule as live submissions: anonymous public fills never score
+        recordSkip('anonymous submission (no evaluator)'); // same rule as live submissions: anonymous public fills never score
         continue;
       }
       try {
-        const didScore = await this.applyOneMapping(
+        const result = await this.applyOneMapping(
           mapping,
           fieldsByKey,
           submission.answers as SubmissionAnswers,
@@ -315,17 +333,17 @@ export class FormKpiScoringService {
           getPerformanceLevels,
           getScoreLabels,
         );
-        if (didScore) scored++;
-        else skipped++;
+        if (result.scored) scored++;
+        else recordSkip(result.reason);
       } catch (cause) {
-        skipped++;
-        this.logger.warn(
-          `backfill of mapping ${mappingId} failed for submission ${submission.id}: ${cause instanceof Error ? cause.message : cause}`,
-        );
+        const message = cause instanceof Error ? cause.message : String(cause);
+        recordSkip(`error: ${message}`);
+        this.logger.warn(`backfill of mapping ${mappingId} failed for submission ${submission.id}: ${message}`);
       }
     }
     await this.invalidateDashboardCache();
-    return { scored, skipped };
+    const skipped = submissions.length - scored;
+    return { scored, skipped, skippedReasons };
   }
 }
 

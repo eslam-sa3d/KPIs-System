@@ -41,20 +41,67 @@ export class FormKpiMappingsService {
   }
 
   async list(formId: string) {
-    return this.prisma.formKpiMapping.findMany({
-      where: { formId },
-      include: {
-        evaluationArea: { select: { id: true, name: true, kpiId: true, cadence: true } },
-        subCriteria: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+    const [mappings, form] = await Promise.all([
+      this.prisma.formKpiMapping.findMany({
+        where: { formId },
+        include: {
+          evaluationArea: { select: { id: true, name: true, kpiId: true, cadence: true } },
+          subCriteria: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.form.findUnique({ where: { id: formId } }),
+    ]);
+    if (!mappings.length || !form) return mappings.map((m) => ({ ...m, readinessWarning: null }));
+
+    const { definition } = await this.forms.getLatestVersion(form.slug);
+    const fieldsByKey = new Map(definition.fields.map((f) => [f.key, f]));
+    const needsScoreLabels = mappings.some((m) => fieldsByKey.get(m.scoreFieldKey)?.type === 'score_label');
+    const needsPerformanceLevels = mappings.some((m) => fieldsByKey.get(m.scoreFieldKey)?.type === 'performance_level');
+    const [scoreLabelCount, performanceLevelCount] = await Promise.all([
+      needsScoreLabels ? this.prisma.scoreLabel.count() : Promise.resolve(null),
+      needsPerformanceLevels ? this.prisma.performanceLevel.count() : Promise.resolve(null),
+    ]);
+
+    return mappings.map((m) => ({
+      ...m,
+      readinessWarning: this.readinessWarningFor(
+        fieldsByKey.get(m.scoreFieldKey),
+        scoreLabelCount,
+        performanceLevelCount,
+      ),
+    }));
+  }
+
+  /** Null unless this mapping's score field is a type backed by admin-configured
+   *  reference data (Score Labels/Performance Levels) that's currently empty —
+   *  in that case every submission through this mapping silently normalizes to
+   *  no score, and nothing else in the UI says so (see this session's actual
+   *  incident: 34 mappings backfilled "0 scored" with no indication why until
+   *  someone read the source to find the empty ScoreLabel table). */
+  private readinessWarningFor(
+    scoreField: FormDefinition['fields'][number] | undefined,
+    scoreLabelCount: number | null,
+    performanceLevelCount: number | null,
+  ): string | null {
+    if (scoreField?.type === 'score_label' && scoreLabelCount === 0) {
+      return 'No Score Labels are configured yet (Configuration → Score Labels) — this question cannot score until at least one exists';
+    }
+    if (scoreField?.type === 'performance_level' && performanceLevelCount === 0) {
+      return 'No Performance Levels are configured yet (Configuration → Performance Levels) — this question cannot score until at least one exists';
+    }
+    return null;
   }
 
   async create(formId: string, input: CreateFormKpiMappingInput, actorId: string) {
     const { definition } = await this.forms.getLatestVersion((await this.requireForm(formId)).slug);
 
     this.validateEvaluateeFieldKeys(definition, input.evaluateeFieldKeys);
+    const resolvedEvaluateeFieldKeys = this.requireExplicitEvaluateeChoice(
+      definition,
+      input.evaluateeFieldKeys,
+      input.selfAssessment,
+    );
     // Any answerable field can be linked — see normalizeScore in FormKpiScoringService for which
     // types (SCORE_FIELD_TYPES) actually produce a live score; the rest just never do, silently.
     const scoreField = definition.fields.find((f) => f.key === input.scoreFieldKey);
@@ -89,7 +136,7 @@ export class FormKpiMappingsService {
         formId,
         evaluationAreaId: input.evaluationAreaId,
         subCriteriaId: input.subCriteriaId,
-        evaluateeFieldKeys: input.evaluateeFieldKeys ?? [],
+        evaluateeFieldKeys: resolvedEvaluateeFieldKeys,
         scoreFieldKey: input.scoreFieldKey,
         reviewType: input.reviewType,
         anonymous: input.anonymous,
@@ -126,6 +173,11 @@ export class FormKpiMappingsService {
 
     const { definition } = await this.forms.getLatestVersion(form.slug);
     this.validateEvaluateeFieldKeys(definition, input.evaluateeFieldKeys);
+    const resolvedEvaluateeFieldKeys = this.requireExplicitEvaluateeChoice(
+      definition,
+      input.evaluateeFieldKeys,
+      input.selfAssessment,
+    );
     const scoreField = definition.fields.find((f) => f.key === input.scoreFieldKey);
     if (!scoreField || scoreField.type === 'section_header') {
       throw AppError.validation([{ path: 'scoreFieldKey', message: 'must reference a question on this form' }]);
@@ -163,7 +215,7 @@ export class FormKpiMappingsService {
         // treats an undefined field as "leave it alone", so clearing a
         // previously-set value in the edit form has to be an explicit null.
         subCriteriaId: input.subCriteriaId ?? null,
-        evaluateeFieldKeys: input.evaluateeFieldKeys ?? [],
+        evaluateeFieldKeys: resolvedEvaluateeFieldKeys,
         scoreFieldKey: input.scoreFieldKey,
         reviewType: input.reviewType,
         anonymous: input.anonymous,
@@ -210,6 +262,31 @@ export class FormKpiMappingsService {
     }
   }
 
+  /** A form with at least one evaluatee-capable field must explicitly choose
+   *  self-assessment or a non-empty evaluateeFieldKeys — omitting both used
+   *  to silently mean self-assessment, which is how a real form scored the
+   *  submitter instead of whoever they were evaluating for weeks before
+   *  anyone noticed. A form with no evaluatee-capable field has no real
+   *  choice to make, so self-assessment is forced regardless of the flags.
+   *  Returns the evaluateeFieldKeys to actually persist. */
+  private requireExplicitEvaluateeChoice(
+    definition: FormDefinition,
+    evaluateeFieldKeys: string[] | undefined,
+    selfAssessment: boolean | undefined,
+  ): string[] {
+    if (!definition.fields.some(isEvaluateeField)) return [];
+    if (selfAssessment) return [];
+    if (!evaluateeFieldKeys || evaluateeFieldKeys.length === 0) {
+      throw AppError.validation([
+        {
+          path: 'evaluateeFieldKeys',
+          message: 'pick at least one "who is this about" field, or explicitly choose self-assessment',
+        },
+      ]);
+    }
+    return evaluateeFieldKeys;
+  }
+
   /** contextFieldKey/commentFieldKey are optional and deliberately untyped
    *  (any field type can supply free-text context) — the only real
    *  requirement is that they exist on the form at all. */
@@ -241,6 +318,11 @@ export class FormKpiMappingsService {
     const { definition } = await this.forms.getLatestVersion((await this.requireForm(formId)).slug);
 
     this.validateEvaluateeFieldKeys(definition, input.evaluateeFieldKeys);
+    const resolvedEvaluateeFieldKeys = this.requireExplicitEvaluateeChoice(
+      definition,
+      input.evaluateeFieldKeys,
+      input.selfAssessment,
+    );
     this.validateExtraFieldKeys(definition, input.contextFieldKey, input.commentFieldKey);
 
     // Raw Prisma rows (createdAt: Date) — serialized to the wire-format
@@ -300,7 +382,7 @@ export class FormKpiMappingsService {
         data: {
           formId,
           evaluationAreaId: row.evaluationAreaId,
-          evaluateeFieldKeys: input.evaluateeFieldKeys ?? [],
+          evaluateeFieldKeys: resolvedEvaluateeFieldKeys,
           scoreFieldKey: row.scoreFieldKey,
           reviewType: input.reviewType,
           anonymous: input.anonymous,
