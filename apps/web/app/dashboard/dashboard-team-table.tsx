@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Band, BandKey, PerformanceLevelOption, bandBadgeStyle, bandOf } from '../../lib/performance-band';
 
-type MemberSortKey = 'name' | 'department' | 'updated';
+type MemberSortKey = 'name' | 'updated';
 type CoverageFilter = 'all' | 'scored' | 'pending';
 
 /** The team roster table: coverage/status filter pills, a free-text search,
@@ -102,14 +102,6 @@ export function DashboardTeamTable({
                 Name
               </button>
             </TableHead>
-            <TableHead
-              className="p-th-sortable"
-              aria-sort={memberSort.key === 'department' ? (memberSort.dir > 0 ? 'ascending' : 'descending') : 'none'}
-            >
-              <button type="button" onClick={() => sortMembersBy('department')}>
-                Department
-              </button>
-            </TableHead>
             <TableHead>Job title</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Score</TableHead>
@@ -126,7 +118,7 @@ export function DashboardTeamTable({
         <TableBody>
           {memberTableData.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="muted" style={{ textAlign: 'center' }}>
+              <TableCell colSpan={5} className="muted" style={{ textAlign: 'center' }}>
                 {totalTeamMemberCount === 0 ? 'No active team members.' : 'No team members match this filter.'}
               </TableCell>
             </TableRow>
@@ -156,7 +148,6 @@ export function DashboardTeamTable({
                   style={{ cursor: 'pointer' }}
                 >
                   <TableCell style={{ fontWeight: 500 }}>{m.displayName}</TableCell>
-                  <TableCell className="muted">{m.department ?? '—'}</TableCell>
                   <TableCell className="muted">{m.jobTitle ?? '—'}</TableCell>
                   <TableCell>
                     <Badge className="border-transparent" style={bandBadgeStyle(band, levels)}>

@@ -60,7 +60,7 @@ interface RawKpi {
   evaluationAreas: RawEvaluationArea[];
 }
 
-type MemberSortKey = 'name' | 'department' | 'updated';
+type MemberSortKey = 'name' | 'updated';
 type CoverageFilter = 'all' | 'scored' | 'pending';
 
 export default function DashboardPage() {
@@ -207,8 +207,6 @@ export default function DashboardPage() {
     data = [...data].sort((a, b) => {
       const dir = memberSort.dir;
       switch (memberSort.key) {
-        case 'department':
-          return (a.department ?? '').localeCompare(b.department ?? '') * dir;
         case 'updated':
           return (a.lastUpdated ?? '').localeCompare(b.lastUpdated ?? '') * dir;
         case 'name':
